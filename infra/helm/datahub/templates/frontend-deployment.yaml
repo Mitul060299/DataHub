@@ -1,0 +1,27 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "datahub.frontendFullname" . }}
+  labels:
+    app: {{ include "datahub.frontendName" . }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "datahub.frontendName" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "datahub.frontendName" . }}
+    spec:
+      containers:
+        - name: datahub-frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.frontend.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "datahub.frontendFullname" . }}
+{{- end }}

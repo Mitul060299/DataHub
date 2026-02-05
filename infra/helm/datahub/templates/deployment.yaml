@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "datahub.backendFullname" . }}
+  labels:
+    app: {{ include "datahub.backendName" . }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "datahub.backendName" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "datahub.backendName" . }}
+    spec:
+      containers:
+        - name: datahub-backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: {{ include "datahub.backendFullname" . }}
+            {{- if .Values.backend.secretEnv }}
+            - secretRef:
+                name: {{ include "datahub.backendFullname" . }}
+            {{- end }}

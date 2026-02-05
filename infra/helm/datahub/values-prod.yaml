@@ -1,0 +1,66 @@
+backend:
+  replicaCount: 2
+  image:
+    repository: mitul6299/datahub-backend
+    tag: v1
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  ingress:
+    enabled: true
+    className: "nginx"
+    hosts:
+      - host: api.datahub.org.in
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: datahub-api-tls
+        hosts:
+          - api.datahub.org.in
+  env:
+    APP_ENV: production
+    CORS_ORIGINS: "https://app.datahub.org.in"
+    DATABASE_URL: ""
+    REDIS_URL: ""
+    CHROMA_URL: ""
+    PUBLIC_BASE_URL: "https://app.datahub.org.in"
+    SHARED_RATE_LIMIT_PER_MIN: "120"
+    SUPABASE_URL: "https://fpzkzrrqexxnuvdpulep.supabase.co"
+  secretEnv:
+    APP_SECRET_KEY: "replace-me"
+    OIDC_CLIENT_SECRET: "replace-me"
+    SHARE_SIGNING_SECRET: "replace-me"
+    DATABASE_URL: "replace-me"
+    REDIS_URL: "replace-me"
+    CHROMA_URL: "replace-me"
+    SUPABASE_ANON_KEY: "replace-me"
+    SUPABASE_SERVICE_ROLE_KEY: "replace-me"
+  migrationJob:
+    enabled: true
+
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: mitul6299/datahub-frontend
+    tag: v1
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5173
+  ingress:
+    enabled: true
+    className: "nginx"
+    hosts:
+      - host: app.datahub.org.in
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: datahub-app-tls
+        hosts:
+          - app.datahub.org.in
+  env:
+    VITE_API_BASE_URL: "https://api.datahub.org.in"

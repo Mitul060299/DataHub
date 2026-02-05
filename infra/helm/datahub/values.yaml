@@ -1,0 +1,54 @@
+backend:
+  replicaCount: 1
+  image:
+    repository: datahub/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  ingress:
+    enabled: false
+    className: ""
+    hosts:
+      - host: api.datahub.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  env:
+    APP_ENV: production
+    CORS_ORIGINS: "*"
+    DATABASE_URL: ""
+    REDIS_URL: ""
+    CHROMA_URL: ""
+    PUBLIC_BASE_URL: ""
+    SHARED_RATE_LIMIT_PER_MIN: "120"
+  secretEnv:
+    APP_SECRET_KEY: ""
+    OIDC_CLIENT_SECRET: ""
+    SHARE_SIGNING_SECRET: ""
+  migrationJob:
+    enabled: true
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: datahub/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5173
+  ingress:
+    enabled: false
+    className: ""
+    hosts:
+      - host: app.datahub.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  env:
+    VITE_API_BASE_URL: "http://localhost:8000"

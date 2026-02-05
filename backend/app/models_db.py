@@ -1,0 +1,104 @@
+from sqlalchemy import Column, String, Text, Integer, Boolean
+from sqlalchemy import DateTime
+from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
+from .db import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(String, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    role = Column(String, nullable=False, default="viewer")
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+    id = Column(String, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    is_shared = Column(Boolean, nullable=False, default=False)
+    share_token = Column(String, nullable=True)
+    share_expires_at = Column(DateTime(timezone=True), nullable=True)
+    share_scope = Column(String, nullable=True)
+
+
+class Context(Base):
+    __tablename__ = "contexts"
+    id = Column(String, primary_key=True)
+    workspace_id = Column(String, nullable=False)
+    glossary = Column(JSONB, nullable=False, default=dict)
+    rules = Column(JSONB, nullable=False, default=list)
+
+
+class ContextVersion(Base):
+    __tablename__ = "context_versions"
+    id = Column(String, primary_key=True)
+    workspace_id = Column(String, nullable=False)
+    glossary = Column(JSONB, nullable=False, default=dict)
+    rules = Column(JSONB, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Dashboard(Base):
+    __tablename__ = "dashboards"
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    widgets = Column(JSONB, nullable=False, default=list)
+    is_shared = Column(Boolean, nullable=False, default=False)
+    share_token = Column(String, nullable=True)
+    share_expires_at = Column(DateTime(timezone=True), nullable=True)
+    share_scope = Column(String, nullable=True)
+
+
+class DatasetMetaDB(Base):
+    __tablename__ = "dataset_meta"
+    id = Column(String, primary_key=True)
+    columns = Column(JSONB, nullable=False, default=list)
+    row_count = Column(Integer, nullable=False)
+    parent_id = Column(String, nullable=True)
+
+
+class DatasetDataDB(Base):
+    __tablename__ = "dataset_data"
+    id = Column(String, primary_key=True)
+    rows = Column(JSONB, nullable=False, default=list)
+
+
+class DatasetChunkDB(Base):
+    __tablename__ = "dataset_chunks"
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    rows = Column(JSONB, nullable=False, default=list)
+
+
+class AuditLogDB(Base):
+    __tablename__ = "audit_logs"
+    id = Column(String, primary_key=True)
+    action = Column(String, nullable=False)
+    actor = Column(String, nullable=False)
+    target = Column(String, nullable=False)
+    metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AgentFeedbackDB(Base):
+    __tablename__ = "agent_feedback"
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, nullable=False)
+    rating = Column(String, nullable=False)
+    source = Column(String, nullable=False, default="suggestion")
+    notes = Column(Text, nullable=True)
+    metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ApprovalRequestDB(Base):
+    __tablename__ = "approval_requests"
+    id = Column(String, primary_key=True)
+    requester = Column(String, nullable=False)
+    resource_type = Column(String, nullable=False)
+    resource_id = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

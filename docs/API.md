@@ -1,0 +1,90 @@
+# API
+
+- OpenAPI schema is available at /openapi.json
+- Swagger UI is available at /docs
+
+## MVP Endpoints
+- POST /auth/login?username=USER&role=viewer|editor|admin
+- GET /auth/oidc/login
+- GET /auth/oidc/callback?code=AUTH_CODE
+- POST /datasets/upload
+- GET /datasets
+- GET /datasets/{dataset_id}/lineage
+- GET /datasets/{dataset_id}/suggest-columns?query=...&limit=...
+- DELETE /datasets/{dataset_id} (requires editor)
+- GET /datasets/{dataset_id}/export (requires viewer) [sort_by, sort_dir, filter_col, filter_op, filter_val]
+- GET /datasets/{dataset_id}/preview?offset=0&limit=50 (returns total_rows; supports sort/filter params)
+- GET /profiling/{dataset_id}?columns=col1,col2
+- GET /profiling/{dataset_id}/summary?column=colName&bins=10&top_n=10
+- GET /profiling/{dataset_id}/correlations
+- GET /insights/{dataset_id}?workspace_id=...
+- GET /insights/{dataset_id}/actions
+- GET /agents/suggest/{dataset_id}?workspace_id=...
+- POST /agents/chat/{dataset_id}?workspace_id=...
+- POST /agents/feedback
+- POST /transformations/recipes
+- GET /transformations/recipes/{dataset_id}
+- GET /transformations/recipes/{dataset_id}/versions
+- POST /transformations/recipes/{dataset_id}/revert/{version_id}
+- POST /transformations/apply/{dataset_id}
+- GET /context/{workspace_id}
+- POST /context
+- GET /context/{workspace_id}/versions
+- POST /context/{workspace_id}/revert/{version_id}
+- GET /governance/audit?action=...&actor=...&target=...&since_minutes=...&limit=...
+- GET /governance/usage
+- GET /governance/share-settings (requires admin)
+- GET /governance/cache-stats (requires admin)
+- POST /approvals
+- GET /approvals?status=...&requester=...&resource_type=...&resource_id=...&limit=...
+- POST /approvals/{request_id}/approve
+- POST /approvals/{request_id}/reject
+- WS /realtime/presence?workspace_id=default&user=alice
+- GET /templates/dashboards
+- POST /templates/dashboards/{template_id}/instantiate
+- POST /governance/audit
+- POST /dashboards?name=My%20Dashboard (requires editor)
+- GET /dashboards
+- GET /dashboards/{dashboard_id}
+- POST /dashboards/{dashboard_id}/share
+- POST /dashboards/{dashboard_id}/unshare
+- POST /dashboards/unshare-all
+- POST /dashboards/purge-expired
+- GET /dashboards/shared/{share_token}
+- 429 returned if shared rate limit exceeded
+- 403 returned if signature is invalid when SHARE_SIGNING_SECRET is set (sig query param)
+- 403 returned if share scope does not match (scope query param)
+- PUT /widgets/{dashboard_id}/{widget_id}?title=...&column=...&chart_type=...&dataset_id=... (requires editor)
+- POST /widgets/{dashboard_id}/reorder?widget_ids=id1,id2 (requires editor)
+	- Returns reordered widgets list
+- POST /webhooks?target_url=...&event=... (requires editor)
+- GET /webhooks
+- POST /jobs?name=...&cron=...&action=... (requires editor)
+- GET /jobs
+- GET /connectors
+- POST /connectors/import
+	- supabase: {url, key, table, columns?, limit?}
+	- inline_csv: {csv_text}
+	- http_csv: {url}
+	- sql_query: {connection_url, query|table, where?, updated_at_column?, updated_at_since?}
+	- excel: {file_path|url, sheet_name?}
+	- google_sheets: {sheet_id, gid?}
+- POST /connectors/sync
+	- payload: {connector, config, mode: pull|push, dataset_id?}
+- GET /connectors/sync-status
+- POST /users
+- GET /users
+- GET /plugins
+- POST /plugins/load
+- POST /plugins/enable
+- POST /plugins/disable
+- POST /workspaces
+- GET /workspaces
+- POST /workspaces/{workspace_id}/share
+- POST /workspaces/{workspace_id}/unshare
+- POST /workspaces/unshare-all
+- POST /workspaces/purge-expired
+- GET /workspaces/shared/{share_token}
+- 429 returned if shared rate limit exceeded
+- 403 returned if signature is invalid when SHARE_SIGNING_SECRET is set (sig query param)
+- 403 returned if share scope does not match (scope query param)

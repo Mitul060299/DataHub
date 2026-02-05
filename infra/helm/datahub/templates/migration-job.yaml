@@ -1,0 +1,28 @@
+{{- if .Values.backend.migrationJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "datahub.backendFullname" . }}-migrate
+  labels:
+    app: {{ include "datahub.backendName" . }}
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: {{ include "datahub.backendName" . }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: ["sh", "-c", "alembic upgrade head"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "datahub.backendFullname" . }}
+            {{- if .Values.backend.secretEnv }}
+            - secretRef:
+                name: {{ include "datahub.backendFullname" . }}
+            {{- end }}
+{{- end }}

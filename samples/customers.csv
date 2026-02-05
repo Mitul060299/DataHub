@@ -1,0 +1,7 @@
+customer_id,name,email,signup_date,total_spend,region
+1001,Alice Johnson,alice@example.com,2024-01-15,1200.50,North
+1002,Bob Smith,bob@example.com,2024-02-18,850.00,West
+1003,Chandra Patel,chandra@example.com,2024-03-05,540.75,South
+1004,Diego Martinez,diego@example.com,2024-03-20,130.25,East
+1005,Elena Wang,elena@example.com,2024-04-10,2450.00,North
+1006,Fatima Noor,fatima@example.com,2024-05-08,,West

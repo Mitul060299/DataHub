@@ -1,0 +1,17 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "datahub.frontendFullname" . }}
+  labels:
+    app: {{ include "datahub.frontendName" . }}
+spec:
+  type: {{ .Values.frontend.service.type }}
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: {{ .Values.frontend.service.port }}
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ include "datahub.frontendName" . }}
+{{- end }}

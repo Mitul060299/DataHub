@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: datahub
+      POSTGRES_USER: datahub
+      POSTGRES_PASSWORD: datahub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      APP_SECRET_KEY: change-me
+      CORS_ORIGINS: "http://localhost:5173"
+      DATABASE_URL: postgresql+psycopg://datahub:datahub@postgres:5432/datahub
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_URL: http://chroma:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - chroma
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

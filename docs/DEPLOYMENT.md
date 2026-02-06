@@ -10,6 +10,17 @@
 	- docker compose -f docker-compose.prod.yml up -d --build
 - Frontend is served on port 80 and proxies /api to the backend
 
+## Single VPS (Docker Compose + Caddy)
+- Point Cloudflare DNS records for `datahub.org.in` and `app.datahub.org.in` to the VPS IP
+- Ensure `.env.production` uses the Supabase Postgres connection string for `DATABASE_URL`
+- Bring up the stack (Caddy handles TLS and reverse proxy):
+	- docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+- Run migrations against Supabase:
+	- docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head
+- Verify:
+	- https://app.datahub.org.in
+	- https://app.datahub.org.in/api/health
+
 ## Helm (Placeholder)
 ### Helm (Kubernetes)
 - Helm chart lives in infra/helm/datahub

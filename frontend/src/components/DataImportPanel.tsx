@@ -28,6 +28,8 @@ import {
   CheckCircleOutlined,
 } from "@ant-design/icons";
 import { useMemo, useState } from "react";
+import { uploadDataset } from "../api";
+import type { DatasetPreview } from "../types";
 import { notify } from "../utils/notify";
 import { AIChat, type AIAction } from "./ai/AIChat";
 
@@ -151,9 +153,11 @@ export function DataImportPanel() {
   const [importSource, setImportSource] = useState<ImportSource>("file");
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<DatasetPreview | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [progressPercent, setProgressPercent] = useState(34);
   const [progressStep, setProgressStep] = useState(1);
+  const [recentImports, setRecentImports] = useState<ImportItem[]>(RECENT_IMPORTS);
 
   const aiSuggestions = [
     "Import a CSV file",
@@ -164,36 +168,85 @@ export function DataImportPanel() {
 
   const fileType = uploadedFile?.name.split(".").pop()?.toUpperCase() || "CSV";
 
-  const schemaTable = useMemo(
-    () =>
-      SAMPLE_SCHEMA.map((col) => ({
+  const schemaTable = useMemo(() => {
+    if (!importPreview) {
+      return SAMPLE_SCHEMA.map((col) => ({
         key: col.name,
         ...col,
-      })),
-    []
-  );
+      }));
+    }
+
+    const sampleRows = importPreview.sample_rows;
+    const sampleCount = sampleRows.length || 1;
+
+    const inferType = (values: Array<unknown>): Column["type"] => {
+      const nonNull = values.filter((value) => value !== null && value !== undefined);
+      if (!nonNull.length) return "text";
+      if (nonNull.every((value) => typeof value === "boolean")) return "boolean";
+      if (nonNull.every((value) => typeof value === "number")) return "number";
+      if (nonNull.every((value) => typeof value === "string" && !Number.isNaN(Date.parse(value)))) return "date";
+      return "text";
+    };
+
+    return importPreview.columns.map((name) => {
+      const values = sampleRows.map((row) => row[name]);
+      const samples = values
+        .filter((value) => value !== null && value !== undefined)
+        .slice(0, 3)
+        .map((value) => String(value));
+      const nulls = values.filter((value) => value === null || value === undefined).length;
+      const nullPercentage = Math.round((nulls / sampleCount) * 100);
+
+      return {
+        key: name,
+        name,
+        type: inferType(values),
+        samples: samples.length ? samples : ["-"],
+        nullPercentage,
+      };
+    });
+  }, [importPreview]);
 
   const handleFileSelect = (file: File) => {
     setUploadedFile(file);
+    setImportPreview(null);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
+    if (!uploadedFile) {
+      notify.info("Upload a file to start import");
+      return;
+    }
     setShowProgress(true);
-    setProgressPercent(12);
+    setProgressPercent(15);
     setProgressStep(0);
-    const interval = window.setInterval(() => {
-      setProgressPercent((prev) => {
-        const next = prev + 18;
-        return next >= 100 ? 100 : next;
-      });
-      setProgressStep((prev) => (prev < 4 ? prev + 1 : 4));
-    }, 700);
-    window.setTimeout(() => {
-      window.clearInterval(interval);
+
+    try {
+      const preview = await uploadDataset(uploadedFile);
+      setImportPreview(preview);
       setProgressPercent(100);
       setProgressStep(4);
+      setRecentImports((prev) => [
+        {
+          id: preview.dataset_id,
+          name: uploadedFile.name.replace(/\.[^/.]+$/, ""),
+          source: "file",
+          sourceType: fileType,
+          rows: preview.row_count,
+          size: Number((uploadedFile.size / 1024 / 1024).toFixed(2)),
+          importedAt: new Date().toLocaleString(),
+          status: "success",
+        },
+        ...prev,
+      ]);
       notify.success("Dataset imported successfully");
-    }, 3200);
+      window.setTimeout(() => setShowProgress(false), 800);
+    } catch (error) {
+      notify.error("Import failed");
+      setProgressPercent(0);
+      setProgressStep(0);
+      setShowProgress(false);
+    }
   };
 
   const handleAIAction = (action: AIAction) => {
@@ -373,7 +426,7 @@ export function DataImportPanel() {
                   <Divider />
                   <Title level={5}>AI Analysis</Title>
                   <div className="ai-issues">
-                    {SAMPLE_ISSUES.map((issue) => (
+                    {(importPreview ? [] : SAMPLE_ISSUES).map((issue) => (
                       <Card key={issue.suggestion} className="issue-card">
                         <Space>
                           <WarningOutlined />
@@ -419,7 +472,7 @@ export function DataImportPanel() {
 
         <Card className="recent-imports" title="Recent Imports">
           <Table
-            dataSource={RECENT_IMPORTS}
+            dataSource={recentImports}
             pagination={{ pageSize: 5 }}
             columns={[
               { title: "Dataset", dataIndex: "name" },
@@ -466,7 +519,9 @@ export function DataImportPanel() {
             ]}
           />
           <Progress percent={progressPercent} />
-          <Text type="secondary">12,543 of 15,000 rows processed</Text>
+          <Text type="secondary">
+            {importPreview ? `${importPreview.row_count.toLocaleString()} rows processed` : "Processing rows..."}
+          </Text>
           <Button onClick={() => setShowProgress(false)}>Cancel Import</Button>
         </Space>
       </Modal>

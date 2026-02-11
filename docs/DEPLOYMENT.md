@@ -10,6 +10,34 @@
 	- docker compose -f docker-compose.prod.yml up -d --build
 - Frontend is served on port 80 and proxies /api to the backend
 
+## Render (Backend) + Vercel (Frontend) + Supabase
+### Backend (Render)
+- Create a new Render Web Service from the backend repo
+- Build command: pip install -r requirements.txt
+- Start command: uvicorn app.main:app --host 0.0.0.0 --port 10000
+- Add environment variables:
+	- DATABASE_URL (Supabase Postgres connection string)
+	- SUPABASE_URL
+	- SUPABASE_ANON_KEY
+	- SUPABASE_JWT_SECRET
+	- SUPABASE_JWT_AUD
+	- PUBLIC_BASE_URL (your Vercel frontend URL)
+	- CORS_ORIGINS (comma-separated list including your Vercel domain)
+	- METRICS_BEARER_TOKEN (optional)
+	- SHARE_SIGNING_SECRET (recommended for signed share links)
+
+### Database Migrations (Supabase)
+- Run once against Supabase:
+	- DATABASE_URL=<supabase> python -m alembic upgrade head
+
+### Frontend (Vercel)
+- Import the frontend project into Vercel
+- Build command: npm run build
+- Output directory: dist
+- Environment variables:
+	- VITE_API_BASE_URL (Render backend URL)
+	- VITE_ENABLE_BILLING=false
+
 ## Single VPS (Docker Compose + Caddy)
 - Point Cloudflare DNS records for `datahub.org.in` and `app.datahub.org.in` to the VPS IP
 - Ensure `.env.production` uses the Supabase Postgres connection string for `DATABASE_URL`
@@ -88,10 +116,9 @@ Key values:
 - Grafana auto-provisions the Prometheus datasource via infra/monitoring/grafana/provisioning
 
 ## Beta Deployment Smoke Checklist
-- Confirm DNS points datahub.org.in and app.datahub.org.in to the VPS IP
-- Run: docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-- Run migrations: docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head
-- Verify health: https://app.datahub.org.in/api/health
+- Confirm Vercel domain and Render backend URL are set
+- Run migrations against Supabase
+- Verify health: https://<render-backend>/health
 - Verify auth flow and core actions: login, upload dataset, preview, insights
-- Verify shared links if enabled: https://app.datahub.org.in/shared/{token}
+- Verify shared links if enabled: https://<vercel-app>/shared/{token}
 - If monitoring enabled: open Prometheus and Grafana, confirm datahub-backend target is UP

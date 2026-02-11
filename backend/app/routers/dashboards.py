@@ -2,7 +2,8 @@ from fastapi import APIRouter, Header, Depends, HTTPException, Request
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import uuid
-from ..models import Dashboard
+from pydantic import BaseModel
+from ..models import Dashboard, DashboardWidget
 from ..security import get_current_role, require_role
 from ..db import get_db
 from ..models_db import Dashboard as DashboardDB
@@ -14,6 +15,11 @@ from ..models import AuditEntry
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 _shared_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
+
+
+class DashboardUpdate(BaseModel):
+    name: str | None = None
+    widgets: list[DashboardWidget] | None = None
 
 @router.post("/", response_model=Dashboard)
 def create_dashboard(
@@ -72,6 +78,68 @@ def get_dashboard(
         share_expires_at=str(dashboard.share_expires_at) if dashboard.share_expires_at else None,
         share_scope=dashboard.share_scope,
     )
+
+
+@router.put("/{dashboard_id}", response_model=Dashboard)
+def update_dashboard(
+    dashboard_id: str,
+    payload: DashboardUpdate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> Dashboard:
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    dashboard = db.query(DashboardDB).filter(DashboardDB.id == dashboard_id).first()
+    if not dashboard:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+    if payload.name is not None:
+        if not payload.name.strip():
+            raise HTTPException(status_code=400, detail="Dashboard name cannot be empty")
+        dashboard.name = payload.name
+    if payload.widgets is not None:
+        dashboard.widgets = [widget.model_dump() for widget in payload.widgets]
+    db.commit()
+    audit_store.add(
+        AuditEntry(
+            action="update.dashboard",
+            actor=authorization or "unknown",
+            target=dashboard_id,
+            metadata={},
+        )
+    )
+    return Dashboard(
+        dashboard_id=dashboard.id,
+        name=dashboard.name,
+        widgets=dashboard.widgets or [],
+        is_shared=bool(dashboard.is_shared),
+        share_token=dashboard.share_token,
+        share_expires_at=str(dashboard.share_expires_at) if dashboard.share_expires_at else None,
+        share_scope=dashboard.share_scope,
+    )
+
+
+@router.delete("/{dashboard_id}")
+def delete_dashboard(
+    dashboard_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    dashboard = db.query(DashboardDB).filter(DashboardDB.id == dashboard_id).first()
+    if not dashboard:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+    db.delete(dashboard)
+    db.commit()
+    audit_store.add(
+        AuditEntry(
+            action="delete.dashboard",
+            actor=authorization or "unknown",
+            target=dashboard_id,
+            metadata={},
+        )
+    )
+    return {"status": "deleted", "dashboard_id": dashboard_id}
 
 
 @router.post("/{dashboard_id}/share")

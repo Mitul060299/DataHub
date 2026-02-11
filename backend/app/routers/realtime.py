@@ -66,6 +66,9 @@ presence_manager = PresenceManager()
 @router.websocket("/presence")
 async def presence(websocket: WebSocket, workspace_id: str = "default", user: str = "anon"):
     authorization = websocket.headers.get("authorization")
+    token = websocket.query_params.get("token")
+    if not authorization and token:
+        authorization = f"Bearer {token}"
     role = get_current_role(authorization)
     try:
         require_role("viewer", role)

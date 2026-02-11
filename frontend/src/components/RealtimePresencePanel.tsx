@@ -1,6 +1,7 @@
 import { Button, Card, Input, List, Space, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { notify } from "../utils/notify";
+import { getAuthToken } from "../utils/auth";
 
 export function RealtimePresencePanel() {
   const [workspaceId, setWorkspaceId] = useState("default");
@@ -14,7 +15,9 @@ export function RealtimePresencePanel() {
   const wsUrl = useMemo(() => {
     const base = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
     const wsBase = base.replace(/^http/, "ws");
-    return `${wsBase}/realtime/presence?workspace_id=${encodeURIComponent(workspaceId)}&user=${encodeURIComponent(user)}`;
+    const token = getAuthToken();
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
+    return `${wsBase}/realtime/presence?workspace_id=${encodeURIComponent(workspaceId)}&user=${encodeURIComponent(user)}${tokenParam}`;
   }, [workspaceId, user]);
 
   const disconnect = () => {

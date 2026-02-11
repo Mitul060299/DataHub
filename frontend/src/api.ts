@@ -149,6 +149,16 @@ export async function createDashboard(name: string) {
   return response.data;
 }
 
+export async function updateDashboard(dashboardId: string, payload: { name?: string; widgets?: any[] }) {
+  const response = await api.put(`/dashboards/${dashboardId}`, payload);
+  return response.data;
+}
+
+export async function deleteDashboard(dashboardId: string) {
+  const response = await api.delete(`/dashboards/${dashboardId}`);
+  return response.data;
+}
+
 export async function shareDashboard(dashboardId: string, expiresInHours?: number, scope?: string) {
   const params: Record<string, unknown> = {};
   if (expiresInHours) params.expires_in_hours = expiresInHours;

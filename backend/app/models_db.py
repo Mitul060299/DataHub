@@ -102,3 +102,21 @@ class ApprovalRequestDB(Base):
     summary = Column(Text, nullable=False)
     status = Column(String, nullable=False, default="pending")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class WebhookDB(Base):
+    __tablename__ = "webhooks"
+    id = Column(String, primary_key=True)
+    target_url = Column(Text, nullable=False)
+    event = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ScheduledJobDB(Base):
+    __tablename__ = "scheduled_jobs"
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    cron = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="scheduled")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

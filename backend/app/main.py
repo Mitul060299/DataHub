@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+import os
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, dashboards, webhooks, jobs, connectors, users, workspaces, widgets, metrics, approvals, realtime, templates
 from .db import Base, engine
@@ -21,7 +22,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def create_tables() -> None:
-    Base.metadata.create_all(bind=engine)
+    if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
+        Base.metadata.create_all(bind=engine)
 
 
 @app.middleware("http")

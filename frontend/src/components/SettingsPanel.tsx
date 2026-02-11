@@ -1,6 +1,7 @@
 import { Card, Row, Col, Form, Input, Select, Switch, Button, Divider, Typography, List, Tag } from "antd";
 import { useState } from "react";
 import { notify } from "../utils/notify";
+import { billingEnabled } from "../utils/featureFlags";
 
 const plans = [
   { value: "starter", label: "Starter", price: "$49 / month" },
@@ -51,48 +52,50 @@ export function SettingsPanel() {
         </Card>
       </Col>
 
-      <Col xs={24} lg={12}>
-        <Card className="panel-card" title="Subscription & Billing">
-          <Typography.Text type="secondary">Current plan</Typography.Text>
-          <div style={{ marginTop: 8, marginBottom: 16 }}>
-            <Select
-              value={plan}
-              onChange={setPlan}
-              options={plans}
-              style={{ width: "100%" }}
+      {billingEnabled && (
+        <Col xs={24} lg={12}>
+          <Card className="panel-card" title="Subscription & Billing">
+            <Typography.Text type="secondary">Current plan</Typography.Text>
+            <div style={{ marginTop: 8, marginBottom: 16 }}>
+              <Select
+                value={plan}
+                onChange={setPlan}
+                options={plans}
+                style={{ width: "100%" }}
+              />
+            </div>
+            <List
+              bordered
+              dataSource={[
+                "Unlimited dashboards",
+                "Priority AI compute",
+                "SOC2-ready audit logs",
+                "Dedicated workspace limits",
+              ]}
+              renderItem={(item) => (
+                <List.Item>
+                  <Tag color="blue">Included</Tag>
+                  {item}
+                </List.Item>
+              )}
             />
-          </div>
-          <List
-            bordered
-            dataSource={[
-              "Unlimited dashboards",
-              "Priority AI compute",
-              "SOC2-ready audit logs",
-              "Dedicated workspace limits",
-            ]}
-            renderItem={(item) => (
-              <List.Item>
-                <Tag color="blue">Included</Tag>
-                {item}
-              </List.Item>
-            )}
-          />
-          <Divider />
-          <Typography.Text type="secondary">Billing contact</Typography.Text>
-          <Form
-            layout="vertical"
-            onFinish={() => notify.success("Billing details saved")}
-            initialValues={{ billingEmail: "billing@datahub.org.in" }}
-          >
-            <Form.Item label="Billing email" name="billingEmail">
-              <Input placeholder="Billing email" />
-            </Form.Item>
-            <Button type="primary" htmlType="submit">
-              Update billing
-            </Button>
-          </Form>
-        </Card>
-      </Col>
+            <Divider />
+            <Typography.Text type="secondary">Billing contact</Typography.Text>
+            <Form
+              layout="vertical"
+              onFinish={() => notify.success("Billing details saved")}
+              initialValues={{ billingEmail: "billing@datahub.org.in" }}
+            >
+              <Form.Item label="Billing email" name="billingEmail">
+                <Input placeholder="Billing email" />
+              </Form.Item>
+              <Button type="primary" htmlType="submit">
+                Update billing
+              </Button>
+            </Form>
+          </Card>
+        </Col>
+      )}
 
       <Col xs={24}>
         <Card className="panel-card" title="Security">

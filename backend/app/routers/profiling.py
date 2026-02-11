@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from ..models import ProfileSummary, ChartSummary, ChartSeriesPoint, CorrelationSummary, CorrelationPair
 from ..services.profiler import profile_dataframe
@@ -7,12 +7,20 @@ from ..services.correlation import compute_correlations
 from ..services.cache import profile_cache
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
+from ..security import get_current_role, require_role
 
 router = APIRouter(prefix="/profiling", tags=["profiling"])
 
 
 @router.get("/{dataset_id}", response_model=ProfileSummary)
-def profile_dataset(dataset_id: str, columns: str | None = None, db: Session = Depends(get_db)) -> ProfileSummary:
+def profile_dataset(
+    dataset_id: str,
+    columns: str | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> ProfileSummary:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     cache_key = f"profile:{dataset_id}:{columns or 'all'}"
     cached = profile_cache.get(cache_key)
     if cached:
@@ -40,8 +48,11 @@ def profile_summary(
     column: str,
     bins: int = 10,
     top_n: int = 10,
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> ChartSummary:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     cache_key = f"summary:{dataset_id}:{column}"
     cached = profile_cache.get(cache_key)
     if cached:
@@ -75,7 +86,13 @@ def profile_summary(
 
 
 @router.get("/{dataset_id}/correlations", response_model=CorrelationSummary)
-def profile_correlations(dataset_id: str, db: Session = Depends(get_db)) -> CorrelationSummary:
+def profile_correlations(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> CorrelationSummary:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     cache_key = f"corr:{dataset_id}"
     cached = profile_cache.get(cache_key)
     if cached:

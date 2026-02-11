@@ -66,7 +66,13 @@ def _chunk_rows(rows: list[dict], size: int) -> list[list[dict]]:
 
 
 @router.post("/upload", response_model=DatasetPreview)
-async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)) -> DatasetPreview:
+async def upload_dataset(
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DatasetPreview:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     content = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(content))
     df = df.astype(object).where(pd.notnull(df), None)
@@ -186,7 +192,9 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
 
 
 @router.get("/", response_model=list[DatasetMeta])
-def list_datasets(db: Session = Depends(get_db)) -> list[DatasetMeta]:
+def list_datasets(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> list[DatasetMeta]:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     rows = db.query(DatasetMetaDB).all()
     return [
         DatasetMeta(
@@ -200,7 +208,13 @@ def list_datasets(db: Session = Depends(get_db)) -> list[DatasetMeta]:
 
 
 @router.get("/{dataset_id}/lineage", response_model=list[DatasetMeta])
-def dataset_lineage(dataset_id: str, db: Session = Depends(get_db)) -> list[DatasetMeta]:
+def dataset_lineage(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> list[DatasetMeta]:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     lineage: list[DatasetMeta] = []
     current_id = dataset_id
     visited = set()
@@ -226,8 +240,11 @@ def suggest_columns(
     dataset_id: str,
     query: str,
     limit: int = 5,
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -327,8 +344,11 @@ def preview_dataset(
     filter_col: str | None = None,
     filter_op: str | None = None,
     filter_val: str | None = None,
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> DatasetPage:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     if limit > 500:
         limit = 500
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()

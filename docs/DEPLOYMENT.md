@@ -80,7 +80,18 @@ Key values:
 ## Monitoring
 - Prometheus metrics are exposed at /metrics on the backend
 - Optional monitoring stack:
-	- docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d
+	- docker compose --env-file .env.production -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d
 	- Prometheus: http://localhost:9090
 	- Grafana: http://localhost:3000 (admin password via GRAFANA_ADMIN_PASSWORD)
 - Alert rules are defined in infra/monitoring/alert.rules.yml
+- If METRICS_BEARER_TOKEN is set, Prometheus uses it to authenticate to /metrics
+- Grafana auto-provisions the Prometheus datasource via infra/monitoring/grafana/provisioning
+
+## Beta Deployment Smoke Checklist
+- Confirm DNS points datahub.org.in and app.datahub.org.in to the VPS IP
+- Run: docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+- Run migrations: docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head
+- Verify health: https://app.datahub.org.in/api/health
+- Verify auth flow and core actions: login, upload dataset, preview, insights
+- Verify shared links if enabled: https://app.datahub.org.in/shared/{token}
+- If monitoring enabled: open Prometheus and Grafana, confirm datahub-backend target is UP

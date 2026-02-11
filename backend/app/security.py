@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 import base64
 import time
@@ -108,11 +108,29 @@ def _map_supabase_role(claims: Dict[str, Any]) -> str:
     return "viewer"
 
 
+def _verify_app_token(token: str) -> Dict[str, Any]:
+    if not settings.app_secret_key:
+        return {}
+    try:
+        return jwt.decode(
+            token,
+            settings.app_secret_key,
+            algorithms=["HS256"],
+            options={"require": ["exp", "sub"]},
+        )
+    except Exception:
+        return {}
+
+
 def create_access_token(subject: str, role: str = "viewer", expires_minutes: int = 60) -> Dict[str, str]:
-    payload = f"{subject}|{role}|{int((datetime.utcnow() + timedelta(minutes=expires_minutes)).timestamp())}"
-    token = base64.urlsafe_b64encode(
-        f"{payload}|{settings.app_secret_key}".encode("utf-8")
-    ).decode("utf-8")
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": subject,
+        "role": role,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
+    }
+    token = jwt.encode(payload, settings.app_secret_key, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -125,6 +143,8 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
             return "viewer"
         if _is_jwt(token):
             claims = _verify_supabase_token(token)
+            if not claims:
+                claims = _verify_app_token(token)
             if claims:
                 return _map_supabase_role(claims)
         decoded = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")

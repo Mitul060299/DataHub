@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from ..models import ConnectorImportRequest, DatasetPreview
 from ..services.connectors import connector_registry
@@ -6,17 +6,26 @@ from .datasets import save_dataset
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
 from ..services.sync_store import sync_store
+from ..security import get_current_role, require_role
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
 
 @router.get("/")
-def list_connectors() -> dict:
+def list_connectors(authorization: str | None = Header(default=None)) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     return {"connectors": connector_registry.list()}
 
 
 @router.post("/import", response_model=DatasetPreview)
-def import_from_connector(payload: ConnectorImportRequest, db: Session = Depends(get_db)) -> DatasetPreview:
+def import_from_connector(
+    payload: ConnectorImportRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DatasetPreview:
+    role = get_current_role(authorization)
+    require_role("editor", role)
     connector = connector_registry.get(payload.connector)
     if not connector:
         raise HTTPException(status_code=404, detail="Connector not found")
@@ -32,7 +41,13 @@ def import_from_connector(payload: ConnectorImportRequest, db: Session = Depends
 
 
 @router.post("/sync")
-def sync_connector(payload: dict, db: Session = Depends(get_db)) -> dict:
+def sync_connector(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("editor", role)
     connector_name = payload.get("connector")
     config = payload.get("config", {})
     mode = payload.get("mode", "pull")
@@ -79,7 +94,9 @@ def sync_connector(payload: dict, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/sync-status")
-def list_sync_status() -> dict:
+def list_sync_status(authorization: str | None = Header(default=None)) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     return {
         "status": [
             {

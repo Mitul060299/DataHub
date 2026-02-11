@@ -45,6 +45,7 @@ import { exchangeOidcCode } from "./api";
 import { clearAuthToken, getAuthToken, setAuthToken, getRoleFromToken } from "./utils/auth";
 import { notify } from "./utils/notify";
 import { supabase } from "./utils/supabaseClient";
+import { billingEnabled } from "./utils/featureFlags";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 const { Header, Content, Sider } = Layout;
@@ -498,7 +499,11 @@ export function App() {
       <PlansPanel
         onSelectPlan={(plan) => {
           setSelectedPlan(plan);
-          setActiveRoute("billing");
+          if (billingEnabled) {
+            setActiveRoute("billing");
+          } else {
+            notify.info("Billing is disabled for the beta");
+          }
         }}
       />
     </div>
@@ -542,7 +547,6 @@ export function App() {
     workspace: { title: "Workspace", description: "Manage projects and teams", content: workspaceTabContent },
     settings: { title: "Settings", description: "Manage account and preferences", content: settingsTabContent },
     plans: { title: "Plans", description: "Pricing and plan selection", content: plansTabContent },
-    billing: { title: "Billing", description: "Subscription and invoices", content: billingTabContent },
     about: { title: "About", description: "Product story", content: aboutTabContent },
     reviews: { title: "Reviews", description: "Customer feedback", content: reviewsTabContent },
     automation: { title: "Automation", description: "Integrations and jobs", content: automationTabContent },
@@ -550,6 +554,10 @@ export function App() {
     admin: { title: "Admin", description: "Administration", content: adminTabContent },
     shared: { title: "Shared", description: "Shared resources", content: sharedTabContent },
   };
+
+  if (billingEnabled) {
+    routeMap.billing = { title: "Billing", description: "Subscription and invoices", content: billingTabContent };
+  }
 
   const activePage = routeMap[activeRoute] || routeMap.home;
 
@@ -621,7 +629,35 @@ export function App() {
     setLoadingBar(true);
     const timer = window.setTimeout(() => setLoadingBar(false), 600);
     return () => window.clearTimeout(timer);
+  }, [activeRoute, billingEnabled]);
+
+  useEffect(() => {
+    if (!billingEnabled && activeRoute === "billing") {
+      setActiveRoute("plans");
+    }
   }, [activeRoute]);
+
+  const userMenuItems = [
+    { key: "user", label: "Jordan Smith · jordan@acme.com" },
+    { type: "divider" as const },
+    { key: "account", label: "Account Settings", onClick: () => setActiveRoute("settings") },
+    ...(billingEnabled
+      ? [{ key: "billing", label: "Billing", onClick: () => setActiveRoute("billing") }]
+      : []),
+    { key: "docs", label: "Documentation" },
+    { key: "help", label: "Help & Support" },
+    { type: "divider" as const },
+    {
+      key: "signout",
+      label: "Sign Out",
+      onClick: () => {
+        clearAuthToken();
+        setHasToken(false);
+        setRole(null);
+        notify.info("Signed out");
+      },
+    },
+  ];
   return (
     <Layout className="app-shell">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -698,25 +734,7 @@ export function App() {
           <Dropdown
             trigger={["click"]}
             menu={{
-              items: [
-                { key: "user", label: "Jordan Smith · jordan@acme.com" },
-                { type: "divider" as const },
-                { key: "account", label: "Account Settings", onClick: () => setActiveRoute("settings") },
-                { key: "billing", label: "Billing", onClick: () => setActiveRoute("billing") },
-                { key: "docs", label: "Documentation" },
-                { key: "help", label: "Help & Support" },
-                { type: "divider" as const },
-                {
-                  key: "signout",
-                  label: "Sign Out",
-                  onClick: () => {
-                    clearAuthToken();
-                    setHasToken(false);
-                    setRole(null);
-                    notify.info("Signed out");
-                  },
-                },
-              ],
+              items: userMenuItems,
             }}
           >
             <Button type="text">

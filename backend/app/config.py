@@ -37,6 +37,7 @@ class Settings(BaseModel):
     public_base_url: str = os.getenv("PUBLIC_BASE_URL", "")
     shared_rate_limit_per_minute: int = int(os.getenv("SHARED_RATE_LIMIT_PER_MIN", "120"))
     share_signing_secret: str = os.getenv("SHARE_SIGNING_SECRET", "")
+    metrics_bearer_token: str = os.getenv("METRICS_BEARER_TOKEN", "")
     share_scope_allowlist: list[str] = [
         scope.strip()
         for scope in os.getenv("SHARE_SCOPE_ALLOWLIST", "").split(",")

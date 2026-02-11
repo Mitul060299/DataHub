@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, Set
 import json
+from ..security import get_current_role, require_role
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
 
@@ -64,6 +65,13 @@ presence_manager = PresenceManager()
 
 @router.websocket("/presence")
 async def presence(websocket: WebSocket, workspace_id: str = "default", user: str = "anon"):
+    authorization = websocket.headers.get("authorization")
+    role = get_current_role(authorization)
+    try:
+        require_role("viewer", role)
+    except Exception:
+        await websocket.close(code=4403)
+        return
     await presence_manager.connect(workspace_id, user, websocket)
     try:
         while True:

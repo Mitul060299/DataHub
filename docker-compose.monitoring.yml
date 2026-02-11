@@ -3,6 +3,8 @@ version: "3.9"
 services:
   prometheus:
     image: prom/prometheus:v2.53.2
+    env_file:
+      - ./.env.production
     volumes:
       - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/monitoring/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
@@ -16,6 +18,8 @@ services:
     image: grafana/grafana:11.1.5
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-grafana}
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3000:3000"
     depends_on:

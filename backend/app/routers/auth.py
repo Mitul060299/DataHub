@@ -9,8 +9,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=AuthToken)
-def login(username: str, role: str = "viewer") -> AuthToken:
-    token_data = create_access_token(username, role=role)
+def login(username: str) -> AuthToken:
+    token_data = create_access_token(username, role="viewer")
     return AuthToken(**token_data)
 
 

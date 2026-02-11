@@ -37,6 +37,7 @@ import {
 } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { notify } from "../utils/notify";
+import { billingEnabled } from "../utils/featureFlags";
 
 const { Text, Title } = Typography;
 
@@ -624,27 +625,29 @@ export function WorkspaceManagementPanel() {
                 </Space>
               ),
             },
-            {
-              key: "billing",
-              label: "Billing",
-              children: (
-                <Space direction="vertical" style={{ width: "100%" }}>
-                  <Card className="billing-card">
-                    <Space direction="vertical">
-                      <Text strong>Current plan: {currentWorkspace.plan}</Text>
-                      <Progress percent={80} />
-                      <Text type="secondary">Projects: 8/unlimited</Text>
-                      <Text type="secondary">Storage: 2.3GB/10GB</Text>
-                      <Text type="secondary">Team members: 3/5</Text>
-                      <Button type="primary">Upgrade Plan</Button>
-                    </Space>
-                  </Card>
-                  <Divider />
-                  <Text strong>Payment method</Text>
-                  <Input placeholder="**** **** **** 1243" />
-                </Space>
-              ),
-            },
+            ...(billingEnabled
+              ? [{
+                key: "billing",
+                label: "Billing",
+                children: (
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    <Card className="billing-card">
+                      <Space direction="vertical">
+                        <Text strong>Current plan: {currentWorkspace.plan}</Text>
+                        <Progress percent={80} />
+                        <Text type="secondary">Projects: 8/unlimited</Text>
+                        <Text type="secondary">Storage: 2.3GB/10GB</Text>
+                        <Text type="secondary">Team members: 3/5</Text>
+                        <Button type="primary">Upgrade Plan</Button>
+                      </Space>
+                    </Card>
+                    <Divider />
+                    <Text strong>Payment method</Text>
+                    <Input placeholder="**** **** **** 1243" />
+                  </Space>
+                ),
+              }]
+              : []),
             {
               key: "security",
               label: "Security",

@@ -17,7 +17,13 @@ _shared_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
 
 
 @router.post("/", response_model=WorkspaceOut)
-def create_workspace(payload: WorkspaceCreate, db: Session = Depends(get_db)) -> WorkspaceOut:
+def create_workspace(
+    payload: WorkspaceCreate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> WorkspaceOut:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     workspace = Workspace(id=str(uuid.uuid4()), name=payload.name, is_shared=False, share_token=None, share_expires_at=None)
     db.add(workspace)
     try:
@@ -37,7 +43,9 @@ def create_workspace(payload: WorkspaceCreate, db: Session = Depends(get_db)) ->
 
 
 @router.get("/", response_model=list[WorkspaceOut])
-def list_workspaces(db: Session = Depends(get_db)) -> list[WorkspaceOut]:
+def list_workspaces(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> list[WorkspaceOut]:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     workspaces = db.query(Workspace).all()
     return [
         WorkspaceOut(

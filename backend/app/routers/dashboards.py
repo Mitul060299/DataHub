@@ -31,7 +31,12 @@ def create_dashboard(
 
 
 @router.get("/", response_model=list[Dashboard])
-def list_dashboards(db: Session = Depends(get_db)) -> list[Dashboard]:
+def list_dashboards(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> list[Dashboard]:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     dashboards = db.query(DashboardDB).all()
     return [
         Dashboard(
@@ -48,7 +53,13 @@ def list_dashboards(db: Session = Depends(get_db)) -> list[Dashboard]:
 
 
 @router.get("/{dashboard_id}", response_model=Dashboard)
-def get_dashboard(dashboard_id: str, db: Session = Depends(get_db)) -> Dashboard:
+def get_dashboard(
+    dashboard_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> Dashboard:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
     dashboard = db.query(DashboardDB).filter(DashboardDB.id == dashboard_id).first()
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")

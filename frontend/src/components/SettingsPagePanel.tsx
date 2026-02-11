@@ -30,6 +30,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { notify } from "../utils/notify";
 import { PaymentSubscriptionPanel } from "./PaymentSubscriptionPanel";
+import { billingEnabled } from "../utils/featureFlags";
 
 const { Text, Title } = Typography;
 
@@ -416,11 +417,13 @@ export function SettingsPagePanel() {
               label: "ML Events",
               children: <Checkbox.Group options={["Model training complete", "Model deployed", "Prediction drift detected"]} />,
             },
-            {
-              key: "billing",
-              label: "Billing",
-              children: <Checkbox.Group options={["Payment succeeded", "Payment failed", "Trial expiring", "Usage limit warning"]} />,
-            },
+            ...(billingEnabled
+              ? [{
+                key: "billing",
+                label: "Billing",
+                children: <Checkbox.Group options={["Payment succeeded", "Payment failed", "Trial expiring", "Usage limit warning"]} />,
+              }]
+              : []),
           ]}
         />
       </Card>
@@ -546,7 +549,9 @@ export function SettingsPagePanel() {
           { key: "profile", label: "Profile", children: profileContent },
           { key: "security", label: "Account Security", children: securityContent },
           { key: "workspace", label: "Workspace Settings", children: workspaceContent },
-          { key: "billing", label: "Billing", children: <PaymentSubscriptionPanel /> },
+          ...(billingEnabled
+            ? [{ key: "billing", label: "Billing", children: <PaymentSubscriptionPanel /> }]
+            : []),
           { key: "team", label: "Team & Permissions", children: teamContent },
           { key: "integrations", label: "Integrations", children: integrationsContent },
           { key: "notifications", label: "Notifications", children: notificationsContent },

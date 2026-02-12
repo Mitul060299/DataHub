@@ -39,7 +39,7 @@ import {
   RobotOutlined,
 } from "@ant-design/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AgentSuggestion, DatasetMeta, InsightSummary, TransformationStep } from "./types";
+import type { AgentSuggestion, DatasetMeta, InsightSummary, PipelineSchedule, TransformationStep } from "./types";
 import {
   applyRecipe,
   chatWithAgent,
@@ -48,6 +48,8 @@ import {
   fetchInsights,
   fetchRecipe,
   listDatasets,
+  listPipelines,
+  runPipeline,
   saveRecipe,
   exchangeOidcCode,
 } from "./api";
@@ -133,6 +135,10 @@ export function App() {
   const [datasetColumns, setDatasetColumns] = useState<string[]>([]);
   const [insights, setInsights] = useState<InsightSummary | null>(null);
   const [suggestion, setSuggestion] = useState<AgentSuggestion | null>(null);
+  const [pipelines, setPipelines] = useState<PipelineSchedule[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [selectedPipelineMeta, setSelectedPipelineMeta] = useState<PipelineSchedule | null>(null);
+  const [selectedPipelineSteps, setSelectedPipelineSteps] = useState<TransformationStep[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatEntry[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [aiTyping, setAiTyping] = useState(false);
@@ -243,6 +249,47 @@ export function App() {
         notify.error(detail);
       });
   }, []);
+
+  const refreshPipelines = async () => {
+    try {
+      const data = await listPipelines();
+      setPipelines(data);
+      if (!selectedPipelineId && data.length) {
+        setSelectedPipelineId(data[0].pipeline_id);
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to load pipelines.";
+      notify.error(detail);
+    }
+  };
+
+  useEffect(() => {
+    refreshPipelines();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPipelineId) {
+      setSelectedPipelineMeta(null);
+      setSelectedPipelineSteps([]);
+      return;
+    }
+    const pipeline = pipelines.find((item) => item.pipeline_id === selectedPipelineId) || null;
+    setSelectedPipelineMeta(pipeline);
+    if (!pipeline?.dataset_id) {
+      setSelectedPipelineSteps([]);
+      return;
+    }
+    fetchRecipe(pipeline.dataset_id)
+      .then((recipe) => setSelectedPipelineSteps(recipe.steps || []))
+      .catch((err: any) => {
+        const detail = err?.response?.data?.detail;
+        if (detail && detail.toLowerCase().includes("not found")) {
+          setSelectedPipelineSteps([]);
+        } else if (detail) {
+          notify.error(detail);
+        }
+      });
+  }, [selectedPipelineId, pipelines]);
 
   useEffect(() => {
     if (!datasetId) {
@@ -442,6 +489,23 @@ export function App() {
     }
   };
 
+  const handleRunExistingPipeline = async () => {
+    if (!selectedPipelineId) {
+      notify.info("Select a pipeline to run.");
+      return;
+    }
+    setPipelineStatus("running");
+    try {
+      await runPipeline(selectedPipelineId);
+      setPipelineStatus("completed");
+      notify.success("Pipeline run triggered.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to run pipeline.";
+      notify.error(detail);
+      setPipelineStatus("draft");
+    }
+  };
+
   const handleSchedulePipeline = async () => {
     if (!datasetId) {
       notify.info("Select a dataset to schedule a pipeline.");
@@ -462,6 +526,7 @@ export function App() {
         enabled: true,
       });
       notify.success("Pipeline schedule created.");
+      refreshPipelines();
       setScheduleOpen(false);
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Failed to schedule pipeline.";
@@ -474,6 +539,15 @@ export function App() {
   const datasetOptions = useMemo(
     () => datasets.map((item) => ({ label: item.dataset_id, value: item.dataset_id })),
     [datasets]
+  );
+
+  const pipelineOptions = useMemo(
+    () =>
+      pipelines.map((item) => ({
+        label: item.dataset_id ? `${item.name} · ${item.dataset_id}` : item.name,
+        value: item.pipeline_id,
+      })),
+    [pipelines]
   );
 
   const selectedDataset = useMemo(
@@ -504,365 +578,404 @@ export function App() {
 
   return (
     <Layout className="ai-analytics-layout">
-      <Sider
-        width={leftSidebarCollapsed ? 60 : 240}
-        collapsedWidth={60}
-        collapsible={false}
-        className={`main-sidebar ${leftSidebarCollapsed ? "collapsed" : ""}`}
-        theme="light"
-      >
-        <div className="main-sidebar-inner">
-          <nav className="main-nav">
+      <div className="ai-topbar">
+        <div className="topbar-left">
+          <div className="topbar-brand">
+            <DatabaseOutlined className="brand-icon" />
+            <span>DataHub</span>
+          </div>
+          <div className="topbar-nav">
             <Button
               type="text"
-              className={`main-nav-item ${activeMainTab === "home" ? "active" : ""}`}
+              className={`topbar-item ${activeMainTab === "home" ? "active" : ""}`}
               icon={<HomeOutlined />}
               onClick={() => setActiveMainTab("home")}
             >
-              {!leftSidebarCollapsed && "Home"}
+              Home
             </Button>
             <Button
               type="text"
-              className={`main-nav-item ${activeMainTab === "workspace" ? "active" : ""}`}
+              className={`topbar-item ${activeMainTab === "workspace" ? "active" : ""}`}
               icon={<AppstoreOutlined />}
               onClick={() => setActiveMainTab("workspace")}
             >
-              {!leftSidebarCollapsed && "Workspaces"}
+              Workspaces
             </Button>
             <Button
               type="text"
-              className={`main-nav-item ${activeMainTab === "marketplace" ? "active" : ""}`}
+              className={`topbar-item ${activeMainTab === "marketplace" ? "active" : ""}`}
               icon={<ShoppingOutlined />}
               onClick={() => setActiveMainTab("marketplace")}
             >
-              {!leftSidebarCollapsed && "Marketplace"}
-            </Button>
-          </nav>
-          <div className="main-sidebar-footer">
-            <Button
-              type="text"
-              className={`main-nav-item ${activeMainTab === "settings" ? "active" : ""}`}
-              icon={<SettingOutlined />}
-              onClick={() => setActiveMainTab("settings")}
-            >
-              {!leftSidebarCollapsed && "Settings"}
-            </Button>
-            <Button
-              type="text"
-              className="main-nav-item"
-              icon={leftSidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setLeftSidebarCollapsed((prev) => !prev)}
-            >
-              {!leftSidebarCollapsed && "Collapse"}
+              Marketplace
             </Button>
           </div>
         </div>
-      </Sider>
-
-      <div className={`data-operations-panel ${dataPanelOpen ? "open" : ""}`}>
-        <Tabs
-          tabPosition="left"
-          activeKey={activeDataTab}
-          onChange={(key) => setActiveDataTab(key)}
-          className="data-operations-tabs"
-          items={[
-            {
-              key: "import",
-              label: (
-                <span className="data-tab-label">
-                  <DatabaseOutlined />
-                  Data Import
-                </span>
-              ),
-              children: <DataImportPanel />,
-            },
-            {
-              key: "transform",
-              label: (
-                <span className="data-tab-label">
-                  <SwapOutlined />
-                  Transform
-                </span>
-              ),
-              children: <DataTransformationPanel />,
-            },
-            {
-              key: "ml",
-              label: (
-                <span className="data-tab-label">
-                  <ExperimentOutlined />
-                  ML/Cleaning
-                </span>
-              ),
-              children: <DataCleaningPanel />,
-            },
-            {
-              key: "feature",
-              label: (
-                <span className="data-tab-label">
-                  <BranchesOutlined />
-                  Feature Eng
-                </span>
-              ),
-              children: <TransformationsPanel datasetId={datasetId} />,
-            },
-            {
-              key: "quality",
-              label: (
-                <span className="data-tab-label">
-                  <CheckCircleOutlined />
-                  Data Quality
-                </span>
-              ),
-              children: <ProfilePanel datasetId={datasetId} />,
-            },
-          ]}
-        />
+        <div className="topbar-actions">
+          <Button onClick={() => setDataPanelOpen((prev) => !prev)}>Data Ops</Button>
+          <Button onClick={() => setPipelineOpen((prev) => !prev)}>Pipeline</Button>
+        </div>
       </div>
 
-      <Content className="center-workspace">
-        {isMobile && (
-          <div className="workspace-toolbar">
-            <Space>
-              <Button onClick={() => setDataPanelOpen((prev) => !prev)}>Data Ops</Button>
-              <Button onClick={() => setPipelineOpen((prev) => !prev)}>Pipeline</Button>
-            </Space>
+      <div className="ai-body">
+        <Sider
+          width={leftSidebarCollapsed ? 60 : 280}
+          collapsedWidth={60}
+          collapsible={false}
+          className={`data-sidebar ${dataPanelOpen ? "open" : ""} ${leftSidebarCollapsed ? "collapsed" : ""}`}
+          theme="light"
+        >
+          <div className="main-sidebar-inner">
+            <Tabs
+              tabPosition="left"
+              activeKey={activeDataTab}
+              onChange={(key) => setActiveDataTab(key)}
+              className="data-operations-tabs"
+              items={[
+                {
+                  key: "import",
+                  label: (
+                    <span className="data-tab-label">
+                      <DatabaseOutlined />
+                      Data Import
+                    </span>
+                  ),
+                  children: <DataImportPanel />,
+                },
+                {
+                  key: "transform",
+                  label: (
+                    <span className="data-tab-label">
+                      <SwapOutlined />
+                      Transform
+                    </span>
+                  ),
+                  children: <DataTransformationPanel />,
+                },
+                {
+                  key: "ml",
+                  label: (
+                    <span className="data-tab-label">
+                      <ExperimentOutlined />
+                      ML/Cleaning
+                    </span>
+                  ),
+                  children: <DataCleaningPanel />,
+                },
+                {
+                  key: "feature",
+                  label: (
+                    <span className="data-tab-label">
+                      <BranchesOutlined />
+                      Feature Eng
+                    </span>
+                  ),
+                  children: <TransformationsPanel datasetId={datasetId} />,
+                },
+                {
+                  key: "quality",
+                  label: (
+                    <span className="data-tab-label">
+                      <CheckCircleOutlined />
+                      Data Quality
+                    </span>
+                  ),
+                  children: <ProfilePanel datasetId={datasetId} />,
+                },
+              ]}
+            />
+            <div className="main-sidebar-footer">
+              <Button
+                type="text"
+                className={`main-nav-item ${activeMainTab === "settings" ? "active" : ""}`}
+                icon={<SettingOutlined />}
+                onClick={() => setActiveMainTab("settings")}
+              >
+                {!leftSidebarCollapsed && "Settings"}
+              </Button>
+              <Button
+                type="text"
+                className="main-nav-item"
+                icon={leftSidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => setLeftSidebarCollapsed((prev) => !prev)}
+              >
+                {!leftSidebarCollapsed && "Collapse"}
+              </Button>
+            </div>
           </div>
-        )}
+        </Sider>
 
-        {isSharedView ? (
-          sharedTabContent
-        ) : (
-          <>
-            <div className="ai-chat-container">
-              <div className="chat-header">
-                <div>
-                  <Title level={4} style={{ marginBottom: 0 }}>
-                    AI Data Analyst
-                  </Title>
-                  <Text type="secondary">
-                    {selectedDataset
-                      ? `Working on ${selectedDataset.dataset_id}`
-                      : "Select a dataset to start"}
-                  </Text>
-                </div>
-                <Space align="center">
-                  <Select
-                    placeholder="Select dataset"
-                    value={datasetId ?? undefined}
-                    onChange={(value) => setDatasetId(value)}
-                    options={datasetOptions}
-                    style={{ minWidth: 200 }}
-                    allowClear
-                  />
-                  <Tag color={aiTyping ? "blue" : "green"}>{aiTyping ? "Thinking" : "Online"}</Tag>
-                </Space>
-              </div>
-
-              <div className="chat-messages" ref={chatScrollRef}>
-                {chatMessages.map((message, index) => (
-                  <div key={`${message.role}-${index}`} className={`chat-message ${message.role}`}>
-                    <Avatar className="message-avatar" icon={message.role === "user" ? <UserOutlined /> : <RobotOutlined />} />
-                    <div className="message-body">
-                      <div className="message-content">{message.content}</div>
-                      <Text className="message-time" type="secondary">
-                        {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <Content className="center-workspace">
+            {isSharedView ? (
+              sharedTabContent
+            ) : (
+              <>
+                <div className="ai-chat-container">
+                  <div className="chat-header">
+                    <div>
+                      <Title level={4} style={{ marginBottom: 0 }}>
+                        AI Data Analyst
+                      </Title>
+                      <Text type="secondary">
+                        {selectedDataset
+                          ? `Working on ${selectedDataset.dataset_id}`
+                          : "Select a dataset to start"}
                       </Text>
                     </div>
+                    <Space align="center">
+                      <Select
+                        placeholder="Select dataset"
+                        value={datasetId ?? undefined}
+                        onChange={(value) => setDatasetId(value)}
+                        options={datasetOptions}
+                        style={{ minWidth: 200 }}
+                        allowClear
+                      />
+                      <Tag color={aiTyping ? "blue" : "green"}>{aiTyping ? "Thinking" : "Online"}</Tag>
+                    </Space>
                   </div>
-                ))}
-              </div>
 
-              <div className="chat-input-area">
-                <div className="suggested-prompts">
-                  {promptChips.map((prompt) => (
-                    <button
-                      key={prompt}
-                      className="suggested-prompt-chip"
-                      onClick={() => setInputMessage(prompt)}
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-                {aiTyping && <Text className="chat-typing">AI is typing...</Text>}
-                <div className="chat-input-row">
-                  <Input.TextArea
-                    value={inputMessage}
-                    onChange={(event) => setInputMessage(event.target.value)}
-                    autoSize={{ minRows: 1, maxRows: 4 }}
-                    placeholder="Ask AI to help with your data..."
-                    onPressEnter={(event) => {
-                      if (!event.shiftKey) {
-                        event.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                  />
-                  <Button type="primary" icon={<SendOutlined />} onClick={handleSendMessage}>
-                    Send
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="insights-preview-container">
-              <Tabs
-                activeKey={activeInsightTab}
-                onChange={(key) => setActiveInsightTab(key)}
-                items={[
-                  {
-                    key: "suggestions",
-                    label: (
-                      <span className="insight-tab-label">
-                        <BulbOutlined /> AI Suggestions
-                      </span>
-                    ),
-                    children: (
-                      <div>
-                        {suggestion?.notes?.length ? (
-                          <Card className="ai-suggestion-notes">
-                            <Text strong>Summary</Text>
-                            <Divider style={{ margin: "8px 0" }} />
-                            <Space direction="vertical">
-                              {suggestion.notes.map((note) => (
-                                <Text key={note} type="secondary">
-                                  {note}
-                                </Text>
-                              ))}
-                            </Space>
-                          </Card>
-                        ) : null}
-                        <div className="ai-suggestions-grid">
-                          {suggestionCards.length ? (
-                            suggestionCards.map((step, index) => (
-                              <Card key={`${step.name}-${index}`} className="ai-suggestion-card">
-                                <div className="suggestion-header">
-                                  <div>
-                                    <Text strong>{step.name}</Text>
-                                    <Text type="secondary" className="suggestion-description">
-                                      {JSON.stringify(step.params || {})}
-                                    </Text>
-                                  </div>
-                                  <span className="confidence-badge">
-                                    {Math.max(70, 95 - index * 5)}% confidence
-                                  </span>
-                                </div>
-                                <Button onClick={() => handleApplySuggestionStep(step)}>
-                                  Apply
-                                </Button>
-                              </Card>
-                            ))
-                          ) : (
-                            <Text type="secondary">No AI suggestions yet.</Text>
-                          )}
+                  <div className="chat-messages" ref={chatScrollRef}>
+                    {chatMessages.map((message, index) => (
+                      <div key={`${message.role}-${index}`} className={`chat-message ${message.role}`}>
+                        <Avatar className="message-avatar" icon={message.role === "user" ? <UserOutlined /> : <RobotOutlined />} />
+                        <div className="message-body">
+                          <div className="message-content">{message.content}</div>
+                          <Text className="message-time" type="secondary">
+                            {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </Text>
                         </div>
                       </div>
-                    ),
-                  },
-                  {
-                    key: "preview",
-                    label: (
-                      <span className="insight-tab-label">
-                        <EyeOutlined /> Data Preview
-                      </span>
-                    ),
-                    children: (
-                      <div className="data-preview-tab">
-                        <div className="data-preview-stats">
-                          <Tag color="blue">Rows: {selectedDataset?.row_count ?? "-"}</Tag>
-                          <Tag color="cyan">Columns: {datasetColumns.length || "-"}</Tag>
-                        </div>
-                        <DatasetPreviewPanel datasetId={datasetId} onColumns={setDatasetColumns} />
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "insights",
-                    label: (
-                      <span className="insight-tab-label">
-                        <ThunderboltOutlined /> Insights
-                      </span>
-                    ),
-                    children: (
-                      <div className="insights-grid">
-                        <InsightsPanel insights={insights} />
-                        <CorrelationPanel datasetId={datasetId} />
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          </>
-        )}
-      </Content>
+                    ))}
+                  </div>
 
-      <aside className={`pipeline-sidebar ${pipelineOpen ? "open" : ""}`}>
-        <div className="pipeline-header">
-          <Input
-            className="pipeline-name-input"
-            value={pipelineName}
-            onChange={(event) => setPipelineName(event.target.value)}
-            placeholder="Pipeline name"
-          />
-          <div className="pipeline-status-row">
-            <Tag color={pipelineStatus === "completed" ? "green" : pipelineStatus === "running" ? "blue" : "default"}>
-              {pipelineStatus}
-            </Tag>
-            <Text type="secondary">
-              {lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : "Not saved"}
-            </Text>
-          </div>
-        </div>
-
-        <div className="pipeline-steps-container">
-          {pipelineSteps.length ? (
-            <Steps
-              direction="vertical"
-              current={Math.max(pipelineSteps.length - 1, 0)}
-              items={pipelineSteps.map((step, index) => ({
-                title: step.name,
-                description: (
-                  <div className="pipeline-step">
-                    <Text type="secondary">{JSON.stringify(step.params || {})}</Text>
-                    <div className="step-actions">
-                      <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => openStepEditor(index)}
+                  <div className="chat-input-area">
+                    <div className="suggested-prompts">
+                      {promptChips.map((prompt) => (
+                        <button
+                          key={prompt}
+                          className="suggested-prompt-chip"
+                          onClick={() => setInputMessage(prompt)}
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                    {aiTyping && <Text className="chat-typing">AI is typing...</Text>}
+                    <div className="chat-input-row">
+                      <Input.TextArea
+                        value={inputMessage}
+                        onChange={(event) => setInputMessage(event.target.value)}
+                        autoSize={{ minRows: 1, maxRows: 4 }}
+                        placeholder="Ask AI to help with your data..."
+                        onPressEnter={(event) => {
+                          if (!event.shiftKey) {
+                            event.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
                       />
-                      <Button
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDeleteStep(index)}
-                      />
+                      <Button type="primary" icon={<SendOutlined />} onClick={handleSendMessage}>
+                        Send
+                      </Button>
                     </div>
                   </div>
-                ),
-                status: pipelineStatus === "running" && index === pipelineSteps.length - 1 ? "process" : "wait",
-              }))}
-            />
-          ) : (
-            <Text type="secondary">Add steps to build your pipeline.</Text>
-          )}
-          <Button className="add-step-button" icon={<PlusOutlined />} onClick={() => openStepEditor(null)}>
-            Add Step
-          </Button>
-        </div>
+                </div>
 
-        <div className="pipeline-actions">
-          <Button icon={<SaveOutlined />} block onClick={handleSavePipeline}>
-            Save Pipeline
-          </Button>
-          <Button icon={<ClockCircleOutlined />} block onClick={() => setScheduleOpen(true)}>
-            Schedule
-          </Button>
-          <Button type="primary" icon={<PlayCircleOutlined />} block onClick={handleExecutePipeline}>
-            Execute Now
-          </Button>
+                <div className="insights-preview-container">
+                  <Tabs
+                    activeKey={activeInsightTab}
+                    onChange={(key) => setActiveInsightTab(key)}
+                    items={[
+                      {
+                        key: "suggestions",
+                        label: (
+                          <span className="insight-tab-label">
+                            <BulbOutlined /> AI Suggestions
+                          </span>
+                        ),
+                        children: (
+                          <div>
+                            {suggestion?.notes?.length ? (
+                              <Card className="ai-suggestion-notes">
+                                <Text strong>Summary</Text>
+                                <Divider style={{ margin: "8px 0" }} />
+                                <Space direction="vertical">
+                                  {suggestion.notes.map((note) => (
+                                    <Text key={note} type="secondary">
+                                      {note}
+                                    </Text>
+                                  ))}
+                                </Space>
+                              </Card>
+                            ) : null}
+                            <div className="ai-suggestions-grid">
+                              {suggestionCards.length ? (
+                                suggestionCards.map((step, index) => (
+                                  <Card key={`${step.name}-${index}`} className="ai-suggestion-card">
+                                    <div className="suggestion-header">
+                                      <div>
+                                        <Text strong>{step.name}</Text>
+                                        <Text type="secondary" className="suggestion-description">
+                                          {JSON.stringify(step.params || {})}
+                                        </Text>
+                                      </div>
+                                      <span className="confidence-badge">
+                                        {Math.max(70, 95 - index * 5)}% confidence
+                                      </span>
+                                    </div>
+                                    <Button onClick={() => handleApplySuggestionStep(step)}>
+                                      Apply
+                                    </Button>
+                                  </Card>
+                                ))
+                              ) : (
+                                <Text type="secondary">No AI suggestions yet.</Text>
+                              )}
+                            </div>
+                          </div>
+                        ),
+                      },
+                      {
+                        key: "preview",
+                        label: (
+                          <span className="insight-tab-label">
+                            <EyeOutlined /> Data Preview
+                          </span>
+                        ),
+                        children: (
+                          <div className="data-preview-tab">
+                            <div className="data-preview-stats">
+                              <Tag color="blue">Rows: {selectedDataset?.row_count ?? "-"}</Tag>
+                              <Tag color="cyan">Columns: {datasetColumns.length || "-"}</Tag>
+                            </div>
+                            <DatasetPreviewPanel datasetId={datasetId} onColumns={setDatasetColumns} />
+                          </div>
+                        ),
+                      },
+                      {
+                        key: "insights",
+                        label: (
+                          <span className="insight-tab-label">
+                            <ThunderboltOutlined /> Insights
+                          </span>
+                        ),
+                        children: (
+                          <div className="insights-grid">
+                            <InsightsPanel insights={insights} />
+                            <CorrelationPanel datasetId={datasetId} />
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                </div>
+              </>
+            )}
+          </Content>
+
+          <aside className={`pipeline-sidebar ${pipelineOpen ? "open" : ""}`}>
+            <div className="pipeline-header">
+              <Input
+                className="pipeline-name-input"
+                value={pipelineName}
+                onChange={(event) => setPipelineName(event.target.value)}
+                placeholder="Pipeline name"
+              />
+              <div className="pipeline-status-row">
+                <Tag color={pipelineStatus === "completed" ? "green" : pipelineStatus === "running" ? "blue" : "default"}>
+                  {pipelineStatus}
+                </Tag>
+                <Text type="secondary">
+                  {lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : "Not saved"}
+                </Text>
+              </div>
+              <div className="pipeline-select-row">
+                <Select
+                  placeholder="Run existing pipeline"
+                  value={selectedPipelineId ?? undefined}
+                  onChange={(value) => setSelectedPipelineId(value)}
+                  options={pipelineOptions}
+                  style={{ width: "100%" }}
+                  allowClear
+                />
+                <Button icon={<PlayCircleOutlined />} onClick={handleRunExistingPipeline}>
+                  Run Selected
+                </Button>
+              </div>
+              {selectedPipelineMeta && (
+                <div className="selected-pipeline-info">
+                  <Text strong>Selected pipeline</Text>
+                  <div className="selected-pipeline-meta">
+                    <Text type="secondary">Dataset: {selectedPipelineMeta.dataset_id || "-"}</Text>
+                    <Text type="secondary">Cadence: {selectedPipelineMeta.cadence}</Text>
+                    <Text type="secondary">Enabled: {selectedPipelineMeta.enabled ? "Yes" : "No"}</Text>
+                  </div>
+                  {selectedPipelineSteps.length ? (
+                    <div className="selected-pipeline-steps">
+                      {selectedPipelineSteps.map((step, index) => (
+                        <div key={`${step.name}-${index}`} className="selected-pipeline-step">
+                          <Text>{index + 1}. {step.name}</Text>
+                          <Text type="secondary">{JSON.stringify(step.params || {})}</Text>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Text type="secondary">No steps found for this pipeline.</Text>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="pipeline-steps-container">
+              {pipelineSteps.length ? (
+                <Steps
+                  direction="vertical"
+                  current={Math.max(pipelineSteps.length - 1, 0)}
+                  items={pipelineSteps.map((step, index) => ({
+                    title: step.name,
+                    description: (
+                      <div className="pipeline-step">
+                        <Text type="secondary">{JSON.stringify(step.params || {})}</Text>
+                        <div className="step-actions">
+                          <Button
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => openStepEditor(index)}
+                          />
+                          <Button
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleDeleteStep(index)}
+                          />
+                        </div>
+                      </div>
+                    ),
+                    status: pipelineStatus === "running" && index === pipelineSteps.length - 1 ? "process" : "wait",
+                  }))}
+                />
+              ) : (
+                <Text type="secondary">Add steps to build your pipeline.</Text>
+              )}
+              <Button className="add-step-button" icon={<PlusOutlined />} onClick={() => openStepEditor(null)}>
+                Add Step
+              </Button>
+            </div>
+
+            <div className="pipeline-actions">
+              <Button icon={<SaveOutlined />} block onClick={handleSavePipeline}>
+                Save Pipeline
+              </Button>
+              <Button icon={<ClockCircleOutlined />} block onClick={() => setScheduleOpen(true)}>
+                Schedule
+              </Button>
+              <Button type="primary" icon={<PlayCircleOutlined />} block onClick={handleExecutePipeline}>
+                Execute Now
+              </Button>
+            </div>
+          </aside>
         </div>
-      </aside>
+      </div>
 
       <Modal
         title={editingStepIndex !== null ? "Edit Step" : "Add Step"}

@@ -975,7 +975,6 @@ export function App() {
             </div>
           </aside>
         </div>
-      </div>
 
       <Modal
         title={editingStepIndex !== null ? "Edit Step" : "Add Step"}

@@ -1975,14 +1975,33 @@ body {
   gap: 6px;
 }
 
-.data-sidebar .ant-tabs-nav {
-  background: #ffffff;
+.data-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.data-tab-label {
-  display: inline-flex;
+.data-nav-item {
+  display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #475569;
+}
+
+.data-nav-item:hover {
+  background: #f1f5f9;
+}
+
+.data-nav-item.active {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.data-panel-drawer .ant-drawer-body {
+  padding: 16px;
+  background: #f8fafc;
 }
 
 .center-workspace {
@@ -1993,6 +2012,7 @@ body {
   padding: 16px;
   overflow: hidden;
   background: #f9fafb;
+  min-width: 0;
 }
 
 .workspace-toolbar {

@@ -4,7 +4,6 @@ import {
   Space,
   Card,
   Button,
-  Drawer,
   Tabs,
   Input,
   Tag,
@@ -507,10 +506,6 @@ export function App() {
     }
   };
 
-  const openDataPanel = (key: string) => {
-    setActiveDataTab(key);
-    setDataPanelOpen(true);
-  };
 
   const handleSchedulePipeline = async () => {
     if (!datasetId) {
@@ -582,24 +577,6 @@ export function App() {
     </div>
   );
 
-  const dataNavItems = [
-    { key: "import", label: "Data Import", icon: <DatabaseOutlined /> },
-    { key: "transform", label: "Transform", icon: <SwapOutlined /> },
-    { key: "ml", label: "ML/Cleaning", icon: <ExperimentOutlined /> },
-    { key: "feature", label: "Feature Eng", icon: <BranchesOutlined /> },
-    { key: "quality", label: "Data Quality", icon: <CheckCircleOutlined /> },
-  ];
-
-  const dataPanelMap: Record<string, JSX.Element> = {
-    import: <DataImportPanel />,
-    transform: <DataTransformationPanel />,
-    ml: <DataCleaningPanel />,
-    feature: <TransformationsPanel datasetId={datasetId} />,
-    quality: <ProfilePanel datasetId={datasetId} />,
-  };
-
-  const activeDataLabel = dataNavItems.find((item) => item.key === activeDataTab)?.label ?? "Data Ops";
-
   return (
     <Layout className="ai-analytics-layout">
       <div className="ai-topbar">
@@ -650,19 +627,64 @@ export function App() {
           theme="light"
         >
           <div className="main-sidebar-inner">
-            <div className="data-nav">
-              {dataNavItems.map((item) => (
-                <Button
-                  key={item.key}
-                  type="text"
-                  className={`data-nav-item ${activeDataTab === item.key ? "active" : ""}`}
-                  icon={item.icon}
-                  onClick={() => openDataPanel(item.key)}
-                >
-                  {!leftSidebarCollapsed && item.label}
-                </Button>
-              ))}
-            </div>
+            <Tabs
+              tabPosition="left"
+              activeKey={activeDataTab}
+              onChange={(key) => setActiveDataTab(key)}
+              className="data-operations-tabs"
+              items={[
+                {
+                  key: "import",
+                  label: (
+                    <span className="data-tab-label">
+                      <DatabaseOutlined />
+                      Data Import
+                    </span>
+                  ),
+                  children: <DataImportPanel />,
+                },
+                {
+                  key: "transform",
+                  label: (
+                    <span className="data-tab-label">
+                      <SwapOutlined />
+                      Transform
+                    </span>
+                  ),
+                  children: <DataTransformationPanel />,
+                },
+                {
+                  key: "ml",
+                  label: (
+                    <span className="data-tab-label">
+                      <ExperimentOutlined />
+                      ML/Cleaning
+                    </span>
+                  ),
+                  children: <DataCleaningPanel />,
+                },
+                {
+                  key: "feature",
+                  label: (
+                    <span className="data-tab-label">
+                      <BranchesOutlined />
+                      Feature Eng
+                    </span>
+                  ),
+                  children: <TransformationsPanel datasetId={datasetId} />,
+                },
+                {
+                  key: "quality",
+                  label: (
+                    <span className="data-tab-label">
+                      <CheckCircleOutlined />
+                      Data Quality
+                    </span>
+                  ),
+                  children: <ProfilePanel datasetId={datasetId} />,
+                },
+              ]}
+            />
             <div className="main-sidebar-footer">
               <Button
                 type="text"
@@ -954,17 +976,6 @@ export function App() {
             </div>
           </aside>
         </div>
-
-        <Drawer
-          title={activeDataLabel}
-          placement="left"
-          open={dataPanelOpen}
-          onClose={() => setDataPanelOpen(false)}
-          width={440}
-          className="data-panel-drawer"
-        >
-          {dataPanelMap[activeDataTab]}
-        </Drawer>
 
       <Modal
         title={editingStepIndex !== null ? "Edit Step" : "Add Step"}

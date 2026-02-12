@@ -2,26 +2,7 @@ import { Card, List, Rate, Form, Input, Button, Space, Typography, Avatar } from
 import { useState } from "react";
 import { notify } from "../utils/notify";
 
-const initialReviews = [
-  {
-    name: "Priya N.",
-    role: "Head of Analytics",
-    rating: 5,
-    comment: "DataHub reduced our dashboard delivery time by 60%.",
-  },
-  {
-    name: "Carlos M.",
-    role: "Data Platform Lead",
-    rating: 4,
-    comment: "Great governance controls and a smooth collaboration flow.",
-  },
-  {
-    name: "Morgan S.",
-    role: "Operations Manager",
-    rating: 5,
-    comment: "The AI copilot helps us spot issues faster than before.",
-  },
-];
+const initialReviews: Array<{ name: string; role: string; rating: number; comment: string }> = [];
 
 export function ReviewsPanel() {
   const [reviews, setReviews] = useState(initialReviews);
@@ -32,6 +13,7 @@ export function ReviewsPanel() {
         <List
           itemLayout="horizontal"
           dataSource={reviews}
+          locale={{ emptyText: "No customer reviews yet." }}
           renderItem={(item) => (
             <List.Item>
               <List.Item.Meta

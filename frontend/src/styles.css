@@ -1862,6 +1862,7 @@ body {
 .ai-analytics-layout {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100vh;
   overflow: hidden;
   background: #f9fafb;
@@ -1930,11 +1931,13 @@ body {
   display: flex;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
 }
 
 .data-sidebar {
   background: #f8fafc !important;
   border-right: 1px solid #e2e8f0;
+  flex: 0 0 auto;
 }
 
 .main-sidebar-inner {
@@ -1975,33 +1978,14 @@ body {
   gap: 6px;
 }
 
-.data-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.data-operations-tabs .ant-tabs-nav {
+  background: #ffffff;
 }
 
-.data-nav-item {
-  display: flex;
+.data-tab-label {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  color: #475569;
-}
-
-.data-nav-item:hover {
-  background: #f1f5f9;
-}
-
-.data-nav-item.active {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.data-panel-drawer .ant-drawer-body {
-  padding: 16px;
-  background: #f8fafc;
+  gap: 10px;
 }
 
 .center-workspace {
@@ -2219,6 +2203,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 0 0 320px;
 }
 
 .pipeline-header {

@@ -4,195 +4,156 @@ import {
   Space,
   Card,
   Button,
-  Row,
-  Col,
-  Divider,
-  Statistic,
-  Tag,
-  Badge,
-  Avatar,
-  Breadcrumb,
-  Drawer,
-  Dropdown,
-  Input,
-  List,
-  Modal,
   Tabs,
-  Tooltip,
+  Input,
+  Tag,
+  Avatar,
+  Select,
+  Modal,
+  Steps,
+  Divider,
 } from "antd";
 import {
-  BellOutlined,
+  HomeOutlined,
+  AppstoreOutlined,
+  ShoppingOutlined,
+  SettingOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  PlusOutlined,
-  SearchOutlined,
-  SettingOutlined,
-  DownOutlined,
-  HomeOutlined,
   DatabaseOutlined,
-  CloudUploadOutlined,
-  DeploymentUnitOutlined,
-  BarChartOutlined,
-  TeamOutlined,
-  ShareAltOutlined,
+  SwapOutlined,
+  ExperimentOutlined,
+  BranchesOutlined,
+  CheckCircleOutlined,
+  BulbOutlined,
+  EyeOutlined,
   ThunderboltOutlined,
-  ApiOutlined,
-  DashboardOutlined,
+  PlusOutlined,
+  SendOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SaveOutlined,
+  ClockCircleOutlined,
+  PlayCircleOutlined,
+  UserOutlined,
+  RobotOutlined,
 } from "@ant-design/icons";
-import { useEffect, useState, lazy, Suspense } from "react";
-import { InsightSummary, AgentSuggestion } from "./types";
-import { exchangeOidcCode } from "./api";
-import { clearAuthToken, getAuthToken, setAuthToken, getRoleFromToken } from "./utils/auth";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { AgentSuggestion, DatasetMeta, InsightSummary, TransformationStep } from "./types";
+import {
+  applyRecipe,
+  chatWithAgent,
+  createPipeline,
+  fetchAgentSuggestions,
+  fetchInsights,
+  fetchRecipe,
+  listDatasets,
+  saveRecipe,
+  exchangeOidcCode,
+} from "./api";
+import { clearAuthToken, setAuthToken } from "./utils/auth";
 import { notify } from "./utils/notify";
 import { supabase } from "./utils/supabaseClient";
-import { billingEnabled } from "./utils/featureFlags";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import { DataImportPanel } from "./components/DataImportPanel";
+import { DataTransformationPanel } from "./components/DataTransformationPanel";
+import { DataCleaningPanel } from "./components/DataCleaningPanel";
+import { TransformationsPanel } from "./components/TransformationsPanel";
+import { ProfilePanel } from "./components/ProfilePanel";
+import { DatasetPreviewPanel } from "./components/DatasetPreviewPanel";
+import { InsightsPanel } from "./components/InsightsPanel";
+import { CorrelationPanel } from "./components/CorrelationPanel";
+import { SharedDashboardPanel } from "./components/SharedDashboardPanel";
+import { SharedWorkspacePanel } from "./components/SharedWorkspacePanel";
 
-const { Header, Content, Sider } = Layout;
-const { Text } = Typography;
+const { Sider, Content } = Layout;
+const { Title, Text } = Typography;
 
-const InsightsPanel = lazy(() =>
-  import("./components/InsightsPanel").then((module) => ({ default: module.InsightsPanel }))
-);
-const DashboardPanel = lazy(() =>
-  import("./components/DashboardPanel").then((module) => ({ default: module.DashboardPanel }))
-);
-const ChartSummaryPanel = lazy(() =>
-  import("./components/ChartSummaryPanel").then((module) => ({ default: module.ChartSummaryPanel }))
-);
-const ProfilePanel = lazy(() =>
-  import("./components/ProfilePanel").then((module) => ({ default: module.ProfilePanel }))
-);
-const ColumnSuggestionPanel = lazy(() =>
-  import("./components/ColumnSuggestionPanel").then((module) => ({ default: module.ColumnSuggestionPanel }))
-);
-const ContextPanel = lazy(() =>
-  import("./components/ContextPanel").then((module) => ({ default: module.ContextPanel }))
-);
-const PluginsPanel = lazy(() =>
-  import("./components/PluginsPanel").then((module) => ({ default: module.PluginsPanel }))
-);
-const SyncPanel = lazy(() =>
-  import("./components/SyncPanel").then((module) => ({ default: module.SyncPanel }))
-);
-const WidgetsPanel = lazy(() =>
-  import("./components/WidgetsPanel").then((module) => ({ default: module.WidgetsPanel }))
-);
-const WebhooksPanel = lazy(() =>
-  import("./components/WebhooksPanel").then((module) => ({ default: module.WebhooksPanel }))
-);
-const JobsPanel = lazy(() =>
-  import("./components/JobsPanel").then((module) => ({ default: module.JobsPanel }))
-);
-const PipelinesPanel = lazy(() =>
-  import("./components/PipelinesPanel").then((module) => ({ default: module.PipelinesPanel }))
-);
-const AuditLogPanel = lazy(() =>
-  import("./components/AuditLogPanel").then((module) => ({ default: module.AuditLogPanel }))
-);
-const UsageAnalyticsPanel = lazy(() =>
-  import("./components/UsageAnalyticsPanel").then((module) => ({ default: module.UsageAnalyticsPanel }))
-);
-const CacheStatsPanel = lazy(() =>
-  import("./components/CacheStatsPanel").then((module) => ({ default: module.CacheStatsPanel }))
-);
-const ApprovalsPanel = lazy(() =>
-  import("./components/ApprovalsPanel").then((module) => ({ default: module.ApprovalsPanel }))
-);
-const RealtimePresencePanel = lazy(() =>
-  import("./components/RealtimePresencePanel").then((module) => ({ default: module.RealtimePresencePanel }))
-);
-const CorrelationPanel = lazy(() =>
-  import("./components/CorrelationPanel").then((module) => ({ default: module.CorrelationPanel }))
-);
-const InsightActionsPanel = lazy(() =>
-  import("./components/InsightActionsPanel").then((module) => ({ default: module.InsightActionsPanel }))
-);
-const TemplateGalleryPanel = lazy(() =>
-  import("./components/TemplateGalleryPanel").then((module) => ({ default: module.TemplateGalleryPanel }))
-);
-const SharedDashboardPanel = lazy(() =>
-  import("./components/SharedDashboardPanel").then((module) => ({ default: module.SharedDashboardPanel }))
-);
-const WorkspacePanel = lazy(() =>
-  import("./components/WorkspacePanel").then((module) => ({ default: module.WorkspacePanel }))
-);
-const SharedWorkspacePanel = lazy(() =>
-  import("./components/SharedWorkspacePanel").then((module) => ({ default: module.SharedWorkspacePanel }))
-);
-const ShareAdminPanel = lazy(() =>
-  import("./components/ShareAdminPanel").then((module) => ({ default: module.ShareAdminPanel }))
-);
-const SettingsPagePanel = lazy(() =>
-  import("./components/SettingsPagePanel").then((module) => ({ default: module.SettingsPagePanel }))
-);
-const AboutPanel = lazy(() =>
-  import("./components/AboutPanel").then((module) => ({ default: module.AboutPanel }))
-);
-const ReviewsPanel = lazy(() =>
-  import("./components/ReviewsPanel").then((module) => ({ default: module.ReviewsPanel }))
-);
-const LandingPanel = lazy(() =>
-  import("./components/LandingPanel").then((module) => ({ default: module.LandingPanel }))
-);
-const DemoPanel = lazy(() =>
-  import("./components/DemoPanel").then((module) => ({ default: module.DemoPanel }))
-);
-const PlansPanel = lazy(() =>
-  import("./components/PlansPanel").then((module) => ({ default: module.PlansPanel }))
-);
-const BillingPanel = lazy(() =>
-  import("./components/BillingPanel").then((module) => ({ default: module.BillingPanel }))
-);
-const DataCleaningPanel = lazy(() =>
-  import("./components/DataCleaningPanel").then((module) => ({ default: module.DataCleaningPanel }))
-);
-const DataTransformationPanel = lazy(() =>
-  import("./components/DataTransformationPanel").then((module) => ({ default: module.DataTransformationPanel }))
-);
-const DataModelingPanel = lazy(() =>
-  import("./components/DataModelingPanel").then((module) => ({ default: module.DataModelingPanel }))
-);
-const DashboardBuilderPanel = lazy(() =>
-  import("./components/DashboardBuilderPanel").then((module) => ({ default: module.DashboardBuilderPanel }))
-);
-const MlModelingPanel = lazy(() =>
-  import("./components/MlModelingPanel").then((module) => ({ default: module.MlModelingPanel }))
-);
-const WorkspaceManagementPanel = lazy(() =>
-  import("./components/WorkspaceManagementPanel").then((module) => ({ default: module.WorkspaceManagementPanel }))
-);
-const PaymentSubscriptionPanel = lazy(() =>
-  import("./components/PaymentSubscriptionPanel").then((module) => ({ default: module.PaymentSubscriptionPanel }))
-);
-const DataImportPanel = lazy(() =>
-  import("./components/DataImportPanel").then((module) => ({ default: module.DataImportPanel }))
-);
+type ChatEntry = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+};
+
+const PIPELINE_STEP_OPTIONS = [
+  "drop_missing",
+  "fill_missing",
+  "rename_columns",
+  "cast_type",
+  "filter_rows",
+  "pivot",
+  "join",
+  "add_column_formula",
+  "drop_duplicates",
+];
+
+const PROMPT_SUGGESTIONS: Record<string, string[]> = {
+  import: [
+    "Import a CSV file",
+    "Connect to PostgreSQL",
+    "Schedule daily import",
+    "Check schema after upload",
+  ],
+  transform: [
+    "Join sales and customer data",
+    "Filter rows where revenue > 1000",
+    "Create a calculated column",
+    "Pivot by category and month",
+  ],
+  ml: [
+    "Detect anomalies in my data",
+    "Find customer segments",
+    "Recommend a model",
+    "Generate features",
+  ],
+  feature: [
+    "Create a churn score",
+    "Normalize key metrics",
+    "Aggregate by cohort",
+    "Encode categorical fields",
+  ],
+  quality: [
+    "Check missing values",
+    "Highlight outliers",
+    "Generate data quality report",
+    "Detect duplicate rows",
+  ],
+};
 
 export function App() {
-  const [insights, setInsights] = useState<InsightSummary | null>(null);
-  const [suggestion, setSuggestion] = useState<AgentSuggestion | null>(null);
-  const [datasetId, setDatasetId] = useState<string | null>(null);
-  const [datasetColumns, setDatasetColumns] = useState<string[]>([]);
-  const [dashboardId, setDashboardId] = useState<string | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [hasToken, setHasToken] = useState(!!getAuthToken());
-  const [role, setRole] = useState(getRoleFromToken());
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareWorkspaceToken, setShareWorkspaceToken] = useState<string | null>(null);
   const isSharedView = !!(shareToken || shareWorkspaceToken);
-  const [activeRoute, setActiveRoute] = useState<string>("home");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [commandQuery, setCommandQuery] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>(["Revenue dashboard", "Churn model"]);
-  const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showRightPanel, setShowRightPanel] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
-  const [showMobileNav, setShowMobileNav] = useState(false);
-  const [loadingBar, setLoadingBar] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState("Pro");
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState("home");
+  const [activeDataTab, setActiveDataTab] = useState("import");
+  const [activeInsightTab, setActiveInsightTab] = useState("suggestions");
+  const [datasets, setDatasets] = useState<DatasetMeta[]>([]);
+  const [datasetId, setDatasetId] = useState<string | null>(null);
+  const [datasetColumns, setDatasetColumns] = useState<string[]>([]);
+  const [insights, setInsights] = useState<InsightSummary | null>(null);
+  const [suggestion, setSuggestion] = useState<AgentSuggestion | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatEntry[]>([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [aiTyping, setAiTyping] = useState(false);
+  const [pipelineName, setPipelineName] = useState("Untitled Pipeline");
+  const [pipelineStatus, setPipelineStatus] = useState<"draft" | "running" | "completed">("draft");
+  const [pipelineSteps, setPipelineSteps] = useState<TransformationStep[]>([]);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [stepModalOpen, setStepModalOpen] = useState(false);
+  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
+  const [stepType, setStepType] = useState<string | undefined>(undefined);
+  const [stepParams, setStepParams] = useState("{}");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleCadence, setScheduleCadence] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [scheduleDayOfWeek, setScheduleDayOfWeek] = useState(0);
+  const [scheduleDayOfMonth, setScheduleDayOfMonth] = useState(1);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1200);
+  const [dataPanelOpen, setDataPanelOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const pathMatch = window.location.pathname.match(/^\/shared\/(.+)$/);
@@ -223,24 +184,16 @@ export function App() {
       const accessToken = data.session?.access_token;
       if (accessToken) {
         setAuthToken(accessToken);
-        setHasToken(true);
-        setRole(getRoleFromToken());
       } else {
         clearAuthToken();
-        setHasToken(false);
-        setRole(null);
       }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       const accessToken = session?.access_token;
       if (accessToken) {
         setAuthToken(accessToken);
-        setHasToken(true);
-        setRole(getRoleFromToken());
       } else {
         clearAuthToken();
-        setHasToken(false);
-        setRole(null);
       }
     });
     return () => {
@@ -257,8 +210,6 @@ export function App() {
       .then((data) => {
         if (data?.access_token) {
           setAuthToken(data.access_token);
-          setHasToken(true);
-          setRole(getRoleFromToken());
           notify.success("SSO login successful");
         } else {
           notify.error("SSO login failed");
@@ -273,829 +224,715 @@ export function App() {
       });
   }, []);
 
-  const sharedTabContent = (
-    <div className="section">
-      {shareToken && (
-        <>
-          <Typography.Title level={3}>Shared Dashboard</Typography.Title>
-          <SharedDashboardPanel shareToken={shareToken} />
-        </>
-      )}
-      {shareWorkspaceToken && (
-        <>
-          <Typography.Title level={3}>Shared Workspace</Typography.Title>
-          <SharedWorkspacePanel shareToken={shareWorkspaceToken} />
-        </>
-      )}
-      <Typography.Text type="secondary">You are viewing a shared resource.</Typography.Text>
-    </div>
-  );
-
-  const landingTabContent = <LandingPanel onSelectTab={setActiveRoute} />;
-
-  const demoTabContent = <DemoPanel />;
-
-  const importTabContent = (
-    <div className="section">
-      <DataImportPanel />
-    </div>
-  );
-
-  const cleaningTabContent = (
-    <div className="section">
-      <DataCleaningPanel />
-    </div>
-  );
-
-  const transformTabContent = (
-    <div className="section">
-      <DataTransformationPanel />
-    </div>
-  );
-
-  const modelingTabContent = (
-    <div className="section">
-      <DataModelingPanel />
-    </div>
-  );
-
-  const mlTabContent = (
-    <div className="section">
-      <MlModelingPanel />
-    </div>
-  );
-
-  const workspaceTabContent = (
-    <div className="section">
-      <WorkspaceManagementPanel />
-    </div>
-  );
-
-  const analysisTabContent = (
-    <div className="section">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Insights">
-            <InsightsPanel insights={insights} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Insight Actions">
-            <InsightActionsPanel datasetId={datasetId} />
-          </Card>
-        </Col>
-      </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Profiling">
-            <ProfilePanel datasetId={datasetId} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Column Summary">
-            <ChartSummaryPanel datasetId={datasetId} columns={datasetColumns} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Correlation Insights">
-            <CorrelationPanel datasetId={datasetId} />
-          </Card>
-        </Col>
-      </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Did you mean?">
-            <ColumnSuggestionPanel datasetId={datasetId} />
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
-
-  const dashboardsTabContent = (
-    <div className="section">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Dashboards">
-            <DashboardPanel
-              columns={datasetColumns}
-              datasetId={datasetId}
-              onSelectDashboard={setDashboardId}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Dashboard Templates">
-            <TemplateGalleryPanel datasetId={datasetId} columns={datasetColumns} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Widgets">
-            <WidgetsPanel dashboardId={dashboardId} columns={datasetColumns} />
-          </Card>
-        </Col>
-      </Row>
-      <Row gutter={[16, 16]}>
-        <Col span={24}>
-          <Card className="panel-card" title="Dashboard Builder">
-            <DashboardBuilderPanel />
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
-
-  const collaborationTabContent = (
-    <div className="section">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Realtime Presence">
-            <RealtimePresencePanel />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Workspaces">
-            <WorkspacePanel activeWorkspaceId={workspaceId} onSelectWorkspace={setWorkspaceId} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Business Context">
-            <ContextPanel activeWorkspaceId={workspaceId} onSelectWorkspace={setWorkspaceId} />
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
-
-  const automationTabContent = (
-    <div className="section">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Plugins">
-            <PluginsPanel />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Connector Sync">
-            <SyncPanel />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card className="panel-card" title="Webhooks">
-            <WebhooksPanel />
-          </Card>
-        </Col>
-      </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Scheduled Jobs">
-            <JobsPanel />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Pipelines">
-            <PipelinesPanel />
-          </Card>
-        </Col>
-        </Row>
-    </div>
-  );
-
-  const governanceTabContent = (
-    <div className="section">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Audit Logs">
-            <AuditLogPanel />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Usage Analytics">
-            <UsageAnalyticsPanel />
-          </Card>
-        </Col>
-      </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Cache Stats">
-            <CacheStatsPanel />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Approval Workflows">
-            <ApprovalsPanel />
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
-
-  const adminTabContent = (
-    <div className="section">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card className="panel-card" title="Share Admin">
-            <ShareAdminPanel />
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
-
-  const plansTabContent = (
-    <div className="section">
-      <PlansPanel
-        onSelectPlan={(plan) => {
-          setSelectedPlan(plan);
-          if (billingEnabled) {
-            setActiveRoute("billing");
-          } else {
-            notify.info("Billing is disabled for the beta");
-          }
-        }}
-      />
-    </div>
-  );
-
-  const billingTabContent = (
-    <div className="section">
-      <BillingPanel selectedPlan={selectedPlan} />
-      <PaymentSubscriptionPanel />
-    </div>
-  );
-
-  const settingsTabContent = (
-    <div className="section">
-      <SettingsPagePanel />
-    </div>
-  );
-
-  const aboutTabContent = (
-    <div className="section">
-      <AboutPanel />
-    </div>
-  );
-
-  const reviewsTabContent = (
-    <div className="section">
-      <ReviewsPanel />
-    </div>
-  );
-
-  const routeMap: Record<string, { title: string; description?: string; content: JSX.Element }> = {
-    home: { title: "Home", description: "Dashboard overview", content: landingTabContent },
-    demo: { title: "Demo", description: "Product walkthrough", content: demoTabContent },
-    import: { title: "Import", description: "Bring data into your workspace", content: importTabContent },
-    clean: { title: "Data Cleaning", description: "Fix data quality issues", content: cleaningTabContent },
-    transform: { title: "Transform", description: "Build transformation flows", content: transformTabContent },
-    model: { title: "Data Modeling", description: "Design your schema", content: modelingTabContent },
-    ml: { title: "ML Modeling", description: "Train and deploy models", content: mlTabContent },
-    dashboards: { title: "Dashboards", description: "Build analytics experiences", content: dashboardsTabContent },
-    collab: { title: "Collaborate", description: "Share and manage access", content: collaborationTabContent },
-    workspace: { title: "Workspace", description: "Manage projects and teams", content: workspaceTabContent },
-    settings: { title: "Settings", description: "Manage account and preferences", content: settingsTabContent },
-    plans: { title: "Plans", description: "Pricing and plan selection", content: plansTabContent },
-    about: { title: "About", description: "Product story", content: aboutTabContent },
-    reviews: { title: "Reviews", description: "Customer feedback", content: reviewsTabContent },
-    automation: { title: "Automation", description: "Integrations and jobs", content: automationTabContent },
-    governance: { title: "Activity", description: "Audit and governance", content: governanceTabContent },
-    admin: { title: "Admin", description: "Administration", content: adminTabContent },
-    shared: { title: "Shared", description: "Shared resources", content: sharedTabContent },
-  };
-
-  if (billingEnabled) {
-    routeMap.billing = { title: "Billing", description: "Subscription and invoices", content: billingTabContent };
-  }
-
-  const activePage = routeMap[activeRoute] || routeMap.home;
-
-  const workspaces = [
-    { id: "personal", name: "Personal Workspace" },
-    { id: "growth", name: "Growth Team" },
-    { id: "enterprise", name: "Enterprise Ops" },
-  ];
-
-  const notifications: Array<{ id: string; text: string; time: string; unread: boolean }> = [
-    { id: "n1", text: "Dataset sales_q4.csv imported", time: "2 min ago", unread: true },
-    { id: "n2", text: "Dashboard shared with Finance", time: "1 hour ago", unread: false },
-    { id: "n3", text: "Model Churn RF deployed", time: "2 hours ago", unread: true },
-  ];
-
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 992);
+    const handleResize = () => setIsMobile(window.innerWidth < 1200);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setShowCommandPalette(true);
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === "/") {
-        event.preventDefault();
-        setShowShortcuts(true);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    listDatasets()
+      .then((data) => {
+        setDatasets(data);
+        if (!datasetId && data.length) {
+          setDatasetId(data[0].dataset_id);
+        }
+      })
+      .catch((err: any) => {
+        const detail = err?.response?.data?.detail || "Failed to load datasets.";
+        notify.error(detail);
+      });
   }, []);
 
   useEffect(() => {
-    let sequence = "";
-    let timeout: number | undefined;
-    const handler = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey) return;
-      sequence += event.key.toLowerCase();
-      if (sequence.endsWith("gh")) {
-        setActiveRoute("home");
-        sequence = "";
-      }
-      if (sequence.endsWith("gd")) {
-        setActiveRoute("dashboards");
-        sequence = "";
-      }
-      if (sequence.endsWith("gs")) {
-        setActiveRoute("settings");
-        sequence = "";
-      }
-      if (timeout) window.clearTimeout(timeout);
-      timeout = window.setTimeout(() => {
-        sequence = "";
-      }, 800);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  useEffect(() => {
-    setLoadingBar(true);
-    const timer = window.setTimeout(() => setLoadingBar(false), 600);
-    return () => window.clearTimeout(timer);
-  }, [activeRoute, billingEnabled]);
-
-  useEffect(() => {
-    if (!billingEnabled && activeRoute === "billing") {
-      setActiveRoute("plans");
+    if (!datasetId) {
+      setInsights(null);
+      setSuggestion(null);
+      setPipelineSteps([]);
+      return;
     }
-  }, [activeRoute]);
+    fetchInsights(datasetId)
+      .then(setInsights)
+      .catch((err: any) => {
+        const detail = err?.response?.data?.detail || "Failed to load insights.";
+        notify.error(detail);
+      });
+    fetchAgentSuggestions(datasetId)
+      .then(setSuggestion)
+      .catch((err: any) => {
+        const detail = err?.response?.data?.detail || "Failed to load suggestions.";
+        notify.error(detail);
+      });
+    fetchRecipe(datasetId)
+      .then((recipe) => setPipelineSteps(recipe.steps || []))
+      .catch((err: any) => {
+        const detail = err?.response?.data?.detail;
+        if (detail && detail.toLowerCase().includes("not found")) {
+          setPipelineSteps([]);
+        } else if (detail) {
+          notify.error(detail);
+        }
+      });
+  }, [datasetId]);
 
-  const userMenuItems = [
-    { key: "user", label: "Jordan Smith · jordan@acme.com" },
-    { type: "divider" as const },
-    { key: "account", label: "Account Settings", onClick: () => setActiveRoute("settings") },
-    ...(billingEnabled
-      ? [{ key: "billing", label: "Billing", onClick: () => setActiveRoute("billing") }]
-      : []),
-    { key: "docs", label: "Documentation" },
-    { key: "help", label: "Help & Support" },
-    { type: "divider" as const },
-    {
-      key: "signout",
-      label: "Sign Out",
-      onClick: () => {
-        clearAuthToken();
-        setHasToken(false);
-        setRole(null);
-        notify.info("Signed out");
+  useEffect(() => {
+    const prompts = PROMPT_SUGGESTIONS[activeDataTab] || [];
+    if (!datasetId) {
+      setChatMessages([
+        {
+          role: "assistant",
+          content: "Select a dataset to begin the AI conversation.",
+          timestamp: new Date(),
+        },
+      ]);
+      return;
+    }
+    setChatMessages([
+      {
+        role: "assistant",
+        content: `Ready to help with ${datasetId}. Pick a prompt or ask a question.`,
+        timestamp: new Date(),
       },
-    },
-  ];
+      ...(prompts.length
+        ? [
+            {
+              role: "assistant",
+              content: "Try one of the suggested prompts below.",
+              timestamp: new Date(),
+            },
+          ]
+        : []),
+    ]);
+  }, [datasetId, activeDataTab]);
+
+  useEffect(() => {
+    const node = chatScrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [chatMessages, aiTyping]);
+
+  const handleSendMessage = async () => {
+    const trimmed = inputMessage.trim();
+    if (!trimmed) return;
+    if (!datasetId) {
+      notify.info("Select a dataset to start chatting.");
+      return;
+    }
+    const userMessage: ChatEntry = {
+      role: "user",
+      content: trimmed,
+      timestamp: new Date(),
+    };
+    const history = [...chatMessages, userMessage].map((item) => ({
+      role: item.role,
+      content: item.content,
+    }));
+    setChatMessages((prev) => [...prev, userMessage]);
+    setInputMessage("");
+    setAiTyping(true);
+    try {
+      const response = await chatWithAgent(datasetId, trimmed, history);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: response.reply,
+          timestamp: new Date(),
+        },
+      ]);
+      if (response?.notes?.length) {
+        notify.info(response.notes.join(" "));
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to get assistant response.";
+      notify.error(detail);
+    } finally {
+      setAiTyping(false);
+    }
+  };
+
+  const handleApplySuggestionStep = async (step: TransformationStep) => {
+    if (!datasetId) {
+      notify.info("Select a dataset to apply suggestions.");
+      return;
+    }
+    const nextSteps = [...pipelineSteps, step];
+    setPipelineSteps(nextSteps);
+    try {
+      await saveRecipe(datasetId, nextSteps);
+      setLastSavedAt(new Date());
+      notify.success("Added suggestion to pipeline.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to save suggestion.";
+      notify.error(detail);
+    }
+  };
+
+  const openStepEditor = (index: number | null) => {
+    if (index === null) {
+      setStepType(undefined);
+      setStepParams("{}");
+      setEditingStepIndex(null);
+      setStepModalOpen(true);
+      return;
+    }
+    const step = pipelineSteps[index];
+    setStepType(step.name);
+    setStepParams(JSON.stringify(step.params || {}, null, 2));
+    setEditingStepIndex(index);
+    setStepModalOpen(true);
+  };
+
+  const handleSaveStep = () => {
+    if (!stepType) {
+      notify.info("Choose a step type.");
+      return;
+    }
+    let params: Record<string, unknown> = {};
+    try {
+      params = stepParams ? JSON.parse(stepParams) : {};
+    } catch (err: any) {
+      notify.error("Step params must be valid JSON.");
+      return;
+    }
+    const nextSteps = [...pipelineSteps];
+    const nextStep = { name: stepType, params };
+    if (editingStepIndex !== null) {
+      nextSteps[editingStepIndex] = nextStep;
+    } else {
+      nextSteps.push(nextStep);
+    }
+    setPipelineSteps(nextSteps);
+    setStepModalOpen(false);
+  };
+
+  const handleDeleteStep = (index: number) => {
+    setPipelineSteps((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSavePipeline = async () => {
+    if (!datasetId) {
+      notify.info("Select a dataset to save a pipeline.");
+      return;
+    }
+    try {
+      await saveRecipe(datasetId, pipelineSteps);
+      setLastSavedAt(new Date());
+      notify.success("Pipeline saved.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to save pipeline.";
+      notify.error(detail);
+    }
+  };
+
+  const handleExecutePipeline = async () => {
+    if (!datasetId) {
+      notify.info("Select a dataset to execute a pipeline.");
+      return;
+    }
+    setPipelineStatus("running");
+    try {
+      await applyRecipe(datasetId);
+      setPipelineStatus("completed");
+      notify.success("Pipeline executed.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to execute pipeline.";
+      notify.error(detail);
+      setPipelineStatus("draft");
+    }
+  };
+
+  const handleSchedulePipeline = async () => {
+    if (!datasetId) {
+      notify.info("Select a dataset to schedule a pipeline.");
+      return;
+    }
+    setScheduleSaving(true);
+    try {
+      await createPipeline({
+        name: pipelineName.trim() || "Pipeline",
+        cadence: scheduleCadence,
+        time_of_day: scheduleTime,
+        day_of_week: scheduleCadence === "weekly" ? scheduleDayOfWeek : undefined,
+        day_of_month: scheduleCadence === "monthly" ? scheduleDayOfMonth : undefined,
+        dataset_id: datasetId,
+        apply_recipe: true,
+        run_profile: true,
+        run_insights: true,
+        enabled: true,
+      });
+      notify.success("Pipeline schedule created.");
+      setScheduleOpen(false);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to schedule pipeline.";
+      notify.error(detail);
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  const datasetOptions = useMemo(
+    () => datasets.map((item) => ({ label: item.dataset_id, value: item.dataset_id })),
+    [datasets]
+  );
+
+  const selectedDataset = useMemo(
+    () => datasets.find((item) => item.dataset_id === datasetId) || null,
+    [datasets, datasetId]
+  );
+
+  const suggestionCards = suggestion?.recommended_steps ?? [];
+  const promptChips = PROMPT_SUGGESTIONS[activeDataTab] || [];
+
+  const sharedTabContent = (
+    <div className="shared-view">
+      {shareToken && (
+        <>
+          <Title level={3}>Shared Dashboard</Title>
+          <SharedDashboardPanel shareToken={shareToken} />
+        </>
+      )}
+      {shareWorkspaceToken && (
+        <>
+          <Title level={3}>Shared Workspace</Title>
+          <SharedWorkspacePanel shareToken={shareWorkspaceToken} />
+        </>
+      )}
+      <Text type="secondary">You are viewing a shared resource.</Text>
+    </div>
+  );
+
   return (
-    <Layout className="app-shell">
-      <a href="#main" className="skip-link">Skip to content</a>
-      {loadingBar && <div className="top-loading-bar" />}
-      <Header className="top-nav" role="banner">
-        <div className="top-nav-left">
-          <Button
-            className="mobile-only"
-            type="text"
-            icon={<MenuUnfoldOutlined />}
-            onClick={() => setShowMobileNav(true)}
-            aria-label="Open navigation"
-          />
-          <Button type="text" className="logo-button" onClick={() => setActiveRoute("home")}>
-            <DashboardOutlined />
-            <span className="logo-text">DataHub</span>
-          </Button>
-          <Dropdown
-            trigger={["click"]}
-            menu={{
-              items: [
-                ...workspaces.map((workspace) => ({
-                  key: workspace.id,
-                  label: (
-                    <Space>
-                      <Avatar size="small">{workspace.name.slice(0, 1)}</Avatar>
-                      <span>{workspace.name}</span>
-                    </Space>
-                  ),
-                  onClick: () => setWorkspaceId(workspace.id),
-                })),
-                { type: "divider" as const },
-                { key: "create", label: "+ Create Workspace" },
-                { key: "manage", label: "Manage Workspaces" },
-              ],
-            }}
-          >
-            <Button type="text" className="workspace-selector">
-              <Space>
-                <Avatar size="small">W</Avatar>
-                <span>{workspaceId || "Growth Team"}</span>
-                <DownOutlined />
-              </Space>
-            </Button>
-          </Dropdown>
-        </div>
-        <div className="top-nav-center">
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="Search datasets, dashboards..."
-            onFocus={() => setShowCommandPalette(true)}
-            value={commandQuery}
-            onChange={(event) => setCommandQuery(event.target.value)}
-          />
-        </div>
-        <div className="top-nav-right">
-          <Dropdown
-            trigger={["click"]}
-            menu={{
-              items: [
-                { key: "project", label: "New Project" },
-                { key: "import", label: "Import Data" },
-                { key: "dashboard", label: "Create Dashboard" },
-                { key: "train", label: "Train Model" },
-              ],
-              onClick: ({ key }) => notify.info(`Action: ${key}`),
-            }}
-          >
-            <Button icon={<PlusOutlined />}>New</Button>
-          </Dropdown>
-          <Badge count={3} offset={[2, 2]}>
-            <Button type="text" icon={<BellOutlined />} onClick={() => setShowNotifications(true)} />
-          </Badge>
-          <Dropdown
-            trigger={["click"]}
-            menu={{
-              items: userMenuItems,
-            }}
-          >
-            <Button type="text">
-              <Avatar size="small">JS</Avatar>
-            </Button>
-          </Dropdown>
-        </div>
-      </Header>
-
-      <Layout>
-        <Sider
-          className="side-nav desktop-only"
-          collapsible
-          collapsed={sidebarCollapsed}
-          trigger={null}
-          width={240}
-          collapsedWidth={60}
-        >
-          <nav aria-label="Primary">
-            <div className="side-nav-section">
-              <Button
-                type="text"
-                className={`nav-item ${activeRoute === "home" ? "active" : ""}`}
-                icon={<HomeOutlined />}
-                onClick={() => setActiveRoute("home")}
-              >
-                {!sidebarCollapsed && "Home"}
-              </Button>
-            </div>
-            <div className="side-nav-section">
-              {!sidebarCollapsed && <Text className="nav-section-label">Data</Text>}
-              <Tooltip title={sidebarCollapsed ? "Import" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "import" ? "active" : ""}`}
-                  icon={<CloudUploadOutlined />}
-                  onClick={() => setActiveRoute("import")}
-                >
-                  {!sidebarCollapsed && "Import"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "Datasets" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "clean" ? "active" : ""}`}
-                  icon={<DatabaseOutlined />}
-                  onClick={() => setActiveRoute("clean")}
-                >
-                  {!sidebarCollapsed && "Datasets"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "Connectors" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "automation" ? "active" : ""}`}
-                  icon={<ApiOutlined />}
-                  onClick={() => setActiveRoute("automation")}
-                >
-                  {!sidebarCollapsed && "Connectors"}
-                </Button>
-              </Tooltip>
-            </div>
-            <div className="side-nav-section">
-              {!sidebarCollapsed && <Text className="nav-section-label">Transform</Text>}
-              <Tooltip title={sidebarCollapsed ? "Clean" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "clean" ? "active" : ""}`}
-                  icon={<ThunderboltOutlined />}
-                  onClick={() => setActiveRoute("clean")}
-                >
-                  {!sidebarCollapsed && "Clean"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "Transform" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "transform" ? "active" : ""}`}
-                  icon={<DeploymentUnitOutlined />}
-                  onClick={() => setActiveRoute("transform")}
-                >
-                  {!sidebarCollapsed && "Transform"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "Model" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "model" ? "active" : ""}`}
-                  icon={<ShareAltOutlined />}
-                  onClick={() => setActiveRoute("model")}
-                >
-                  {!sidebarCollapsed && "Model"}
-                </Button>
-              </Tooltip>
-            </div>
-            <div className="side-nav-section">
-              {!sidebarCollapsed && <Text className="nav-section-label">Analyze</Text>}
-              <Tooltip title={sidebarCollapsed ? "Dashboards" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "dashboards" ? "active" : ""}`}
-                  icon={<BarChartOutlined />}
-                  onClick={() => setActiveRoute("dashboards")}
-                >
-                  {!sidebarCollapsed && "Dashboards"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "ML & AI" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "ml" ? "active" : ""}`}
-                  icon={<ApiOutlined />}
-                  onClick={() => setActiveRoute("ml")}
-                >
-                  {!sidebarCollapsed && "ML & AI"}
-                </Button>
-              </Tooltip>
-            </div>
-            <div className="side-nav-section">
-              {!sidebarCollapsed && <Text className="nav-section-label">Collaborate</Text>}
-              <Tooltip title={sidebarCollapsed ? "Team" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "collab" ? "active" : ""}`}
-                  icon={<TeamOutlined />}
-                  onClick={() => setActiveRoute("collab")}
-                >
-                  {!sidebarCollapsed && "Team"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "Shared" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "shared" ? "active" : ""}`}
-                  icon={<ShareAltOutlined />}
-                  onClick={() => setActiveRoute("shared")}
-                >
-                  {!sidebarCollapsed && "Shared"}
-                </Button>
-              </Tooltip>
-              <Tooltip title={sidebarCollapsed ? "Activity" : ""} placement="right">
-                <Button
-                  type="text"
-                  className={`nav-item ${activeRoute === "governance" ? "active" : ""}`}
-                  icon={<BellOutlined />}
-                  onClick={() => setActiveRoute("governance")}
-                >
-                  {!sidebarCollapsed && "Activity"}
-                </Button>
-              </Tooltip>
-            </div>
-            <div className="side-nav-bottom">
-              <Button
-                type="text"
-                className={`nav-item ${activeRoute === "settings" ? "active" : ""}`}
-                icon={<SettingOutlined />}
-                onClick={() => setActiveRoute("settings")}
-              >
-                {!sidebarCollapsed && "Settings"}
-              </Button>
-              <Button
-                type="text"
-                className="nav-item"
-                icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setSidebarCollapsed((prev) => !prev)}
-              >
-                {!sidebarCollapsed && "Collapse"}
-              </Button>
-            </div>
-          </nav>
-        </Sider>
-
-        <Content className="main-content" id="main" role="main">
-          <div className="content-container">
-            <Breadcrumb
-              items={[
-                { title: "Home", onClick: () => setActiveRoute("home") },
-                { title: activePage.title },
-              ]}
-            />
-            <div className="page-header">
-              <div>
-                <Typography.Title level={2} style={{ marginBottom: 0 }}>
-                  {activePage.title}
-                </Typography.Title>
-                {activePage.description && <Text type="secondary">{activePage.description}</Text>}
-              </div>
-              <Space>
-                <Button onClick={() => setShowRightPanel((prev) => !prev)}>Toggle Context</Button>
-                <Button type="primary">Primary Action</Button>
-              </Space>
-            </div>
-            <Suspense
-              fallback={(
-                <div className="section">
-                  <Card className="panel-card">
-                    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-                      <Typography.Title level={4} style={{ margin: 0 }}>
-                        Loading workspace...
-                      </Typography.Title>
-                      <Typography.Text type="secondary">
-                        Fetching modules and preparing the experience.
-                      </Typography.Text>
-                    </Space>
-                  </Card>
-                </div>
-              )}
+    <Layout className="ai-analytics-layout">
+      <Sider
+        width={leftSidebarCollapsed ? 60 : 240}
+        collapsedWidth={60}
+        collapsible={false}
+        className={`main-sidebar ${leftSidebarCollapsed ? "collapsed" : ""}`}
+        theme="light"
+      >
+        <div className="main-sidebar-inner">
+          <nav className="main-nav">
+            <Button
+              type="text"
+              className={`main-nav-item ${activeMainTab === "home" ? "active" : ""}`}
+              icon={<HomeOutlined />}
+              onClick={() => setActiveMainTab("home")}
             >
-              {isSharedView ? sharedTabContent : activePage.content}
-            </Suspense>
+              {!leftSidebarCollapsed && "Home"}
+            </Button>
+            <Button
+              type="text"
+              className={`main-nav-item ${activeMainTab === "workspace" ? "active" : ""}`}
+              icon={<AppstoreOutlined />}
+              onClick={() => setActiveMainTab("workspace")}
+            >
+              {!leftSidebarCollapsed && "Workspaces"}
+            </Button>
+            <Button
+              type="text"
+              className={`main-nav-item ${activeMainTab === "marketplace" ? "active" : ""}`}
+              icon={<ShoppingOutlined />}
+              onClick={() => setActiveMainTab("marketplace")}
+            >
+              {!leftSidebarCollapsed && "Marketplace"}
+            </Button>
+          </nav>
+          <div className="main-sidebar-footer">
+            <Button
+              type="text"
+              className={`main-nav-item ${activeMainTab === "settings" ? "active" : ""}`}
+              icon={<SettingOutlined />}
+              onClick={() => setActiveMainTab("settings")}
+            >
+              {!leftSidebarCollapsed && "Settings"}
+            </Button>
+            <Button
+              type="text"
+              className="main-nav-item"
+              icon={leftSidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setLeftSidebarCollapsed((prev) => !prev)}
+            >
+              {!leftSidebarCollapsed && "Collapse"}
+            </Button>
           </div>
-        </Content>
+        </div>
+      </Sider>
 
-        {showRightPanel && !isMobile && (
-          <aside className="right-panel" aria-label="Context panel">
-            <Card className="panel-card" title="Context">
-              <Typography.Text type="secondary">
-                Contextual guidance and AI assistant content appears here.
-              </Typography.Text>
-            </Card>
-          </aside>
+      <div className={`data-operations-panel ${dataPanelOpen ? "open" : ""}`}>
+        <Tabs
+          tabPosition="left"
+          activeKey={activeDataTab}
+          onChange={(key) => setActiveDataTab(key)}
+          className="data-operations-tabs"
+          items={[
+            {
+              key: "import",
+              label: (
+                <span className="data-tab-label">
+                  <DatabaseOutlined />
+                  Data Import
+                </span>
+              ),
+              children: <DataImportPanel />,
+            },
+            {
+              key: "transform",
+              label: (
+                <span className="data-tab-label">
+                  <SwapOutlined />
+                  Transform
+                </span>
+              ),
+              children: <DataTransformationPanel />,
+            },
+            {
+              key: "ml",
+              label: (
+                <span className="data-tab-label">
+                  <ExperimentOutlined />
+                  ML/Cleaning
+                </span>
+              ),
+              children: <DataCleaningPanel />,
+            },
+            {
+              key: "feature",
+              label: (
+                <span className="data-tab-label">
+                  <BranchesOutlined />
+                  Feature Eng
+                </span>
+              ),
+              children: <TransformationsPanel datasetId={datasetId} />,
+            },
+            {
+              key: "quality",
+              label: (
+                <span className="data-tab-label">
+                  <CheckCircleOutlined />
+                  Data Quality
+                </span>
+              ),
+              children: <ProfilePanel datasetId={datasetId} />,
+            },
+          ]}
+        />
+      </div>
+
+      <Content className="center-workspace">
+        {isMobile && (
+          <div className="workspace-toolbar">
+            <Space>
+              <Button onClick={() => setDataPanelOpen((prev) => !prev)}>Data Ops</Button>
+              <Button onClick={() => setPipelineOpen((prev) => !prev)}>Pipeline</Button>
+            </Space>
+          </div>
         )}
-      </Layout>
 
-      <Drawer
-        open={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        title="Notifications"
-        placement="right"
+        {isSharedView ? (
+          sharedTabContent
+        ) : (
+          <>
+            <div className="ai-chat-container">
+              <div className="chat-header">
+                <div>
+                  <Title level={4} style={{ marginBottom: 0 }}>
+                    AI Data Analyst
+                  </Title>
+                  <Text type="secondary">
+                    {selectedDataset
+                      ? `Working on ${selectedDataset.dataset_id}`
+                      : "Select a dataset to start"}
+                  </Text>
+                </div>
+                <Space align="center">
+                  <Select
+                    placeholder="Select dataset"
+                    value={datasetId ?? undefined}
+                    onChange={(value) => setDatasetId(value)}
+                    options={datasetOptions}
+                    style={{ minWidth: 200 }}
+                    allowClear
+                  />
+                  <Tag color={aiTyping ? "blue" : "green"}>{aiTyping ? "Thinking" : "Online"}</Tag>
+                </Space>
+              </div>
+
+              <div className="chat-messages" ref={chatScrollRef}>
+                {chatMessages.map((message, index) => (
+                  <div key={`${message.role}-${index}`} className={`chat-message ${message.role}`}>
+                    <Avatar className="message-avatar" icon={message.role === "user" ? <UserOutlined /> : <RobotOutlined />} />
+                    <div className="message-body">
+                      <div className="message-content">{message.content}</div>
+                      <Text className="message-time" type="secondary">
+                        {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </Text>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="chat-input-area">
+                <div className="suggested-prompts">
+                  {promptChips.map((prompt) => (
+                    <button
+                      key={prompt}
+                      className="suggested-prompt-chip"
+                      onClick={() => setInputMessage(prompt)}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+                {aiTyping && <Text className="chat-typing">AI is typing...</Text>}
+                <div className="chat-input-row">
+                  <Input.TextArea
+                    value={inputMessage}
+                    onChange={(event) => setInputMessage(event.target.value)}
+                    autoSize={{ minRows: 1, maxRows: 4 }}
+                    placeholder="Ask AI to help with your data..."
+                    onPressEnter={(event) => {
+                      if (!event.shiftKey) {
+                        event.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                  />
+                  <Button type="primary" icon={<SendOutlined />} onClick={handleSendMessage}>
+                    Send
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="insights-preview-container">
+              <Tabs
+                activeKey={activeInsightTab}
+                onChange={(key) => setActiveInsightTab(key)}
+                items={[
+                  {
+                    key: "suggestions",
+                    label: (
+                      <span className="insight-tab-label">
+                        <BulbOutlined /> AI Suggestions
+                      </span>
+                    ),
+                    children: (
+                      <div>
+                        {suggestion?.notes?.length ? (
+                          <Card className="ai-suggestion-notes">
+                            <Text strong>Summary</Text>
+                            <Divider style={{ margin: "8px 0" }} />
+                            <Space direction="vertical">
+                              {suggestion.notes.map((note) => (
+                                <Text key={note} type="secondary">
+                                  {note}
+                                </Text>
+                              ))}
+                            </Space>
+                          </Card>
+                        ) : null}
+                        <div className="ai-suggestions-grid">
+                          {suggestionCards.length ? (
+                            suggestionCards.map((step, index) => (
+                              <Card key={`${step.name}-${index}`} className="ai-suggestion-card">
+                                <div className="suggestion-header">
+                                  <div>
+                                    <Text strong>{step.name}</Text>
+                                    <Text type="secondary" className="suggestion-description">
+                                      {JSON.stringify(step.params || {})}
+                                    </Text>
+                                  </div>
+                                  <span className="confidence-badge">
+                                    {Math.max(70, 95 - index * 5)}% confidence
+                                  </span>
+                                </div>
+                                <Button onClick={() => handleApplySuggestionStep(step)}>
+                                  Apply
+                                </Button>
+                              </Card>
+                            ))
+                          ) : (
+                            <Text type="secondary">No AI suggestions yet.</Text>
+                          )}
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "preview",
+                    label: (
+                      <span className="insight-tab-label">
+                        <EyeOutlined /> Data Preview
+                      </span>
+                    ),
+                    children: (
+                      <div className="data-preview-tab">
+                        <div className="data-preview-stats">
+                          <Tag color="blue">Rows: {selectedDataset?.row_count ?? "-"}</Tag>
+                          <Tag color="cyan">Columns: {datasetColumns.length || "-"}</Tag>
+                        </div>
+                        <DatasetPreviewPanel datasetId={datasetId} onColumns={setDatasetColumns} />
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "insights",
+                    label: (
+                      <span className="insight-tab-label">
+                        <ThunderboltOutlined /> Insights
+                      </span>
+                    ),
+                    children: (
+                      <div className="insights-grid">
+                        <InsightsPanel insights={insights} />
+                        <CorrelationPanel datasetId={datasetId} />
+                      </div>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          </>
+        )}
+      </Content>
+
+      <aside className={`pipeline-sidebar ${pipelineOpen ? "open" : ""}`}>
+        <div className="pipeline-header">
+          <Input
+            className="pipeline-name-input"
+            value={pipelineName}
+            onChange={(event) => setPipelineName(event.target.value)}
+            placeholder="Pipeline name"
+          />
+          <div className="pipeline-status-row">
+            <Tag color={pipelineStatus === "completed" ? "green" : pipelineStatus === "running" ? "blue" : "default"}>
+              {pipelineStatus}
+            </Tag>
+            <Text type="secondary">
+              {lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : "Not saved"}
+            </Text>
+          </div>
+        </div>
+
+        <div className="pipeline-steps-container">
+          {pipelineSteps.length ? (
+            <Steps
+              direction="vertical"
+              current={Math.max(pipelineSteps.length - 1, 0)}
+              items={pipelineSteps.map((step, index) => ({
+                title: step.name,
+                description: (
+                  <div className="pipeline-step">
+                    <Text type="secondary">{JSON.stringify(step.params || {})}</Text>
+                    <div className="step-actions">
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => openStepEditor(index)}
+                      />
+                      <Button
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleDeleteStep(index)}
+                      />
+                    </div>
+                  </div>
+                ),
+                status: pipelineStatus === "running" && index === pipelineSteps.length - 1 ? "process" : "wait",
+              }))}
+            />
+          ) : (
+            <Text type="secondary">Add steps to build your pipeline.</Text>
+          )}
+          <Button className="add-step-button" icon={<PlusOutlined />} onClick={() => openStepEditor(null)}>
+            Add Step
+          </Button>
+        </div>
+
+        <div className="pipeline-actions">
+          <Button icon={<SaveOutlined />} block onClick={handleSavePipeline}>
+            Save Pipeline
+          </Button>
+          <Button icon={<ClockCircleOutlined />} block onClick={() => setScheduleOpen(true)}>
+            Schedule
+          </Button>
+          <Button type="primary" icon={<PlayCircleOutlined />} block onClick={handleExecutePipeline}>
+            Execute Now
+          </Button>
+        </div>
+      </aside>
+
+      <Modal
+        title={editingStepIndex !== null ? "Edit Step" : "Add Step"}
+        open={stepModalOpen}
+        onCancel={() => setStepModalOpen(false)}
+        onOk={handleSaveStep}
+        okText="Save"
       >
         <Space direction="vertical" style={{ width: "100%" }}>
-          <Button type="link" onClick={() => notify.success("All marked as read")}>Mark all as read</Button>
-          <Tabs
-            items={[
-              { key: "all", label: "All", children: null },
-              { key: "unread", label: "Unread", children: null },
-              { key: "mentions", label: "Mentions", children: null },
+          <Select
+            placeholder="Step type"
+            value={stepType}
+            onChange={(value) => setStepType(value)}
+            options={PIPELINE_STEP_OPTIONS.map((item) => ({ label: item, value: item }))}
+          />
+          <Input.TextArea
+            value={stepParams}
+            onChange={(event) => setStepParams(event.target.value)}
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            placeholder='{"columns": ["col"], "value": 0}'
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title="Schedule Pipeline"
+        open={scheduleOpen}
+        onCancel={() => setScheduleOpen(false)}
+        onOk={handleSchedulePipeline}
+        confirmLoading={scheduleSaving}
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Select
+            value={scheduleCadence}
+            onChange={(value) => setScheduleCadence(value)}
+            options={[
+              { label: "Daily", value: "daily" },
+              { label: "Weekly", value: "weekly" },
+              { label: "Monthly", value: "monthly" },
             ]}
           />
-          <List
-            dataSource={notifications}
-            locale={{ emptyText: "No new notifications" }}
-            renderItem={(item) => (
-              <List.Item>
-                <List.Item.Meta
-                  avatar={<Avatar>{item.text.slice(0, 1)}</Avatar>}
-                  title={item.text}
-                  description={item.time}
-                />
-                {item.unread && <Badge color="blue" />}
-              </List.Item>
-            )}
-          />
-          <Button type="link">View all</Button>
-        </Space>
-      </Drawer>
-
-      <Modal
-        open={showCommandPalette}
-        onCancel={() => setShowCommandPalette(false)}
-        footer={null}
-        title="Command Palette"
-      >
-        <Space direction="vertical" style={{ width: "100%" }}>
           <Input
-            autoFocus
-            prefix={<SearchOutlined />}
-            placeholder="Type a command or search..."
-            value={commandQuery}
-            onChange={(event) => setCommandQuery(event.target.value)}
-            onPressEnter={() => {
-              if (commandQuery.trim()) {
-                setRecentSearches((prev) => [commandQuery, ...prev.slice(0, 4)]);
-                setShowCommandPalette(false);
-              }
-            }}
+            value={scheduleTime}
+            onChange={(event) => setScheduleTime(event.target.value)}
+            placeholder="Time (HH:MM)"
           />
-          <Text type="secondary">Recent searches</Text>
-          <Space wrap>
-            {recentSearches.map((item) => (
-              <Tag key={item}>{item}</Tag>
-            ))}
-          </Space>
-          <Divider />
-          <Text type="secondary">Quick actions</Text>
-          <List
-            dataSource={["Import data", "Create dashboard", "Train model", "Invite member"]}
-            renderItem={(item) => <List.Item>{item}</List.Item>}
-          />
+          {scheduleCadence === "weekly" && (
+            <Select
+              value={scheduleDayOfWeek}
+              onChange={(value) => setScheduleDayOfWeek(value)}
+              options={[
+                { label: "Mon", value: 0 },
+                { label: "Tue", value: 1 },
+                { label: "Wed", value: 2 },
+                { label: "Thu", value: 3 },
+                { label: "Fri", value: 4 },
+                { label: "Sat", value: 5 },
+                { label: "Sun", value: 6 },
+              ]}
+            />
+          )}
+          {scheduleCadence === "monthly" && (
+            <Input
+              value={scheduleDayOfMonth}
+              onChange={(event) => setScheduleDayOfMonth(Number(event.target.value) || 1)}
+              placeholder="Day of month (1-28)"
+            />
+          )}
         </Space>
       </Modal>
-
-      <Modal
-        open={showShortcuts}
-        onCancel={() => setShowShortcuts(false)}
-        footer={null}
-        title="Keyboard Shortcuts"
-      >
-        <List
-          dataSource={[
-            "Cmd/Ctrl + K: Command palette",
-            "Cmd/Ctrl + B: Toggle sidebar",
-            "Cmd/Ctrl + /: Shortcuts",
-            "G then H: Home",
-            "G then D: Dashboards",
-            "G then S: Settings",
-          ]}
-          renderItem={(item) => <List.Item>{item}</List.Item>}
-        />
-      </Modal>
-
-      <Drawer
-        open={showMobileNav}
-        onClose={() => setShowMobileNav(false)}
-        placement="left"
-        title="Navigation"
-      >
-        <List
-          dataSource={[
-            { key: "home", label: "Home" },
-            { key: "import", label: "Import" },
-            { key: "dashboards", label: "Dashboards" },
-            { key: "settings", label: "Settings" },
-          ]}
-          renderItem={(item) => (
-            <List.Item
-              onClick={() => {
-                setActiveRoute(item.key);
-                setShowMobileNav(false);
-              }}
-            >
-              {item.label}
-            </List.Item>
-          )}
-        />
-      </Drawer>
-
-      {isMobile && (
-        <div className="mobile-tab-bar">
-          <Button type="text" icon={<HomeOutlined />} onClick={() => setActiveRoute("home")}>
-            Home
-          </Button>
-          <Button type="text" icon={<DatabaseOutlined />} onClick={() => setActiveRoute("import")}>
-            Data
-          </Button>
-          <Button type="text" icon={<BarChartOutlined />} onClick={() => setActiveRoute("dashboards")}>
-            Dashboards
-          </Button>
-          <Button type="text" icon={<MenuUnfoldOutlined />} onClick={() => setShowMobileNav(true)}>
-            More
-          </Button>
-        </div>
-      )}
     </Layout>
   );
 }

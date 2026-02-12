@@ -102,6 +102,70 @@ class ScheduledJob(BaseModel):
     status: str
 
 
+PipelineCadence = Literal["daily", "weekly", "monthly"]
+
+
+class PipelineCreate(BaseModel):
+    name: str
+    cadence: PipelineCadence = "daily"
+    time_of_day: Optional[str] = None
+    day_of_week: Optional[int] = None
+    day_of_month: Optional[int] = None
+    dataset_id: Optional[str] = None
+    connector: Optional[str] = None
+    connector_config: Dict[str, Any] = Field(default_factory=dict)
+    apply_recipe: bool = False
+    run_profile: bool = True
+    run_insights: bool = True
+    enabled: bool = True
+
+
+class PipelineUpdate(BaseModel):
+    name: Optional[str] = None
+    cadence: Optional[PipelineCadence] = None
+    time_of_day: Optional[str] = None
+    day_of_week: Optional[int] = None
+    day_of_month: Optional[int] = None
+    dataset_id: Optional[str] = None
+    connector: Optional[str] = None
+    connector_config: Optional[Dict[str, Any]] = None
+    apply_recipe: Optional[bool] = None
+    run_profile: Optional[bool] = None
+    run_insights: Optional[bool] = None
+    enabled: Optional[bool] = None
+
+
+class PipelineSchedule(BaseModel):
+    pipeline_id: str
+    name: str
+    cadence: PipelineCadence
+    time_of_day: Optional[str] = None
+    day_of_week: Optional[int] = None
+    day_of_month: Optional[int] = None
+    dataset_id: Optional[str] = None
+    connector: Optional[str] = None
+    connector_config: Dict[str, Any] = Field(default_factory=dict)
+    apply_recipe: bool = False
+    run_profile: bool = True
+    run_insights: bool = True
+    enabled: bool = True
+    last_run_at: Optional[str] = None
+    next_run_at: Optional[str] = None
+    last_run_metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: Optional[str] = None
+
+
+class PipelineRun(BaseModel):
+    run_id: str
+    pipeline_id: str
+    status: str
+    dataset_id: Optional[str] = None
+    error: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    started_at: str
+    finished_at: Optional[str] = None
+
+
 class ConnectorImportRequest(BaseModel):
     connector: str
     config: Dict[str, Any] = Field(default_factory=dict)

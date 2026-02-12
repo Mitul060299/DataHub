@@ -120,3 +120,36 @@ class ScheduledJobDB(Base):
     action = Column(String, nullable=False)
     status = Column(String, nullable=False, default="scheduled")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PipelineDB(Base):
+    __tablename__ = "pipelines"
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    cadence = Column(String, nullable=False)
+    time_of_day = Column(String, nullable=True)
+    day_of_week = Column(Integer, nullable=True)
+    day_of_month = Column(Integer, nullable=True)
+    dataset_id = Column(String, nullable=True)
+    connector = Column(String, nullable=True)
+    connector_config = Column(JSONB, nullable=False, default=dict)
+    apply_recipe = Column(Boolean, nullable=False, default=False)
+    run_profile = Column(Boolean, nullable=False, default=True)
+    run_insights = Column(Boolean, nullable=False, default=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    last_run_metadata = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PipelineRunDB(Base):
+    __tablename__ = "pipeline_runs"
+    id = Column(String, primary_key=True)
+    pipeline_id = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    dataset_id = Column(String, nullable=True)
+    error = Column(Text, nullable=True)
+    metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    finished_at = Column(DateTime(timezone=True), nullable=True)

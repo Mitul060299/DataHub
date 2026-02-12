@@ -1,13 +1,14 @@
 from fastapi import FastAPI, Request
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, dashboards, webhooks, jobs, connectors, users, workspaces, widgets, metrics, approvals, realtime, templates
+from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, dashboards, webhooks, jobs, connectors, users, workspaces, widgets, metrics, approvals, realtime, templates, pipelines
 from .db import Base, engine
 from . import models_db
 from .services.audit import audit_store
 from .models import AuditEntry
 from .services.metrics import start_timer
 from .config import settings
+from .services.pipelines import start_scheduler
 
 app = FastAPI(title="DataHub API", version="0.1.0")
 
@@ -24,6 +25,10 @@ app.add_middleware(
 def create_tables() -> None:
     if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
         Base.metadata.create_all(bind=engine)
+    try:
+        start_scheduler()
+    except Exception:
+        pass
 
 
 @app.middleware("http")
@@ -71,3 +76,4 @@ app.include_router(widgets.router)
 app.include_router(approvals.router)
 app.include_router(realtime.router)
 app.include_router(templates.router)
+app.include_router(pipelines.router)

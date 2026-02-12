@@ -149,6 +149,37 @@ export interface ScheduledJob {
   status: string;
 }
 
+export interface PipelineSchedule {
+  pipeline_id: string;
+  name: string;
+  cadence: "daily" | "weekly" | "monthly";
+  time_of_day?: string | null;
+  day_of_week?: number | null;
+  day_of_month?: number | null;
+  dataset_id?: string | null;
+  connector?: string | null;
+  connector_config?: Record<string, unknown>;
+  apply_recipe: boolean;
+  run_profile: boolean;
+  run_insights: boolean;
+  enabled: boolean;
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+  last_run_metadata?: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export interface PipelineRun {
+  run_id: string;
+  pipeline_id: string;
+  status: string;
+  dataset_id?: string | null;
+  error?: string | null;
+  metadata?: Record<string, unknown>;
+  started_at: string;
+  finished_at?: string | null;
+}
+
 export interface AuditEntry {
   action: string;
   actor: string;

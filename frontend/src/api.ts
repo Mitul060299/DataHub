@@ -349,6 +349,49 @@ export async function createJob(name: string, cron: string, action: string) {
   return response.data;
 }
 
+export async function listPipelines() {
+  const response = await api.get("/pipelines");
+  return response.data;
+}
+
+export async function createPipeline(payload: {
+  name: string;
+  cadence: "daily" | "weekly" | "monthly";
+  time_of_day?: string;
+  day_of_week?: number;
+  day_of_month?: number;
+  dataset_id?: string | null;
+  connector?: string | null;
+  connector_config?: Record<string, unknown>;
+  apply_recipe?: boolean;
+  run_profile?: boolean;
+  run_insights?: boolean;
+  enabled?: boolean;
+}) {
+  const response = await api.post("/pipelines", payload);
+  return response.data;
+}
+
+export async function updatePipeline(pipelineId: string, payload: Record<string, unknown>) {
+  const response = await api.put(`/pipelines/${pipelineId}`, payload);
+  return response.data;
+}
+
+export async function deletePipeline(pipelineId: string) {
+  const response = await api.delete(`/pipelines/${pipelineId}`);
+  return response.data;
+}
+
+export async function runPipeline(pipelineId: string) {
+  const response = await api.post(`/pipelines/${pipelineId}/run`);
+  return response.data;
+}
+
+export async function listPipelineRuns(pipelineId: string) {
+  const response = await api.get(`/pipelines/${pipelineId}/runs`);
+  return response.data;
+}
+
 export async function listDashboardTemplates() {
   const response = await api.get("/templates/dashboards");
   return response.data;

@@ -84,6 +84,9 @@ const WebhooksPanel = lazy(() =>
 const JobsPanel = lazy(() =>
   import("./components/JobsPanel").then((module) => ({ default: module.JobsPanel }))
 );
+const PipelinesPanel = lazy(() =>
+  import("./components/PipelinesPanel").then((module) => ({ default: module.PipelinesPanel }))
+);
 const AuditLogPanel = lazy(() =>
   import("./components/AuditLogPanel").then((module) => ({ default: module.AuditLogPanel }))
 );
@@ -449,7 +452,12 @@ export function App() {
             <JobsPanel />
           </Card>
         </Col>
-      </Row>
+        <Col xs={24} lg={12}>
+          <Card className="panel-card" title="Pipelines">
+            <PipelinesPanel />
+          </Card>
+        </Col>
+        </Row>
     </div>
   );
 

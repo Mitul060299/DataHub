@@ -154,6 +154,30 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
         return "viewer"
 
 
+def get_current_subject(authorization: str | None = Header(default=None)) -> Optional[str]:
+    if not authorization:
+        return None
+    try:
+        scheme, token = authorization.split(" ")
+        if scheme.lower() != "bearer":
+            return None
+        if _is_jwt(token):
+            claims = _verify_supabase_token(token)
+            if not claims:
+                claims = _verify_app_token(token)
+            if claims:
+                return (
+                    claims.get("email")
+                    or claims.get("preferred_username")
+                    or claims.get("sub")
+                )
+        decoded = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")
+        parts = decoded.split("|")
+        return parts[0] if parts else None
+    except Exception:
+        return None
+
+
 def require_role(required: str, role: str) -> None:
     allowed = {"viewer": 1, "editor": 2, "admin": 3}
     if allowed.get(role, 1) < allowed.get(required, 1):

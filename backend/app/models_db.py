@@ -10,6 +10,7 @@ class User(Base):
     id = Column(String, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     role = Column(String, nullable=False, default="viewer")
+    plan = Column(String, nullable=False, default="Free")
 
 
 class Workspace(Base):
@@ -53,6 +54,7 @@ class Dashboard(Base):
 class DatasetMetaDB(Base):
     __tablename__ = "dataset_meta"
     id = Column(String, primary_key=True)
+    workspace_id = Column(String, nullable=False, default="default")
     columns = Column(JSONB, nullable=False, default=list)
     row_count = Column(Integer, nullable=False)
     parent_id = Column(String, nullable=True)
@@ -70,6 +72,32 @@ class DatasetChunkDB(Base):
     dataset_id = Column(String, nullable=False)
     chunk_index = Column(Integer, nullable=False)
     rows = Column(JSONB, nullable=False, default=list)
+
+
+class ImportTableDB(Base):
+    __tablename__ = "import_tables"
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    dataset_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    source_type = Column(String, nullable=False)
+    source_name = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ImportConnectionDB(Base):
+    __tablename__ = "import_connections"
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    host = Column(String, nullable=True)
+    database = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="connected")
+    config = Column(JSONB, nullable=False, default=dict)
+    last_sync_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class AuditLogDB(Base):

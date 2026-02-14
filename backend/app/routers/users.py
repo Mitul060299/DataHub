@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 import uuid
 from ..db import get_db
-from ..models import UserCreate, UserOut
-from ..models_db import User
-from ..security import get_current_role, require_role
+from ..models import UserCreate, UserOut, UserProfileOut, UserUsage
+from ..models_db import User, DatasetMetaDB, ImportTableDB
+from ..security import get_current_role, get_current_subject, require_role
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -17,7 +17,7 @@ def create_user(
 ) -> UserOut:
     role = get_current_role(authorization)
     require_role("admin", role)
-    user = User(id=str(uuid.uuid4()), username=payload.username, role=payload.role)
+    user = User(id=str(uuid.uuid4()), username=payload.username, role=payload.role, plan=payload.plan)
     db.add(user)
     try:
         db.commit()
@@ -25,7 +25,7 @@ def create_user(
         db.rollback()
         raise HTTPException(status_code=400, detail="User already exists")
     db.refresh(user)
-    return UserOut(id=user.id, username=user.username, role=user.role)
+    return UserOut(id=user.id, username=user.username, role=user.role, plan=user.plan)
 
 
 @router.get("/", response_model=list[UserOut])
@@ -36,4 +36,47 @@ def list_users(
     role = get_current_role(authorization)
     require_role("admin", role)
     users = db.query(User).all()
-    return [UserOut(id=u.id, username=u.username, role=u.role) for u in users]
+    return [UserOut(id=u.id, username=u.username, role=u.role, plan=u.plan) for u in users]
+
+
+@router.get("/me", response_model=UserProfileOut)
+def get_me(
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> UserProfileOut:
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    role = get_current_role(authorization)
+    user = db.query(User).filter(User.username == subject).first()
+    if not user:
+        user = User(id=str(uuid.uuid4()), username=subject, role=role, plan="Free")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    workspace_filter = workspace_id or "default"
+    datasets_used = (
+        db.query(DatasetMetaDB)
+        .filter(DatasetMetaDB.workspace_id == workspace_filter)
+        .count()
+    )
+    storage_used = (
+        db.query(ImportTableDB)
+        .filter(ImportTableDB.workspace_id == workspace_filter)
+        .with_entities(ImportTableDB.size_bytes)
+        .all()
+    )
+    storage_total = sum(row[0] or 0 for row in storage_used)
+    usage = UserUsage(
+        datasetsUsed=datasets_used,
+        storageUsed=storage_total,
+        aiMessagesUsed=0,
+    )
+    return UserProfileOut(
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        plan=user.plan,
+        usage=usage,
+    )

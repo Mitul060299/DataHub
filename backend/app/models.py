@@ -69,6 +69,7 @@ class AuthToken(BaseModel):
 
 
 UserRole = Literal["admin", "editor", "viewer"]
+UserPlan = Literal["Free", "Professional", "Team", "Enterprise"]
 
 
 class DashboardWidget(BaseModel):
@@ -174,12 +175,28 @@ class ConnectorImportRequest(BaseModel):
 class UserCreate(BaseModel):
     username: str
     role: UserRole = "viewer"
+    plan: UserPlan = "Free"
 
 
 class UserOut(BaseModel):
     id: str
     username: str
     role: UserRole
+    plan: UserPlan
+
+
+class UserUsage(BaseModel):
+    datasetsUsed: int
+    storageUsed: int
+    aiMessagesUsed: int
+
+
+class UserProfileOut(BaseModel):
+    id: str
+    username: str
+    role: UserRole
+    plan: UserPlan
+    usage: UserUsage
 
 
 class WorkspaceCreate(BaseModel):

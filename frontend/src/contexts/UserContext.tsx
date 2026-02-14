@@ -1,0 +1,199 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { fetchCurrentUser } from "../api";
+import { useAuth } from "./AuthContext";
+
+type UserPlan = "Free" | "Professional" | "Team" | "Enterprise";
+
+type PlanLimits = {
+  maxFileSize: number;
+  maxDatasets: number;
+  maxStorage: number;
+  maxWorkspaces: number;
+  maxPipelines: number;
+  aiMessagesPerMonth: number;
+  features: {
+    allFileFormats: boolean;
+    databaseConnections: boolean;
+    cloudStorage: boolean;
+    autoML: boolean;
+    apiAccess: boolean;
+    scheduledPipelines: boolean;
+    collaboration: boolean;
+    customML: boolean;
+    enterpriseConnectors: boolean;
+    sso: boolean;
+  };
+};
+
+type UserContextType = {
+  plan: UserPlan;
+  setPlan: (plan: UserPlan) => void;
+  limits: PlanLimits;
+  usage: {
+    datasetsUsed: number;
+    storageUsed: number;
+    aiMessagesUsed: number;
+  };
+  workspaceId: string;
+  setWorkspaceId: (workspaceId: string) => void;
+  user: {
+    id: string;
+    username: string;
+    role: string;
+  } | null;
+};
+
+const planLimits: Record<UserPlan, PlanLimits> = {
+  Free: {
+    maxFileSize: 10 * 1024 * 1024,
+    maxDatasets: 3,
+    maxStorage: 100 * 1024 * 1024,
+    maxWorkspaces: 1,
+    maxPipelines: 2,
+    aiMessagesPerMonth: 100,
+    features: {
+      allFileFormats: false,
+      databaseConnections: false,
+      cloudStorage: false,
+      autoML: false,
+      apiAccess: false,
+      scheduledPipelines: false,
+      collaboration: false,
+      customML: false,
+      enterpriseConnectors: false,
+      sso: false,
+    },
+  },
+  Professional: {
+    maxFileSize: 100 * 1024 * 1024,
+    maxDatasets: -1,
+    maxStorage: 50 * 1024 * 1024 * 1024,
+    maxWorkspaces: 10,
+    maxPipelines: -1,
+    aiMessagesPerMonth: -1,
+    features: {
+      allFileFormats: true,
+      databaseConnections: true,
+      cloudStorage: true,
+      autoML: true,
+      apiAccess: true,
+      scheduledPipelines: true,
+      collaboration: false,
+      customML: false,
+      enterpriseConnectors: false,
+      sso: false,
+    },
+  },
+  Team: {
+    maxFileSize: 500 * 1024 * 1024,
+    maxDatasets: -1,
+    maxStorage: 500 * 1024 * 1024 * 1024,
+    maxWorkspaces: -1,
+    maxPipelines: -1,
+    aiMessagesPerMonth: -1,
+    features: {
+      allFileFormats: true,
+      databaseConnections: true,
+      cloudStorage: true,
+      autoML: true,
+      apiAccess: true,
+      scheduledPipelines: true,
+      collaboration: true,
+      customML: true,
+      enterpriseConnectors: true,
+      sso: false,
+    },
+  },
+  Enterprise: {
+    maxFileSize: 1024 * 1024 * 1024,
+    maxDatasets: -1,
+    maxStorage: -1,
+    maxWorkspaces: -1,
+    maxPipelines: -1,
+    aiMessagesPerMonth: -1,
+    features: {
+      allFileFormats: true,
+      databaseConnections: true,
+      cloudStorage: true,
+      autoML: true,
+      apiAccess: true,
+      scheduledPipelines: true,
+      collaboration: true,
+      customML: true,
+      enterpriseConnectors: true,
+      sso: true,
+    },
+  },
+};
+
+const UserContext = createContext<UserContextType | undefined>(undefined);
+
+export const UserProvider = ({ children }: { children: ReactNode }) => {
+  const [plan, setPlan] = useState<UserPlan>("Free");
+  const [usage, setUsage] = useState({
+    datasetsUsed: 0,
+    storageUsed: 0,
+    aiMessagesUsed: 0,
+  });
+  const [workspaceId, setWorkspaceId] = useState("default");
+  const [user, setUser] = useState<UserContextType["user"]>(null);
+  const { session, loading } = useAuth();
+
+  useEffect(() => {
+    let mounted = true;
+    const loadUser = async () => {
+      if (loading) return;
+      if (!session) {
+        if (!mounted) return;
+        setPlan("Free");
+        setUsage({ datasetsUsed: 0, storageUsed: 0, aiMessagesUsed: 0 });
+        setUser(null);
+        return;
+      }
+      try {
+        const profile = await fetchCurrentUser(workspaceId);
+        if (!mounted) return;
+        setPlan(profile.plan);
+        setUsage(profile.usage);
+        setUser({
+          id: profile.id,
+          username: profile.username,
+          role: profile.role,
+        });
+      } catch {
+        if (!mounted) return;
+        setUser(null);
+      }
+    };
+    loadUser();
+    return () => {
+      mounted = false;
+    };
+  }, [workspaceId, session, loading]);
+
+  const limits = planLimits[plan];
+
+  return (
+    <UserContext.Provider
+      value={{ plan, setPlan, limits, usage, workspaceId, setWorkspaceId, user }}
+    >
+      {children}
+    </UserContext.Provider>
+  );
+};
+
+export const useUser = () => {
+  const context = useContext(UserContext);
+  if (!context) {
+    throw new Error("useUser must be used within UserProvider");
+  }
+  return context;
+};
+
+export const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};

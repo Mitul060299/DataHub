@@ -69,6 +69,7 @@ def _chunk_rows(rows: list[dict], size: int) -> list[list[dict]]:
 async def upload_dataset(
     file: UploadFile = File(...),
     authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> DatasetPreview:
     role = get_current_role(authorization)
@@ -84,6 +85,7 @@ async def upload_dataset(
     db.add(
         DatasetMetaDB(
             id=dataset_id,
+            workspace_id=workspace_id or "default",
             columns=list(df.columns),
             row_count=int(df.shape[0]),
             parent_id=None,
@@ -119,7 +121,12 @@ async def upload_dataset(
     return preview
 
 
-def save_dataset(df: pd.DataFrame, db: Session, parent_id: str | None = None) -> str:
+def save_dataset(
+    df: pd.DataFrame,
+    db: Session,
+    parent_id: str | None = None,
+    workspace_id: str | None = None,
+) -> str:
     dataset_id = str(uuid.uuid4())
     df = df.astype(object).where(pd.notnull(df), None)
     if int(df.shape[0]) <= 5000:
@@ -129,6 +136,7 @@ def save_dataset(df: pd.DataFrame, db: Session, parent_id: str | None = None) ->
     db.add(
         DatasetMetaDB(
             id=dataset_id,
+            workspace_id=workspace_id or "default",
             columns=list(df.columns),
             row_count=int(df.shape[0]),
             parent_id=parent_id,
@@ -192,10 +200,17 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
 
 
 @router.get("/", response_model=list[DatasetMeta])
-def list_datasets(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> list[DatasetMeta]:
+def list_datasets(
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> list[DatasetMeta]:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    rows = db.query(DatasetMetaDB).all()
+    query = db.query(DatasetMetaDB)
+    if workspace_id:
+        query = query.filter(DatasetMetaDB.workspace_id == workspace_id)
+    rows = query.all()
     return [
         DatasetMeta(
             dataset_id=row.id,

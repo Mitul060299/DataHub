@@ -18,7 +18,7 @@ import {
   Statistic,
   Dropdown,
   Menu,
-  Rate,
+  Switch,
 } from "antd";
 import {
   HomeOutlined,
@@ -33,7 +33,6 @@ import {
   SendOutlined,
   BulbOutlined,
   EyeOutlined,
-  ThunderboltOutlined,
   SaveOutlined,
   PlayCircleOutlined,
   ClockCircleOutlined,
@@ -45,15 +44,12 @@ import {
   FilterOutlined,
   CopyOutlined,
   StarOutlined,
-  RocketOutlined,
   CloudUploadOutlined,
   UploadOutlined,
   TeamOutlined,
   BarChartOutlined,
   FileOutlined,
   MoreOutlined,
-  MailOutlined,
-  PhoneOutlined,
   CreditCardOutlined,
   ApiOutlined,
   LockOutlined,
@@ -62,12 +58,20 @@ import {
   LogoutOutlined,
   DownOutlined,
 } from "@ant-design/icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import "./styles_new.css";
+import { DataImportTab } from "./components/DataImportTab";
+import { HomePage } from "./components/HomePage";
+import { formatFileSize, useUser } from "./contexts/UserContext";
+import { useAuth } from "./contexts/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { LoginPage } from "./pages/LoginPage";
+import { SignupPage } from "./pages/SignupPage";
 
 const { Header, Content, Sider } = Layout;
 const { TextArea } = Input;
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -261,18 +265,28 @@ const NOTIFICATIONS = [
   },
 ];
 
-const CURRENT_USER = {
-  name: "John Doe",
-  email: "john@example.com",
-  plan: "Professional",
-  planColor: "blue",
+const planColors: Record<string, string> = {
+  Free: "default",
+  Professional: "blue",
+  Team: "purple",
+  Enterprise: "gold",
 };
 
-export function App() {
+const AppShell = () => {
+  const { plan, limits, user, setWorkspaceId } = useUser();
+  const { user: authUser, signOut } = useAuth();
+  const navigate = useNavigate();
+  const displayName =
+    (authUser?.user_metadata?.full_name as string | undefined) || user?.username || "User";
+  const displayEmail = authUser?.email ?? user?.username ?? "Unknown";
+  const planColor = planColors[plan] ?? "blue";
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [activeDataTab, setActiveDataTab] = useState("import");
   const [activeInsightTab, setActiveInsightTab] = useState("suggestions");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [importGuidanceShown, setImportGuidanceShown] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -283,6 +297,31 @@ export function App() {
   const [inputMessage, setInputMessage] = useState("");
   const [selectedTable, setSelectedTable] = useState("sales_data");
   const [pipelineName, setPipelineName] = useState("Untitled Pipeline");
+
+  const maxImportSize = limits.maxFileSize;
+  const maxImportLabel = maxImportSize < 0 ? "Unlimited" : formatFileSize(maxImportSize);
+
+  useEffect(() => {
+    document.body.setAttribute("data-theme", themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    setWorkspaceId(activeWorkspace?.id ?? "default");
+  }, [activeWorkspace?.id, setWorkspaceId]);
+
+  useEffect(() => {
+    if (activeDataTab !== "import" || importGuidanceShown) return;
+    const guidance = `I can help you import your data! Here is what you can do:\n\nUpload files:\n- Drag and drop CSV, Excel, JSON, or Parquet files\n- Your ${plan} plan allows files up to ${maxImportLabel}\n\nConnect databases:\n- PostgreSQL, MySQL, SQL Server, MongoDB\n- Warehouses: Snowflake, BigQuery, Redshift\n- Cloud storage: S3, Azure Blob, Google Cloud Storage\n\nWhat would you like to import?`;
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: guidance,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]);
+    setImportGuidanceShown(true);
+  }, [activeDataTab, importGuidanceShown, maxImportLabel, plan]);
 
   const handleSendMessage = () => {
     if (!inputMessage.trim()) return;
@@ -307,25 +346,7 @@ export function App() {
           <DatabaseOutlined /> Data Import
         </span>
       ),
-      children: (
-        <div className="data-ops-content">
-          <Card bordered={false}>
-            <Title level={5}>Import Your Data</Title>
-            <Text type="secondary">Choose your data source and let AI guide you</Text>
-            <div style={{ marginTop: 16 }}>
-              <Button type="link" block style={{ textAlign: "left" }}>
-                Import a CSV file
-              </Button>
-              <Button type="link" block style={{ textAlign: "left" }}>
-                Connect to PostgreSQL
-              </Button>
-              <Button type="link" block style={{ textAlign: "left" }}>
-                Schedule daily import
-              </Button>
-            </div>
-          </Card>
-        </div>
-      ),
+      children: <DataImportTab />,
     },
     {
       key: "transform",
@@ -483,15 +504,15 @@ export function App() {
       <div className="profile-dropdown">
         <div className="profile-dropdown-header">
           <Avatar size={48} icon={<UserOutlined />}>
-            {CURRENT_USER.name[0]}
+            {displayName[0]}
           </Avatar>
           <div className="profile-info">
-            <Text strong>{CURRENT_USER.name}</Text>
+            <Text strong>{displayName}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {CURRENT_USER.email}
+              {displayEmail}
             </Text>
-            <Tag color={CURRENT_USER.planColor} style={{ marginTop: 4 }}>
-              {CURRENT_USER.plan} Plan
+            <Tag color={planColor} style={{ marginTop: 4 }}>
+              {plan} Plan
             </Tag>
           </div>
         </div>
@@ -531,7 +552,16 @@ export function App() {
             { key: "help", icon: <QuestionCircleOutlined />, label: "Help & Support" },
             { key: "docs", icon: <FileTextOutlined />, label: "Documentation" },
             { type: "divider" },
-            { key: "logout", icon: <LogoutOutlined />, label: "Log Out", danger: true },
+            {
+              key: "logout",
+              icon: <LogoutOutlined />,
+              label: "Log Out",
+              danger: true,
+              onClick: async () => {
+                await signOut();
+                navigate("/login", { replace: true });
+              },
+            },
           ]}
         />
       </div>
@@ -542,9 +572,9 @@ export function App() {
         <Button type="text" style={{ height: "auto", padding: "4px 8px" }}>
           <Space>
             <Avatar size="small" icon={<UserOutlined />}>
-              {CURRENT_USER.name[0]}
+              {displayName[0]}
             </Avatar>
-            <Text>{CURRENT_USER.name}</Text>
+            <Text>{displayName}</Text>
             <DownOutlined style={{ fontSize: 12 }} />
           </Space>
         </Button>
@@ -553,191 +583,8 @@ export function App() {
   };
 
   const HomeContent = () => (
-    <div className="full-width-content">
-      <div className="hero-section">
-        <div className="hero-content">
-          <Title level={1}>AI-Powered Data Analytics Platform</Title>
-          <Paragraph className="hero-subtitle">
-            Transform your data with intelligent automation, ML-powered insights,
-            and collaborative workflows.
-          </Paragraph>
-          <Space size="large">
-            <Button type="primary" size="large" icon={<RocketOutlined />}>
-              Get Started Free
-            </Button>
-            <Button size="large" icon={<PlayCircleOutlined />}>
-              Watch Demo
-            </Button>
-          </Space>
-        </div>
-        <div className="hero-image" />
-      </div>
-
-      <div className="features-section">
-        <Title level={2}>Platform Capabilities</Title>
-        <Row gutter={[24, 24]}>
-          <Col span={8}>
-            <Card className="feature-card">
-              <DatabaseOutlined style={{ fontSize: 40, color: "#2563eb" }} />
-              <Title level={4}>Data Import & Integration</Title>
-              <Paragraph>
-                Connect to CSV, PostgreSQL, MySQL, MongoDB, and more.
-                Schedule automated imports.
-              </Paragraph>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card className="feature-card">
-              <ThunderboltOutlined style={{ fontSize: 40, color: "#2563eb" }} />
-              <Title level={4}>AI-Powered Cleaning</Title>
-              <Paragraph>
-                Automatically detect and fix data quality issues with ML algorithms.
-              </Paragraph>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card className="feature-card">
-              <RobotOutlined style={{ fontSize: 40, color: "#2563eb" }} />
-              <Title level={4}>Intelligent Assistant</Title>
-              <Paragraph>
-                Chat with AI to build pipelines, transform data, and get insights.
-              </Paragraph>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card className="feature-card">
-              <SwapOutlined style={{ fontSize: 40, color: "#2563eb" }} />
-              <Title level={4}>Transformation Studio</Title>
-              <Paragraph>
-                Build transformations with visual steps and AI guidance.
-              </Paragraph>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card className="feature-card">
-              <ExperimentOutlined style={{ fontSize: 40, color: "#2563eb" }} />
-              <Title level={4}>ML Modeling</Title>
-              <Paragraph>
-                Train and deploy predictive models with built-in workflows.
-              </Paragraph>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card className="feature-card">
-              <BranchesOutlined style={{ fontSize: 40, color: "#2563eb" }} />
-              <Title level={4}>Collaboration</Title>
-              <Paragraph>
-                Share datasets, pipelines, and dashboards across teams.
-              </Paragraph>
-            </Card>
-          </Col>
-        </Row>
-      </div>
-
-      <div className="pricing-section">
-        <Title level={2}>Choose Your Plan</Title>
-        <Row gutter={[24, 24]} justify="center">
-          <Col span={6}>
-            <Card className="pricing-card">
-              <Tag color="default">Free</Tag>
-              <Title level={3}>Starter</Title>
-              <Title level={2}>
-                $0<Text type="secondary">/month</Text>
-              </Title>
-              <ul className="pricing-features">
-                <li>✓ 5 datasets</li>
-                <li>✓ 100 MB storage</li>
-                <li>✓ Basic AI features</li>
-                <li>✓ 1 workspace</li>
-              </ul>
-              <Button block>Current Plan</Button>
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card className="pricing-card pricing-card-featured">
-              <Tag color="blue">Popular</Tag>
-              <Title level={3}>Professional</Title>
-              <Title level={2}>
-                $29<Text type="secondary">/month</Text>
-              </Title>
-              <ul className="pricing-features">
-                <li>✓ Unlimited datasets</li>
-                <li>✓ 10 GB storage</li>
-                <li>✓ Advanced AI & ML</li>
-                <li>✓ 10 workspaces</li>
-                <li>✓ Priority support</li>
-              </ul>
-              <Button type="primary" block>
-                Upgrade Now
-              </Button>
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card className="pricing-card">
-              <Tag color="gold">Enterprise</Tag>
-              <Title level={3}>Team</Title>
-              <Title level={2}>
-                $99<Text type="secondary">/month</Text>
-              </Title>
-              <ul className="pricing-features">
-                <li>✓ Everything in Pro</li>
-                <li>✓ Unlimited storage</li>
-                <li>✓ Team collaboration</li>
-                <li>✓ Custom integrations</li>
-                <li>✓ 24/7 support</li>
-              </ul>
-              <Button block>Contact Sales</Button>
-            </Card>
-          </Col>
-        </Row>
-      </div>
-
-      <div className="reviews-section">
-        <Title level={2}>Trusted by Data Teams</Title>
-        <Card className="review-card-empty">
-          <Space direction="vertical" size="middle" style={{ textAlign: "center", width: "100%" }}>
-            <Rate disabled defaultValue={0} />
-            <Paragraph>No reviews yet. Share your feedback to help the community.</Paragraph>
-            <Button type="primary">Leave a Review</Button>
-          </Space>
-        </Card>
-      </div>
-
-      <div className="contact-section">
-        <Title level={2}>Get in Touch</Title>
-        <Row gutter={[48, 24]}>
-          <Col span={12}>
-            <Space direction="vertical" size="large" style={{ width: "100%" }}>
-              <div>
-                <MailOutlined style={{ fontSize: 24, color: "#2563eb" }} />
-                <Title level={4}>Email</Title>
-                <Text>support@datahub.com</Text>
-              </div>
-              <div>
-                <PhoneOutlined style={{ fontSize: 24, color: "#2563eb" }} />
-                <Title level={4}>Phone</Title>
-                <Text>+1 (555) 123-4567</Text>
-              </div>
-            </Space>
-          </Col>
-          <Col span={12}>
-            <Form layout="vertical">
-              <Form.Item label="Name">
-                <Input />
-              </Form.Item>
-              <Form.Item label="Email">
-                <Input />
-              </Form.Item>
-              <Form.Item label="Message">
-                <TextArea rows={4} />
-              </Form.Item>
-              <Button type="primary" block>
-                Send Message
-              </Button>
-            </Form>
-          </Col>
-        </Row>
-      </div>
+    <div className="full-width-content home-page-wrapper">
+      <HomePage />
     </div>
   );
 
@@ -1022,6 +869,32 @@ export function App() {
             children: <Card>Account settings content.</Card>,
           },
           {
+            key: "appearance",
+            label: (
+              <span>
+                <BulbOutlined /> Appearance
+              </span>
+            ),
+            children: (
+              <Card>
+                <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                  <div>
+                    <Title level={5}>Theme</Title>
+                    <Text type="secondary">Switch between light and dark mode.</Text>
+                  </div>
+                  <Space align="center">
+                    <Text>Light</Text>
+                    <Switch
+                      checked={themeMode === "dark"}
+                      onChange={(checked) => setThemeMode(checked ? "dark" : "light")}
+                    />
+                    <Text>Dark</Text>
+                  </Space>
+                </Space>
+              </Card>
+            ),
+          },
+          {
             key: "billing",
             label: (
               <span>
@@ -1065,7 +938,13 @@ export function App() {
   const ProjectWorkspaceContent = () => (
     <Layout className="ai-body">
       <Sider width={280} className="data-sidebar">
-        <Tabs tabPosition="left" items={dataOperationsTabs} className="data-operations-tabs" />
+        <Tabs
+          tabPosition="left"
+          items={dataOperationsTabs}
+          className="data-operations-tabs"
+          activeKey={activeDataTab}
+          onChange={setActiveDataTab}
+        />
       </Sider>
       <Content className="center-workspace">
         <Breadcrumb className="project-breadcrumb">
@@ -1221,5 +1100,24 @@ export function App() {
       </Header>
       {renderContent()}
     </Layout>
+  );
+};
+
+export function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/app" replace />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route
+        path="/app"
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/app" replace />} />
+    </Routes>
   );
 }

@@ -57,6 +57,23 @@ export async function exchangeOidcCode(code: string) {
   return response.data as { access_token: string; token_type: string };
 }
 
+export async function fetchCurrentUser(workspaceId?: string) {
+  const response = await api.get("/users/me", {
+    headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+  });
+  return response.data as {
+    id: string;
+    username: string;
+    role: string;
+    plan: "Free" | "Professional" | "Team" | "Enterprise";
+    usage: {
+      datasetsUsed: number;
+      storageUsed: number;
+      aiMessagesUsed: number;
+    };
+  };
+}
+
 export async function chatWithAgent(
   datasetId: string,
   message: string,

@@ -59,7 +59,7 @@ import {
   DownOutlined,
 } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./styles_new.css";
 import { DataImportTab } from "./components/DataImportTab";
 import { HomePage } from "./components/HomePage";
@@ -271,15 +271,23 @@ const planColors: Record<string, string> = {
   Enterprise: "gold",
 };
 
+const MAIN_TABS = new Set(["home", "workspaces", "marketplace", "settings"]);
+
+const resolveMainTab = (search: string) => {
+  const tab = new URLSearchParams(search).get("tab");
+  return tab && MAIN_TABS.has(tab) ? tab : "home";
+};
+
 const AppShell = () => {
   const { plan, limits, user, setWorkspaceId } = useUser();
   const { user: authUser, signOut, session } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const displayName =
     (authUser?.user_metadata?.full_name as string | undefined) || user?.username || "User";
   const displayEmail = authUser?.email ?? user?.username ?? "Unknown";
   const planColor = planColors[plan] ?? "blue";
-  const [activeMainTab, setActiveMainTab] = useState("home");
+  const [activeMainTab, setActiveMainTab] = useState(() => resolveMainTab(location.search));
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [activeDataTab, setActiveDataTab] = useState("import");
@@ -303,6 +311,10 @@ const AppShell = () => {
   useEffect(() => {
     document.body.setAttribute("data-theme", themeMode);
   }, [themeMode]);
+
+  useEffect(() => {
+    setActiveMainTab(resolveMainTab(location.search));
+  }, [location.search]);
 
   useEffect(() => {
     setWorkspaceId(activeWorkspace?.id ?? "default");
@@ -445,12 +457,14 @@ const AppShell = () => {
 
   const handleNavigate = (tab: string) => {
     if (tab === "workspaces" && !session) {
-      navigate("/login", { replace: false, state: { from: { pathname: "/app" } } });
+      navigate("/login?from=workspaces", { replace: false, state: { from: { pathname: "/app" } } });
       return;
     }
+    const nextTab = MAIN_TABS.has(tab) ? tab : "home";
     setActiveMainTab(tab);
     setActiveWorkspace(null);
     setActiveProject(null);
+    navigate(`/app?tab=${encodeURIComponent(nextTab)}`);
   };
 
   const NotificationDropdown = () => {
@@ -562,7 +576,7 @@ const AppShell = () => {
               danger: true,
               onClick: async () => {
                 await signOut();
-                navigate("/login", { replace: true });
+                navigate("/app?tab=home", { replace: true });
               },
             },
           ]}

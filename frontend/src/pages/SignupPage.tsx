@@ -3,6 +3,7 @@ import { GithubOutlined, GoogleOutlined, LockOutlined, MailOutlined, UserOutline
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { TopRibbon } from "../components/TopRibbon";
 import "../AuthPages.css";
 
 const { Title, Text } = Typography;
@@ -43,68 +44,71 @@ export function SignupPage() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-grid">
-        <div className="auth-hero">
-          <span className="auth-kicker">Launch your workspace</span>
-          <Title level={1}>Create your DataHub account</Title>
-          <Text>
-            Get instant access to AI-powered data import, governance, and collaboration tools.
-          </Text>
-        </div>
-        <div className="auth-card">
-          <Title level={2}>Sign up</Title>
-          <Text type="secondary">Start with email or continue with a provider.</Text>
-          {errorMessage && <Alert type="error" message={errorMessage} showIcon style={{ marginTop: 16 }} />}
-          {successMessage && (
-            <Alert type="success" message={successMessage} showIcon style={{ marginTop: 16 }} />
-          )}
-          <Form layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-            <Form.Item
-              label="Full name"
-              name="name"
-              rules={[{ required: true, message: "Enter your name" }]}
-            >
-              <Input prefix={<UserOutlined />} placeholder="Alex Rivera" />
-            </Form.Item>
-            <Form.Item
-              label="Email"
-              name="email"
-              rules={[{ required: true, message: "Enter your email" }]}
-            >
-              <Input prefix={<MailOutlined />} placeholder="you@company.com" />
-            </Form.Item>
-            <Form.Item
-              label="Password"
-              name="password"
-              rules={[{ required: true, message: "Create a password" }]}
-            >
-              <Input.Password prefix={<LockOutlined />} placeholder="At least 8 characters" />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" className="auth-action" loading={loading}>
-              Create account
-            </Button>
-          </Form>
-          <div className="auth-divider">or continue with</div>
-          <Button
-            icon={<GoogleOutlined />}
-            className="auth-secondary"
-            onClick={() => handleProvider("google")}
-          >
-            Google
-          </Button>
-          <Button
-            icon={<GithubOutlined />}
-            className="auth-secondary"
-            onClick={() => handleProvider("github")}
-            style={{ marginTop: 12 }}
-          >
-            GitHub
-          </Button>
-          <div className="auth-footer">
+    <div className="auth-shell">
+      <TopRibbon />
+      <div className="auth-page">
+        <div className="auth-grid">
+          <div className="auth-hero">
+            <span className="auth-kicker">Launch your workspace</span>
+            <Title level={1}>Create your DataHub account</Title>
             <Text>
-              Already have an account? <Link className="auth-link" to="/login">Sign in</Link>
+              Get instant access to AI-powered data import, governance, and collaboration tools.
             </Text>
+          </div>
+          <div className="auth-card">
+            <Title level={2}>Sign up</Title>
+            <Text type="secondary">Start with email or continue with a provider.</Text>
+            {errorMessage && <Alert type="error" message={errorMessage} showIcon style={{ marginTop: 16 }} />}
+            {successMessage && (
+              <Alert type="success" message={successMessage} showIcon style={{ marginTop: 16 }} />
+            )}
+            <Form layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
+              <Form.Item
+                label="Full name"
+                name="name"
+                rules={[{ required: true, message: "Enter your name" }]}
+              >
+                <Input prefix={<UserOutlined />} placeholder="Alex Rivera" />
+              </Form.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[{ required: true, message: "Enter your email" }]}
+              >
+                <Input prefix={<MailOutlined />} placeholder="you@company.com" />
+              </Form.Item>
+              <Form.Item
+                label="Password"
+                name="password"
+                rules={[{ required: true, message: "Create a password" }]}
+              >
+                <Input.Password prefix={<LockOutlined />} placeholder="At least 8 characters" />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" className="auth-action" loading={loading}>
+                Create account
+              </Button>
+            </Form>
+            <div className="auth-divider">or continue with</div>
+            <Button
+              icon={<GoogleOutlined />}
+              className="auth-secondary"
+              onClick={() => handleProvider("google")}
+            >
+              Google
+            </Button>
+            <Button
+              icon={<GithubOutlined />}
+              className="auth-secondary"
+              onClick={() => handleProvider("github")}
+              style={{ marginTop: 12 }}
+            >
+              GitHub
+            </Button>
+            <div className="auth-footer">
+              <Text>
+                Already have an account? <Link className="auth-link" to="/login">Sign in</Link>
+              </Text>
+            </div>
           </div>
         </div>
       </div>

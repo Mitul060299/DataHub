@@ -65,7 +65,6 @@ import { DataImportTab } from "./components/DataImportTab";
 import { HomePage } from "./components/HomePage";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
-import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 
@@ -274,7 +273,7 @@ const planColors: Record<string, string> = {
 
 const AppShell = () => {
   const { plan, limits, user, setWorkspaceId } = useUser();
-  const { user: authUser, signOut } = useAuth();
+  const { user: authUser, signOut, session } = useAuth();
   const navigate = useNavigate();
   const displayName =
     (authUser?.user_metadata?.full_name as string | undefined) || user?.username || "User";
@@ -445,6 +444,10 @@ const AppShell = () => {
   ];
 
   const handleNavigate = (tab: string) => {
+    if (tab === "workspaces" && !session) {
+      navigate("/login", { replace: false, state: { from: { pathname: "/app" } } });
+      return;
+    }
     setActiveMainTab(tab);
     setActiveWorkspace(null);
     setActiveProject(null);
@@ -1109,14 +1112,7 @@ export function App() {
       <Route path="/" element={<Navigate to="/app" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route
-        path="/app"
-        element={
-          <ProtectedRoute>
-            <AppShell />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/app" element={<AppShell />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );

@@ -227,3 +227,23 @@ class QueryCacheDB(Base):
         Index("idx_query_cache_hash", "query_hash"),
         Index("idx_query_cache_expires", "expires_at"),
     )
+
+
+class TransformationHistoryDB(Base):
+    __tablename__ = "transformation_history"
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, nullable=False)
+    user_id = Column(String, nullable=True)
+    operation = Column(String, nullable=False)
+    sql = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    affected_rows = Column(String, nullable=True)
+    execution_time_ms = Column(Integer, nullable=True)
+    status = Column(String, nullable=False, default="completed")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_transformation_history_dataset", "dataset_id"),
+        Index("idx_transformation_history_user", "user_id"),
+    )

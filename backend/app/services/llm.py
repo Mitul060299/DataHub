@@ -50,15 +50,31 @@ def _parse_steps(raw: str) -> List[TransformationStep]:
         return []
 
 
+def _provider_config() -> tuple[str, str, str]:
+    provider = settings.llm_provider.lower()
+    if provider == "groq" and settings.groq_api_key:
+        return provider, settings.groq_api_key, settings.groq_model
+    if provider == "openai" and settings.openai_api_key:
+        return provider, settings.openai_api_key, settings.openai_model
+    return "", "", ""
+
+
+def _provider_base_url(provider: str) -> str:
+    if provider == "groq":
+        return settings.groq_base_url
+    return "https://api.openai.com/v1"
+
+
 def suggest_steps_llm(df: pd.DataFrame, context_text: str) -> Tuple[List[TransformationStep], List[str]]:
-    if settings.llm_provider != "openai" or not settings.openai_api_key:
+    provider, api_key, model = _provider_config()
+    if not provider or not api_key:
         steps = suggest_steps(df)
         return steps, ["LLM not configured; using rule-based suggestions."]
 
     prompt = _build_payload(df, context_text)
 
     request_body = {
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
@@ -69,8 +85,8 @@ def suggest_steps_llm(df: pd.DataFrame, context_text: str) -> Tuple[List[Transfo
 
     try:
         response = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            f"{_provider_base_url(provider)}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
             json=request_body,
             timeout=15.0,
         )
@@ -117,12 +133,13 @@ def chat_with_dataset(
     message: str,
     history: List[dict],
 ) -> Tuple[str, List[str]]:
-    if settings.llm_provider != "openai" or not settings.openai_api_key:
+    provider, api_key, model = _provider_config()
+    if not provider or not api_key:
         return _fallback_chat_response(df, message), ["LLM not configured; using fallback responses."]
 
     summary = _dataset_summary(df)
     request_body = {
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": [
             {"role": "system", "content": CHAT_SYSTEM_PROMPT},
             {
@@ -149,8 +166,8 @@ def chat_with_dataset(
 
     try:
         response = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            f"{_provider_base_url(provider)}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
             json=request_body,
             timeout=20.0,
         )
@@ -167,7 +184,8 @@ def generate_insight_narrative(
     recommendations: List[str],
     context_text: str = "",
 ) -> str | None:
-    if settings.llm_provider != "openai" or not settings.openai_api_key:
+    provider, api_key, model = _provider_config()
+    if not provider or not api_key:
         return None
 
     payload = {
@@ -177,7 +195,7 @@ def generate_insight_narrative(
         "context": context_text,
     }
     request_body = {
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": [
             {"role": "system", "content": INSIGHT_SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(payload)},
@@ -186,8 +204,8 @@ def generate_insight_narrative(
     }
     try:
         response = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            f"{_provider_base_url(provider)}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
             json=request_body,
             timeout=15.0,
         )

@@ -62,6 +62,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./styles_new.css";
 import { DataImportTab } from "./components/DataImportTab";
+import { DataCleaningTab } from "./components/DataCleaningTab";
 import { HomePage } from "./components/HomePage";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
@@ -358,6 +359,15 @@ const AppShell = () => {
         </span>
       ),
       children: <DataImportTab />,
+    },
+    {
+      key: "cleaning",
+      label: (
+        <span className="data-tab-label">
+          <CheckCircleOutlined /> Data Cleaning & Transformation
+        </span>
+      ),
+      children: <DataCleaningTab />,
     },
     {
       key: "transform",

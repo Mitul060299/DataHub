@@ -303,6 +303,7 @@ const AppShell = () => {
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [projects, setProjects] = useState<Project[]>(PROJECTS);
@@ -352,15 +353,23 @@ const AppShell = () => {
       notify.error("Workspace name is required");
       return;
     }
+    
+    console.log('Creating workspace:', newWorkspaceName.trim());
+    setIsCreatingWorkspace(true);
+    
     try {
-      await createWorkspace(newWorkspaceName.trim());
+      const result = await createWorkspace(newWorkspaceName.trim());
+      console.log('Workspace created:', result);
       notify.success("Workspace created successfully");
       setCreateWorkspaceOpen(false);
       setNewWorkspaceName("");
       await loadWorkspaces();
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || "Failed to create workspace";
+      console.error('Error creating workspace:', err);
+      const detail = err?.response?.data?.detail || err?.message || "Failed to create workspace";
       notify.error(detail);
+    } finally {
+      setIsCreatingWorkspace(false);
     }
   };
 
@@ -1171,6 +1180,7 @@ const AppShell = () => {
         }}
         onOk={handleCreateWorkspace}
         okText="Create"
+        confirmLoading={isCreatingWorkspace}
         destroyOnClose
       >
         <Input

@@ -17,6 +17,7 @@ import {
   DeleteOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
+import { AIChat, type AIAction, type DatasetSummary } from "./ai/AIChat";
 import { notify } from "../utils/notify";
 import "./DataCleaningTab.css";
 
@@ -132,6 +133,13 @@ export function DataTransformTab() {
   const [selectedTransform, setSelectedTransform] = useState<string | null>(null);
   const [filteredRows, setFilteredRows] = useState<Row[]>(SAMPLE_ROWS);
 
+  const dataset: DatasetSummary = {
+    id: "customers_2025",
+    name: "customers_2025.csv",
+    rows: 34567,
+    columns: COLUMN_OPTIONS.map((item) => item.label),
+  };
+
   const addCondition = () => {
     setConditions((prev) => [
       ...prev,
@@ -190,6 +198,20 @@ export function DataTransformTab() {
 
     setFilteredRows(filtered);
     notify.success(`Filter applied: ${filtered.length} rows match`);
+  };
+
+  const handleAIAction = (action: AIAction) => {
+    if (action.type === "apply_all") {
+      applyFilters();
+      notify.success("AI suggested transformation applied");
+      return;
+    }
+    if (action.type === "undo_last") {
+      removeCondition(conditions[conditions.length - 1]?.id || "");
+      notify.info("Last filter removed");
+      return;
+    }
+    notify.info(`AI action: ${action.type}`);
   };
 
   return (
@@ -316,31 +338,35 @@ export function DataTransformTab() {
         </div>
 
         <div className="cleaning-right">
-          <Card className="cleaning-card" title="Available Transformations">
-            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Card className="cleaning-card" title="AI Transform Assistant">
+            <AIChat context="transform" currentDataset={dataset} onAction={handleAIAction} />
+          </Card>
+
+          <Card className="cleaning-card" title="Available Transformations" style={{ marginTop: 12 }}>
+            <Space direction="vertical" size="small" style={{ width: "100%" }}>
               {TRANSFORMATIONS.map((transform) => (
-                <Card
+                <Button
                   key={transform.id}
-                  size="small"
-                  hoverable
+                  block
                   onClick={() => {
                     setSelectedTransform(transform.id);
-                    notify.info(`${transform.label} selected - configuration coming soon!`);
+                    notify.info(`${transform.label} selected`);
                   }}
-                  className={selectedTransform === transform.id ? "selected-transform" : ""}
+                  type={selectedTransform === transform.id ? "primary" : "default"}
+                  style={{ textAlign: "left", height: "auto" }}
                 >
-                  <Space direction="vertical" size={0}>
+                  <Space direction="vertical" size={0} style={{ width: "100%" }}>
                     <Text strong>{transform.label}</Text>
                     <Text type="secondary" style={{ fontSize: "12px" }}>
                       {transform.description}
                     </Text>
                   </Space>
-                </Card>
+                </Button>
               ))}
             </Space>
           </Card>
 
-          <Card className="cleaning-card" title="Quick Transformations">
+          <Card className="cleaning-card" title="Quick Actions" style={{ marginTop: 12 }}>
             <Space direction="vertical" size="small" style={{ width: "100%" }}>
               <Button
                 block
@@ -350,22 +376,19 @@ export function DataTransformTab() {
                   notify.success("Filter condition added");
                 }}
               >
-                Add Quick Filter
+                Add Filter
               </Button>
               <Button
                 block
+                danger
                 onClick={() => {
                   setConditions([]);
                   setFilteredRows(SAMPLE_ROWS);
                   notify.info("Filters cleared");
                 }}
               >
-                Clear All Filters
+                Clear Filters
               </Button>
-              <Divider style={{ margin: "8px 0" }} />
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                Advanced transformations like joins, pivots, and aggregations will be available in the cards above.
-              </Text>
             </Space>
           </Card>
         </div>

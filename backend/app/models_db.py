@@ -249,9 +249,9 @@ class TransformationHistoryDB(Base):
     )
 
 
-# Visualization models
-class DashboardThemeDB(Base):
-    __tablename__ = "dashboard_themes"
+# Visualization models (using viz_ prefix to avoid conflicts)
+class VizDashboardThemeDB(Base):
+    __tablename__ = "viz_dashboard_themes"
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     user_id = Column(Integer, nullable=False)
@@ -264,8 +264,8 @@ class DashboardThemeDB(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class DashboardDB(Base):
-    __tablename__ = "dashboards"
+class VizDashboardDB(Base):
+    __tablename__ = "viz_dashboards"
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
@@ -281,8 +281,8 @@ class DashboardDB(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class DashboardWidgetDB(Base):
-    __tablename__ = "dashboard_widgets"
+class VizDashboardWidgetDB(Base):
+    __tablename__ = "viz_dashboard_widgets"
     id = Column(Integer, primary_key=True)
     dashboard_id = Column(Integer, nullable=False)
     widget_type = Column(String, nullable=False)
@@ -295,8 +295,8 @@ class DashboardWidgetDB(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class DashboardFilterDB(Base):
-    __tablename__ = "dashboard_filters"
+class VizDashboardFilterDB(Base):
+    __tablename__ = "viz_dashboard_filters"
     id = Column(Integer, primary_key=True)
     dashboard_id = Column(Integer, nullable=False)
     filter_type = Column(String, nullable=False)

@@ -17,8 +17,8 @@ depends_on = None
 
 
 def upgrade():
-    # Dashboard Themes Table
-    op.create_table('dashboard_themes',
+    # Dashboard Themes Table (using viz_ prefix to avoid conflicts)
+    op.create_table('viz_dashboard_themes',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -33,11 +33,11 @@ def upgrade():
         sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_dashboard_themes_user', 'dashboard_themes', ['user_id'])
-    op.create_index('idx_dashboard_themes_workspace', 'dashboard_themes', ['workspace_id'])
+    op.create_index('idx_viz_dashboard_themes_user', 'viz_dashboard_themes', ['user_id'])
+    op.create_index('idx_viz_dashboard_themes_workspace', 'viz_dashboard_themes', ['workspace_id'])
 
     # Dashboards Table
-    op.create_table('dashboards',
+    op.create_table('viz_dashboards',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
@@ -54,16 +54,16 @@ def upgrade():
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='SET NULL'),
-        sa.ForeignKeyConstraint(['theme_id'], ['dashboard_themes.id'], ondelete='SET NULL'),
+        sa.ForeignKeyConstraint(['theme_id'], ['viz_dashboard_themes.id'], ondelete='SET NULL'),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_dashboards_user', 'dashboards', ['user_id'])
-    op.create_index('idx_dashboards_workspace', 'dashboards', ['workspace_id'])
-    op.create_index('idx_dashboards_dataset', 'dashboards', ['dataset_id'])
-    op.create_index('idx_dashboards_share_token', 'dashboards', ['share_token'])
+    op.create_index('idx_viz_dashboards_user', 'viz_dashboards', ['user_id'])
+    op.create_index('idx_viz_dashboards_workspace', 'viz_dashboards', ['workspace_id'])
+    op.create_index('idx_viz_dashboards_dataset', 'viz_dashboards', ['dataset_id'])
+    op.create_index('idx_viz_dashboards_share_token', 'viz_dashboards', ['share_token'])
 
     # Dashboard Widgets Table
-    op.create_table('dashboard_widgets',
+    op.create_table('viz_dashboard_widgets',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('dashboard_id', sa.Integer(), nullable=False),
         sa.Column('widget_type', sa.String(), nullable=False),  # bar, line, pie, kpi, table, etc.
@@ -74,15 +74,15 @@ def upgrade():
         sa.Column('filters', postgresql.JSONB(), nullable=True),  # Widget-specific filters
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()')),
-        sa.ForeignKeyConstraint(['dashboard_id'], ['dashboards.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['dashboard_id'], ['viz_dashboards.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='SET NULL'),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_dashboard_widgets_dashboard', 'dashboard_widgets', ['dashboard_id'])
-    op.create_index('idx_dashboard_widgets_dataset', 'dashboard_widgets', ['dataset_id'])
+    op.create_index('idx_viz_dashboard_widgets_dashboard', 'viz_dashboard_widgets', ['dashboard_id'])
+    op.create_index('idx_viz_dashboard_widgets_dataset', 'viz_dashboard_widgets', ['dataset_id'])
 
     # Dashboard Filters Table
-    op.create_table('dashboard_filters',
+    op.create_table('viz_dashboard_filters',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('dashboard_id', sa.Integer(), nullable=False),
         sa.Column('filter_type', sa.String(), nullable=False),  # date_range, dropdown, slider, etc.
@@ -91,26 +91,26 @@ def upgrade():
         sa.Column('applies_to_widgets', postgresql.ARRAY(sa.Integer()), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()')),
-        sa.ForeignKeyConstraint(['dashboard_id'], ['dashboards.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['dashboard_id'], ['viz_dashboards.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_dashboard_filters_dashboard', 'dashboard_filters', ['dashboard_id'])
+    op.create_index('idx_viz_dashboard_filters_dashboard', 'viz_dashboard_filters', ['dashboard_id'])
 
 
 def downgrade():
-    op.drop_index('idx_dashboard_filters_dashboard')
-    op.drop_table('dashboard_filters')
+    op.drop_index('idx_viz_dashboard_filters_dashboard')
+    op.drop_table('viz_dashboard_filters')
     
-    op.drop_index('idx_dashboard_widgets_dataset')
-    op.drop_index('idx_dashboard_widgets_dashboard')
-    op.drop_table('dashboard_widgets')
+    op.drop_index('idx_viz_dashboard_widgets_dataset')
+    op.drop_index('idx_viz_dashboard_widgets_dashboard')
+    op.drop_table('viz_dashboard_widgets')
     
-    op.drop_index('idx_dashboards_share_token')
-    op.drop_index('idx_dashboards_dataset')
-    op.drop_index('idx_dashboards_workspace')
-    op.drop_index('idx_dashboards_user')
-    op.drop_table('dashboards')
+    op.drop_index('idx_viz_dashboards_share_token')
+    op.drop_index('idx_viz_dashboards_dataset')
+    op.drop_index('idx_viz_dashboards_workspace')
+    op.drop_index('idx_viz_dashboards_user')
+    op.drop_table('viz_dashboards')
     
-    op.drop_index('idx_dashboard_themes_workspace')
-    op.drop_index('idx_dashboard_themes_user')
-    op.drop_table('dashboard_themes')
+    op.drop_index('idx_viz_dashboard_themes_workspace')
+    op.drop_index('idx_viz_dashboard_themes_user')
+    op.drop_table('viz_dashboard_themes')

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from ..db import get_db
 from ..security import get_current_user
-from ..models_db import DashboardDB, DashboardWidgetDB, DashboardThemeDB, DashboardFilterDB
+from ..models_db import VizVizDashboardDB, VizVizDashboardWidgetDB, VizVizDashboardThemeDB, VizVizDashboardFilterDB
 from ..services.visualization import VisualizationService
 from ..services.duckdb_service import DuckDBService
 
@@ -90,7 +90,7 @@ async def create_dashboard(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new dashboard"""
-    db_dashboard = DashboardDB(
+    db_dashboard = VizDashboardDB(
         name=dashboard.name,
         description=dashboard.description,
         user_id=current_user["id"],
@@ -123,10 +123,10 @@ async def list_dashboards(
     current_user: dict = Depends(get_current_user)
 ):
     """List all dashboards for the user"""
-    query = db.query(DashboardDB).filter(DashboardDB.user_id == current_user["id"])
+    query = db.query(VizDashboardDB).filter(VizDashboardDB.user_id == current_user["id"])
     
     if workspace_id:
-        query = query.filter(DashboardDB.workspace_id == workspace_id)
+        query = query.filter(VizDashboardDB.workspace_id == workspace_id)
     
     dashboards = query.all()
     
@@ -154,17 +154,17 @@ async def get_dashboard(
     current_user: dict = Depends(get_current_user)
 ):
     """Get a specific dashboard with its widgets"""
-    dashboard = db.query(DashboardDB).filter(
-        DashboardDB.id == dashboard_id,
-        DashboardDB.user_id == current_user["id"]
+    dashboard = db.query(VizDashboardDB).filter(
+        VizDashboardDB.id == dashboard_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
     
     # Get widgets
-    widgets = db.query(DashboardWidgetDB).filter(
-        DashboardWidgetDB.dashboard_id == dashboard_id
+    widgets = db.query(VizDashboardWidgetDB).filter(
+        VizDashboardWidgetDB.dashboard_id == dashboard_id
     ).all()
     
     return {
@@ -202,9 +202,9 @@ async def update_dashboard(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a dashboard"""
-    dashboard = db.query(DashboardDB).filter(
-        DashboardDB.id == dashboard_id,
-        DashboardDB.user_id == current_user["id"]
+    dashboard = db.query(VizDashboardDB).filter(
+        VizDashboardDB.id == dashboard_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not dashboard:
@@ -236,9 +236,9 @@ async def delete_dashboard(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a dashboard"""
-    dashboard = db.query(DashboardDB).filter(
-        DashboardDB.id == dashboard_id,
-        DashboardDB.user_id == current_user["id"]
+    dashboard = db.query(VizDashboardDB).filter(
+        VizDashboardDB.id == dashboard_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not dashboard:
@@ -259,15 +259,15 @@ async def create_widget(
 ):
     """Create a new widget"""
     # Verify dashboard ownership
-    dashboard = db.query(DashboardDB).filter(
-        DashboardDB.id == widget.dashboard_id,
-        DashboardDB.user_id == current_user["id"]
+    dashboard = db.query(VizDashboardDB).filter(
+        VizDashboardDB.id == widget.dashboard_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
     
-    db_widget = DashboardWidgetDB(
+    db_widget = VizDashboardWidgetDB(
         dashboard_id=widget.dashboard_id,
         widget_type=widget.widget_type,
         title=widget.title,
@@ -300,9 +300,9 @@ async def update_widget(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a widget"""
-    widget = db.query(DashboardWidgetDB).join(DashboardDB).filter(
-        DashboardWidgetDB.id == widget_id,
-        DashboardDB.user_id == current_user["id"]
+    widget = db.query(VizDashboardWidgetDB).join(VizDashboardDB).filter(
+        VizDashboardWidgetDB.id == widget_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not widget:
@@ -329,9 +329,9 @@ async def delete_widget(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a widget"""
-    widget = db.query(DashboardWidgetDB).join(DashboardDB).filter(
-        DashboardWidgetDB.id == widget_id,
-        DashboardDB.user_id == current_user["id"]
+    widget = db.query(VizDashboardWidgetDB).join(VizDashboardDB).filter(
+        VizDashboardWidgetDB.id == widget_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not widget:
@@ -397,7 +397,7 @@ async def create_theme(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new theme"""
-    db_theme = DashboardThemeDB(
+    db_theme = VizDashboardThemeDB(
         name=theme.name,
         user_id=current_user["id"],
         workspace_id=theme.workspace_id,
@@ -426,13 +426,13 @@ async def list_themes(
     current_user: dict = Depends(get_current_user)
 ):
     """List available themes"""
-    query = db.query(DashboardThemeDB).filter(
-        (DashboardThemeDB.user_id == current_user["id"]) | (DashboardThemeDB.is_global == True)
+    query = db.query(VizDashboardThemeDB).filter(
+        (VizDashboardThemeDB.user_id == current_user["id"]) | (VizDashboardThemeDB.is_global == True)
     )
     
     if workspace_id:
         query = query.filter(
-            (DashboardThemeDB.workspace_id == workspace_id) | (DashboardThemeDB.is_global == True)
+            (VizDashboardThemeDB.workspace_id == workspace_id) | (VizDashboardThemeDB.is_global == True)
         )
     
     themes = query.all()
@@ -458,9 +458,9 @@ async def share_dashboard(
     current_user: dict = Depends(get_current_user)
 ):
     """Generate a share link for a dashboard"""
-    dashboard = db.query(DashboardDB).filter(
-        DashboardDB.id == dashboard_id,
-        DashboardDB.user_id == current_user["id"]
+    dashboard = db.query(VizDashboardDB).filter(
+        VizDashboardDB.id == dashboard_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not dashboard:
@@ -485,9 +485,9 @@ async def revoke_share(
     current_user: dict = Depends(get_current_user)
 ):
     """Revoke share access for a dashboard"""
-    dashboard = db.query(DashboardDB).filter(
-        DashboardDB.id == dashboard_id,
-        DashboardDB.user_id == current_user["id"]
+    dashboard = db.query(VizDashboardDB).filter(
+        VizDashboardDB.id == dashboard_id,
+        VizDashboardDB.user_id == current_user["id"]
     ).first()
     
     if not dashboard:
@@ -498,3 +498,4 @@ async def revoke_share(
     db.commit()
     
     return {"message": "Share access revoked"}
+

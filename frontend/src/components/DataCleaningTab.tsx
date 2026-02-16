@@ -27,14 +27,6 @@ import "./DataCleaningTab.css";
 
 const { Title, Text } = Typography;
 
-type Condition = {
-  id: string;
-  column: string;
-  operator: string;
-  value: string;
-  logic: "AND" | "OR";
-};
-
 type HistoryItem = {
   id: string;
   title: string;
@@ -117,8 +109,6 @@ const COLUMN_OPTIONS = [
   { value: "status", label: "Status" },
 ];
 
-const OPERATORS = [">", ">=", "=", "<=", "<", "contains"];
-
 const OPERATION_LABELS: Record<OperationId, string> = {
   remove_duplicates: "Remove duplicates",
   fill_missing: "Fill missing values",
@@ -198,9 +188,6 @@ const PREVIEW_COLUMNS = [
 export function DataCleaningTab() {
   const [operations, setOperations] = useState<OperationId[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<string[]>(["customer", "email"]);
-  const [conditions, setConditions] = useState<Condition[]>([
-    { id: "cond-1", column: "revenue", operator: ">", value: "10000", logic: "AND" },
-  ]);
   const [history, setHistory] = useState<HistoryItem[]>([
     {
       id: "h1",
@@ -286,40 +273,19 @@ export function DataCleaningTab() {
     notify.info(`AI action: ${action.type}`);
   };
 
-  const addCondition = () => {
-    setConditions((prev) => [
-      ...prev,
-      {
-        id: `cond-${Date.now()}`,
-        column: "revenue",
-        operator: ">",
-        value: "0",
-        logic: "AND",
-      },
-    ]);
-  };
-
-  const updateCondition = (id: string, patch: Partial<Condition>) => {
-    setConditions((prev) => prev.map((cond) => (cond.id === id ? { ...cond, ...patch } : cond)));
-  };
-
-  const removeCondition = (id: string) => {
-    setConditions((prev) => prev.filter((cond) => cond.id !== id));
-  };
-
   const startJob = () => {
     setProgress(8);
     setIsRunning(true);
-    notify.info("Transformation job started");
+    notify.info("Cleaning job started");
   };
 
   return (
     <div className="cleaning-tab">
       <div className="cleaning-hero">
         <div>
-          <Title level={2}>Data Cleaning & Transformation</Title>
+          <Title level={2}>Data Cleaning</Title>
           <Text type="secondary">
-            Build a clean, trusted dataset with AI-powered operations, preview, and audit history.
+            Clean your data with AI-powered operations, preview changes, and maintain audit history.
           </Text>
         </div>
         <Space wrap>
@@ -366,47 +332,42 @@ export function DataCleaningTab() {
             />
           </Card>
 
-          <Card className="cleaning-card" title="Filter builder" extra={<FilterOutlined />}>
+          <Card className="cleaning-card" title="Data Quality Issues" extra={<WarningOutlined />}>
             <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-              {conditions.map((condition, index) => (
-                <div key={condition.id} className="filter-row">
-                  {index > 0 && (
-                    <Select
-                      value={condition.logic}
-                      onChange={(value) => updateCondition(condition.id, { logic: value })}
-                      options={[
-                        { value: "AND", label: "AND" },
-                        { value: "OR", label: "OR" },
-                      ]}
-                      className="filter-logic"
-                    />
-                  )}
-                  <Select
-                    value={condition.column}
-                    onChange={(value) => updateCondition(condition.id, { column: value })}
-                    options={COLUMN_OPTIONS}
-                    className="filter-column"
-                  />
-                  <Select
-                    value={condition.operator}
-                    onChange={(value) => updateCondition(condition.id, { operator: value })}
-                    options={OPERATORS.map((op) => ({ value: op, label: op }))}
-                    className="filter-operator"
-                  />
-                  <Input
-                    value={condition.value}
-                    onChange={(event) => updateCondition(condition.id, { value: event.target.value })}
-                    placeholder="Value"
-                    className="filter-value"
-                  />
-                  <Button type="text" danger onClick={() => removeCondition(condition.id)}>
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              <Button type="dashed" onClick={addCondition}>
-                Add condition
-              </Button>
+              <div>
+                <Space>
+                  <Tag color="error">245 duplicates</Tag>
+                  <Text type="secondary">Remove duplicate rows</Text>
+                </Space>
+              </div>
+              <div>
+                <Space>
+                  <Tag color="warning">1,523 missing values</Tag>
+                  <Text type="secondary">Fill or remove nulls</Text>
+                </Space>
+              </div>
+              <div>
+                <Space>
+                  <Tag color="orange">87 outliers</Tag>
+                  <Text type="secondary">Cap or remove outliers</Text>
+                </Space>
+              </div>
+              <div>
+                <Space>
+                  <Tag color="blue">312 whitespace issues</Tag>
+                  <Text type="secondary">Trim leading/trailing spaces</Text>
+                </Space>
+              </div>
+              <div>
+                <Space>
+                  <Tag color="cyan">Mixed case</Tag>
+                  <Text type="secondary">Standardize text casing</Text>
+                </Space>
+              </div>
+              <Divider />
+              <Text type="secondary">
+                Apply cleaning operations from the quick actions above to resolve these issues.
+              </Text>
             </Space>
           </Card>
 

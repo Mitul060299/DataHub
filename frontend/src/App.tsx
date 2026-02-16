@@ -64,6 +64,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import "./styles_new.css";
 import { DataImportTab } from "./components/DataImportTab";
 import { DataCleaningTab } from "./components/DataCleaningTab";
+import { DataTransformTab } from "./components/DataTransformTab";
 import { HomePage } from "./components/HomePage";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
@@ -429,7 +430,7 @@ const AppShell = () => {
       key: "cleaning",
       label: (
         <span className="data-tab-label">
-          <CheckCircleOutlined /> Data Cleaning & Transformation
+          <CheckCircleOutlined /> Clean
         </span>
       ),
       children: <DataCleaningTab />,
@@ -441,13 +442,7 @@ const AppShell = () => {
           <SwapOutlined /> Transform
         </span>
       ),
-      children: (
-        <div className="data-ops-content">
-          <Card bordered={false}>
-            <Title level={5}>Transform Data</Title>
-          </Card>
-        </div>
-      ),
+      children: <DataTransformTab />,
     },
     {
       key: "ml-cleaning",

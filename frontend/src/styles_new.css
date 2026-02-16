@@ -121,6 +121,22 @@ body[data-theme="dark"] .ai-body {
   background: #eff6ff !important;
 }
 
+.data-operations-tabs .ant-tabs-nav {
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+.data-operations-tabs .ant-tabs-nav::before {
+  display: none !important;
+}
+
+.data-operations-tabs {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
 .data-tab-label {
   display: inline-flex;
   align-items: center;
@@ -139,7 +155,8 @@ body[data-theme="dark"] .ai-body {
   flex-direction: column !important;
   gap: 16px !important;
   padding: 16px !important;
-  overflow: hidden !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 /* AI CHAT - Takes 60% of center space */

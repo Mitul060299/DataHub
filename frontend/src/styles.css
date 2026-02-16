@@ -1980,6 +1980,19 @@ body {
 
 .data-operations-tabs .ant-tabs-nav {
   background: #ffffff;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+.data-operations-tabs .ant-tabs-nav::before {
+  display: none !important;
+}
+
+.data-operations-tabs {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .data-tab-label {
@@ -1994,7 +2007,8 @@ body {
   flex-direction: column;
   gap: 16px;
   padding: 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #f9fafb;
   min-width: 0;
 }

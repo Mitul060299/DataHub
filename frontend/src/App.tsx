@@ -1059,56 +1059,7 @@ const AppShell = () => {
           </Breadcrumb.Item>
           <Breadcrumb.Item>{activeProject?.name}</Breadcrumb.Item>
         </Breadcrumb>
-        <div className="ai-chat-container">
-          <div className="chat-header">
-            <Space>
-              <RobotOutlined style={{ fontSize: 20, color: "#2563eb" }} />
-              <Title level={4} style={{ margin: 0 }}>AI Data Analyst</Title>
-            </Space>
-            <Select placeholder="Select a dataset to start" style={{ width: 220 }}>
-              <Select.Option value="sales">Sales Data</Select.Option>
-            </Select>
-          </div>
-          <div className="chat-messages">
-            {chatMessages.map((msg, idx) => (
-              <div key={idx} className={`chat-message ${msg.role}`}>
-                <Avatar className="message-avatar">
-                  {msg.role === "user" ? <UserOutlined /> : <RobotOutlined />}
-                </Avatar>
-                <div className="message-body">
-                  <div className="message-content">{msg.content}</div>
-                  <Text type="secondary" className="message-time">{msg.timestamp}</Text>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="chat-input-area">
-            <div className="suggested-prompts">
-              <Tag className="suggested-prompt-chip">Import a CSV file</Tag>
-              <Tag className="suggested-prompt-chip">Connect to PostgreSQL</Tag>
-              <Tag className="suggested-prompt-chip">Schedule daily import</Tag>
-            </div>
-            <div className="chat-input-row">
-              <TextArea
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onPressEnter={(e) => {
-                  if (!e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder="Ask..."
-                autoSize={{ minRows: 1, maxRows: 4 }}
-                style={{ flex: 1 }}
-              />
-              <Button type="primary" icon={<SendOutlined />} onClick={handleSendMessage} />
-            </div>
-          </div>
-        </div>
-        <div className="insights-preview-container">
-          <Tabs activeKey={activeInsightTab} onChange={setActiveInsightTab} items={insightTabs} />
-        </div>
+        {dataOperationsTabs.find(tab => tab.key === activeDataTab)?.children}
       </Content>
       <Sider width={320} className="pipeline-sidebar">
         <div className="pipeline-header">

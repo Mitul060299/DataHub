@@ -294,9 +294,29 @@ const AppShell = () => {
   const displayEmail = authUser?.email ?? user?.username ?? "Unknown";
   const planColor = planColors[plan] ?? "blue";
   const [activeMainTab, setActiveMainTab] = useState(() => resolveMainTab(location.search));
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
-  const [activeProject, setActiveProject] = useState<Project | null>(null);
-  const [activeDataTab, setActiveDataTab] = useState("import");
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(() => {
+    try {
+      const saved = localStorage.getItem("activeWorkspace");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [activeProject, setActiveProject] = useState<Project | null>(() => {
+    try {
+      const saved = localStorage.getItem("activeProject");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [activeDataTab, setActiveDataTab] = useState(() => {
+    try {
+      return localStorage.getItem("activeDataTab") || "import";
+    } catch {
+      return "import";
+    }
+  });
   const [activeInsightTab, setActiveInsightTab] = useState("suggestions");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [importGuidanceShown, setImportGuidanceShown] = useState(false);
@@ -306,7 +326,14 @@ const AppShell = () => {
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
-  const [projects, setProjects] = useState<Project[]>(PROJECTS);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      const saved = localStorage.getItem("projects");
+      return saved ? JSON.parse(saved) : PROJECTS;
+    } catch {
+      return PROJECTS;
+    }
+  });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -332,6 +359,34 @@ const AppShell = () => {
   useEffect(() => {
     setWorkspaceId(activeWorkspace?.id ?? "default");
   }, [activeWorkspace?.id, setWorkspaceId]);
+
+  // Persist activeWorkspace to localStorage
+  useEffect(() => {
+    if (activeWorkspace) {
+      localStorage.setItem("activeWorkspace", JSON.stringify(activeWorkspace));
+    } else {
+      localStorage.removeItem("activeWorkspace");
+    }
+  }, [activeWorkspace]);
+
+  // Persist activeProject to localStorage
+  useEffect(() => {
+    if (activeProject) {
+      localStorage.setItem("activeProject", JSON.stringify(activeProject));
+    } else {
+      localStorage.removeItem("activeProject");
+    }
+  }, [activeProject]);
+
+  // Persist activeDataTab to localStorage
+  useEffect(() => {
+    localStorage.setItem("activeDataTab", activeDataTab);
+  }, [activeDataTab]);
+
+  // Persist projects to localStorage
+  useEffect(() => {
+    localStorage.setItem("projects", JSON.stringify(projects));
+  }, [projects]);
 
   const loadWorkspaces = useCallback(async () => {
     try {
@@ -506,8 +561,11 @@ const AppShell = () => {
     }
     const nextTab = MAIN_TABS.has(tab) ? tab : "home";
     setActiveMainTab(tab);
-    setActiveWorkspace(null);
-    setActiveProject(null);
+    // Only clear workspace/project when navigating away from workspaces tab
+    if (nextTab !== "workspaces") {
+      setActiveWorkspace(null);
+      setActiveProject(null);
+    }
     navigate(`/app?tab=${encodeURIComponent(nextTab)}`);
   };
 

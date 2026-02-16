@@ -14,6 +14,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Export the api instance for direct use in components
+export { api };
+
 export async function uploadDataset(file: File) {
   const formData = new FormData();
   formData.append("file", file);

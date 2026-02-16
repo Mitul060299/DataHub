@@ -1,3 +1,9 @@
+/**
+ * @deprecated This component uses the old simplified dashboard system.
+ * Use DataVisualizationTab component with /visualizations API instead.
+ * This file is kept for backwards compatibility only.
+ */
+
 import { Button, Card, Divider, Descriptions, List, Popconfirm, Space, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { notify } from "../utils/notify";

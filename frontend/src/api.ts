@@ -159,6 +159,11 @@ export async function revertRecipe(datasetId: string, versionId: string) {
   return response.data;
 }
 
+// ========================================
+// DEPRECATED: Old Dashboard API
+// Use /visualizations endpoints instead
+// ========================================
+
 export async function listDashboards() {
   const response = await api.get("/dashboards");
   return response.data;

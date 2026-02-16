@@ -40,6 +40,8 @@ class ContextVersion(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+# DEPRECATED: Old simple dashboard - use VizDashboardDB instead
+# Kept for backwards compatibility with existing data
 class Dashboard(Base):
     __tablename__ = "dashboards"
     id = Column(String, primary_key=True)

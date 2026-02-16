@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Request
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, dashboards, webhooks, jobs, connectors, users, workspaces, widgets, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations
+from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations
+# Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine
 from . import models_db
 from .services.audit import audit_store
@@ -66,13 +67,12 @@ app.include_router(context.router)
 app.include_router(insights.router)
 app.include_router(governance.router)
 app.include_router(agents.router)
-app.include_router(dashboards.router)
+# Old dashboards and widgets routers removed - replaced by visualizations router
 app.include_router(webhooks.router)
 app.include_router(jobs.router)
 app.include_router(connectors.router)
 app.include_router(users.router)
 app.include_router(workspaces.router)
-app.include_router(widgets.router)
 app.include_router(approvals.router)
 app.include_router(realtime.router)
 app.include_router(templates.router)

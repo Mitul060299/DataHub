@@ -1,3 +1,9 @@
+"""
+DEPRECATED: Old simplified dashboard router
+Use /visualizations router instead for the new BI dashboard builder.
+This file is kept for backwards compatibility only.
+"""
+
 from fastapi import APIRouter, Header, Depends, HTTPException, Request
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session

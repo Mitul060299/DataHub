@@ -1,3 +1,9 @@
+"""
+DEPRECATED: Old simplified widget router
+Use /visualizations router instead for the new BI dashboard widgets.
+This file is kept for backwards compatibility only.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 import uuid

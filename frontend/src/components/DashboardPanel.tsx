@@ -1,3 +1,9 @@
+/**
+ * @deprecated This component uses the old simplified dashboard system.
+ * Use DataVisualizationTab component instead for the new BI dashboard builder.
+ * This file is kept for backwards compatibility only.
+ */
+
 import { Button, Card, Input, List, Space, Typography, Select, Input as TextInput } from "antd";
 import { useEffect, useState } from "react";
 import { createDashboard, fetchChartSummary, listDashboards, shareDashboard, unshareDashboard } from "../api";

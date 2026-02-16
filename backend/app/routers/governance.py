@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from ..models import AuditEntry, UsageSummary, ActionCount, TargetCount
 from ..services.audit import audit_store
 from ..services.cache import profile_cache
+from ..services.query_cache import QueryCacheService
 from ..routers.datasets import dataset_cache_stats
 from ..db import get_db
 from ..models_db import AuditLogDB
@@ -88,10 +89,11 @@ def share_settings(authorization: str | None = Header(default=None)) -> dict:
 
 
 @router.get("/cache-stats")
-def cache_stats(authorization: str | None = Header(default=None)) -> dict:
+def cache_stats(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     role = get_current_role(authorization)
     require_role("admin", role)
     return {
         "profile_cache": profile_cache.stats(),
         "dataset_cache": dataset_cache_stats(),
+        "query_cache": QueryCacheService.stats_last_24h(db),
     }

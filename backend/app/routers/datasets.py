@@ -7,12 +7,15 @@ import pandas as pd
 import uuid
 import difflib
 from sqlalchemy.orm import Session
-from ..models import DatasetPreview, DatasetMeta, DatasetPage
+from ..models import DatasetPreview, DatasetMeta, DatasetPage, DatasetQueryRequest, DatasetQueryResponse
 from ..services.events import emit_event
 from ..security import get_current_role, require_role
 from ..db import get_db
 from ..config import settings
 from ..services.cache import invalidate_profile_cache
+from ..services.duckdb_service import DuckDBService
+from ..services.query_cache import QueryCacheService
+from ..services.object_storage import StorageService
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -126,40 +129,45 @@ def save_dataset(
     db: Session,
     parent_id: str | None = None,
     workspace_id: str | None = None,
+    store_rows: bool = True,
+    meta_extra: dict | None = None,
 ) -> str:
     dataset_id = str(uuid.uuid4())
     df = df.astype(object).where(pd.notnull(df), None)
-    if int(df.shape[0]) <= 5000:
+    if store_rows and int(df.shape[0]) <= 5000:
         _DATASETS[dataset_id] = df
         _touch_cache(dataset_id)
         _evict_cache()
-    db.add(
-        DatasetMetaDB(
-            id=dataset_id,
-            workspace_id=workspace_id or "default",
-            columns=list(df.columns),
-            row_count=int(df.shape[0]),
-            parent_id=parent_id,
-        )
-    )
-    rows = df.to_dict(orient="records")
-    chunks = _chunk_rows(rows, _CHUNK_SIZE)
-    for index, chunk in enumerate(chunks):
-        db.add(
-            DatasetChunkDB(
-                id=f"{dataset_id}:{index}",
-                dataset_id=dataset_id,
-                chunk_index=index,
-                rows=chunk,
+    meta_kwargs = {
+        "id": dataset_id,
+        "workspace_id": workspace_id or "default",
+        "columns": list(df.columns),
+        "row_count": int(df.shape[0]),
+        "parent_id": parent_id,
+    }
+    if meta_extra:
+        meta_kwargs.update(meta_extra)
+    db.add(DatasetMetaDB(**meta_kwargs))
+
+    if store_rows:
+        rows = df.to_dict(orient="records")
+        chunks = _chunk_rows(rows, _CHUNK_SIZE)
+        for index, chunk in enumerate(chunks):
+            db.add(
+                DatasetChunkDB(
+                    id=f"{dataset_id}:{index}",
+                    dataset_id=dataset_id,
+                    chunk_index=index,
+                    rows=chunk,
+                )
             )
-        )
-    if len(rows) <= 5000:
-        db.add(
-            DatasetDataDB(
-                id=dataset_id,
-                rows=rows,
+        if len(rows) <= 5000:
+            db.add(
+                DatasetDataDB(
+                    id=dataset_id,
+                    rows=rows,
+                )
             )
-        )
     db.commit()
     emit_event("dataset.transformed", {"dataset_id": dataset_id})
     return dataset_id
@@ -271,12 +279,62 @@ def suggest_columns(
     return {"query": query, "suggestions": suggestions[: max(1, min(limit, 20))]}
 
 
+@router.post("/{dataset_id}/query", response_model=DatasetQueryResponse)
+def query_dataset(
+    dataset_id: str,
+    payload: DatasetQueryRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DatasetQueryResponse:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta or not meta.storage_path:
+        raise HTTPException(status_code=404, detail="Dataset not found or not in object storage")
+
+    results, cached = DuckDBService.query_with_cache(
+        db,
+        dataset_id,
+        meta.user_id,
+        meta.storage_path,
+        payload.query,
+    )
+
+    return DatasetQueryResponse(
+        results=results,
+        row_count=len(results),
+        cached=cached,
+    )
+
+
+@router.post("/{dataset_id}/cache/clear")
+def clear_dataset_cache(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    QueryCacheService.clear_dataset_cache(db, dataset_id)
+    return {"success": True, "message": "Cache cleared"}
+
+
 @router.delete("/{dataset_id}")
 def delete_dataset(dataset_id: str, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     role = get_current_role(authorization)
     require_role("editor", role)
     if dataset_id in _DATASETS:
         _DATASETS.pop(dataset_id, None)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if meta and meta.storage_path:
+        try:
+            StorageService.delete(meta.storage_path)
+        except Exception:
+            pass
     db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).delete()
     db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
     db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()

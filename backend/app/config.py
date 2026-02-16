@@ -11,6 +11,15 @@ def _parse_origins(value: str) -> List[str]:
     return [origin.strip() for origin in value.split(",") if origin.strip()]
 
 
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized == "":
+        return default
+    return normalized in {"1", "true", "yes", "on"}
+
+
 class Settings(BaseModel):
     app_env: str = os.getenv("APP_ENV", "development")
     app_secret_key: str = os.getenv("APP_SECRET_KEY", "change-me")
@@ -34,6 +43,20 @@ class Settings(BaseModel):
     dataset_cache_ttl_seconds: int = int(os.getenv("DATASET_CACHE_TTL", "1800"))
     profile_cache_ttl_seconds: int = int(os.getenv("PROFILE_CACHE_TTL", "300"))
     profile_cache_max: int = int(os.getenv("PROFILE_CACHE_MAX", "200"))
+    storage_provider: str = os.getenv("STORAGE_PROVIDER", "s3")
+    s3_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    s3_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    s3_region: str = os.getenv("AWS_REGION", "us-east-1")
+    s3_bucket_name: str = os.getenv("S3_BUCKET_NAME", "")
+    r2_account_id: str = os.getenv("R2_ACCOUNT_ID", "")
+    r2_access_key_id: str = os.getenv("R2_ACCESS_KEY_ID", "")
+    r2_secret_access_key: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
+    r2_bucket_name: str = os.getenv("R2_BUCKET_NAME", "")
+    query_cache_ttl_seconds: int = int(os.getenv("QUERY_CACHE_TTL", "3600"))
+    enable_query_cache: bool = _parse_bool(os.getenv("ENABLE_QUERY_CACHE"), True)
+    enable_auto_archival: bool = _parse_bool(os.getenv("ENABLE_AUTO_ARCHIVAL"), True)
+    compression_level: int = int(os.getenv("COMPRESSION_LEVEL", "9"))
+    dataset_inline_max_rows: int = int(os.getenv("DATASET_INLINE_MAX_ROWS", "5000"))
     public_base_url: str = os.getenv("PUBLIC_BASE_URL", "")
     shared_rate_limit_per_minute: int = int(os.getenv("SHARED_RATE_LIMIT_PER_MIN", "120"))
     share_signing_secret: str = os.getenv("SHARE_SIGNING_SECRET", "")

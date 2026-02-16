@@ -26,6 +26,16 @@ class DatasetPage(BaseModel):
     total_rows: int
 
 
+class DatasetQueryRequest(BaseModel):
+    query: str
+
+
+class DatasetQueryResponse(BaseModel):
+    results: List[Dict[str, Any]]
+    row_count: int
+    cached: bool
+
+
 class ChartSeriesPoint(BaseModel):
     label: str
     value: int

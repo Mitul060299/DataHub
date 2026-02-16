@@ -8,12 +8,16 @@ from io import StringIO
 import re
 import uuid
 import pandas as pd
+import os
 
 from ..db import get_db
 from ..security import get_current_role, require_role
 from ..services.file_parser import FileParserService
+from ..services.data_conversion import DataConversionService
+from ..services.object_storage import StorageService
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, ImportTableDB, ImportConnectionDB
 from .datasets import save_dataset, get_dataset_from_db
+from ..config import settings
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -80,7 +84,35 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     df = df.astype(object).where(pd.notnull(df), None)
-    dataset_id = save_dataset(df, db, workspace_id=workspace_id)
+    store_rows = int(df.shape[0]) <= settings.dataset_inline_max_rows
+    parquet_bytes, schema, row_count, stats, compression_ratio = DataConversionService.dataframe_to_parquet(
+        df,
+        original_size=len(content),
+    )
+    dataset_id = save_dataset(
+        df,
+        db,
+        workspace_id=workspace_id,
+        store_rows=store_rows,
+    )
+
+    file_base = os.path.splitext(file.filename or "dataset")[0]
+    parquet_name = f"{file_base}.parquet"
+    storage_path = StorageService.upload(workspace_id, dataset_id, parquet_bytes, parquet_name)
+
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if meta:
+        meta.name = file.filename
+        meta.source_type = "file_upload"
+        meta.storage_provider = settings.storage_provider
+        meta.storage_path = storage_path
+        meta.file_format = "parquet"
+        meta.schema_json = schema
+        meta.stats_json = stats
+        meta.file_size_bytes = len(content)
+        meta.compressed_size_bytes = len(parquet_bytes)
+        meta.status = "ready"
+        meta.access_tier = "hot"
 
     table_name = _ensure_unique_table_name(db, _sanitize_table_name(file.filename))
     table_id = str(uuid.uuid4())
@@ -103,6 +135,10 @@ async def upload_file(
         "tableName": table_name,
         "rowCount": int(df.shape[0]),
         "tableCount": 1,
+        "compressionRatio": f"{compression_ratio:.1f}%",
+        "originalSize": len(content),
+        "compressedSize": len(parquet_bytes),
+        "storagePath": storage_path,
     }
 
 
@@ -221,6 +257,13 @@ async def delete_table(
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
+    
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == table.dataset_id).first()
+    if meta and meta.storage_path:
+        try:
+            StorageService.delete(meta.storage_path)
+        except Exception:
+            pass
 
     db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == table.dataset_id).delete()
     db.query(DatasetDataDB).filter(DatasetDataDB.id == table.dataset_id).delete()

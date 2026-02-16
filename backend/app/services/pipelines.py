@@ -15,6 +15,7 @@ from ..services.profiler import profile_dataframe
 from ..services.insights import generate_insights
 from ..services.recipes import recipe_store
 from ..services.transformer import apply_steps
+from ..services.archival import schedule_archival_job
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -63,6 +64,7 @@ def start_scheduler() -> None:
     if scheduler.running:
         return
     scheduler.start()
+    schedule_archival_job(scheduler)
     _load_jobs()
 
 

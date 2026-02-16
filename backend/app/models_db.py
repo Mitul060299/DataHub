@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, Boolean
+from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index
 from sqlalchemy import DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -54,10 +54,35 @@ class Dashboard(Base):
 class DatasetMetaDB(Base):
     __tablename__ = "dataset_meta"
     id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=True)
     workspace_id = Column(String, nullable=False, default="default")
+    name = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    source_type = Column(String, nullable=True)
+    storage_provider = Column(String, nullable=True, default="s3")
+    storage_path = Column(Text, nullable=True)
+    file_format = Column(String, nullable=True, default="parquet")
+    schema_json = Column(JSONB, nullable=True, default=dict)
+    stats_json = Column(JSONB, nullable=True, default=dict)
     columns = Column(JSONB, nullable=False, default=list)
     row_count = Column(Integer, nullable=False)
+    file_size_bytes = Column(BigInteger, nullable=True)
+    compressed_size_bytes = Column(BigInteger, nullable=True)
+    status = Column(String, nullable=False, default="processing")
+    error_message = Column(Text, nullable=True)
+    last_queried_at = Column(DateTime(timezone=True), nullable=True)
+    query_count = Column(Integer, nullable=False, default=0)
+    access_tier = Column(String, nullable=False, default="hot")
     parent_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_datasets_user_workspace", "user_id", "workspace_id"),
+        Index("idx_datasets_status", "status"),
+        Index("idx_datasets_access_tier", "access_tier"),
+        Index("idx_datasets_last_queried", "last_queried_at"),
+    )
 
 
 class DatasetDataDB(Base):
@@ -181,3 +206,24 @@ class PipelineRunDB(Base):
     metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
     started_at = Column(DateTime(timezone=True), nullable=False)
     finished_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class QueryCacheDB(Base):
+    __tablename__ = "query_cache"
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, nullable=False)
+    user_id = Column(String, nullable=True)
+    query_hash = Column(String, nullable=False, unique=True)
+    query_sql = Column(Text, nullable=False)
+    result_json = Column(JSONB, nullable=True)
+    result_row_count = Column(Integer, nullable=False, default=0)
+    execution_time_ms = Column(Integer, nullable=True)
+    cache_hits = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_accessed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_query_cache_hash", "query_hash"),
+        Index("idx_query_cache_expires", "expires_at"),
+    )

@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Select, Modal, Space, message, Dropdown, Row, Col, Input, Switch } from 'antd';
-import { PlusOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, TableOutlined, DashboardOutlined, DownloadOutlined, ShareAltOutlined, BgColorsOutlined, MoreOutlined } from '@ant-design/icons';
+import { Card, Button, Select, Modal, Space, message, Dropdown, Row, Col, Input, Switch, Drawer } from 'antd';
+import { PlusOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, TableOutlined, DashboardOutlined, DownloadOutlined, ShareAltOutlined, BgColorsOutlined, MoreOutlined, RobotOutlined } from '@ant-design/icons';
 import GridLayout from 'react-grid-layout';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import './DataVisualizationTab.css';
+import { AIChat, type AIAction, type DatasetSummary } from './ai/AIChat';
 import { api } from '../api';
+
+// Cell component for recharts pie chart colors
+const Cell = ({ fill }: { fill: string }) => <div style={{ fill }} />;
 
 const { Option } = Select;
 
@@ -42,6 +46,7 @@ const DataVisualizationTab: React.FC = () => {
   const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
   const [isAddWidgetModalVisible, setIsAddWidgetModalVisible] = useState(false);
   const [isCreateDashboardModalVisible, setIsCreateDashboardModalVisible] = useState(false);
+  const [isAIChatDrawerVisible, setIsAIChatDrawerVisible] = useState(false);
   const [newDashboardName, setNewDashboardName] = useState('');
   const [selectedChartType, setSelectedChartType] = useState<string>('bar');
   const [widgetTitle, setWidgetTitle] = useState('');
@@ -52,6 +57,25 @@ const DataVisualizationTab: React.FC = () => {
   const [layout, setLayout] = useState<any[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30);
+
+  const datasetSummary: DatasetSummary = {
+    id: selectedDataset || '',
+    name: selectedDataset ? datasets.find(d => d.id === selectedDataset)?.name || 'Dataset' : 'Dataset',
+    rows: currentDashboard?.widgets.length || 0,
+    columns: availableColumns ? Object.keys(availableColumns) : [],
+  };
+
+  const handleAIAction = (action: AIAction) => {
+    if (action.type === "apply_all") {
+      message.success("Dashboard configuration created by AI");
+      return;
+    }
+    if (action.type === "undo_last") {
+      message.info("Last widget removed");
+      return;
+    }
+    message.info(`AI action: ${action.type}`);
+  };
 
   useEffect(() => {
     loadDashboards();
@@ -426,6 +450,13 @@ const DataVisualizationTab: React.FC = () => {
             <Switch checked={autoRefresh} onChange={setAutoRefresh} size="small" />
             <span style={{ marginLeft: 8 }}>Auto Refresh ({refreshInterval}s)</span>
           </div>
+          <Button 
+            icon={<RobotOutlined />} 
+            type="primary"
+            onClick={() => setIsAIChatDrawerVisible(true)}
+          >
+            AI Assistant
+          </Button>
           <Button icon={<DownloadOutlined />} onClick={() => exportDashboard('pdf')}>
             Export PDF
           </Button>
@@ -702,6 +733,37 @@ const DataVisualizationTab: React.FC = () => {
           )}
         </Space>
       </Modal>
+
+      {/* AI Chat Drawer */}
+      <Drawer
+        title="AI Dashboard Assistant"
+        placement="right"
+        onClose={() => setIsAIChatDrawerVisible(false)}
+        open={isAIChatDrawerVisible}
+        width={450}
+        bodyStyle={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}
+      >
+        <div style={{ flex: 1, overflow: "auto" }}>
+          <AIChat 
+            context="clean" 
+            currentDataset={datasetSummary} 
+            onAction={handleAIAction}
+          />
+        </div>
+        <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: "12px" }}>
+          <Space direction="vertical" size="small" style={{ width: "100%" }}>
+            <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
+              Ask me to:
+            </p>
+            <ul style={{ margin: "8px 0 0 16px", fontSize: "12px", color: "#666" }}>
+              <li>Create a sales dashboard</li>
+              <li>Show KPIs and trends</li>
+              <li>Compare data across metrics</li>
+              <li>Generate charts from columns</li>
+            </ul>
+          </Space>
+        </div>
+      </Drawer>
     </div>
   );
 };

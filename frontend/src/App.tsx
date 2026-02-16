@@ -19,6 +19,7 @@ import {
   Dropdown,
   Menu,
   Switch,
+  Modal,
 } from "antd";
 import {
   HomeOutlined,
@@ -68,6 +69,8 @@ import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
+import { createWorkspace, listWorkspaces } from "./api";
+import { notify } from "./utils/notify";
 
 const { Header, Content, Sider } = Layout;
 const { TextArea } = Input;
@@ -295,6 +298,9 @@ const AppShell = () => {
   const [activeInsightTab, setActiveInsightTab] = useState("suggestions");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [importGuidanceShown, setImportGuidanceShown] = useState(false);
+  const [workspaces, setWorkspaces] = useState<any[]>([]);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -320,6 +326,38 @@ const AppShell = () => {
   useEffect(() => {
     setWorkspaceId(activeWorkspace?.id ?? "default");
   }, [activeWorkspace?.id, setWorkspaceId]);
+
+  const loadWorkspaces = async () => {
+    try {
+      const data = await listWorkspaces();
+      setWorkspaces(data);
+    } catch (err: any) {
+      console.error("Failed to load workspaces:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMainTab === "workspaces" && session) {
+      loadWorkspaces();
+    }
+  }, [activeMainTab, session]);
+
+  const handleCreateWorkspace = async () => {
+    if (!newWorkspaceName.trim()) {
+      notify.error("Workspace name is required");
+      return;
+    }
+    try {
+      await createWorkspace(newWorkspaceName.trim());
+      notify.success("Workspace created successfully");
+      setCreateWorkspaceOpen(false);
+      setNewWorkspaceName("");
+      await loadWorkspaces();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to create workspace";
+      notify.error(detail);
+    }
+  };
 
   useEffect(() => {
     if (activeDataTab !== "import" || importGuidanceShown) return;
@@ -710,20 +748,33 @@ const AppShell = () => {
     </div>
   );
 
-  const WorkspaceGridContent = () => (
-    <div className="full-width-content">
-      <div className="workspaces-header">
-        <div>
-          <Title level={2}>Workspaces</Title>
-          <Text type="secondary">Organize your projects into workspaces</Text>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />}>
-          Create Workspace
-        </Button>
-      </div>
+  const WorkspaceGridContent = () => {
+    const displayWorkspaces = workspaces.length > 0 ? workspaces.map(ws => ({
+      id: ws.id,
+      name: ws.name,
+      description: ws.description || "No description",
+      color: "#2563eb",
+      icon: ws.name.charAt(0).toUpperCase(),
+      projectCount: 0,
+      memberCount: 0,
+      pipelineCount: 0,
+      members: [],
+    })) : WORKSPACES;
 
-      <Row gutter={[24, 24]}>
-        {WORKSPACES.map((workspace) => (
+    return (
+      <div className="full-width-content">
+        <div className="workspaces-header">
+          <div>
+            <Title level={2}>Workspaces</Title>
+            <Text type="secondary">Organize your projects into workspaces</Text>
+          </div>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateWorkspaceOpen(true)}>
+            Create Workspace
+          </Button>
+        </div>
+
+        <Row gutter={[24, 24]}>
+          {displayWorkspaces.map((workspace) => (
           <Col span={8} key={workspace.id}>
             <Card
               className="workspace-card"
@@ -769,8 +820,30 @@ const AppShell = () => {
           </Col>
         ))}
       </Row>
+
+      <Modal
+        title="Create Workspace"
+        open={createWorkspaceOpen}
+        onCancel={() => {
+          setCreateWorkspaceOpen(false);
+          setNewWorkspaceName("");
+        }}
+        onOk={handleCreateWorkspace}
+        okText="Create"
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Input
+            placeholder="Workspace name"
+            value={newWorkspaceName}
+            onChange={(e) => setNewWorkspaceName(e.target.value)}
+            onPressEnter={handleCreateWorkspace}
+            autoFocus
+          />
+        </Space>
+      </Modal>
     </div>
-  );
+    );
+  };
 
   const ProjectGridContent = () => {
     if (!activeWorkspace) return null;

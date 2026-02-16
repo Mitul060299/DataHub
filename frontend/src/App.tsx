@@ -59,7 +59,7 @@ import {
   LogoutOutlined,
   DownOutlined,
 } from "@ant-design/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./styles_new.css";
 import { DataImportTab } from "./components/DataImportTab";
@@ -301,6 +301,8 @@ const AppShell = () => {
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -327,20 +329,20 @@ const AppShell = () => {
     setWorkspaceId(activeWorkspace?.id ?? "default");
   }, [activeWorkspace?.id, setWorkspaceId]);
 
-  const loadWorkspaces = async () => {
+  const loadWorkspaces = useCallback(async () => {
     try {
       const data = await listWorkspaces();
       setWorkspaces(data);
     } catch (err: any) {
       console.error("Failed to load workspaces:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (activeMainTab === "workspaces" && session) {
       loadWorkspaces();
     }
-  }, [activeMainTab, session]);
+  }, [activeMainTab, session, loadWorkspaces]);
 
   const handleCreateWorkspace = async () => {
     if (!newWorkspaceName.trim()) {
@@ -357,6 +359,16 @@ const AppShell = () => {
       const detail = err?.response?.data?.detail || "Failed to create workspace";
       notify.error(detail);
     }
+  };
+
+  const handleCreateProject = () => {
+    if (!newProjectName.trim()) {
+      notify.error("Project name is required");
+      return;
+    }
+    notify.success(`Project "${newProjectName}" created successfully`);
+    setCreateProjectOpen(false);
+    setNewProjectName("");
   };
 
   useEffect(() => {
@@ -864,7 +876,7 @@ const AppShell = () => {
           </div>
           <Space>
             <Button icon={<TeamOutlined />}>Manage Members</Button>
-            <Button type="primary" icon={<PlusOutlined />}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateProjectOpen(true)}>
               New Project
             </Button>
           </Space>
@@ -911,6 +923,36 @@ const AppShell = () => {
             </Col>
           ))}
         </Row>
+
+        <Modal
+          title="Create Project"
+          open={createProjectOpen}
+          onCancel={() => {
+            setCreateProjectOpen(false);
+            setNewProjectName("");
+          }}
+          onOk={handleCreateProject}
+          okText="Create"
+        >
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Input
+              placeholder="Project name"
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              onPressEnter={handleCreateProject}
+              autoFocus
+            />
+            <Select
+              placeholder="Project type"
+              style={{ width: "100%" }}
+              options={[
+                { label: "Analytics", value: "analytics" },
+                { label: "Machine Learning", value: "ml" },
+                { label: "ETL", value: "etl" },
+              ]}
+            />
+          </Space>
+        </Modal>
       </div>
     );
   };

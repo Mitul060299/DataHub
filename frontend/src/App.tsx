@@ -1015,7 +1015,7 @@ const AppShell = () => {
       <Sider width={280} className="data-sidebar">
         <Tabs
           tabPosition="left"
-          items={dataOperationsTabs}
+          items={dataOperationsTabs.map(tab => ({ key: tab.key, label: tab.label }))}
           className="data-operations-tabs"
           activeKey={activeDataTab}
           onChange={setActiveDataTab}

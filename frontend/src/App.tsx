@@ -303,6 +303,7 @@ const AppShell = () => {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [projects, setProjects] = useState<Project[]>(PROJECTS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -366,6 +367,20 @@ const AppShell = () => {
       notify.error("Project name is required");
       return;
     }
+    if (!activeWorkspace) {
+      notify.error("No workspace selected");
+      return;
+    }
+    const newProject: Project = {
+      id: `proj-${Date.now()}`,
+      name: newProjectName.trim(),
+      description: "New project",
+      type: "analytics",
+      status: "active",
+      lastUpdated: "Just now",
+      datasetCount: 0,
+    };
+    setProjects(prev => [...prev, { ...newProject, workspaceId: activeWorkspace.id } as any]);
     notify.success(`Project "${newProjectName}" created successfully`);
     setCreateProjectOpen(false);
     setNewProjectName("");
@@ -832,27 +847,6 @@ const AppShell = () => {
           </Col>
         ))}
       </Row>
-
-      <Modal
-        title="Create Workspace"
-        open={createWorkspaceOpen}
-        onCancel={() => {
-          setCreateWorkspaceOpen(false);
-          setNewWorkspaceName("");
-        }}
-        onOk={handleCreateWorkspace}
-        okText="Create"
-      >
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <Input
-            placeholder="Workspace name"
-            value={newWorkspaceName}
-            onChange={(e) => setNewWorkspaceName(e.target.value)}
-            onPressEnter={handleCreateWorkspace}
-            autoFocus
-          />
-        </Space>
-      </Modal>
     </div>
     );
   };
@@ -883,7 +877,7 @@ const AppShell = () => {
         </div>
 
         <Row gutter={[24, 24]}>
-          {PROJECTS.map((project) => (
+          {projects.filter((p: any) => !p.workspaceId || p.workspaceId === activeWorkspace.id).map((project) => (
             <Col span={6} key={project.id}>
               <Card
                 className="project-card"
@@ -923,36 +917,6 @@ const AppShell = () => {
             </Col>
           ))}
         </Row>
-
-        <Modal
-          title="Create Project"
-          open={createProjectOpen}
-          onCancel={() => {
-            setCreateProjectOpen(false);
-            setNewProjectName("");
-          }}
-          onOk={handleCreateProject}
-          okText="Create"
-        >
-          <Space direction="vertical" style={{ width: "100%" }}>
-            <Input
-              placeholder="Project name"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              onPressEnter={handleCreateProject}
-              autoFocus
-            />
-            <Select
-              placeholder="Project type"
-              style={{ width: "100%" }}
-              options={[
-                { label: "Analytics", value: "analytics" },
-                { label: "Machine Learning", value: "ml" },
-                { label: "ETL", value: "etl" },
-              ]}
-            />
-          </Space>
-        </Modal>
       </div>
     );
   };
@@ -1241,6 +1205,44 @@ const AppShell = () => {
         </div>
       </Header>
       {renderContent()}
+
+      <Modal
+        title="Create Workspace"
+        open={createWorkspaceOpen}
+        onCancel={() => {
+          setCreateWorkspaceOpen(false);
+          setNewWorkspaceName("");
+        }}
+        onOk={handleCreateWorkspace}
+        okText="Create"
+        destroyOnClose
+      >
+        <Input
+          placeholder="Workspace name"
+          value={newWorkspaceName}
+          onChange={(e) => setNewWorkspaceName(e.target.value)}
+          onPressEnter={handleCreateWorkspace}
+        />
+      </Modal>
+
+      <Modal
+        title="Create Project"
+        open={createProjectOpen}
+        onCancel={() => {
+          setCreateProjectOpen(false);
+          setNewProjectName("");
+        }}
+        onOk={handleCreateProject}
+        okText="Create"
+        destroyOnClose
+      >
+        <Input
+          placeholder="Project name"
+          value={newProjectName}
+          onChange={(e) => setNewProjectName(e.target.value)}
+          onPressEnter={handleCreateProject}
+        />
+      </Modal>
     </Layout>
   );
 };

@@ -463,51 +463,6 @@ const AppShell = () => {
       ),
       children: <DataVisualizationTab />,
     },
-    {
-      key: "ml-cleaning",
-      label: (
-        <span className="data-tab-label">
-          <ExperimentOutlined /> ML/Cleaning
-        </span>
-      ),
-      children: (
-        <div className="data-ops-content">
-          <Card bordered={false}>
-            <Title level={5}>ML & Data Cleaning</Title>
-          </Card>
-        </div>
-      ),
-    },
-    {
-      key: "feature-eng",
-      label: (
-        <span className="data-tab-label">
-          <BranchesOutlined /> Feature Eng
-        </span>
-      ),
-      children: (
-        <div className="data-ops-content">
-          <Card bordered={false}>
-            <Title level={5}>Feature Engineering</Title>
-          </Card>
-        </div>
-      ),
-    },
-    {
-      key: "quality",
-      label: (
-        <span className="data-tab-label">
-          <CheckCircleOutlined /> Data Quality
-        </span>
-      ),
-      children: (
-        <div className="data-ops-content">
-          <Card bordered={false}>
-            <Title level={5}>Data Quality</Title>
-          </Card>
-        </div>
-      ),
-    },
   ];
 
   const insightTabs = [

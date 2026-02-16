@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from ..db import get_db
-from ..security import get_current_user
-from ..models_db import VizVizDashboardDB, VizVizDashboardWidgetDB, VizVizDashboardThemeDB, VizVizDashboardFilterDB
+from ..security import get_current_subject
+from ..models_db import VizDashboardDB, VizDashboardWidgetDB, VizDashboardThemeDB, VizDashboardFilterDB
 from ..services.visualization import VisualizationService
 from ..services.duckdb_service import DuckDBService
 
@@ -44,7 +44,7 @@ class WidgetUpdate(BaseModel):
 class DashboardCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    workspace_id: int
+    workspace_id: str
     dataset_id: Optional[int] = None
     theme_id: Optional[int] = None
     refresh_interval: Optional[int] = None
@@ -61,7 +61,7 @@ class DashboardUpdate(BaseModel):
 
 class ThemeCreate(BaseModel):
     name: str
-    workspace_id: Optional[int] = None
+    workspace_id: Optional[str] = None
     is_global: bool = False
     colors: dict
     fonts: Optional[dict] = None
@@ -87,13 +87,13 @@ def get_visualization_service(db: Session = Depends(get_db)):
 async def create_dashboard(
     dashboard: DashboardCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Create a new dashboard"""
     db_dashboard = VizDashboardDB(
         name=dashboard.name,
         description=dashboard.description,
-        user_id=current_user["id"],
+        user_id=subject,
         workspace_id=dashboard.workspace_id,
         dataset_id=dashboard.dataset_id,
         theme_id=dashboard.theme_id,
@@ -118,12 +118,12 @@ async def create_dashboard(
 
 @router.get("/dashboards")
 async def list_dashboards(
-    workspace_id: Optional[int] = None,
+    workspace_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """List all dashboards for the user"""
-    query = db.query(VizDashboardDB).filter(VizDashboardDB.user_id == current_user["id"])
+    query = db.query(VizDashboardDB).filter(VizDashboardDB.user_id == subject)
     
     if workspace_id:
         query = query.filter(VizDashboardDB.workspace_id == workspace_id)
@@ -151,12 +151,12 @@ async def list_dashboards(
 async def get_dashboard(
     dashboard_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Get a specific dashboard with its widgets"""
     dashboard = db.query(VizDashboardDB).filter(
         VizDashboardDB.id == dashboard_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not dashboard:
@@ -199,12 +199,12 @@ async def update_dashboard(
     dashboard_id: int,
     update: DashboardUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Update a dashboard"""
     dashboard = db.query(VizDashboardDB).filter(
         VizDashboardDB.id == dashboard_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not dashboard:
@@ -233,12 +233,12 @@ async def update_dashboard(
 async def delete_dashboard(
     dashboard_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Delete a dashboard"""
     dashboard = db.query(VizDashboardDB).filter(
         VizDashboardDB.id == dashboard_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not dashboard:
@@ -255,13 +255,13 @@ async def delete_dashboard(
 async def create_widget(
     widget: WidgetCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Create a new widget"""
     # Verify dashboard ownership
     dashboard = db.query(VizDashboardDB).filter(
         VizDashboardDB.id == widget.dashboard_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not dashboard:
@@ -297,12 +297,12 @@ async def update_widget(
     widget_id: int,
     update: WidgetUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Update a widget"""
     widget = db.query(VizDashboardWidgetDB).join(VizDashboardDB).filter(
         VizDashboardWidgetDB.id == widget_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not widget:
@@ -326,12 +326,12 @@ async def update_widget(
 async def delete_widget(
     widget_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Delete a widget"""
     widget = db.query(VizDashboardWidgetDB).join(VizDashboardDB).filter(
         VizDashboardWidgetDB.id == widget_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not widget:
@@ -349,7 +349,7 @@ async def get_chart_data(
     dataset_id: str,
     config: ChartConfig,
     viz_service: VisualizationService = Depends(get_visualization_service),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Get chart data for a specific dataset and configuration"""
     try:
@@ -364,7 +364,7 @@ async def suggest_columns(
     dataset_id: str,
     chart_type: str,
     viz_service: VisualizationService = Depends(get_visualization_service),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Suggest appropriate columns for a chart type"""
     try:
@@ -379,7 +379,7 @@ async def calculate_kpi(
     dataset_id: str,
     config: KPIConfig,
     viz_service: VisualizationService = Depends(get_visualization_service),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Calculate KPI value"""
     try:
@@ -394,12 +394,12 @@ async def calculate_kpi(
 async def create_theme(
     theme: ThemeCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Create a new theme"""
     db_theme = VizDashboardThemeDB(
         name=theme.name,
-        user_id=current_user["id"],
+        user_id=subject,
         workspace_id=theme.workspace_id,
         is_global=theme.is_global,
         colors=theme.colors,
@@ -421,13 +421,13 @@ async def create_theme(
 
 @router.get("/themes")
 async def list_themes(
-    workspace_id: Optional[int] = None,
+    workspace_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """List available themes"""
     query = db.query(VizDashboardThemeDB).filter(
-        (VizDashboardThemeDB.user_id == current_user["id"]) | (VizDashboardThemeDB.is_global == True)
+        (VizDashboardThemeDB.user_id == subject) | (VizDashboardThemeDB.is_global == True)
     )
     
     if workspace_id:
@@ -455,12 +455,12 @@ async def share_dashboard(
     dashboard_id: int,
     db: Session = Depends(get_db),
     viz_service: VisualizationService = Depends(get_visualization_service),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Generate a share link for a dashboard"""
     dashboard = db.query(VizDashboardDB).filter(
         VizDashboardDB.id == dashboard_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not dashboard:
@@ -482,12 +482,12 @@ async def share_dashboard(
 async def revoke_share(
     dashboard_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    subject: str = Depends(get_current_subject)
 ):
     """Revoke share access for a dashboard"""
     dashboard = db.query(VizDashboardDB).filter(
         VizDashboardDB.id == dashboard_id,
-        VizDashboardDB.user_id == current_user["id"]
+        VizDashboardDB.user_id == subject
     ).first()
     
     if not dashboard:

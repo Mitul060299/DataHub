@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, dashboards, webhooks, jobs, connectors, users, workspaces, widgets, metrics, approvals, realtime, templates, pipelines, imports, cleaning
+from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, dashboards, webhooks, jobs, connectors, users, workspaces, widgets, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations
 from .db import Base, engine
 from . import models_db
 from .services.audit import audit_store
@@ -79,3 +79,4 @@ app.include_router(templates.router)
 app.include_router(pipelines.router)
 app.include_router(imports.router)
 app.include_router(cleaning.router)
+app.include_router(visualizations.router)

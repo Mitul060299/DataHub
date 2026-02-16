@@ -65,6 +65,7 @@ import "./styles_new.css";
 import { DataImportTab } from "./components/DataImportTab";
 import { DataCleaningTab } from "./components/DataCleaningTab";
 import { DataTransformTab } from "./components/DataTransformTab";
+import DataVisualizationTab from "./components/DataVisualizationTab";
 import { HomePage } from "./components/HomePage";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
@@ -443,6 +444,15 @@ const AppShell = () => {
         </span>
       ),
       children: <DataTransformTab />,
+    },
+    {
+      key: "visualization",
+      label: (
+        <span className="data-tab-label">
+          <BarChartOutlined /> Visualization
+        </span>
+      ),
+      children: <DataVisualizationTab />,
     },
     {
       key: "ml-cleaning",

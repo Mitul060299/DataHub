@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index
+from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY
 from sqlalchemy import DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -247,3 +247,62 @@ class TransformationHistoryDB(Base):
         Index("idx_transformation_history_dataset", "dataset_id"),
         Index("idx_transformation_history_user", "user_id"),
     )
+
+
+# Visualization models
+class DashboardThemeDB(Base):
+    __tablename__ = "dashboard_themes"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    user_id = Column(Integer, nullable=False)
+    workspace_id = Column(Integer, nullable=True)
+    is_global = Column(Boolean, default=False)
+    colors = Column(JSONB, nullable=False)
+    fonts = Column(JSONB, nullable=True)
+    logo_url = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class DashboardDB(Base):
+    __tablename__ = "dashboards"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    user_id = Column(Integer, nullable=False)
+    workspace_id = Column(Integer, nullable=False)
+    dataset_id = Column(Integer, nullable=True)
+    theme_id = Column(Integer, nullable=True)
+    layout = Column(JSONB, nullable=True)
+    refresh_interval = Column(Integer, nullable=True)
+    is_public = Column(Boolean, default=False)
+    share_token = Column(String, nullable=True, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class DashboardWidgetDB(Base):
+    __tablename__ = "dashboard_widgets"
+    id = Column(Integer, primary_key=True)
+    dashboard_id = Column(Integer, nullable=False)
+    widget_type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    dataset_id = Column(Integer, nullable=True)
+    config = Column(JSONB, nullable=False)
+    position = Column(JSONB, nullable=False)
+    filters = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class DashboardFilterDB(Base):
+    __tablename__ = "dashboard_filters"
+    id = Column(Integer, primary_key=True)
+    dashboard_id = Column(Integer, nullable=False)
+    filter_type = Column(String, nullable=False)
+    column_name = Column(String, nullable=False)
+    config = Column(JSONB, nullable=False)
+    applies_to_widgets = Column(ARRAY(Integer), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+

@@ -1,0 +1,116 @@
+"""Add visualization tables
+
+Revision ID: 0017_visualization_tables
+Revises: 0016_transformation_history
+Create Date: 2025-01-01 00:00:00.000000
+
+"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision = '0017_visualization_tables'
+down_revision = '0016_transformation_history'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    # Dashboard Themes Table
+    op.create_table('dashboard_themes',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('workspace_id', sa.Integer(), nullable=True),
+        sa.Column('is_global', sa.Boolean(), default=False),
+        sa.Column('colors', postgresql.JSONB(), nullable=False),
+        sa.Column('fonts', postgresql.JSONB(), nullable=True),
+        sa.Column('logo_url', sa.String(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()')),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_dashboard_themes_user', 'dashboard_themes', ['user_id'])
+    op.create_index('idx_dashboard_themes_workspace', 'dashboard_themes', ['workspace_id'])
+
+    # Dashboards Table
+    op.create_table('dashboards',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('description', sa.Text(), nullable=True),
+        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('workspace_id', sa.Integer(), nullable=False),
+        sa.Column('dataset_id', sa.Integer(), nullable=True),
+        sa.Column('theme_id', sa.Integer(), nullable=True),
+        sa.Column('layout', postgresql.JSONB(), nullable=True),
+        sa.Column('refresh_interval', sa.Integer(), nullable=True),
+        sa.Column('is_public', sa.Boolean(), default=False),
+        sa.Column('share_token', sa.String(), nullable=True, unique=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()')),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='SET NULL'),
+        sa.ForeignKeyConstraint(['theme_id'], ['dashboard_themes.id'], ondelete='SET NULL'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_dashboards_user', 'dashboards', ['user_id'])
+    op.create_index('idx_dashboards_workspace', 'dashboards', ['workspace_id'])
+    op.create_index('idx_dashboards_dataset', 'dashboards', ['dataset_id'])
+    op.create_index('idx_dashboards_share_token', 'dashboards', ['share_token'])
+
+    # Dashboard Widgets Table
+    op.create_table('dashboard_widgets',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('dashboard_id', sa.Integer(), nullable=False),
+        sa.Column('widget_type', sa.String(), nullable=False),  # bar, line, pie, kpi, table, etc.
+        sa.Column('title', sa.String(), nullable=False),
+        sa.Column('dataset_id', sa.Integer(), nullable=True),
+        sa.Column('config', postgresql.JSONB(), nullable=False),  # Stores chart configuration
+        sa.Column('position', postgresql.JSONB(), nullable=False),  # {x, y, w, h} for grid layout
+        sa.Column('filters', postgresql.JSONB(), nullable=True),  # Widget-specific filters
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()')),
+        sa.ForeignKeyConstraint(['dashboard_id'], ['dashboards.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='SET NULL'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_dashboard_widgets_dashboard', 'dashboard_widgets', ['dashboard_id'])
+    op.create_index('idx_dashboard_widgets_dataset', 'dashboard_widgets', ['dataset_id'])
+
+    # Dashboard Filters Table
+    op.create_table('dashboard_filters',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('dashboard_id', sa.Integer(), nullable=False),
+        sa.Column('filter_type', sa.String(), nullable=False),  # date_range, dropdown, slider, etc.
+        sa.Column('column_name', sa.String(), nullable=False),
+        sa.Column('config', postgresql.JSONB(), nullable=False),
+        sa.Column('applies_to_widgets', postgresql.ARRAY(sa.Integer()), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()')),
+        sa.ForeignKeyConstraint(['dashboard_id'], ['dashboards.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_dashboard_filters_dashboard', 'dashboard_filters', ['dashboard_id'])
+
+
+def downgrade():
+    op.drop_index('idx_dashboard_filters_dashboard')
+    op.drop_table('dashboard_filters')
+    
+    op.drop_index('idx_dashboard_widgets_dataset')
+    op.drop_index('idx_dashboard_widgets_dashboard')
+    op.drop_table('dashboard_widgets')
+    
+    op.drop_index('idx_dashboards_share_token')
+    op.drop_index('idx_dashboards_dataset')
+    op.drop_index('idx_dashboards_workspace')
+    op.drop_index('idx_dashboards_user')
+    op.drop_table('dashboards')
+    
+    op.drop_index('idx_dashboard_themes_workspace')
+    op.drop_index('idx_dashboard_themes_user')
+    op.drop_table('dashboard_themes')

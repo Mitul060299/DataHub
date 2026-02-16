@@ -280,215 +280,147 @@ export function DataCleaningTab() {
   };
 
   return (
-    <div className="cleaning-tab">
-      <div className="cleaning-hero">
+    <div className="cleaning-tab-v2">
+      {/* Header */}
+      <div className="cleaning-header-v2">
         <div>
-          <Title level={2}>Data Cleaning</Title>
+          <Title level={2} style={{ margin: 0 }}>
+            Data Cleaning
+          </Title>
           <Text type="secondary">
-            Clean your data with AI-powered operations, preview changes, and maintain audit history.
+            Clean your data with AI-powered operations and preview changes instantly.
           </Text>
         </div>
-        <Space wrap>
-          <Button
-            icon={<ThunderboltOutlined />}
-            type="primary"
-            onClick={() => addOperation("remove_duplicates")}
-          >
-            Remove duplicates
-          </Button>
-          <Button onClick={() => addOperation("fill_missing")}>Fill missing</Button>
-          <Button onClick={() => addOperation("trim_whitespace")}>Trim whitespace</Button>
-          <Button onClick={() => addOperation("standardize_case")}>Standardize case</Button>
-          <Button onClick={() => addOperation("remove_outliers")}>Remove outliers</Button>
-        </Space>
       </div>
 
-      <div className="cleaning-grid">
-        <div className="cleaning-left">
-          <Card className="cleaning-card" title="Dataset overview">
-            <div className="summary-grid">
-              <div>
-                <Text type="secondary">Dataset</Text>
-                <Title level={4}>{dataset.name}</Title>
-              </div>
-              <div>
+      {/* Main Layout */}
+      <div className="cleaning-main-layout">
+        {/* Left: Dataset Preview + Info */}
+        <div className="cleaning-preview-section">
+          {/* Table Selector */}
+          <Card className="cleaning-card-v2" style={{ marginBottom: 12 }}>
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Text type="secondary" strong>
+                Select Table
+              </Text>
+              <Select
+                placeholder="Choose a table"
+                defaultValue="sales_q1"
+                options={[
+                  { value: "sales_q1", label: "Sales Q1 2025" },
+                  { value: "customers", label: "Customers" },
+                  { value: "orders", label: "Orders" },
+                ]}
+                style={{ width: "100%" }}
+              />
+            </Space>
+          </Card>
+
+          {/* Dataset Preview */}
+          <Card className="cleaning-card-v2" title="Dataset Preview" style={{ flex: 1 }}>
+            <div className="dataset-preview-table">
+              <Table
+                columns={PREVIEW_COLUMNS}
+                dataSource={beforeRows}
+                size="small"
+                pagination={{ pageSize: 8 }}
+                rowKey="id"
+                scroll={{ x: 600 }}
+              />
+            </div>
+          </Card>
+
+          {/* Dataset Info */}
+          <Card className="cleaning-card-v2" title="Dataset Information" style={{ marginTop: 12 }}>
+            <div className="dataset-info-grid">
+              <div className="info-item">
                 <Text type="secondary">Rows</Text>
                 <Title level={4}>{dataset.rows?.toLocaleString()}</Title>
               </div>
-              <div>
+              <div className="info-item">
                 <Text type="secondary">Columns</Text>
                 <Title level={4}>{dataset.columns?.length}</Title>
               </div>
+              <div className="info-item">
+                <Text type="secondary">Size</Text>
+                <Title level={4}>4.2 MB</Title>
+              </div>
             </div>
-            <Divider />
-            <Text type="secondary">Columns in scope</Text>
-            <Select
-              mode="multiple"
-              value={selectedColumns}
-              onChange={setSelectedColumns}
-              options={COLUMN_OPTIONS}
-              className="cleaning-select"
-              placeholder="Select columns"
-            />
-          </Card>
-
-          <Card className="cleaning-card" title="Data Quality Issues" extra={<WarningOutlined />}>
-            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-              <div>
-                <Space>
-                  <Tag color="error">245 duplicates</Tag>
-                  <Text type="secondary">Remove duplicate rows</Text>
-                </Space>
-              </div>
-              <div>
-                <Space>
-                  <Tag color="warning">1,523 missing values</Tag>
-                  <Text type="secondary">Fill or remove nulls</Text>
-                </Space>
-              </div>
-              <div>
-                <Space>
-                  <Tag color="orange">87 outliers</Tag>
-                  <Text type="secondary">Cap or remove outliers</Text>
-                </Space>
-              </div>
-              <div>
-                <Space>
-                  <Tag color="blue">312 whitespace issues</Tag>
-                  <Text type="secondary">Trim leading/trailing spaces</Text>
-                </Space>
-              </div>
-              <div>
-                <Space>
-                  <Tag color="cyan">Mixed case</Tag>
-                  <Text type="secondary">Standardize text casing</Text>
-                </Space>
-              </div>
-              <Divider />
-              <Text type="secondary">
-                Apply cleaning operations from the quick actions above to resolve these issues.
+            <Divider style={{ margin: "12px 0" }} />
+            <div style={{ marginTop: 12 }}>
+              <Text type="secondary" strong>
+                Quality Score
               </Text>
-            </Space>
-          </Card>
-
-          <Card className="cleaning-card" title="Execution">
-            <div className="execution-row">
-              <Switch checked={isLargeDataset} onChange={setIsLargeDataset} />
-              <Text type="secondary">Treat as large dataset</Text>
-            </div>
-            <div className="execution-progress">
               <Progress
-                percent={progress}
-                status={progress >= 100 ? "success" : "active"}
-                showInfo
+                percent={72}
+                status="normal"
+                style={{ marginTop: 8 }}
+                strokeColor="#22c55e"
               />
-              <Text type="secondary">
-                {isLargeDataset
-                  ? "Running in background with sampling preview."
-                  : "Executing inline on preview data."}
-              </Text>
-            </div>
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              onClick={startJob}
-              disabled={isRunning}
-            >
-              Run transformation
-            </Button>
-          </Card>
-        </div>
-
-        <div className="cleaning-center">
-          <Card className="cleaning-card" title="Before / After comparison">
-            <div className="comparison-grid">
-              <div className="comparison-panel">
-                <div className="panel-header">
-                  <Text strong>Before</Text>
-                  <Tag color="volcano">Raw</Tag>
-                </div>
-                <Table
-                  columns={PREVIEW_COLUMNS}
-                  dataSource={beforeRows}
-                  size="small"
-                  pagination={false}
-                  rowKey="id"
-                />
-              </div>
-              <div className="comparison-panel">
-                <div className="panel-header">
-                  <Text strong>After</Text>
-                  <Tag color="green">Cleaned</Tag>
-                </div>
-                <Table
-                  columns={PREVIEW_COLUMNS}
-                  dataSource={afterRows}
-                  size="small"
-                  pagination={false}
-                  rowKey="id"
-                />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="cleaning-card" title="Applied transformations">
-            <Space wrap>
-              {operations.length === 0 ? (
-                <Tag color="default">No operations applied</Tag>
-              ) : (
-                operations.map((operation) => (
-                  <Tag key={operation} icon={<CheckCircleOutlined />} color="blue">
-                    {OPERATION_LABELS[operation]}
-                  </Tag>
-                ))
-              )}
-            </Space>
-            <Divider />
-            <div className="quality-badges">
-              <Badge color="#10b981" text="Duplicates removed" />
-              <Badge color="#f97316" text="Outliers capped" />
-              <Badge color="#0ea5e9" text="Case normalized" />
             </div>
           </Card>
         </div>
 
-        <div className="cleaning-right">
-          <Card className="cleaning-card" title="AI Cleaning Assistant">
-            <AIChat context="clean" currentDataset={dataset} onAction={handleAIAction} />
-          </Card>
-
-          <Card
-            className="cleaning-card"
-            title="Transformation history"
-            extra={<HistoryOutlined />}
-          >
-            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-              {history.map((item) => (
-                <div key={item.id} className="history-item">
-                  <div>
-                    <Text strong>{item.title}</Text>
-                    <Text type="secondary" className="history-desc">
-                      {item.description}
-                    </Text>
-                    <Text type="secondary" className="history-time">
-                      {item.timestamp}
-                    </Text>
-                  </div>
-                  <Tag
-                    color={
-                      item.status === "completed"
-                        ? "green"
-                        : item.status === "running"
-                        ? "gold"
-                        : "default"
-                    }
-                    icon={item.status === "completed" ? <CheckCircleOutlined /> : <WarningOutlined />}
+        {/* Right: AI Chat + Quick Actions */}
+        <div className="cleaning-chat-section">
+          {/* AI Chat */}
+          <Card className="cleaning-card-v2" title="AI Cleaning Assistant" style={{ flex: 1 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
+              <AIChat context="clean" currentDataset={dataset} onAction={handleAIAction} />
+              <Divider style={{ margin: "8px 0" }} />
+              <Space direction="vertical" style={{ width: "100%" }}>
+                <Text type="secondary" strong>
+                  Quick Actions
+                </Text>
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Button
+                    block
+                    onClick={() => addOperation("remove_duplicates")}
+                    icon={<ThunderboltOutlined />}
                   >
-                    {item.status}
-                  </Tag>
-                </div>
-              ))}
-              <Button type="link">View full history</Button>
+                    Remove Duplicates
+                  </Button>
+                  <Button block onClick={() => addOperation("fill_missing")}>
+                    Fill Missing Values
+                  </Button>
+                  <Button block onClick={() => addOperation("trim_whitespace")}>
+                    Trim Whitespace
+                  </Button>
+                  <Button block onClick={() => addOperation("standardize_case")}>
+                    Standardize Case
+                  </Button>
+                </Space>
+              </Space>
+            </div>
+          </Card>
+
+          {/* Data Quality Issues */}
+          <Card className="cleaning-card-v2" title="Quality Issues" style={{ marginTop: 12 }}>
+            <Space direction="vertical" size="small" style={{ width: "100%" }}>
+              <div>
+                <Space size="small">
+                  <Tag color="error">245</Tag>
+                  <Text type="secondary">Duplicates</Text>
+                </Space>
+              </div>
+              <div>
+                <Space size="small">
+                  <Tag color="warning">1,523</Tag>
+                  <Text type="secondary">Missing</Text>
+                </Space>
+              </div>
+              <div>
+                <Space size="small">
+                  <Tag color="orange">87</Tag>
+                  <Text type="secondary">Outliers</Text>
+                </Space>
+              </div>
+              <div>
+                <Space size="small">
+                  <Tag color="blue">312</Tag>
+                  <Text type="secondary">Whitespace</Text>
+                </Space>
+              </div>
             </Space>
           </Card>
         </div>

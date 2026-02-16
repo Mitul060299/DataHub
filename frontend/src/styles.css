@@ -1937,7 +1937,7 @@ body {
 .data-sidebar {
   background: #f8fafc !important;
   border-right: 1px solid #e2e8f0;
-  flex: 0 0 auto;
+  flex: 0 0 200px !important;
 }
 
 .main-sidebar-inner {

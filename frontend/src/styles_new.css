@@ -104,7 +104,7 @@ body[data-theme="dark"] .ai-body {
 
 /* LEFT SIDEBAR - Fixed width */
 .data-sidebar {
-  width: 280px !important;
+  width: 200px !important;
   background: #f8fafc !important;
   border-right: 1px solid #e2e8f0 !important;
   flex-shrink: 0 !important;

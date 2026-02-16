@@ -10,6 +10,74 @@
   --cleaning-accent-3: #10b981;
 }
 
+/* V2 Layout */
+.cleaning-tab-v2 {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0;
+}
+
+.cleaning-header-v2 {
+  padding: 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--cleaning-border);
+  margin-bottom: 12px;
+}
+
+.cleaning-header-v2 h2 {
+  margin: 0;
+}
+
+.cleaning-main-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 0 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cleaning-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.cleaning-chat-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.cleaning-card-v2 {
+  border: 1px solid var(--cleaning-border);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.dataset-preview-table {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dataset-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.info-item {
+  text-align: center;
+}
+
+.info-item h4 {
+  margin: 8px 0 0 0;
+}
+
+/* Old layout styles (kept for reference) */
 .cleaning-tab {
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
   background: radial-gradient(circle at top left, #e0f2fe 0%, #f8fafc 40%, #fff7ed 100%);

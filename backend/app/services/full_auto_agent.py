@@ -15,7 +15,7 @@ from fastapi import HTTPException
 import pandas as pd
 import numpy as np
 
-from app.services.duckdb_service import DatabaseService as DuckDBService
+from app.services.duckdb_service import DuckDBService
 from app.services.ml_service import MLService
 
 

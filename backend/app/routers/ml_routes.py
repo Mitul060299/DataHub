@@ -10,7 +10,7 @@ from app.controllers.ml_controller import (
     AutoMLChatRequest,
     PredictRequest
 )
-from app.models_db import Dataset
+from app.models_db import DatasetMetaDB
 import pandas as pd
 from io import StringIO
 
@@ -56,9 +56,9 @@ async def start_training(
 ):
     """Start ML training"""
     # Load dataset
-    dataset = db.query(Dataset).filter(
-        Dataset.id == request.dataset_id,
-        Dataset.user_id == current_user_id
+    dataset = db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.id == request.dataset_id,
+        DatasetMetaDB.user_id == current_user_id
     ).first()
     if not dataset:
         raise HTTPException(404, "Dataset not found")
@@ -94,9 +94,9 @@ async def automl_chat(
 ):
     """AutoML chat interface"""
     # Load dataset
-    dataset = db.query(Dataset).filter(
-        Dataset.id == request.dataset_id,
-        Dataset.user_id == current_user_id
+    dataset = db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.id == request.dataset_id,
+        DatasetMetaDB.user_id == current_user_id
     ).first()
     if not dataset:
         raise HTTPException(404, "Dataset not found")

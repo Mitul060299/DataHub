@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 
 from app.services.duckdb_service import DatabaseService as DuckDBService
+from app.services.ml_service import MLService
 
 
 # Alias for compatibility
@@ -33,28 +34,27 @@ def _get_client():
     from app.config import settings
     
     if settings.llm_provider == "groq":
-        from groq import Groq
-        return Groq(api_key=settings.groq_api_key)
-    else:
         try:
-            from openai import OpenAI
-            return OpenAI(api_key=settings.openai_api_key)
+            from groq import Groq
+            return Groq(api_key=settings.groq_api_key)
         except:
-            # Return a mock client if neither is configured
-            class MockClient:
-                class chat:
-                    class completions:
-                        @staticmethod
-                        def create(**kwargs):
-                            class Response:
-                                class Choice:
-                                    class Message:
-                                        content = "Analysis complete"
-                                        tool_calls = None
-                                    message = Message()
-                                choices = [Choice()]
-                            return Response()
-            return MockClient()
+            pass
+    
+    # Mock client fallback
+    class MockClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    class Response:
+                        class Choice:
+                            class Message:
+                                content = "Analysis complete"
+                                tool_calls = None
+                            message = Message()
+                        choices = [Choice()]
+                    return Response()
+    return MockClient()
 
 
 @dataclass
@@ -261,7 +261,7 @@ class ToolExecutor:
         return stats
 
     async def train_ml_model(self, args: Dict) -> Dict[str, Any]:
-        """Train ML model - simplified"""
+        """Train ML model using MLService"""
         df = self.df
         request = args.get('request', 'predict target')
         target_col = args.get('target_column', None)
@@ -269,17 +269,14 @@ class ToolExecutor:
 
         # Infer task type if not specified
         if not target_col and len(df.columns) > 0:
-            target_col = df.columns[-1]  # use last column as target
+            target_col = df.columns[-1]
 
         try:
-            # Simplified model training
-            result = {
-                'task_type': task_type,
-                'target': target_col,
-                'best_model': 'baseline_model',
-                'accuracy': 0.75,
-                'features_used': list(df.columns[:-1]) if len(df.columns) > 1 else list(df.columns),
-            }
+            # Use MLService
+            result = await MLService.train_classification(
+                df, 'auto', target_col, list(df.columns),
+                model_name='random_forest'
+            )
 
             self.state['model_trained'] = True
             self.state['dataframes']['model_result'] = result

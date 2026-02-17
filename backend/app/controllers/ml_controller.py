@@ -11,26 +11,9 @@ import asyncio
 import pandas as pd
 import json
 
-# Model definitions for common ML tasks
-CLASSIFICATION_MODELS = {
-    "random_forest": {"description": "Random Forest Classifier"},
-    "logistic_regression": {"description": "Logistic Regression"},
-    "svm": {"description": "Support Vector Machine"},
-    "gradient_boosting": {"description": "Gradient Boosting"},
-}
-
-REGRESSION_MODELS = {
-    "random_forest": {"description": "Random Forest Regressor"},
-    "linear_regression": {"description": "Linear Regression"},
-    "svm": {"description": "Support Vector Regression"},
-    "gradient_boosting": {"description": "Gradient Boosting"},
-}
-
-CLUSTERING_MODELS = {
-    "kmeans": {"description": "K-Means Clustering"},
-    "dbscan": {"description": "DBSCAN"},
-    "hierarchical": {"description": "Hierarchical Clustering"},
-}
+from app.services.ml_service import MLService, CLASSIFICATION_MODELS, REGRESSION_MODELS, CLUSTERING_MODELS
+from app.services.automl_service import AutoMLService
+from app.services.dl_service import DLService
 
 
 # ── Request schemas ───────────────────────────────────────────────
@@ -140,12 +123,65 @@ class MLController:
 
             result = {}
 
-            # Simplified training - return mock results
-            result = {
-                'metrics': {'accuracy': 0.85, 'precision': 0.82, 'recall': 0.88},
-                'model_name': request.model_name or 'baseline',
-                'feature_importance': {col: 0.5/len(df.columns) for col in df.columns},
-            }
+            if request.experiment_type == "automl":
+                config = {
+                    "experiment_type": request.experiment_type or "classification",
+                    "target_column": request.target_column,
+                    "feature_columns": request.feature_columns or list(df.columns),
+                }
+                result = await AutoMLService.run_automl(
+                    df, exp_id, config, progress_callback=update_progress
+                )
+
+            elif request.experiment_type == "classification":
+                if request.use_deep_learning:
+                    result = await DLService.train_neural_classifier(
+                        df, exp_id,
+                        request.target_column, request.feature_columns,
+                        epochs=request.dl_epochs
+                    )
+                else:
+                    result = await MLService.train_classification(
+                        df, exp_id,
+                        request.target_column, request.feature_columns,
+                        model_name=request.model_name or "random_forest",
+                        hyperparams=request.hyperparams,
+                        test_size=request.test_size,
+                        cv_folds=request.cv_folds
+                    )
+
+            elif request.experiment_type == "regression":
+                result = await MLService.train_regression(
+                    df, exp_id,
+                    request.target_column, request.feature_columns,
+                    model_name=request.model_name or "random_forest",
+                    hyperparams=request.hyperparams,
+                    test_size=request.test_size
+                )
+
+            elif request.experiment_type == "clustering":
+                result = await MLService.train_clustering(
+                    df, exp_id,
+                    request.feature_columns,
+                    model_name=request.model_name or "kmeans",
+                    hyperparams=request.hyperparams
+                )
+
+            elif request.experiment_type == "forecasting":
+                if request.use_deep_learning:
+                    result = await DLService.train_lstm_forecaster(
+                        df, exp_id,
+                        request.date_column, request.target_column,
+                        forecast_periods=request.forecast_periods,
+                        epochs=request.dl_epochs
+                    )
+                else:
+                    result = await MLService.train_forecasting(
+                        df, exp_id,
+                        request.date_column, request.target_column,
+                        forecast_periods=request.forecast_periods,
+                        model_name=request.model_name or "prophet"
+                    )
 
             # Save results
             duration = (datetime.utcnow() - start_time).total_seconds()
@@ -153,7 +189,6 @@ class MLController:
             _experiments[exp_id]["progress"] = 100
             _experiments[exp_id]["metrics"] = result.get("metrics")
             _experiments[exp_id]["best_model"] = result.get("model_name") or request.model_name
-            _experiments[exp_id]["feature_importance"] = result.get("feature_importance")
             _experiments[exp_id]["completed_at"] = datetime.utcnow().isoformat()
             _experiments[exp_id]["training_duration_seconds"] = duration
 
@@ -163,7 +198,6 @@ class MLController:
                 "message": "Training complete!",
                 "result": {
                     "metrics": result.get("metrics"),
-                    "feature_importance": result.get("feature_importance"),
                     "best_model": _experiments[exp_id]["best_model"],
                 }
             }

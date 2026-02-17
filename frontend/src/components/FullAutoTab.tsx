@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Layout,
   Input,
   Button,
   Card,
@@ -430,97 +429,94 @@ const FullAutoTab: React.FC<FullAutoTabProps> = ({
   ];
 
   return (
-    <Layout className="full-auto-tab">
-      {/* Top info bar */}
-      <div className="auto-info-bar">
-        <div className="info-left">
-          <RobotOutlined /> Full Auto Analysis
-        </div>
-        <div className="info-center">
-          {datasetInfo && (
-            <span>
-              📊 {datasetInfo.name} • {datasetInfo.row_count?.toLocaleString()} rows •{' '}
-              {datasetInfo.column_count} columns
-            </span>
-          )}
-        </div>
-        <div className="info-right">
-          <Button
-            icon={<BarsOutlined />}
-            onClick={() => setShowHistory(!showHistory)}
-            size="small"
-            type="text"
-          >
-            History
-          </Button>
-        </div>
-      </div>
+    <div className="full-auto-workspace">
+      {showHistory && (
+        <div className="full-auto-sidebar">
+          <div className="full-auto-sidebar-header">
+            <h3>Session History</h3>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              size="small"
+              onClick={() => {
+                setActiveSessionId(null);
+                setEvents([]);
+                setUserInput('');
+              }}
+            >
+              New
+            </Button>
+          </div>
 
-      <Layout className="auto-main-layout">
-        {/* Left sidebar - Session history */}
-        {showHistory && (
-          <Layout.Sider width={300} className="auto-history-sidebar">
-            <div className="sidebar-header">
-              <h3>Session History</h3>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                size="small"
-                onClick={() => {
-                  setActiveSessionId(null);
-                  setEvents([]);
-                  setUserInput('');
-                }}
-              >
-                New
-              </Button>
-            </div>
-
-            <div className="sessions-list">
-              {sessions.length === 0 ? (
-                <Empty description="No sessions yet" />
-              ) : (
-                <List
-                  dataSource={sessions}
-                  renderItem={(session) => (
-                    <List.Item
-                      key={session.id}
-                      className={`session-item ${
-                        activeSessionId === session.id ? 'active' : ''
-                      }`}
-                      onClick={() => loadSession(session.id)}
-                    >
-                      <div className="session-content">
-                        <div className="session-title">{session.title}</div>
-                        <div className="session-meta">
-                          <Badge
-                            status={
-                              session.status === 'completed'
-                                ? 'success'
-                                : session.status === 'running'
-                                  ? 'processing'
-                                  : 'error'
-                            }
-                            text={session.status}
-                          />
-                          <span className="session-steps">
-                            {session.completed_steps}/{session.total_steps}
-                          </span>
-                        </div>
-                        <div className="session-time">
-                          {new Date(session.created_at).toLocaleDateString()}
-                        </div>
+          <div className="full-auto-session-list">
+            {sessions.length === 0 ? (
+              <Empty description="No sessions yet" />
+            ) : (
+              <List
+                dataSource={sessions}
+                renderItem={(session) => (
+                  <List.Item
+                    key={session.id}
+                    className={`session-item ${
+                      activeSessionId === session.id ? 'active' : ''
+                    }`}
+                    onClick={() => loadSession(session.id)}
+                  >
+                    <div className="session-content">
+                      <div className="session-title">{session.title}</div>
+                      <div className="session-meta">
+                        <Badge
+                          status={
+                            session.status === 'completed'
+                              ? 'success'
+                              : session.status === 'running'
+                                ? 'processing'
+                                : 'error'
+                          }
+                          text={session.status}
+                        />
+                        <span className="session-steps">
+                          {session.completed_steps}/{session.total_steps}
+                        </span>
                       </div>
-                    </List.Item>
-                  )}
-                />
-              )}
-            </div>
-          </Layout.Sider>
-        )}
+                      <div className="session-time">
+                        {new Date(session.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </List.Item>
+                )}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
-        {/* Right content - Chat and analysis */}
-        <Layout.Content className="auto-content">
+      <div className="full-auto-chat-area">
+        <div className="full-auto-context-bar">
+          <div className="info-left">
+            <RobotOutlined /> Full Auto Analysis
+          </div>
+          <div className="info-center">
+            {datasetInfo && (
+              <span>
+                📊 {datasetInfo.name} • {datasetInfo.row_count?.toLocaleString()} rows •{' '}
+                {datasetInfo.column_count} columns
+              </span>
+            )}
+          </div>
+          <div className="info-right">
+            <Button
+              icon={<BarsOutlined />}
+              onClick={() => setShowHistory(!showHistory)}
+              size="small"
+              type="text"
+            >
+              History
+            </Button>
+          </div>
+        </div>
+
+        <div className="full-auto-messages">
           <div className="auto-messages-container">
             {events.length === 0 && !isRunning ? (
               <div className="auto-empty-state">
@@ -552,45 +548,44 @@ const FullAutoTab: React.FC<FullAutoTabProps> = ({
               </div>
             )}
           </div>
+        </div>
 
-          {/* Input bar */}
-          <div className="auto-input-bar">
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                placeholder="What would you like to analyze? (e.g., 'Find patterns in my sales data')"
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onPressEnter={startAnalysis}
-                disabled={isRunning}
-                size="large"
-              />
+        <div className="full-auto-input-bar">
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              placeholder="What would you like to analyze? (e.g., 'Find patterns in my sales data')"
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              onPressEnter={startAnalysis}
+              disabled={isRunning}
+              size="large"
+            />
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={startAnalysis}
+              loading={isRunning}
+              disabled={!userInput.trim() || isRunning}
+              size="large"
+            >
+              Analyze
+            </Button>
+          </Space.Compact>
+
+          {events.length > 0 && !isRunning && (
+            <div className="auto-input-actions">
               <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={startAnalysis}
-                loading={isRunning}
-                disabled={!userInput.trim() || isRunning}
-                size="large"
+                size="small"
+                icon={<SaveOutlined />}
+                onClick={saveCurrentSession}
               >
-                Analyze
+                Save Session
               </Button>
-            </Space.Compact>
-
-            {events.length > 0 && !isRunning && (
-              <div className="auto-input-actions">
-                <Button
-                  size="small"
-                  icon={<SaveOutlined />}
-                  onClick={saveCurrentSession}
-                >
-                  Save Session
-                </Button>
-              </div>
-            )}
-          </div>
-        </Layout.Content>
-      </Layout>
-    </Layout>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 

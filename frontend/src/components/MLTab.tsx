@@ -7,8 +7,6 @@ import {
   Checkbox,
   Space,
   Progress,
-  Row,
-  Col,
   Input,
   Slider,
   Statistic,
@@ -163,85 +161,84 @@ export function MLTab({ currentDataset = null, datasetColumns = [] }: MLTabProps
   const handleSendChatMessage = async () => {
     if (!chatInput.trim()) return;
 
-    const userMessage = chatInput;
-    setChatInput("");
-    setChatMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    setIsLoadingChat(true);
+    return (
+      <div className="ml-workspace">
+        <div className="ml-config-panel">
+          <div className="ml-config-panel-inner">
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              items={[
+                {
+                  key: "automl",
+                  label: (
+                    <span>
+                      <RobotOutlined /> AutoML Chat
+                    </span>
+                  ),
+                  children: renderAutoMLChat(),
+                },
+                {
+                  key: "manual",
+                  label: (
+                    <span>
+                      <SettingOutlined /> Manual Config
+                    </span>
+                  ),
+                  children: renderManualConfig(),
+                },
+              ]}
+            />
+          </div>
+        </div>
 
-    try {
-      // Call AutoML chat endpoint
-      const response = await fetch("/api/ml/automl/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_id: currentDataset?.id || "unknown",
-          message: userMessage,
-          conversation_history: chatMessages,
-        }),
-      });
+        <div className="ml-results-panel">
+          <Card title="Results" style={{ height: "100%", overflowY: "auto" }}>
+            {selectedExperiment ? renderResults() : <Empty description="Select an experiment to view results" />}
+          </Card>
+        </div>
 
-      const result = await response.json();
-      setChatMessages((prev) => [...prev, { role: "assistant", content: result.text || "I'll help you build an ML model." }]);
-
-      // If action provided, apply it
-      if (result.action === "configure_ml_experiment" && result.config) {
-        setTaskType(result.config.experiment_type);
-        setTargetColumn(result.config.target_column || "");
-        setFeatureColumns(result.config.feature_columns || []);
-        setSelectedModel(result.config.models_to_try?.[0] || "");
-        setExperimentName(`${result.config.experiment_type}_experiment`);
-        message.success("Configuration loaded. Ready to train!");
-      }
-    } catch (error) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I couldn't process that. Please try again." }]);
-    } finally {
-      setIsLoadingChat(false);
-    }
-  };
-
-  const handleTaskTypeSelect = async (type: string) => {
-    setTaskType(type);
-    
-    // Load available models
-    try {
-      const response = await fetch(`/api/ml/models/${type}`);
-      const data = await response.json();
-      setAvailableModels(data.models || []);
-      if (data.models && data.models.length > 0) {
-        setSelectedModel(data.models[0].name);
-      }
-    } catch (error) {
-      message.error("Failed to load models");
-    }
-  };
-
-  const handleFeatureToggle = (column: string) => {
-    setFeatureColumns((prev) =>
-      prev.includes(column) ? prev.filter((c) => c !== column) : [...prev, column]
+        <div className="ml-automl-chat">
+          <div className="ml-experiments-panel">
+            <Card title="Experiments" size="small">
+              {experiments.length === 0 ? (
+                <Empty />
+              ) : (
+                <List
+                  dataSource={experiments}
+                  renderItem={(exp) => (
+                    <List.Item
+                      onClick={() => setSelectedExperiment(exp)}
+                      className={`ml-experiment-item ${selectedExperiment?.id === exp.id ? "active" : ""}`}
+                    >
+                      <List.Item.Meta
+                        title={exp.name}
+                        description={
+                          <>
+                            <Tag color="blue">{exp.experiment_type}</Tag>
+                            <Tag
+                              color={
+                                exp.status === "completed"
+                                  ? "green"
+                                  : exp.status === "failed"
+                                  ? "red"
+                                  : "orange"
+                              }
+                            >
+                              {exp.status}
+                            </Tag>
+                          </>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              )}
+            </Card>
+          </div>
+        </div>
+      </div>
     );
-  };
-
-  const handleStartTraining = async () => {
-    if (!taskType) {
-      message.error("Please select a task type");
-      return;
-    }
-    if (!targetColumn) {
-      message.error("Please select a target column");
-      return;
-    }
-    if (featureColumns.length === 0) {
-      message.error("Please select at least one feature column");
-      return;
-    }
-
-    const expName = experimentName || `${taskType}_${new Date().toISOString().slice(0, 10)}`;
-    setExperimentName(expName);
-    setIsTraining(true);
-    setTrainingProgress(0);
-    setTrainingMessage("Starting training...");
-
-    try {
       const response = await fetch("/api/ml/experiments/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -280,88 +280,8 @@ export function DataCleaningTab() {
   };
 
   return (
-    <div className="cleaning-tab-v2">
-      {/* Header */}
-      <div className="cleaning-header-v2">
-        <div>
-          <Title level={2} style={{ margin: 0 }}>
-            Data Cleaning
-          </Title>
-          <Text type="secondary">
-            Clean your data with AI-powered operations and preview changes instantly.
-          </Text>
-        </div>
-      </div>
-
-      {/* Main Layout */}
-      <div className="cleaning-main-layout">
-        {/* Left: Dataset Preview + Info */}
-        <div className="cleaning-preview-section">
-          {/* Table Selector */}
-          <Card className="cleaning-card-v2" style={{ marginBottom: 12 }}>
-            <Space direction="vertical" style={{ width: "100%" }}>
-              <Text type="secondary" strong>
-                Select Table
-              </Text>
-              <Select
-                placeholder="Choose a table"
-                defaultValue="sales_q1"
-                options={[
-                  { value: "sales_q1", label: "Sales Q1 2025" },
-                  { value: "customers", label: "Customers" },
-                  { value: "orders", label: "Orders" },
-                ]}
-                style={{ width: "100%" }}
-              />
-            </Space>
-          </Card>
-
-          {/* Dataset Preview */}
-          <Card className="cleaning-card-v2" title="Dataset Preview" style={{ flex: 1 }}>
-            <div className="dataset-preview-table">
-              <Table
-                columns={PREVIEW_COLUMNS}
-                dataSource={beforeRows}
-                size="small"
-                pagination={{ pageSize: 8 }}
-                rowKey="id"
-                scroll={{ x: 600 }}
-              />
-            </div>
-          </Card>
-
-          {/* Dataset Info */}
-          <Card className="cleaning-card-v2" title="Dataset Information" style={{ marginTop: 12 }}>
-            <div className="dataset-info-grid">
-              <div className="info-item">
-                <Text type="secondary">Rows</Text>
-                <Title level={4}>{dataset.rows?.toLocaleString()}</Title>
-              </div>
-              <div className="info-item">
-                <Text type="secondary">Columns</Text>
-                <Title level={4}>{dataset.columns?.length}</Title>
-              </div>
-              <div className="info-item">
-                <Text type="secondary">Size</Text>
-                <Title level={4}>4.2 MB</Title>
-              </div>
-            </div>
-            <Divider style={{ margin: "12px 0" }} />
-            <div style={{ marginTop: 12 }}>
-              <Text type="secondary" strong>
-                Quality Score
-              </Text>
-              <Progress
-                percent={72}
-                status="normal"
-                style={{ marginTop: 8 }}
-                strokeColor="#22c55e"
-              />
-            </div>
-          </Card>
-        </div>
-
-        {/* Right: AI Chat + Quick Actions */}
+    <div className="data-cleaning-layout">
+      <div className="cleaning-chat-panel">
         <div className="cleaning-chat-section">
           {/* AI Chat */}
           <Card className="cleaning-card-v2" title="AI Cleaning Assistant" style={{ flex: 1 }}>
@@ -423,6 +343,88 @@ export function DataCleaningTab() {
               </div>
             </Space>
           </Card>
+        </div>
+      </div>
+
+      <div className="cleaning-preview-panel">
+        <div className="cleaning-preview-inner">
+          {/* Header */}
+          <div className="cleaning-header-v2">
+            <div>
+              <Title level={2} style={{ margin: 0 }}>
+                Data Cleaning
+              </Title>
+              <Text type="secondary">
+                Clean your data with AI-powered operations and preview changes instantly.
+              </Text>
+            </div>
+          </div>
+
+          {/* Left: Dataset Preview + Info */}
+          <div className="cleaning-preview-section">
+            {/* Table Selector */}
+            <Card className="cleaning-card-v2" style={{ marginBottom: 12 }}>
+              <Space direction="vertical" style={{ width: "100%" }}>
+                <Text type="secondary" strong>
+                  Select Table
+                </Text>
+                <Select
+                  placeholder="Choose a table"
+                  defaultValue="sales_q1"
+                  options={[
+                    { value: "sales_q1", label: "Sales Q1 2025" },
+                    { value: "customers", label: "Customers" },
+                    { value: "orders", label: "Orders" },
+                  ]}
+                  style={{ width: "100%" }}
+                />
+              </Space>
+            </Card>
+
+            {/* Dataset Preview */}
+            <Card className="cleaning-card-v2" title="Dataset Preview" style={{ flex: 1 }}>
+              <div className="dataset-preview-table">
+                <Table
+                  columns={PREVIEW_COLUMNS}
+                  dataSource={beforeRows}
+                  size="small"
+                  pagination={{ pageSize: 8 }}
+                  rowKey="id"
+                  scroll={{ x: 600 }}
+                />
+              </div>
+            </Card>
+
+            {/* Dataset Info */}
+            <Card className="cleaning-card-v2" title="Dataset Information" style={{ marginTop: 12 }}>
+              <div className="dataset-info-grid">
+                <div className="info-item">
+                  <Text type="secondary">Rows</Text>
+                  <Title level={4}>{dataset.rows?.toLocaleString()}</Title>
+                </div>
+                <div className="info-item">
+                  <Text type="secondary">Columns</Text>
+                  <Title level={4}>{dataset.columns?.length}</Title>
+                </div>
+                <div className="info-item">
+                  <Text type="secondary">Size</Text>
+                  <Title level={4}>4.2 MB</Title>
+                </div>
+              </div>
+              <Divider style={{ margin: "12px 0" }} />
+              <div style={{ marginTop: 12 }}>
+                <Text type="secondary" strong>
+                  Quality Score
+                </Text>
+                <Progress
+                  percent={72}
+                  status="normal"
+                  style={{ marginTop: 8 }}
+                  strokeColor="#22c55e"
+                />
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

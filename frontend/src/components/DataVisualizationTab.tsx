@@ -420,89 +420,91 @@ const DataVisualizationTab: React.FC = () => {
   };
 
   return (
-    <div className="data-visualization-tab">
-      <div className="visualization-header">
-        <div className="header-left">
-          <h2>📊 Visualization</h2>
-          <Select
-            value={currentDashboard?.id}
-            onChange={(id) => loadDashboard(id)}
-            style={{ width: 250, marginLeft: 20 }}
-            placeholder="Select Dashboard"
-          >
-            {dashboards.map((d) => (
-              <Option key={d.id} value={d.id}>
-                {d.name}
-              </Option>
-            ))}
-          </Select>
-          <Button
-            icon={<PlusOutlined />}
-            onClick={() => setIsCreateDashboardModalVisible(true)}
-            style={{ marginLeft: 10 }}
-          >
-            New Dashboard
-          </Button>
+    <div className="visualization-tab">
+      <Card className="dashboard-toolbar">
+        <div className="visualization-header">
+          <div className="header-left">
+            <h2>📊 Visualization</h2>
+            <Select
+              value={currentDashboard?.id}
+              onChange={(id) => loadDashboard(id)}
+              style={{ width: 250, marginLeft: 20 }}
+              placeholder="Select Dashboard"
+            >
+              {dashboards.map((d) => (
+                <Option key={d.id} value={d.id}>
+                  {d.name}
+                </Option>
+              ))}
+            </Select>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => setIsCreateDashboardModalVisible(true)}
+              style={{ marginLeft: 10 }}
+            >
+              New Dashboard
+            </Button>
+          </div>
+
+          <Space>
+            <div className="auto-refresh-control">
+              <Switch checked={autoRefresh} onChange={setAutoRefresh} size="small" />
+              <span style={{ marginLeft: 8 }}>Auto Refresh ({refreshInterval}s)</span>
+            </div>
+            <Button
+              icon={<RobotOutlined />}
+              type="primary"
+              onClick={() => setIsAIChatDrawerVisible(true)}
+            >
+              AI Assistant
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={() => exportDashboard('pdf')}>
+              Export PDF
+            </Button>
+            <Button icon={<ShareAltOutlined />} onClick={shareDashboard}>
+              Share
+            </Button>
+            <Button icon={<BgColorsOutlined />}>Theme</Button>
+          </Space>
         </div>
 
-        <Space>
-          <div className="auto-refresh-control">
-            <Switch checked={autoRefresh} onChange={setAutoRefresh} size="small" />
-            <span style={{ marginLeft: 8 }}>Auto Refresh ({refreshInterval}s)</span>
-          </div>
-          <Button 
-            icon={<RobotOutlined />} 
-            type="primary"
-            onClick={() => setIsAIChatDrawerVisible(true)}
-          >
-            AI Assistant
-          </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => exportDashboard('pdf')}>
-            Export PDF
-          </Button>
-          <Button icon={<ShareAltOutlined />} onClick={shareDashboard}>
-            Share
-          </Button>
-          <Button icon={<BgColorsOutlined />}>Theme</Button>
-        </Space>
-      </div>
-
-      {currentDashboard ? (
-        <>
+        {currentDashboard ? (
           <div className="dashboard-actions">
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsAddWidgetModalVisible(true)}>
               Add Widget
             </Button>
           </div>
+        ) : null}
+      </Card>
 
-          <div className="dashboard-grid">
-            <GridLayout
-              className="layout"
-              layout={layout}
-              cols={12}
-              rowHeight={80}
-              width={1200}
-              onLayoutChange={onLayoutChange}
-              draggableHandle=".ant-card-head"
-            >
-              {currentDashboard.widgets.map((widget) => (
-                <div key={widget.id} data-grid={layout.find((l) => l.i === widget.id.toString())}>
-                  {renderWidget(widget)}
-                </div>
-              ))}
-            </GridLayout>
+      <div className="dashboard-grid">
+        {currentDashboard ? (
+          <GridLayout
+            className="layout"
+            layout={layout}
+            cols={12}
+            rowHeight={80}
+            width={1200}
+            onLayoutChange={onLayoutChange}
+            draggableHandle=".ant-card-head"
+          >
+            {currentDashboard.widgets.map((widget) => (
+              <div key={widget.id} data-grid={layout.find((l) => l.i === widget.id.toString())}>
+                {renderWidget(widget)}
+              </div>
+            ))}
+          </GridLayout>
+        ) : (
+          <div className="empty-state">
+            <DashboardOutlined style={{ fontSize: 64, color: '#ccc' }} />
+            <h3>No Dashboard Selected</h3>
+            <p>Create a new dashboard to get started with data visualization</p>
+            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setIsCreateDashboardModalVisible(true)}>
+              Create Dashboard
+            </Button>
           </div>
-        </>
-      ) : (
-        <div className="empty-state">
-          <DashboardOutlined style={{ fontSize: 64, color: '#ccc' }} />
-          <h3>No Dashboard Selected</h3>
-          <p>Create a new dashboard to get started with data visualization</p>
-          <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setIsCreateDashboardModalVisible(true)}>
-            Create Dashboard
-          </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Create Dashboard Modal */}
       <Modal

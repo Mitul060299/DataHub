@@ -536,7 +536,7 @@ const AppShell = () => {
           <RobotOutlined /> Full Auto
         </span>
       ),
-      children: <FullAutoTab />,
+      children: activeProject ? <FullAutoTab projectId={activeProject.id} datasetId={selectedTable || ''} /> : null,
     },
   ];
 

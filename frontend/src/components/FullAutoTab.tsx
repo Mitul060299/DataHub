@@ -478,7 +478,7 @@ const FullAutoTab: React.FC<FullAutoTabProps> = ({
 
             <div className="sessions-list">
               {sessions.length === 0 ? (
-                <Empty description="No sessions yet" size="small" />
+                <Empty description="No sessions yet" />
               ) : (
                 <List
                   dataSource={sessions}

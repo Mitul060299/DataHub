@@ -27,7 +27,6 @@ import {
   List,
 } from "antd";
 import {
-  BotOutlined,
   SettingOutlined,
   PlayCircleOutlined,
   FileTextOutlined,
@@ -36,7 +35,7 @@ import {
   RobotOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ScatterChart, Scatter } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, ScatterChart, Scatter } from "recharts";
 import { AIChat, type AIAction, type DatasetSummary } from "./ai/AIChat";
 import "./MLTab.css";
 
@@ -95,7 +94,12 @@ const TASK_TYPES: TaskTypeCard[] = [
   },
 ];
 
-export function MLTab({ currentDataset = null, datasetColumns = [] }) {
+interface MLTabProps {
+  currentDataset?: any;
+  datasetColumns?: string[];
+}
+
+export function MLTab({ currentDataset = null, datasetColumns = [] }: MLTabProps = {}) {
   // ──────────────────────────────────────────
   // STATE
   // ──────────────────────────────────────────

@@ -693,7 +693,7 @@ export function MLTab({ currentDataset = null, datasetColumns = [] }: MLTabProps
                 key: "automl",
                 label: (
                   <span>
-                    <BotOutlined /> AutoML Chat
+                    <RobotOutlined /> AutoML Chat
                   </span>
                 ),
                 children: renderAutoMLChat(),

@@ -61,7 +61,7 @@ import {
 } from "@ant-design/icons";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import "./styles_new.css";
+import "./styles.css";
 import { DataImportTab } from "./components/DataImportTab";
 import { DataCleaningTab } from "./components/DataCleaningTab";
 import { DataTransformTab } from "./components/DataTransformTab";

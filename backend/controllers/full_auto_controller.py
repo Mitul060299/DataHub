@@ -11,20 +11,51 @@ from datetime import datetime
 
 from fastapi import HTTPException
 import pandas as pd
+from sqlalchemy.orm import Session
+from app.db import get_db
+from app.models_db import DatasetMetaDB, DatasetChunkDB, DatasetDataDB
 
-from services.data_service import DataService
-from services.db_service import DatabaseService
 from services.full_auto_agent import FullAutoAgent, AgentEvent
 
 
 class FullAutoController:
     """Controller for Full Auto agent endpoints"""
 
-    def __init__(self):
-        self.data_service = DataService()
-        self.db_service = DatabaseService()
+    def __init__(self, db: Session = None):
+        self.db = db
         self._sessions = {}  # in-memory session tracking
         self._event_queues = {}  # asyncio.Queue per session
+
+    async def load_dataset(self, dataset_id: str, user_id: str) -> pd.DataFrame:
+        """Load dataset from database by ID for analysis"""
+        if not self.db:
+            from app.db import get_db
+            self.db = next(get_db())
+
+        try:
+            # Try loading from chunks first
+            chunks = self.db.query(DatasetChunkDB).filter(
+                DatasetChunkDB.dataset_id == dataset_id
+            ).order_by(DatasetChunkDB.chunk_index.asc()).all()
+
+            if chunks:
+                rows = []
+                for chunk in chunks:
+                    rows.extend(chunk.rows or [])
+                return pd.DataFrame(rows)
+
+            # Fallback to dataset_data
+            data = self.db.query(DatasetDataDB).filter(
+                DatasetDataDB.id == dataset_id
+            ).first()
+
+            if data:
+                return pd.DataFrame(data.rows or [])
+
+            raise ValueError(f"Dataset {dataset_id} not found")
+
+        except Exception as e:
+            raise ValueError(f"Failed to load dataset: {str(e)}")
 
     async def start_auto(self, user_id: str, dataset_id: str, user_request: str) -> AsyncGenerator[str, None]:
         """
@@ -47,7 +78,7 @@ class FullAutoController:
         try:
             # Load dataset
             try:
-                df = await self.data_service.get_dataset_for_analysis(user_id, dataset_id)
+                df = await self.load_dataset(dataset_id, user_id)
             except Exception as e:
                 yield self._sse_event({
                     'type': 'error',
@@ -110,42 +141,37 @@ class FullAutoController:
 
     async def get_sessions(self, user_id: str) -> list:
         """Get all sessions for a user from database"""
+        if not self.db:
+            from app.db import get_db
+            self.db = next(get_db())
+
         try:
-            sessions = await self.db_service.query(
-                'auto_sessions',
-                filters={'user_id': user_id},
-                order_by=[('created_at', 'desc')],
-                limit=50
-            )
-            return sessions
+            # For now, return in-memory sessions for the user
+            user_sessions = [
+                s for s in self._sessions.values()
+                if s.get('user_id') == user_id
+            ]
+            return user_sessions
         except Exception as e:
             print(f"Error fetching sessions: {e}")
             return []
 
     async def get_session(self, user_id: str, session_id: str) -> Optional[dict]:
         """Get a specific session with all its events"""
-        try:
-            session = await self.db_service.query_one(
-                'auto_sessions',
-                filters={'id': session_id, 'user_id': user_id}
-            )
-
-            if not session:
-                return None
-
-            # Convert JSONB fields
-            session['conversation'] = session.get('conversation', [])
-            session['execution_plan'] = session.get('execution_plan', {})
-            session['artifacts'] = session.get('artifacts', {})
-
-            return session
-        except Exception as e:
-            print(f"Error fetching session: {e}")
+        if session_id not in self._sessions:
             return None
+
+        session = self._sessions[session_id]
+
+        # Verify ownership
+        if session.get('user_id') != user_id:
+            return None
+
+        return session
 
     async def save_session(self, user_id: str, dataset_id: str, events: list,
                           title: Optional[str] = None) -> str:
-        """Save session to database"""
+        """Save session to in-memory storage (database persistence optional)"""
         try:
             session_id = str(uuid.uuid4())
 
@@ -173,9 +199,11 @@ class FullAutoController:
                 'completed_steps': len(completed_steps),
                 'current_step': len(completed_steps),
                 'artifacts': self._extract_artifacts(events),
+                'created_at': datetime.utcnow().isoformat(),
             }
 
-            await self.db_service.insert('auto_sessions', session_data)
+            # Store in memory (and optionally in DB)
+            self._sessions[session_id] = session_data
             return session_id
 
         except Exception as e:

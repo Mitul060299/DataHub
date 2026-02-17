@@ -3,16 +3,22 @@ Full Auto Routes
 API endpoints for autonomous agent orchestration
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.db import get_db
+from app.security import get_current_subject
 from controllers.full_auto_controller import FullAutoController
-from security import get_current_subject
 
 
 router = APIRouter(prefix='/api/auto', tags=['auto'])
-controller = FullAutoController()
+
+
+def get_controller(db: Session = Depends(get_db)) -> FullAutoController:
+    """Get controller instance with database session"""
+    return FullAutoController(db)
 
 
 class AutoRunRequest(BaseModel):
@@ -31,26 +37,24 @@ class SessionResponse(BaseModel):
     completed_steps: int
 
 
-@router.post('/run')
+@router.get('/run')
 async def start_auto_analysis(
-    request: AutoRunRequest,
-    subject: str = None
+    dataset_id: str,
+    user_request: str,
+    current_user_id: str = Depends(get_current_subject),
+    controller: FullAutoController = Depends(get_controller)
 ):
     """
     Start autonomous analysis with SSE streaming.
     Returns Server-Sent Events stream of analysis progress.
     """
-    # Verify user is authenticated
-    if not subject:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-
     try:
         # Create SSE stream from controller
         async def event_generator():
             async for event in controller.start_auto(
-                user_id=subject,
-                dataset_id=request.dataset_id,
-                user_request=request.user_request
+                user_id=current_user_id,
+                dataset_id=dataset_id,
+                user_request=user_request
             ):
                 yield event
 
@@ -73,14 +77,12 @@ async def start_auto_analysis(
 
 @router.get('/sessions')
 async def get_user_sessions(
-    subject: str = None
+    current_user_id: str = Depends(get_current_subject),
+    controller: FullAutoController = Depends(get_controller)
 ):
     """Get all analysis sessions for current user"""
-    if not subject:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-
     try:
-        sessions = await controller.get_sessions(subject)
+        sessions = await controller.get_sessions(current_user_id)
         return {
             'sessions': sessions,
             'count': len(sessions)
@@ -93,14 +95,12 @@ async def get_user_sessions(
 @router.get('/sessions/{session_id}')
 async def get_session_details(
     session_id: str,
-    subject: str = None
+    current_user_id: str = Depends(get_current_subject),
+    controller: FullAutoController = Depends(get_controller)
 ):
     """Get details of a specific analysis session"""
-    if not subject:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-
     try:
-        session = await controller.get_session(subject, session_id)
+        session = await controller.get_session(current_user_id, session_id)
 
         if not session:
             raise HTTPException(status_code=404, detail='Session not found')
@@ -117,14 +117,12 @@ async def get_session_details(
 @router.post('/sessions/{session_id}/cancel')
 async def cancel_session(
     session_id: str,
-    subject: str = None
+    current_user_id: str = Depends(get_current_subject),
+    controller: FullAutoController = Depends(get_controller)
 ):
     """Cancel a running analysis session"""
-    if not subject:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-
     try:
-        success = await controller.cancel_session(subject, session_id)
+        success = await controller.cancel_session(current_user_id, session_id)
 
         if not success:
             raise HTTPException(status_code=404, detail='Session not found or already completed')
@@ -141,12 +139,10 @@ async def cancel_session(
 @router.post('/sessions/{session_id}/save')
 async def save_session(
     session_id: str,
-    subject: str = None
+    current_user_id: str = Depends(get_current_subject),
+    controller: FullAutoController = Depends(get_controller)
 ):
     """Save session to database for history"""
-    if not subject:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-
     try:
         # Get in-memory session
         if session_id not in controller._sessions:
@@ -155,12 +151,12 @@ async def save_session(
         session = controller._sessions[session_id]
 
         # Verify ownership
-        if session['user_id'] != subject:
+        if session['user_id'] != current_user_id:
             raise HTTPException(status_code=403, detail='Forbidden')
 
         # Save to database
         saved_id = await controller.save_session(
-            subject,
+            current_user_id,
             session['dataset_id'],
             session['events']
         )

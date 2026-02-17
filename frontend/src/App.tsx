@@ -66,6 +66,8 @@ import { DataImportTab } from "./components/DataImportTab";
 import { DataCleaningTab } from "./components/DataCleaningTab";
 import { DataTransformTab } from "./components/DataTransformTab";
 import DataVisualizationTab from "./components/DataVisualizationTab";
+import { MLTab } from "./components/MLTab";
+import FullAutoTab from "./components/FullAutoTab";
 import { HomePage } from "./components/HomePage";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
@@ -517,6 +519,24 @@ const AppShell = () => {
         </span>
       ),
       children: <DataVisualizationTab />,
+    },
+    {
+      key: "ml",
+      label: (
+        <span className="data-tab-label">
+          <ExperimentOutlined /> ML/DL
+        </span>
+      ),
+      children: <MLTab />,
+    },
+    {
+      key: "auto",
+      label: (
+        <span className="data-tab-label">
+          <RobotOutlined /> Full Auto
+        </span>
+      ),
+      children: <FullAutoTab />,
     },
   ];
 

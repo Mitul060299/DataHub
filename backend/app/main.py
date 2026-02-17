@@ -1,7 +1,15 @@
 from fastapi import FastAPI, Request
 import os
+import sys
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations
+
+# Ensure repo root is on sys.path so sibling packages (like routes) resolve in production.
+_ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(_ROOT_DIR) not in sys.path:
+    sys.path.append(str(_ROOT_DIR))
+
 from routes import ml_routes, full_auto_routes
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine

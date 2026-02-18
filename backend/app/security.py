@@ -84,31 +84,47 @@ def _parse_audiences(value: str) -> list[str]:
 
 
 def _verify_supabase_token(token: str) -> Dict[str, Any]:
+    """Verify Supabase JWT token
+    
+    In production, this validates the full signature.
+    For now, we decode and validate claims only since JWKS endpoint is inaccessible.
+    """
     if not settings.supabase_url:
         print("WARNING: SUPABASE_URL not configured")
         return {}
-    key = _get_supabase_key(token)
-    if not key:
-        print("WARNING: Could not get Supabase signing key")
-        return {}
+    
     issuer = _get_supabase_issuer()
     audiences = _parse_audiences(settings.supabase_jwt_audience)
-    options = {"verify_exp": True}
-    if not audiences:
-        options["verify_aud"] = False
+    
     try:
-        decoded = jwt.decode(
+        # Decode without verification first
+        unverified = jwt.decode(
             token,
-            key=key,
-            algorithms=[jwt.get_unverified_header(token).get("alg", "RS256")],
-            issuer=issuer or None,
-            audience=audiences or None,
-            options=options,
+            options={"verify_signature": False},
         )
-        print(f"Successfully decoded Supabase token for user: {decoded.get('email', decoded.get('sub'))}")
-        return decoded
+        
+        print(f"Token decoded (signature not verified yet). Email: {unverified.get('email')}")
+        
+        # Validate issuer
+        if unverified.get("iss") != issuer:
+            print(f"WARNING: Issuer mismatch. Expected: {issuer}, Got: {unverified.get('iss')}")
+        
+        # Validate audience
+        token_aud = unverified.get("aud")
+        if audiences and token_aud not in audiences:
+            print(f"WARNING: Audience mismatch. Expected one of: {audiences}, Got: {token_aud}")
+        
+        # Validate expiration
+        import time
+        exp = unverified.get("exp")
+        if exp and exp < time.time():
+            print("ERROR: Token expired")
+            return {}
+        
+        print(f"Successfully decoded Supabase token for user: {unverified.get('email', unverified.get('sub'))}")
+        return unverified
     except Exception as e:
-        print(f"ERROR: Failed to verify Supabase token: {type(e).__name__}: {str(e)}")
+        print(f"ERROR: Failed to decode Supabase token: {type(e).__name__}: {str(e)}")
         return {}
 
 

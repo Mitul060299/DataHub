@@ -9,6 +9,66 @@ from ..security import get_current_role, get_current_subject, get_current_user_i
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+@router.get("/debug/token-algorithm")
+def debug_token_algorithm(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Debug endpoint to check what algorithm the JWT token uses"""
+    import jwt
+    import base64
+    import json
+    
+    if not authorization:
+        return {"error": "No Authorization header provided"}
+    
+    try:
+        # Extract token from "Bearer <token>"
+        token = authorization.split(" ")[1] if " " in authorization else authorization
+        
+        # Decode header without verification
+        header = jwt.get_unverified_header(token)
+        
+        # Decode payload without verification to see structure
+        payload = jwt.decode(token, options={"verify_signature": False})
+        
+        # Determine verification approach
+        alg = header.get("alg", "UNKNOWN")
+        verification_method = ""
+        needs_jwks = False
+        
+        if alg.startswith("HS"):
+            verification_method = f"Use SUPABASE_JWT_SECRET directly with {alg}"
+            needs_jwks = False
+        elif alg.startswith("RS") or alg.startswith("ES"):
+            verification_method = f"Need public key from JWKS for {alg}"
+            needs_jwks = True
+        else:
+            verification_method = f"Unknown algorithm: {alg}"
+        
+        return {
+            "success": True,
+            "header": header,
+            "algorithm": alg,
+            "key_id": header.get("kid"),
+            "verification_method": verification_method,
+            "needs_jwks": needs_jwks,
+            "payload_sample": {
+                "sub": payload.get("sub"),
+                "email": payload.get("email"),
+                "role": payload.get("role"),
+                "aud": payload.get("aud"),
+                "iss": payload.get("iss"),
+                "exp": payload.get("exp"),
+                "iat": payload.get("iat"),
+            }
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
+
+
 @router.get("/debug/jwks")
 def debug_jwks() -> dict:
     """Debug endpoint to check JWKS fetching"""

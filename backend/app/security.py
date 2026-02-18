@@ -40,20 +40,20 @@ def _get_supabase_jwks() -> Dict[str, Any]:
     if cached:
         return cached
     if not settings.supabase_url:
+        print("ERROR: SUPABASE_URL not configured")
         return {}
     jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
-    headers = {}
-    # Add authorization if service role key is available
-    if settings.supabase_service_role_key:
-        headers["Authorization"] = f"Bearer {settings.supabase_service_role_key}"
+    print(f"Fetching JWKS from: {jwks_url}")
     try:
-        response = httpx.get(jwks_url, headers=headers, timeout=10.0)
+        response = httpx.get(jwks_url, timeout=10.0)
+        print(f"JWKS response status: {response.status_code}")
         response.raise_for_status()
         jwks = response.json()
+        print(f"Successfully fetched {len(jwks.get('keys', []))} keys")
         _cache_set("supabase_jwks", jwks, ttl=300)
         return jwks
     except Exception as e:
-        print(f"ERROR fetching JWKS: {e}")
+        print(f"ERROR fetching JWKS: {type(e).__name__}: {str(e)}")
         return {}
 
 

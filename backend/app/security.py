@@ -42,19 +42,28 @@ def _get_supabase_jwks() -> Dict[str, Any]:
     if not settings.supabase_url:
         print("ERROR: SUPABASE_URL not configured")
         return {}
-    jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
-    print(f"Fetching JWKS from: {jwks_url}")
-    try:
-        response = httpx.get(jwks_url, timeout=10.0)
-        print(f"JWKS response status: {response.status_code}")
-        response.raise_for_status()
-        jwks = response.json()
-        print(f"Successfully fetched {len(jwks.get('keys', []))} keys")
-        _cache_set("supabase_jwks", jwks, ttl=300)
-        return jwks
-    except Exception as e:
-        print(f"ERROR fetching JWKS: {type(e).__name__}: {str(e)}")
-        return {}
+    
+    # Try the standard Supabase JWKS endpoint
+    jwks_urls = [
+        settings.supabase_url.rstrip("/") + "/auth/v1/keys",
+        settings.supabase_url.rstrip("/") + "/.well-known/jwks.json",
+    ]
+    
+    for jwks_url in jwks_urls:
+        print(f"Attempting to fetch JWKS from: {jwks_url}")
+        try:
+            response = httpx.get(jwks_url, timeout=10.0, follow_redirects=True)
+            print(f"Response status: {response.status_code}")
+            if response.status_code == 200:
+                jwks = response.json()
+                print(f"Successfully fetched {len(jwks.get('keys', []))} keys from {jwks_url}")
+                _cache_set("supabase_jwks", jwks, ttl=300)
+                return jwks
+        except Exception as e:
+            print(f"Failed with {jwks_url}: {type(e).__name__}: {str(e)}")
+    
+    print("ERROR: Could not fetch JWKS from any endpoint")
+    return {}
 
 
 def _get_supabase_key(id_token: str) -> Optional[Any]:

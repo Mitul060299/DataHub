@@ -68,9 +68,11 @@ def _parse_audiences(value: str) -> list[str]:
 
 def _verify_supabase_token(token: str) -> Dict[str, Any]:
     if not settings.supabase_url:
+        print("WARNING: SUPABASE_URL not configured")
         return {}
     key = _get_supabase_key(token)
     if not key:
+        print("WARNING: Could not get Supabase signing key")
         return {}
     issuer = _get_supabase_issuer()
     audiences = _parse_audiences(settings.supabase_jwt_audience)
@@ -78,7 +80,7 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
     if not audiences:
         options["verify_aud"] = False
     try:
-        return jwt.decode(
+        decoded = jwt.decode(
             token,
             key=key,
             algorithms=[jwt.get_unverified_header(token).get("alg", "RS256")],
@@ -86,7 +88,10 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
             audience=audiences or None,
             options=options,
         )
-    except Exception:
+        print(f"Successfully decoded Supabase token for user: {decoded.get('email', decoded.get('sub'))}")
+        return decoded
+    except Exception as e:
+        print(f"ERROR: Failed to verify Supabase token: {type(e).__name__}: {str(e)}")
         return {}
 
 

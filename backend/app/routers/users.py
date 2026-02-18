@@ -15,6 +15,7 @@ def debug_auth(
 ) -> dict:
     """Debug endpoint to check authentication parsing"""
     from ..security import get_current_subject, get_current_role, get_current_user_id
+    from ..config import settings
     
     return {
         "has_auth_header": authorization is not None,
@@ -22,6 +23,11 @@ def debug_auth(
         "subject": get_current_subject(authorization),
         "role": get_current_role(authorization),
         "user_id": get_current_user_id(authorization),
+        "config": {
+            "supabase_url_set": bool(settings.supabase_url),
+            "supabase_jwt_secret_set": bool(settings.supabase_jwt_secret),
+            "supabase_jwt_audience": settings.supabase_jwt_audience,
+        }
     }
 
 

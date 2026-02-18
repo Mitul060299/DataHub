@@ -318,7 +318,7 @@ export function DataImportPanel() {
                 ))}
                 {!source.available && (
                   <Tag color="orange" icon={<LockOutlined />}>
-                    Pro required
+                    Professional required
                   </Tag>
                 )}
               </div>
@@ -349,7 +349,7 @@ export function DataImportPanel() {
                   <Title level={4}>Drag and drop your file here</Title>
                   <Text type="secondary">or click to browse</Text>
                   <Text type="secondary">Supports: CSV, Excel (.xlsx, .xls), JSON, Parquet, TSV</Text>
-                  <Text type="secondary">Maximum file size: 100MB (Free) / Unlimited (Pro+)</Text>
+                  <Text type="secondary">Maximum file size: 50 MB (Free) / 500 MB (Professional) / 5 GB (Team) / 10 GB (Business) / Custom (Enterprise)</Text>
                   <input
                     type="file"
                     className="hidden-input"
@@ -455,7 +455,7 @@ export function DataImportPanel() {
 
           {importSource === "database" && (
             <Card className="import-placeholder">
-              <Title level={4}>Database connections require Pro</Title>
+              <Title level={4}>Database connections require Professional</Title>
               <Text type="secondary">Upgrade to connect PostgreSQL, MySQL, Snowflake, and more.</Text>
               <Button type="primary" icon={<LockOutlined />}>Upgrade Plan</Button>
             </Card>

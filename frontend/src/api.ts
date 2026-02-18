@@ -68,7 +68,7 @@ export async function fetchCurrentUser(workspaceId?: string) {
     id: string;
     username: string;
     role: string;
-    plan: "Free" | "Professional" | "Team" | "Enterprise";
+    plan: "Free" | "Professional" | "Team" | "Business" | "Enterprise";
     usage: {
       datasetsUsed: number;
       storageUsed: number;

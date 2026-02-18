@@ -56,6 +56,15 @@ class Settings(BaseModel):
     r2_access_key_id: str = os.getenv("R2_ACCESS_KEY_ID", "")
     r2_secret_access_key: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
     r2_bucket_name: str = os.getenv("R2_BUCKET_NAME", "")
+    # Google Cloud Storage settings
+    gcs_project_id: str = os.getenv("GCS_PROJECT_ID", "")
+    gcs_bucket_name: str = os.getenv("GCS_BUCKET_NAME", "")
+    gcs_credentials_json: str = os.getenv("GCS_CREDENTIALS_JSON", "")
+    # Azure Blob Storage settings
+    azure_account_name: str = os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
+    azure_account_key: str = os.getenv("AZURE_STORAGE_ACCOUNT_KEY", "")
+    azure_connection_string: str = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
+    azure_container_name: str = os.getenv("AZURE_CONTAINER_NAME", "")
     query_cache_ttl_seconds: int = int(os.getenv("QUERY_CACHE_TTL", "3600"))
     enable_query_cache: bool = _parse_bool(os.getenv("ENABLE_QUERY_CACHE"), True)
     enable_auto_archival: bool = _parse_bool(os.getenv("ENABLE_AUTO_ARCHIVAL"), True)

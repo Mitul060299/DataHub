@@ -60,7 +60,7 @@ export const HomePage = () => {
           </Title>
           <Paragraph className="hero-subtitle">
             The AI data platform that does the work of Alteryx ($433/mo) + Tableau ($75/mo)
-            + ChatGPT ($20/mo) for just <strong>$49/month</strong>
+            + ChatGPT ($20/mo) for just <strong>$79/month</strong>
           </Paragraph>
           <Space size="large" className="hero-actions">
             <Button type="primary" size="large" icon={<RocketOutlined />} onClick={handleGetStarted}>
@@ -272,7 +272,7 @@ export const HomePage = () => {
             <Card className="pricing-card">
               <div className="plan-header">
                 <Tag color="default">FREE</Tag>
-                <Title level={3}>Starter</Title>
+                <Title level={3}>Free</Title>
                 <div className="plan-price">
                   <span className="price-amount">$0</span>
                   <span className="price-period">/month</span>
@@ -283,14 +283,12 @@ export const HomePage = () => {
               <Divider />
 
               <ul className="plan-features">
-                <li><CheckOutlined /> 3 datasets (10 MB each)</li>
-                <li><CheckOutlined /> 100 MB total storage</li>
-                <li><CheckOutlined /> 1 workspace</li>
-                <li><CheckOutlined /> 2 pipelines</li>
-                <li><CheckOutlined /> 100 AI messages/month</li>
-                <li><CheckOutlined /> CSV & Excel import</li>
-                <li><CheckOutlined /> Basic visualizations</li>
-                <li><CheckOutlined /> Community support</li>
+                <li><CheckOutlined /> Storage: 100 MB</li>
+                <li><CheckOutlined /> AI messages: 50/month</li>
+                <li><CheckOutlined /> Workspaces: 1</li>
+                <li><CheckOutlined /> Projects: 2</li>
+                <li><CheckOutlined /> Datasets/project: 3</li>
+                <li><CheckOutlined /> File size: 50 MB</li>
               </ul>
 
               <Button
@@ -311,29 +309,23 @@ export const HomePage = () => {
               </div>
               <div className="plan-header">
                 <Tag color="blue">PROFESSIONAL</Tag>
-                <Title level={3}>Pro</Title>
+                <Title level={3}>Professional</Title>
                 <div className="plan-price">
-                  <span className="price-amount">$49</span>
-                  <span className="price-period">/month</span>
+                  <span className="price-amount">$79</span>
+                  <span className="price-period">/user/month</span>
                 </div>
-                <Text type="secondary">
-                  <s style={{ opacity: 0.6 }}>$59</s> billed annually
-                </Text>
+                <Text type="secondary">For solo practitioners</Text>
               </div>
 
               <Divider />
 
               <ul className="plan-features">
-                <li><CheckOutlined /> <strong>Unlimited datasets</strong></li>
-                <li><CheckOutlined /> <strong>50 GB storage</strong></li>
-                <li><CheckOutlined /> <strong>10 workspaces</strong></li>
-                <li><CheckOutlined /> <strong>Unlimited pipelines</strong></li>
-                <li><CheckOutlined /> <strong>Unlimited AI chat</strong></li>
-                <li><CheckOutlined /> All data sources (DBs, cloud)</li>
-                <li><CheckOutlined /> AutoML & advanced analytics</li>
-                <li><CheckOutlined /> API access</li>
-                <li><CheckOutlined /> Scheduled pipelines</li>
-                <li><CheckOutlined /> Email support (24h)</li>
+                <li><CheckOutlined /> Storage: 10 GB per user</li>
+                <li><CheckOutlined /> AI messages: 500/month</li>
+                <li><CheckOutlined /> Workspaces: 3</li>
+                <li><CheckOutlined /> Database connections</li>
+                <li><CheckOutlined /> File size: 1 GB</li>
+                <li><CheckOutlined /> Email support</li>
               </ul>
 
               <Button
@@ -344,14 +336,14 @@ export const HomePage = () => {
                 onClick={() => handleUpgrade("Professional")}
                 disabled={isCurrentPlan("Professional")}
               >
-                {isCurrentPlan("Professional") ? "Current Plan" : "Upgrade to Pro"}
+                {isCurrentPlan("Professional") ? "Current Plan" : "Start Professional"}
               </Button>
 
               <Text
                 type="secondary"
                 style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 12 }}
               >
-                Replaces: Alteryx ($433) + Tableau ($75)
+                For consultants & independent analysts
               </Text>
             </Card>
           </Col>
@@ -371,15 +363,11 @@ export const HomePage = () => {
               <Divider />
 
               <ul className="plan-features">
-                <li><CheckOutlined /> <strong>Everything in Pro, plus:</strong></li>
-                <li><CheckOutlined /> 500 GB storage/user</li>
+                <li><CheckOutlined /> Storage: 100 GB shared</li>
+                <li><CheckOutlined /> AI messages: Unlimited</li>
                 <li><CheckOutlined /> Unlimited workspaces</li>
-                <li><CheckOutlined /> Team collaboration</li>
-                <li><CheckOutlined /> Shared pipelines</li>
-                <li><CheckOutlined /> Version control</li>
-                <li><CheckOutlined /> Custom ML models</li>
-                <li><CheckOutlined /> Enterprise connectors</li>
-                <li><CheckOutlined /> RBAC & audit logs</li>
+                <li><CheckOutlined /> Snowflake, BigQuery</li>
+                <li><CheckOutlined /> File size: 5 GB</li>
                 <li><CheckOutlined /> Priority support (4h)</li>
               </ul>
 
@@ -397,27 +385,58 @@ export const HomePage = () => {
           <Col xs={24} sm={12} lg={6}>
             <Card className="pricing-card">
               <div className="plan-header">
-                <Tag color="gold">ENTERPRISE</Tag>
-                <Title level={3}>Enterprise</Title>
+                <Tag color="geekblue">BUSINESS</Tag>
+                <Title level={3}>Business</Title>
                 <div className="plan-price">
-                  <span className="price-amount">Custom</span>
+                  <span className="price-amount">$249</span>
+                  <span className="price-period">/user/month</span>
                 </div>
-                <Text type="secondary">Starting at $499/user/month</Text>
+                <Text type="secondary">Enterprise-grade governance</Text>
               </div>
 
               <Divider />
 
               <ul className="plan-features">
-                <li><CheckOutlined /> <strong>Everything in Team, plus:</strong></li>
-                <li><CheckOutlined /> Unlimited storage</li>
-                <li><CheckOutlined /> SSO / SAML</li>
-                <li><CheckOutlined /> SOC 2 & HIPAA compliance</li>
-                <li><CheckOutlined /> On-premise deployment</li>
-                <li><CheckOutlined /> Custom AI models</li>
-                <li><CheckOutlined /> White-label options</li>
-                <li><CheckOutlined /> 99.9% SLA</li>
-                <li><CheckOutlined /> Dedicated support (1h)</li>
-                <li><CheckOutlined /> Volume discounts</li>
+                <li><CheckOutlined /> Storage: 1 TB shared</li>
+                <li><CheckOutlined /> AI messages: Unlimited</li>
+                <li><CheckOutlined /> SSO + Advanced RBAC</li>
+                <li><CheckOutlined /> Full audit trail</li>
+                <li><CheckOutlined /> File size: 10 GB</li>
+                <li><CheckOutlined /> Success manager + 4h SLA</li>
+              </ul>
+
+              <Button
+                block
+                size="large"
+                style={{ marginTop: 16 }}
+                onClick={() => handleUpgrade("Business")}
+                disabled={isCurrentPlan("Business")}
+              >
+                {isCurrentPlan("Business") ? "Current Plan" : "Upgrade to Business"}
+              </Button>
+            </Card>
+          </Col>
+
+          <Col xs={24} sm={12} lg={6}>
+            <Card className="pricing-card">
+              <div className="plan-header">
+                <Tag color="gold">ENTERPRISE</Tag>
+                <Title level={3}>Enterprise</Title>
+                <div className="plan-price">
+                  <span className="price-amount">Custom</span>
+                </div>
+                <Text type="secondary">For Big 4 & regulated</Text>
+              </div>
+
+              <Divider />
+
+              <ul className="plan-features">
+                <li><CheckOutlined /> Storage: Unlimited</li>
+                <li><CheckOutlined /> AI messages: Custom limits</li>
+                <li><CheckOutlined /> On-premise option</li>
+                <li><CheckOutlined /> White-label</li>
+                <li><CheckOutlined /> Custom integrations</li>
+                <li><CheckOutlined /> 24/7 dedicated support</li>
               </ul>
 
               <Button
@@ -456,8 +475,8 @@ export const HomePage = () => {
             <Col>
               <Card size="small" className="comparison-card comparison-card-highlight">
                 <Statistic
-                  title="DataHub Pro"
-                  value="$49"
+                  title="DataHub Professional"
+                  value="$79"
                   suffix="/mo"
                   valueStyle={{ color: "#52c41a", fontWeight: "bold" }}
                 />
@@ -501,7 +520,7 @@ export const HomePage = () => {
               <Rate disabled defaultValue={5} style={{ color: "#faad14" }} />
               <Paragraph className="review-text">
                 "As a small business, we could not afford Tableau. DataHub gives us
-                enterprise-level analytics at a price we can actually afford. The $49/month
+                enterprise-level analytics at a price we can actually afford. The $79/month
                 plan has everything we need."
               </Paragraph>
               <Space>

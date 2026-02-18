@@ -3,13 +3,15 @@ import type { ReactNode } from "react";
 import { fetchCurrentUser } from "../api";
 import { useAuth } from "./AuthContext";
 
-type UserPlan = "Free" | "Professional" | "Team" | "Enterprise";
+type UserPlan = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
 
 type PlanLimits = {
   maxFileSize: number;
   maxDatasets: number;
   maxStorage: number;
   maxWorkspaces: number;
+  maxProjectsPerWorkspace: number;
+  maxDatasetsPerProject: number;
   maxPipelines: number;
   aiMessagesPerMonth: number;
   features: {
@@ -46,12 +48,14 @@ type UserContextType = {
 
 const planLimits: Record<UserPlan, PlanLimits> = {
   Free: {
-    maxFileSize: 10 * 1024 * 1024,
+    maxFileSize: 50 * 1024 * 1024,
     maxDatasets: 3,
     maxStorage: 100 * 1024 * 1024,
     maxWorkspaces: 1,
-    maxPipelines: 2,
-    aiMessagesPerMonth: 100,
+    maxProjectsPerWorkspace: 2,
+    maxDatasetsPerProject: 3,
+    maxPipelines: 1,
+    aiMessagesPerMonth: 50,
     features: {
       allFileFormats: false,
       databaseConnections: false,
@@ -66,12 +70,14 @@ const planLimits: Record<UserPlan, PlanLimits> = {
     },
   },
   Professional: {
-    maxFileSize: 100 * 1024 * 1024,
-    maxDatasets: -1,
-    maxStorage: 50 * 1024 * 1024 * 1024,
-    maxWorkspaces: 10,
+    maxFileSize: 1 * 1024 * 1024 * 1024,
+    maxDatasets: 25,
+    maxStorage: 10 * 1024 * 1024 * 1024,
+    maxWorkspaces: 3,
+    maxProjectsPerWorkspace: 10,
+    maxDatasetsPerProject: 25,
     maxPipelines: -1,
-    aiMessagesPerMonth: -1,
+    aiMessagesPerMonth: 500,
     features: {
       allFileFormats: true,
       databaseConnections: true,
@@ -86,10 +92,12 @@ const planLimits: Record<UserPlan, PlanLimits> = {
     },
   },
   Team: {
-    maxFileSize: 500 * 1024 * 1024,
+    maxFileSize: 5 * 1024 * 1024 * 1024,
     maxDatasets: -1,
-    maxStorage: 500 * 1024 * 1024 * 1024,
+    maxStorage: 100 * 1024 * 1024 * 1024,
     maxWorkspaces: -1,
+    maxProjectsPerWorkspace: -1,
+    maxDatasetsPerProject: -1,
     maxPipelines: -1,
     aiMessagesPerMonth: -1,
     features: {
@@ -105,11 +113,35 @@ const planLimits: Record<UserPlan, PlanLimits> = {
       sso: false,
     },
   },
+  Business: {
+    maxFileSize: 10 * 1024 * 1024 * 1024,
+    maxDatasets: -1,
+    maxStorage: 1024 * 1024 * 1024 * 1024,
+    maxWorkspaces: -1,
+    maxProjectsPerWorkspace: -1,
+    maxDatasetsPerProject: -1,
+    maxPipelines: -1,
+    aiMessagesPerMonth: -1,
+    features: {
+      allFileFormats: true,
+      databaseConnections: true,
+      cloudStorage: true,
+      autoML: true,
+      apiAccess: true,
+      scheduledPipelines: true,
+      collaboration: true,
+      customML: true,
+      enterpriseConnectors: true,
+      sso: true,
+    },
+  },
   Enterprise: {
-    maxFileSize: 1024 * 1024 * 1024,
+    maxFileSize: -1,
     maxDatasets: -1,
     maxStorage: -1,
     maxWorkspaces: -1,
+    maxProjectsPerWorkspace: -1,
+    maxDatasetsPerProject: -1,
     maxPipelines: -1,
     aiMessagesPerMonth: -1,
     features: {

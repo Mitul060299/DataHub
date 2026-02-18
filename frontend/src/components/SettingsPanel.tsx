@@ -4,13 +4,15 @@ import { notify } from "../utils/notify";
 import { billingEnabled } from "../utils/featureFlags";
 
 const plans = [
-  { value: "starter", label: "Starter", price: "$49 / month" },
-  { value: "growth", label: "Growth", price: "$149 / month" },
-  { value: "enterprise", label: "Enterprise", price: "Contact sales" },
+  { value: "free", label: "Free", price: "$0 / month" },
+  { value: "professional", label: "Professional", price: "$79 / user / month" },
+  { value: "team", label: "Team", price: "$149 / user / month" },
+  { value: "business", label: "Business", price: "$249 / user / month" },
+  { value: "enterprise", label: "Enterprise", price: "Custom" },
 ];
 
 export function SettingsPanel() {
-  const [plan, setPlan] = useState("growth");
+  const [plan, setPlan] = useState("professional");
   const [mfaEnabled, setMfaEnabled] = useState(false);
 
   return (

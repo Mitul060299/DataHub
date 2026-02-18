@@ -34,9 +34,11 @@ import { notify } from "../utils/notify";
 const { Text, Title } = Typography;
 
 const PLAN_FEATURES: Record<string, string[]> = {
-  Starter: ["10 datasets", "Basic dashboards", "Community support", "Email reports", "Single workspace"],
-  Pro: ["50 datasets", "Advanced dashboards", "AI insights", "Priority support", "3 workspaces"],
-  Business: ["Unlimited datasets", "Governance", "SSO", "Dedicated support", "10 workspaces"],
+  Free: ["Storage: 100 MB", "AI messages: 50/mo", "Workspaces: 1", "Projects/workspace: 2", "Datasets/project: 3", "File size: 50 MB"],
+  Professional: ["Storage: 10 GB per user", "AI messages: 500/mo", "Workspaces: 3", "Projects/workspace: 10", "Datasets/project: 25", "File size: 1 GB", "Database connections", "Email support"],
+  Team: ["Storage: 100 GB shared", "AI messages: Unlimited (fair use)", "Workspaces: Unlimited", "Projects/workspace: Unlimited", "Datasets/project: Unlimited", "File size: 5 GB", "Enterprise connectors", "Priority support (4h)"],
+  Business: ["Storage: 1 TB shared", "AI messages: Unlimited", "SSO + Advanced RBAC", "Full audit trail", "File size: 10 GB", "Success manager + 4h SLA"],
+  Enterprise: ["Storage: Unlimited", "AI messages: Custom limits", "On-premise option", "White-label", "Custom integrations", "24/7 dedicated support"],
 };
 
 const INVOICE_DATA = Array.from({ length: 6 }).map((_, index) => ({
@@ -54,7 +56,7 @@ const PAYMENT_METHODS = [
 
 export function PaymentSubscriptionPanel() {
   const [checkoutStep, setCheckoutStep] = useState(0);
-  const [selectedPlan, setSelectedPlan] = useState("Pro");
+  const [selectedPlan, setSelectedPlan] = useState("Professional");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [seatCount, setSeatCount] = useState(3);
   const [promoCode, setPromoCode] = useState("");
@@ -70,8 +72,14 @@ export function PaymentSubscriptionPanel() {
   const [trialBanner, setTrialBanner] = useState(true);
   const [paymentFailed, setPaymentFailed] = useState(false);
 
-  const planPrice = selectedPlan === "Starter" ? 19 : selectedPlan === "Pro" ? 49 : 199;
-  const seatPrice = selectedPlan === "Business" ? 199 : 0;
+  const planPrice = selectedPlan === "Free"
+    ? 0
+    : selectedPlan === "Professional"
+      ? 79
+      : selectedPlan === "Team"
+        ? 149
+        : 249;
+  const seatPrice = selectedPlan === "Business" ? 249 : selectedPlan === "Enterprise" ? 0 : 0;
   const seatsTotal = selectedPlan === "Business" ? seatCount * seatPrice : planPrice;
   const discount = promoStatus === "valid" ? 0.2 : 0;
   const subtotal = seatsTotal * (1 - discount);
@@ -374,13 +382,13 @@ export function PaymentSubscriptionPanel() {
           <Select
             value={selectedPlan}
             onChange={setSelectedPlan}
-            options={["Starter", "Pro", "Business"].map((plan) => ({ label: plan, value: plan }))}
+            options={["Free", "Professional", "Team", "Business", "Enterprise"].map((plan) => ({ label: plan, value: plan }))}
           />
           <Divider />
           <Text type="secondary">Prorated cost calculation</Text>
           <Text>Current plan credit: -$32.67</Text>
-          <Text>New plan cost: $199.00</Text>
-          <Text strong>You pay today: $166.33</Text>
+          <Text>New plan cost: $249.00</Text>
+          <Text strong>You pay today: $216.33</Text>
           <Button type="link" icon={<SwapOutlined />} onClick={() => setDowngradeOpen(true)}>
             View downgrade warnings
           </Button>

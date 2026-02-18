@@ -276,6 +276,7 @@ const planColors: Record<string, string> = {
   Free: "default",
   Professional: "blue",
   Team: "purple",
+  Business: "geekblue",
   Enterprise: "gold",
 };
 

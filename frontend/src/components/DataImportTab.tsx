@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import {
   Card,
-  Tabs,
   Upload,
   Button,
   Progress,
@@ -17,9 +16,11 @@ import {
   List,
   message,
   Modal,
-  Radio,
   InputNumber,
   Switch,
+  Tooltip,
+  Row,
+  Col,
 } from "antd";
 import {
   InboxOutlined,
@@ -38,6 +39,9 @@ import {
   DownloadOutlined,
   ReloadOutlined,
   LockOutlined,
+  FileExcelOutlined,
+  FileTextOutlined,
+  CloudServerOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import { getAuthToken } from "../utils/auth";
@@ -92,28 +96,130 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const databaseTypes: Array<{
+// Enhanced data source configuration with categories and descriptions
+const dataSourceOptions: Array<{
   value: string;
   label: string;
   icon: JSX.Element;
-  requiredFeature: "databaseConnections" | "cloudStorage" | "enterpriseConnectors";
+  category: "files" | "databases" | "storage" | "warehouses";
+  requiredFeature: "databaseConnections" | "cloudStorage" | "enterpriseConnectors" | null;
+  description: string;
 }> = [
-  { value: "postgresql", label: "PostgreSQL", icon: <DatabaseOutlined />, requiredFeature: "databaseConnections" },
-  { value: "mysql", label: "MySQL", icon: <DatabaseOutlined />, requiredFeature: "databaseConnections" },
-  { value: "mssql", label: "SQL Server", icon: <WindowsOutlined />, requiredFeature: "databaseConnections" },
-  { value: "mongodb", label: "MongoDB", icon: <DatabaseOutlined />, requiredFeature: "databaseConnections" },
-  { value: "snowflake", label: "Snowflake", icon: <CloudUploadOutlined />, requiredFeature: "enterpriseConnectors" },
-  { value: "bigquery", label: "Google BigQuery", icon: <GoogleOutlined />, requiredFeature: "enterpriseConnectors" },
-  { value: "redshift", label: "Amazon Redshift", icon: <AmazonOutlined />, requiredFeature: "enterpriseConnectors" },
-  { value: "s3", label: "Amazon S3", icon: <AmazonOutlined />, requiredFeature: "cloudStorage" },
-  { value: "azure-sql", label: "Azure SQL Database", icon: <WindowsOutlined />, requiredFeature: "enterpriseConnectors" },
-  { value: "azure-blob", label: "Azure Blob Storage", icon: <WindowsOutlined />, requiredFeature: "cloudStorage" },
-  { value: "gcs", label: "Google Cloud Storage", icon: <GoogleOutlined />, requiredFeature: "cloudStorage" },
+  // Files - Always available
+  { 
+    value: "csv", 
+    label: "CSV/Excel", 
+    icon: <FileTextOutlined />, 
+    category: "files",
+    requiredFeature: null,
+    description: "Upload CSV, Excel, TSV files" 
+  },
+  { 
+    value: "json", 
+    label: "JSON/Parquet", 
+    icon: <FileExcelOutlined />, 
+    category: "files",
+    requiredFeature: null,
+    description: "Upload JSON, Parquet files" 
+  },
+  
+  // Databases - Professional+
+  { 
+    value: "postgresql", 
+    label: "PostgreSQL", 
+    icon: <DatabaseOutlined />, 
+    category: "databases",
+    requiredFeature: "databaseConnections",
+    description: "Connect to PostgreSQL database" 
+  },
+  { 
+    value: "mysql", 
+    label: "MySQL", 
+    icon: <DatabaseOutlined />, 
+    category: "databases",
+    requiredFeature: "databaseConnections",
+    description: "Connect to MySQL database" 
+  },
+  { 
+    value: "mssql", 
+    label: "SQL Server", 
+    icon: <WindowsOutlined />, 
+    category: "databases",
+    requiredFeature: "databaseConnections",
+    description: "Connect to Microsoft SQL Server" 
+  },
+  { 
+    value: "mongodb", 
+    label: "MongoDB", 
+    icon: <DatabaseOutlined />, 
+    category: "databases",
+    requiredFeature: "databaseConnections",
+    description: "Connect to MongoDB database" 
+  },
+  
+  // Cloud Storage - Professional+
+  { 
+    value: "s3", 
+    label: "Amazon S3", 
+    icon: <AmazonOutlined />, 
+    category: "storage",
+    requiredFeature: "cloudStorage",
+    description: "Connect to Amazon S3 bucket" 
+  },
+  { 
+    value: "gcs", 
+    label: "Google Cloud Storage", 
+    icon: <GoogleOutlined />, 
+    category: "storage",
+    requiredFeature: "cloudStorage",
+    description: "Connect to GCS bucket" 
+  },
+  { 
+    value: "azure-blob", 
+    label: "Azure Blob", 
+    icon: <WindowsOutlined />, 
+    category: "storage",
+    requiredFeature: "cloudStorage",
+    description: "Connect to Azure Blob Storage" 
+  },
+  
+  // Cloud Warehouses - Team+
+  { 
+    value: "snowflake", 
+    label: "Snowflake", 
+    icon: <CloudServerOutlined />, 
+    category: "warehouses",
+    requiredFeature: "enterpriseConnectors",
+    description: "Connect to Snowflake data warehouse" 
+  },
+  { 
+    value: "bigquery", 
+    label: "BigQuery", 
+    icon: <GoogleOutlined />, 
+    category: "warehouses",
+    requiredFeature: "enterpriseConnectors",
+    description: "Connect to Google BigQuery" 
+  },
+  { 
+    value: "redshift", 
+    label: "Redshift", 
+    icon: <AmazonOutlined />, 
+    category: "warehouses",
+    requiredFeature: "enterpriseConnectors",
+    description: "Connect to Amazon Redshift" 
+  },
+  { 
+    value: "azure-sql", 
+    label: "Azure Synapse", 
+    icon: <WindowsOutlined />, 
+    category: "warehouses",
+    requiredFeature: "enterpriseConnectors",
+    description: "Connect to Azure Synapse Analytics" 
+  },
 ];
 
 export const DataImportTab = () => {
   const { plan, limits, usage, workspaceId } = useUser();
-  const [activeImportType, setActiveImportType] = useState<"file" | "database">("file");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [databases, setDatabases] = useState<DatabaseConnection[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -127,18 +233,48 @@ export const DataImportTab = () => {
   const [selectedDatabaseType, setSelectedDatabaseType] = useState<string>("");
 
   const maxFileSize = limits.maxFileSize;
+  const maxFileSizeLabel = maxFileSize < 0 ? "Unlimited" : formatFileSize(maxFileSize);
   const allowedExtensions = limits.features.allFileFormats
     ? [".csv", ".xlsx", ".xls", ".json", ".parquet", ".tsv", ".txt"]
     : [".csv", ".xlsx", ".xls"];
-  const filteredDatabaseTypes = databaseTypes.filter((db) => {
-    if (db.requiredFeature === "enterpriseConnectors") {
-      return limits.features.enterpriseConnectors;
+  
+  // Check if a data source is available for the user's plan
+  const isDataSourceAvailable = (source: typeof dataSourceOptions[0]) => {
+    if (!source.requiredFeature) return true;
+    if (source.requiredFeature === "databaseConnections") return limits.features.databaseConnections;
+    if (source.requiredFeature === "cloudStorage") return limits.features.cloudStorage;
+    if (source.requiredFeature === "enterpriseConnectors") return limits.features.enterpriseConnectors;
+    return false;
+  };
+
+  const getUpgradeMessage = (source: typeof dataSourceOptions[0]) => {
+    if (source.requiredFeature === "databaseConnections") {
+      return "Upgrade to Professional ($79/mo) to unlock database connections";
     }
-    if (db.requiredFeature === "cloudStorage") {
-      return limits.features.cloudStorage;
+    if (source.requiredFeature === "cloudStorage") {
+      return "Upgrade to Professional ($79/mo) to unlock cloud storage";
     }
-    return limits.features.databaseConnections;
-  });
+    if (source.requiredFeature === "enterpriseConnectors") {
+      return "Upgrade to Team ($149/mo) to unlock cloud warehouses";
+    }
+    return "";
+  };
+
+  const handleDataSourceClick = (source: typeof dataSourceOptions[0]) => {
+    if (!isDataSourceAvailable(source)) {
+      message.warning(getUpgradeMessage(source));
+      return;
+    }
+
+    // If it's a file source, the Dragger component handles the upload
+    if (source.category === "files") {
+      return;
+    }
+
+    // Otherwise, it's a connector - open connection modal
+    setSelectedDatabaseType(source.value);
+    setShowConnectionModal(true);
+  };
 
   const fetchTables = async () => {
     try {
@@ -158,8 +294,12 @@ export const DataImportTab = () => {
       return false;
     }
 
-    if (file.size > maxFileSize) {
-      const upgradeTarget = plan === "Free" ? "Professional" : "Team";
+    if (maxFileSize >= 0 && file.size > maxFileSize) {
+      const upgradeTarget = plan === "Free"
+        ? "Professional"
+        : plan === "Professional"
+          ? "Team"
+          : "Business";
       message.error(
         `File size exceeds ${plan} plan limit of ${formatFileSize(maxFileSize)}. ` +
           `Please upgrade to ${upgradeTarget} for larger files.`
@@ -348,7 +488,8 @@ export const DataImportTab = () => {
   }, [workspaceId]);
 
   return (
-    <div className="data-import-container">
+    <div className="data-import-container" style={{ padding: "24px" }}>
+      {/* Usage Stats Banner */}
       <Alert
         message={
           <Space direction="vertical" size={4}>
@@ -363,8 +504,7 @@ export const DataImportTab = () => {
                 {limits.maxStorage !== -1 ? `/${formatFileSize(limits.maxStorage)}` : " (unlimited)"}
               </Text>
               <Text type="secondary">
-                AI Messages: {usage.aiMessagesUsed}
-                {limits.aiMessagesPerMonth !== -1 ? `/${limits.aiMessagesPerMonth}` : " (unlimited)"}
+                Max File Size: {maxFileSizeLabel}
               </Text>
             </Space>
           </Space>
@@ -374,308 +514,251 @@ export const DataImportTab = () => {
         action={
           plan === "Free" && (
             <Button type="primary" size="small">
-              Upgrade to Pro
+              Upgrade Plan
             </Button>
           )
         }
-        style={{ marginBottom: 16 }}
+        style={{ marginBottom: 24 }}
       />
-      <Tabs
-        activeKey={activeImportType}
-        onChange={(key) => setActiveImportType(key as "file" | "database")}
-        items={[
-          {
-            key: "file",
-            label: (
-              <span>
-                <CloudUploadOutlined /> File Upload
-              </span>
-            ),
-            children: (
-              <div className="import-section">
-                <Card className="upload-card">
-                  <Space direction="vertical" size="large" style={{ width: "100%" }}>
-                    <Alert
-                      message={`Max file size: ${formatFileSize(maxFileSize)}`}
-                      description={
-                        plan === "Free"
-                          ? "Upgrade to Professional ($49/mo) for 100 MB files, or Team ($149/mo) for 500 MB files."
-                          : null
-                      }
-                      type="info"
-                      showIcon
-                    />
 
-                    <Dragger
-                      name="file"
-                      multiple
-                      beforeUpload={handleFileUpload}
-                      showUploadList={false}
-                      disabled={isUploading}
-                      accept={allowedExtensions.join(",")}
-                    >
-                      <p className="ant-upload-drag-icon">
-                        <InboxOutlined style={{ color: "#2563eb" }} />
-                      </p>
-                      <p className="ant-upload-text">Click or drag files to upload</p>
-                      <p className="ant-upload-hint">
-                        Supported formats: CSV, Excel, JSON, Parquet, TSV, TXT
-                      </p>
-                    </Dragger>
+      {/* SECTION 1: File Upload Area */}
+      <Card style={{ marginBottom: 24 }}>
+        <Title level={4}>
+          <CloudUploadOutlined /> Import Data
+        </Title>
+        <Paragraph type="secondary">
+          Drop your files here or connect to a database
+        </Paragraph>
 
-                    {uploadedFiles.length > 0 && (
-                      <div className="upload-progress-section">
-                        <Title level={5}>Upload History</Title>
-                        <List
-                          dataSource={uploadedFiles}
-                          rowKey={(file) => file.id}
-                          renderItem={(file) => (
-                            <List.Item
-                              actions={[
-                                file.status === "completed" && (
-                                  <Button
-                                    type="link"
-                                    size="small"
-                                    onClick={() =>
-                                      handleTablePreview(file.tableName || file.name.split(".")[0])
-                                    }
-                                  >
-                                    Preview
-                                  </Button>
-                                ),
-                              ]}
-                            >
-                              <List.Item.Meta
-                                avatar={
-                                  file.status === "uploading" ? (
-                                    <LoadingOutlined />
-                                  ) : file.status === "completed" ? (
-                                    <CheckCircleOutlined style={{ color: "#52c41a" }} />
-                                  ) : (
-                                    <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />
-                                  )
-                                }
-                                title={
-                                  <Space>
-                                    <Text>{file.name}</Text>
-                                    <Text type="secondary">({formatFileSize(file.size)})</Text>
-                                  </Space>
-                                }
-                                description={
-                                  <>
-                                    {file.status === "uploading" && (
-                                      <Progress percent={file.progress} size="small" />
-                                    )}
-                                    {file.status === "completed" && (
-                                      <Text type="secondary">
-                                        {file.rowCount?.toLocaleString()} rows • {file.tableCount} table(s)
-                                      </Text>
-                                    )}
-                                    {file.status === "error" && <Text type="danger">{file.error}</Text>}
-                                  </>
-                                }
-                              />
-                            </List.Item>
-                          )}
-                        />
-                      </div>
+        <Dragger
+          name="file"
+          multiple
+          beforeUpload={handleFileUpload}
+          showUploadList={false}
+          disabled={isUploading}
+          accept={allowedExtensions.join(",")}
+          style={{ marginTop: 16 }}
+        >
+          <p className="ant-upload-drag-icon">
+            <InboxOutlined style={{ fontSize: 64, color: "#2563eb" }} />
+          </p>
+          <p className="ant-upload-text" style={{ fontSize: 16 }}>
+            Click or drag files to upload
+          </p>
+          <p className="ant-upload-hint">
+            Supported: CSV, Excel, JSON, Parquet, TSV • Max size: {maxFileSizeLabel}
+          </p>
+        </Dragger>
+
+        {uploadedFiles.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <Title level={5}>Recent Uploads</Title>
+            <List
+              dataSource={uploadedFiles.slice(0, 3)}
+              size="small"
+              renderItem={(file) => (
+                <List.Item>
+                  <List.Item.Meta
+                    avatar={
+                      file.status === "uploading" ? (
+                        <LoadingOutlined />
+                      ) : file.status === "completed" ? (
+                        <CheckCircleOutlined style={{ color: "#52c41a", fontSize: 20 }} />
+                      ) : (
+                        <ExclamationCircleOutlined style={{ color: "#ff4d4f", fontSize: 20 }} />
+                      )
+                    }
+                    title={file.name}
+                    description={
+                      file.status === "uploading" ? (
+                        <Progress percent={file.progress} size="small" />
+                      ) : file.status === "completed" ? (
+                        <Text type="secondary">{file.rowCount?.toLocaleString()} rows imported</Text>
+                      ) : (
+                        <Text type="danger">{file.error}</Text>
+                      )
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          </div>
+        )}
+      </Card>
+
+      {/* SECTION 2: Data Source Options Grid */}
+      <Card style={{ marginBottom: 24 }}>
+        <Title level={4}>
+          <ApiOutlined /> Available Data Sources
+        </Title>
+        <Paragraph type="secondary">
+          Select a data source to connect. Some options require a higher plan tier.
+        </Paragraph>
+
+        <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+          {dataSourceOptions.map((source) => {
+            const available = isDataSourceAvailable(source);
+            const isFileSource = source.category === "files";
+            
+            return (
+              <Col xs={12} sm={8} md={6} lg={4} xl={4} key={source.value}>
+                <Tooltip title={available ? source.description : getUpgradeMessage(source)}>
+                  <Card
+                    hoverable={available}
+                    onClick={() => handleDataSourceClick(source)}
+                    style={{
+                      textAlign: "center",
+                      opacity: available ? 1 : 0.4,
+                      cursor: available ? "pointer" : "not-allowed",
+                      border: available ? "1px solid #d9d9d9" : "1px solid #f0f0f0",
+                      backgroundColor: available ? "#ffffff" : "#fafafa",
+                      position: "relative",
+                      transition: "all 0.3s ease",
+                    }}
+                    bodyStyle={{ padding: "16px 8px" }}
+                  >
+                    {!available && (
+                      <LockOutlined
+                        style={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          fontSize: 14,
+                          color: "#faad14",
+                        }}
+                      />
                     )}
-                  </Space>
-                </Card>
-              </div>
-            ),
-          },
-          {
-            key: "database",
-            label: (
-              <span>
-                <DatabaseOutlined /> Database Connection
-              </span>
-            ),
-            children: (
-              <div className="import-section">
-                {!limits.features.databaseConnections ? (
-                  <Card className="upgrade-prompt-card">
-                    <Space direction="vertical" align="center" style={{ width: "100%" }} size="large">
-                      <LockOutlined style={{ fontSize: 48, color: "#faad14" }} />
-                      <Title level={4}>Database Connections</Title>
-                      <Text type="secondary">
-                        Unlock PostgreSQL, MySQL, MongoDB, and more with Professional plan
-                      </Text>
-                      <Button type="primary" size="large">
-                        Upgrade to Pro - $49/month
-                      </Button>
-                    </Space>
+                    <div style={{ fontSize: 32, marginBottom: 8, color: available ? "#2563eb" : "#bfbfbf" }}>
+                      {source.icon}
+                    </div>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 13,
+                        display: "block",
+                        color: available ? "#262626" : "#bfbfbf",
+                      }}
+                    >
+                      {source.label}
+                    </Text>
+                    {!available && (
+                      <Tag
+                        color="orange"
+                        style={{ marginTop: 8, fontSize: 10 }}
+                      >
+                        {source.requiredFeature === "databaseConnections" && "Pro"}
+                        {source.requiredFeature === "cloudStorage" && "Pro"}
+                        {source.requiredFeature === "enterpriseConnectors" && "Team"}
+                      </Tag>
+                    )}
                   </Card>
-                ) : (
-                  <Card className="database-connection-card">
-                    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-                      <div>
-                        <Title level={5}>Connect to Database</Title>
-                        <Paragraph type="secondary">
-                          Choose a database type and provide connection details
-                        </Paragraph>
-                      </div>
+                </Tooltip>
+              </Col>
+            );
+          })}
+        </Row>
+      </Card>
 
-                      <div className="database-type-grid">
-                        <Radio.Group
-                          value={selectedDatabaseType}
-                          onChange={(e) => setSelectedDatabaseType(e.target.value)}
-                          style={{ width: "100%" }}
-                        >
-                          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-                            <Text strong>Databases</Text>
-                            <div className="db-options-row">
-                              {filteredDatabaseTypes
-                                .filter((db) => ["postgresql", "mysql", "mssql", "mongodb"].includes(db.value))
-                                .map((db) => (
-                                  <Radio.Button key={db.value} value={db.value} className="db-option-button">
-                                    {db.icon} {db.label}
-                                  </Radio.Button>
-                                ))}
-                            </div>
-
-                            <Text strong>Data Warehouses</Text>
-                            <div className="db-options-row">
-                              {filteredDatabaseTypes
-                                .filter((db) => ["snowflake", "bigquery", "redshift", "azure-sql"].includes(db.value))
-                                .map((db) => (
-                                  <Radio.Button key={db.value} value={db.value} className="db-option-button">
-                                    {db.icon} {db.label}
-                                  </Radio.Button>
-                                ))}
-                            </div>
-
-                            <Text strong>Data Lakes / Cloud Storage</Text>
-                            <div className="db-options-row">
-                              {filteredDatabaseTypes
-                                .filter((db) => ["s3", "azure-blob", "gcs"].includes(db.value))
-                                .map((db) => (
-                                  <Radio.Button key={db.value} value={db.value} className="db-option-button">
-                                    {db.icon} {db.label}
-                                  </Radio.Button>
-                                ))}
-                            </div>
-                          </Space>
-                        </Radio.Group>
-                      </div>
-
-                      {selectedDatabaseType && (
-                        <Button
-                          type="primary"
-                          icon={<ApiOutlined />}
-                          onClick={() => setShowConnectionModal(true)}
-                          size="large"
-                        >
-                          Configure {filteredDatabaseTypes.find((d) => d.value === selectedDatabaseType)?.label} Connection
-                        </Button>
-                      )}
-
-                      {databases.length > 0 && (
-                        <>
-                          <Divider />
-                          <div>
-                            <Title level={5}>Active Connections</Title>
-                            <List
-                              dataSource={databases}
-                              rowKey={(db) => db.id}
-                              renderItem={(db) => (
-                                <List.Item
-                                  actions={[
-                                    <Button type="link" icon={<ReloadOutlined />} key="sync">
-                                      Sync
-                                    </Button>,
-                                    <Button type="link" danger key="disconnect">
-                                      Disconnect
-                                    </Button>,
-                                  ]}
-                                >
-                                  <List.Item.Meta
-                                    avatar={filteredDatabaseTypes.find((d) => d.value === db.type)?.icon}
-                                    title={db.name}
-                                    description={
-                                      <Space direction="vertical" size={0}>
-                                        <Text type="secondary">
-                                          {db.host} • {db.database}
-                                        </Text>
-                                        <Space>
-                                          <Tag color={db.status === "connected" ? "success" : "error"}>
-                                            {db.status}
-                                          </Tag>
-                                          <Text type="secondary">{db.tableCount} tables</Text>
-                                        </Space>
-                                      </Space>
-                                    }
-                                  />
-                                </List.Item>
-                              )}
-                            />
-                          </div>
-                        </>
-                      )}
-                    </Space>
-                  </Card>
-                )}
-              </div>
-            ),
-          },
-        ]}
-      />
+      {/* SECTION 3: Imported Datasets List */}
 
       <Card
         title={
-          <span>
-            <TableOutlined /> Imported Tables ({tables.length})
-          </span>
+          <Space>
+            <TableOutlined />
+            <Text strong>Imported Datasets ({tables.length})</Text>
+          </Space>
         }
-        className="tables-list-card"
-        style={{ marginTop: 24 }}
+        extra={
+          tables.length > 0 && (
+            <Button icon={<ReloadOutlined />} onClick={fetchTables}>
+              Refresh
+            </Button>
+          )
+        }
       >
-        <List
-          dataSource={tables}
-          rowKey={(table) => table.name}
-          renderItem={(table) => (
-            <List.Item
-              actions={[
-                <Button type="link" icon={<EyeOutlined />} onClick={() => handleTablePreview(table.name)}>
-                  Preview
-                </Button>,
-                <Button type="link" icon={<DownloadOutlined />} onClick={() => handleExportTable(table.name)}>
-                  Export
-                </Button>,
-                <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDeleteTable(table.name)}>
-                  Delete
-                </Button>,
-              ]}
-            >
-              <List.Item.Meta
-                avatar={<TableOutlined style={{ fontSize: 24, color: "#2563eb" }} />}
-                title={<Text strong>{table.name}</Text>}
-                description={
-                  <Space split={<Divider type="vertical" />}>
-                    <Text type="secondary">{table.rowCount.toLocaleString()} rows</Text>
-                    <Text type="secondary">{table.columnCount} columns</Text>
-                    <Text type="secondary">{table.size}</Text>
-                    <Text type="secondary">
-                      Updated {table.lastUpdated ? new Date(table.lastUpdated).toLocaleDateString() : "Unknown"}
-                    </Text>
-                  </Space>
-                }
-              />
-            </List.Item>
-          )}
-          locale={{ emptyText: "No tables imported yet. Upload a file or connect a database to get started." }}
-        />
+        {tables.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <DatabaseOutlined style={{ fontSize: 64, color: "#d9d9d9", marginBottom: 16 }} />
+            <Paragraph type="secondary">
+              No datasets imported yet. Upload a file or connect a data source to get started.
+            </Paragraph>
+          </div>
+        ) : (
+          <List
+            dataSource={tables}
+            rowKey={(table) => table.name}
+            renderItem={(table) => (
+              <List.Item
+                actions={[
+                  <Button
+                    type="link"
+                    icon={<EyeOutlined />}
+                    onClick={() => handleTablePreview(table.name)}
+                  >
+                    Preview
+                  </Button>,
+                  <Button
+                    type="link"
+                    icon={<DownloadOutlined />}
+                    onClick={() => handleExportTable(table.name)}
+                  >
+                    Export
+                  </Button>,
+                  <Button
+                    type="link"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDeleteTable(table.name)}
+                  >
+                    Delete
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 8,
+                        backgroundColor: "#e6f7ff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <TableOutlined style={{ fontSize: 24, color: "#2563eb" }} />
+                    </div>
+                  }
+                  title={<Text strong>{table.name}</Text>}
+                  description={
+                    <Space split={<Divider type="vertical" />} wrap>
+                      <Text type="secondary">{table.rowCount.toLocaleString()} rows</Text>
+                      <Text type="secondary">{table.columnCount} columns</Text>
+                      <Text type="secondary">{table.size}</Text>
+                      <Text type="secondary">
+                        {table.lastUpdated
+                          ? `Updated ${new Date(table.lastUpdated).toLocaleDateString()}`
+                          : "Recently imported"}
+                      </Text>
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        )}
       </Card>
 
+      {/* Table Preview */}
       {selectedTable && tableData.length > 0 && (
         <Card
           title={
-            <span>
-              <EyeOutlined /> Preview: {selectedTable}
-            </span>
+            <Space>
+              <EyeOutlined />
+              <Text strong>Preview: {selectedTable}</Text>
+            </Space>
           }
-          className="data-preview-card"
           style={{ marginTop: 24 }}
           extra={
             <Button
@@ -699,6 +782,7 @@ export const DataImportTab = () => {
         </Card>
       )}
 
+      {/* Database Connection Modal */}
       <DatabaseConnectionModal
         open={showConnectionModal}
         databaseType={selectedDatabaseType}

@@ -144,10 +144,64 @@ async def upload_file(
 
 @router.post("/test-connection")
 async def test_connection(payload: dict) -> dict:
+    """Test a database or storage connection before saving."""
+    from ..services.connectors import connector_registry
+    
     db_type = payload.get("type")
     if not db_type:
         raise HTTPException(status_code=400, detail="Database type is required")
-    return {"success": True, "message": "Connection parameters look valid"}
+    
+    # Map UI connector names to backend connector names
+    connector_map = {
+        "postgresql": "postgresql",
+        "mysql": "mysql",
+        "mssql": "mssql",
+        "mongodb": "mongodb",
+        "oracle": "oracle",
+        "snowflake": "snowflake",
+        "bigquery": "bigquery",
+        "redshift": "redshift",
+        "azure-sql": "azure-sql",
+    }
+    
+    connector_name = connector_map.get(db_type, db_type)
+    connector = connector_registry.get(connector_name)
+    
+    if not connector:
+        raise HTTPException(status_code=400, detail=f"Unsupported connector type: {db_type}")
+    
+    # Check if connector has test_connection method
+    if not hasattr(connector, "test_connection"):
+        return {"success": True, "message": "Connection validation not available for this connector"}
+    
+    # Build config from payload
+    config = {
+        "host": payload.get("host"),
+        "port": payload.get("port"),
+        "database": payload.get("database"),
+        "username": payload.get("username"),
+        "password": payload.get("password"),
+        "server": payload.get("server"),  # For Azure
+        "service_name": payload.get("service_name"),  # For Oracle
+        "sid": payload.get("sid"),  # For Oracle
+        "collection": payload.get("collection"),  # For MongoDB
+        "account": payload.get("account"),  # For Snowflake
+        "warehouse": payload.get("warehouse"),  # For Snowflake
+        "schema": payload.get("schema"),
+        "project_id": payload.get("project_id"),  # For BigQuery
+        "credentials_json": payload.get("credentials_json"),  # For BigQuery/GCS
+        "security_token": payload.get("security_token"),  # For Salesforce
+        "domain": payload.get("domain"),  # For Salesforce
+    }
+    
+    # Remove None values
+    config = {k: v for k, v in config.items() if v is not None}
+    
+    try:
+        result = connector.test_connection(config)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @router.post("/connect")

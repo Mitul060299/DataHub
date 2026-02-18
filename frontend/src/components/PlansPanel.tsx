@@ -7,17 +7,20 @@ type Props = {
 
 const planData = {
   monthly: [
-    { name: "Free", price: "$0", period: "/mo", features: ["Basic dashboards", "3 datasets", "1 user"] },
-    { name: "Pro", price: "$49", period: "/user/mo", features: ["Unlimited datasets", "AI insights", "API access"], popular: true },
-    { name: "Business", price: "$199", period: "/user/mo", features: ["SSO", "RBAC", "Audit logs"], },
-    { name: "Enterprise", price: "Custom", period: "", features: ["SLA", "On-prem", "Custom connectors"], },
+    { name: "Free", price: "$0", period: "/mo", features: ["100 MB storage", "50 AI messages/mo", "1 workspace", "CSV/Excel only", "50 MB file size", "Community support"], popular: false },
+    { name: "Professional", price: "$79", period: "/user/mo", features: ["10 GB storage", "500 AI messages/mo", "3 workspaces", "Database access", "1 GB file upload", "Email support"], popular: true },
+    { name: "Team", price: "$149", period: "/user/mo", features: ["100 GB shared storage", "Unlimited AI (fair use)", "Unlimited workspaces", "Snowflake, BigQuery", "5 GB file upload", "Priority support"], popular: false },
+    { name: "Business", price: "$249", period: "/user/mo", features: ["1 TB shared storage", "Unlimited AI (managed)", "SSO + advanced RBAC", "Full audit trail", "10 GB file upload", "Success manager + 4h SLA"] },
+    { name: "Enterprise", price: "Custom", period: "", features: ["Unlimited storage", "Custom AI limits", "On-premise option", "White-label", "Custom integrations", "24/7 dedicated support"] },
   ],
   yearly: [
-    { name: "Free", price: "$0", period: "/mo", features: ["Basic dashboards", "3 datasets", "1 user"] },
-    { name: "Pro", price: "$39", period: "/user/mo", features: ["Unlimited datasets", "AI insights", "API access"], popular: true },
-    { name: "Business", price: "$159", period: "/user/mo", features: ["SSO", "RBAC", "Audit logs"], },
-    { name: "Enterprise", price: "Custom", period: "", features: ["SLA", "On-prem", "Custom connectors"], },
+    { name: "Free", price: "$0", period: "/mo", features: ["100 MB storage", "50 AI messages/mo", "1 workspace", "CSV/Excel only", "50 MB file size", "Community support"], popular: false },
+    { name: "Professional", price: "$63", period: "/user/mo", features: ["10 GB storage", "500 AI messages/mo", "3 workspaces", "Database access", "1 GB file upload", "Email support"], popular: true },
+    { name: "Team", price: "$119", period: "/user/mo", features: ["100 GB shared storage", "Unlimited AI (fair use)", "Unlimited workspaces", "Snowflake, BigQuery", "5 GB file upload", "Priority support"], popular: false },
+    { name: "Business", price: "$199", period: "/user/mo", features: ["1 TB shared storage", "Unlimited AI (managed)", "SSO + advanced RBAC", "Full audit trail", "10 GB file upload", "Success manager + 4h SLA"] },
+    { name: "Enterprise", price: "Custom", period: "", features: ["Unlimited storage", "Custom AI limits", "On-premise option", "White-label", "Custom integrations", "24/7 dedicated support"] },
   ],
+};
 };
 
 export function PlansPanel({ onSelectPlan }: Props) {

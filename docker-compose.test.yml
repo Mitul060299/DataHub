@@ -1,0 +1,128 @@
+# Docker Compose for Data Source Connector Testing
+# This file provides local test instances of various databases and services
+# Usage: docker-compose -f docker-compose.test.yml up -d
+
+version: '3.8'
+
+services:
+  # PostgreSQL Test Database
+  test-postgres:
+    image: postgres:16-alpine
+    container_name: datahub-test-postgres
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+    ports:
+      - "15432:5432"
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MySQL Test Database
+  test-mysql:
+    image: mysql:8.0
+    container_name: datahub-test-mysql
+    environment:
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: testuser
+      MYSQL_PASSWORD: testpass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "13306:3306"
+    volumes:
+      - test-mysql-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "testuser", "-ptestpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Microsoft SQL Server Test Database
+  test-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: datahub-test-mssql
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: TestPass123!
+      MSSQL_PID: Developer
+    ports:
+      - "11433:1433"
+    volumes:
+      - test-mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'TestPass123!' -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # MongoDB Test Database
+  test-mongodb:
+    image: mongo:7.0
+    container_name: datahub-test-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: testuser
+      MONGO_INITDB_ROOT_PASSWORD: testpass
+      MONGO_INITDB_DATABASE: testdb
+    ports:
+      - "17017:27017"
+    volumes:
+      - test-mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (used by DataHub)
+  test-redis:
+    image: redis:7-alpine
+    container_name: datahub-test-redis
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MinIO (S3-compatible storage for testing)
+  test-minio:
+    image: minio/minio:latest
+    container_name: datahub-test-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - test-minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  test-postgres-data:
+    driver: local
+  test-mysql-data:
+    driver: local
+  test-mssql-data:
+    driver: local
+  test-mongodb-data:
+    driver: local
+  test-minio-data:
+    driver: local
+
+networks:
+  default:
+    name: datahub-test-network

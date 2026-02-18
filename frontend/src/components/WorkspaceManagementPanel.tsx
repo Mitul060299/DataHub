@@ -44,7 +44,7 @@ const { Text, Title } = Typography;
 type Workspace = {
   id: string;
   name: string;
-  plan: "Free" | "Pro" | "Business";
+  plan: "Free" | "Professional" | "Business";
   members: number;
   avatar: string;
 };
@@ -84,7 +84,7 @@ type Activity = {
 
 const WORKSPACES: Workspace[] = [
   { id: "personal", name: "Personal Workspace", plan: "Free", members: 1, avatar: "P" },
-  { id: "growth", name: "Growth Team", plan: "Pro", members: 5, avatar: "G" },
+  { id: "growth", name: "Growth Team", plan: "Professional", members: 5, avatar: "G" },
   { id: "enterprise", name: "Enterprise Ops", plan: "Business", members: 12, avatar: "E" },
 ];
 
@@ -315,7 +315,7 @@ export function WorkspaceManagementPanel() {
                 <Space>
                   <Avatar size="small">{workspace.avatar}</Avatar>
                   <span>{workspace.name}</span>
-                  <Tag color={workspace.plan === "Free" ? "default" : workspace.plan === "Pro" ? "blue" : "purple"}>
+                  <Tag color={workspace.plan === "Free" ? "default" : workspace.plan === "Professional" ? "blue" : "geekblue"}>
                     {workspace.plan}
                   </Tag>
                   <Text type="secondary">{workspace.members} members</Text>
@@ -542,7 +542,7 @@ export function WorkspaceManagementPanel() {
             placeholder="Plan"
             options={[
               { label: "Free", value: "Free" },
-              { label: "Pro", value: "Pro" },
+              { label: "Professional", value: "Professional" },
               { label: "Business", value: "Business" },
             ]}
           />

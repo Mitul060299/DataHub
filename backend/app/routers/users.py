@@ -9,6 +9,35 @@ from ..security import get_current_role, get_current_subject, get_current_user_i
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+@router.get("/debug/jwks")
+def debug_jwks() -> dict:
+    """Debug endpoint to check JWKS fetching"""
+    import httpx
+    from ..config import settings
+    
+    try:
+        if not settings.supabase_url:
+            return {"error": "SUPABASE_URL not configured"}
+        
+        jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
+        response = httpx.get(jwks_url, timeout=10.0)
+        response.raise_for_status()
+        jwks = response.json()
+        
+        return {
+            "success": True,
+            "jwks_url": jwks_url,
+            "keys_count": len(jwks.get("keys", [])),
+            "key_ids": [key.get("kid") for key in jwks.get("keys", [])],
+            "your_kid": "47e89e81-5372-4086-b372-06cadcb765fe"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
+
+
 @router.get("/debug/auth")
 def debug_auth(
     authorization: str | None = Header(default=None),

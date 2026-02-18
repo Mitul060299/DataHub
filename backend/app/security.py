@@ -42,11 +42,19 @@ def _get_supabase_jwks() -> Dict[str, Any]:
     if not settings.supabase_url:
         return {}
     jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
-    response = httpx.get(jwks_url, timeout=10.0)
-    response.raise_for_status()
-    jwks = response.json()
-    _cache_set("supabase_jwks", jwks, ttl=300)
-    return jwks
+    headers = {}
+    # Add authorization if service role key is available
+    if settings.supabase_service_role_key:
+        headers["Authorization"] = f"Bearer {settings.supabase_service_role_key}"
+    try:
+        response = httpx.get(jwks_url, headers=headers, timeout=10.0)
+        response.raise_for_status()
+        jwks = response.json()
+        _cache_set("supabase_jwks", jwks, ttl=300)
+        return jwks
+    except Exception as e:
+        print(f"ERROR fetching JWKS: {e}")
+        return {}
 
 
 def _get_supabase_key(id_token: str) -> Optional[Any]:

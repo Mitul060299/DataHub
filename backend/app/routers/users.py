@@ -20,7 +20,11 @@ def debug_jwks() -> dict:
             return {"error": "SUPABASE_URL not configured"}
         
         jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
-        response = httpx.get(jwks_url, timeout=10.0)
+        headers = {}
+        if settings.supabase_service_role_key:
+            headers["Authorization"] = f"Bearer {settings.supabase_service_role_key}"
+        
+        response = httpx.get(jwks_url, headers=headers, timeout=10.0)
         response.raise_for_status()
         jwks = response.json()
         
@@ -29,7 +33,8 @@ def debug_jwks() -> dict:
             "jwks_url": jwks_url,
             "keys_count": len(jwks.get("keys", [])),
             "key_ids": [key.get("kid") for key in jwks.get("keys", [])],
-            "your_kid": "47e89e81-5372-4086-b372-06cadcb765fe"
+            "your_kid": "47e89e81-5372-4086-b372-06cadcb765fe",
+            "service_role_key_set": bool(settings.supabase_service_role_key)
         }
     except Exception as e:
         return {

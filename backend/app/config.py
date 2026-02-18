@@ -43,6 +43,7 @@ class Settings(BaseModel):
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_jwt_secret: str = os.getenv("SUPABASE_JWT_SECRET", "")
     supabase_jwt_audience: str = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated")
+    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     dataset_cache_max: int = int(os.getenv("DATASET_CACHE_MAX", "20"))
     dataset_cache_ttl_seconds: int = int(os.getenv("DATASET_CACHE_TTL", "1800"))

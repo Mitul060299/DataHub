@@ -36,6 +36,7 @@ def _get_supabase_issuer() -> str:
 
 
 def _get_supabase_jwks() -> Dict[str, Any]:
+    """Fetch JWKS from Supabase with proper authentication"""
     cached = _cache_get("supabase_jwks")
     if cached:
         return cached
@@ -43,27 +44,26 @@ def _get_supabase_jwks() -> Dict[str, Any]:
         print("ERROR: SUPABASE_URL not configured")
         return {}
     
-    # Try the standard Supabase JWKS endpoint
-    jwks_urls = [
-        settings.supabase_url.rstrip("/") + "/auth/v1/keys",
-        settings.supabase_url.rstrip("/") + "/.well-known/jwks.json",
-    ]
+    jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
     
-    for jwks_url in jwks_urls:
-        print(f"Attempting to fetch JWKS from: {jwks_url}")
-        try:
-            response = httpx.get(jwks_url, timeout=10.0, follow_redirects=True)
-            print(f"Response status: {response.status_code}")
-            if response.status_code == 200:
-                jwks = response.json()
-                print(f"Successfully fetched {len(jwks.get('keys', []))} keys from {jwks_url}")
-                _cache_set("supabase_jwks", jwks, ttl=300)
-                return jwks
-        except Exception as e:
-            print(f"Failed with {jwks_url}: {type(e).__name__}: {str(e)}")
+    # Supabase requires the anon key header even for public endpoints
+    headers = {}
+    if settings.supabase_anon_key:
+        headers["apikey"] = settings.supabase_anon_key
+        headers["Authorization"] = f"Bearer {settings.supabase_anon_key}"
     
-    print("ERROR: Could not fetch JWKS from any endpoint")
-    return {}
+    print(f"Fetching JWKS from: {jwks_url} (with auth: {bool(settings.supabase_anon_key)})")
+    try:
+        response = httpx.get(jwks_url, headers=headers, timeout=10.0, follow_redirects=True)
+        print(f"JWKS response status: {response.status_code}")
+        response.raise_for_status()
+        jwks = response.json()
+        print(f"Successfully fetched {len(jwks.get('keys', []))} keys")
+        _cache_set("supabase_jwks", jwks, ttl=300)
+        return jwks
+    except Exception as e:
+        print(f"ERROR fetching JWKS: {type(e).__name__}: {str(e)}")
+        return {}
 
 
 def _get_supabase_key(id_token: str) -> Optional[Any]:
@@ -84,47 +84,35 @@ def _parse_audiences(value: str) -> list[str]:
 
 
 def _verify_supabase_token(token: str) -> Dict[str, Any]:
-    """Verify Supabase JWT token
-    
-    In production, this validates the full signature.
-    For now, we decode and validate claims only since JWKS endpoint is inaccessible.
-    """
+    """Verify Supabase JWT token with full signature validation"""
     if not settings.supabase_url:
         print("WARNING: SUPABASE_URL not configured")
         return {}
     
+    key = _get_supabase_key(token)
+    if not key:
+        print("WARNING: Could not get Supabase signing key")
+        return {}
+    
     issuer = _get_supabase_issuer()
     audiences = _parse_audiences(settings.supabase_jwt_audience)
+    options = {"verify_exp": True}
+    if not audiences:
+        options["verify_aud"] = False
     
     try:
-        # Decode without verification first
-        unverified = jwt.decode(
+        decoded = jwt.decode(
             token,
-            options={"verify_signature": False},
+            key=key,
+            algorithms=[jwt.get_unverified_header(token).get("alg", "RS256")],
+            issuer=issuer or None,
+            audience=audiences or None,
+            options=options,
         )
-        
-        print(f"Token decoded (signature not verified yet). Email: {unverified.get('email')}")
-        
-        # Validate issuer
-        if unverified.get("iss") != issuer:
-            print(f"WARNING: Issuer mismatch. Expected: {issuer}, Got: {unverified.get('iss')}")
-        
-        # Validate audience
-        token_aud = unverified.get("aud")
-        if audiences and token_aud not in audiences:
-            print(f"WARNING: Audience mismatch. Expected one of: {audiences}, Got: {token_aud}")
-        
-        # Validate expiration
-        import time
-        exp = unverified.get("exp")
-        if exp and exp < time.time():
-            print("ERROR: Token expired")
-            return {}
-        
-        print(f"Successfully decoded Supabase token for user: {unverified.get('email', unverified.get('sub'))}")
-        return unverified
+        print(f"Successfully verified Supabase token for user: {decoded.get('email', decoded.get('sub'))}")
+        return decoded
     except Exception as e:
-        print(f"ERROR: Failed to decode Supabase token: {type(e).__name__}: {str(e)}")
+        print(f"ERROR: Failed to verify Supabase token: {type(e).__name__}: {str(e)}")
         return {}
 
 

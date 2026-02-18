@@ -9,6 +9,22 @@ from ..security import get_current_role, get_current_subject, get_current_user_i
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+@router.get("/debug/auth")
+def debug_auth(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Debug endpoint to check authentication parsing"""
+    from ..security import get_current_subject, get_current_role, get_current_user_id
+    
+    return {
+        "has_auth_header": authorization is not None,
+        "auth_header_preview": authorization[:50] + "..." if authorization and len(authorization) > 50 else authorization,
+        "subject": get_current_subject(authorization),
+        "role": get_current_role(authorization),
+        "user_id": get_current_user_id(authorization),
+    }
+
+
 @router.post("/", response_model=UserOut)
 def create_user(
     payload: UserCreate,
@@ -47,7 +63,7 @@ def get_me(
 ) -> UserProfileOut:
     subject = get_current_subject(authorization)
     if not subject:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(status_code=401, detail="Unauthorized - no subject found")
     role = get_current_role(authorization)
     user_id = get_current_user_id(authorization)
     
@@ -61,9 +77,10 @@ def get_me(
         try:
             db.commit()
             db.refresh(user)
-        except Exception:
+        except Exception as e:
             # Handle duplicate ID edge case
             db.rollback()
+            print(f"Failed to create user with ID {user_id_to_use}: {str(e)}")
             user = User(id=str(uuid.uuid4()), username=subject, role=role, plan="Free")
             db.add(user)
             db.commit()

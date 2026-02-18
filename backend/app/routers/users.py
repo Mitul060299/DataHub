@@ -9,6 +9,65 @@ from ..security import get_current_role, get_current_subject, get_current_user_i
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+@router.get("/debug/token-inspect")
+def debug_token_inspect(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Detailed token inspection with raw header/payload decode"""
+    import base64
+    import json
+    
+    if not authorization:
+        return {"error": "No Authorization header provided"}
+    
+    try:
+        # Extract token from "Bearer <token>"
+        token = authorization.split(" ")[1] if " " in authorization else authorization
+        
+        # Split token into parts
+        parts = token.split('.')
+        if len(parts) != 3:
+            return {"error": f"Invalid token format - has {len(parts)} parts, expected 3"}
+        
+        header_b64, payload_b64, signature_b64 = parts
+        
+        # Decode header (add padding if needed)
+        header_b64_padded = header_b64 + '=' * (4 - len(header_b64) % 4)
+        header_bytes = base64.urlsafe_b64decode(header_b64_padded)
+        header = json.loads(header_bytes)
+        
+        # Decode payload
+        payload_b64_padded = payload_b64 + '=' * (4 - len(payload_b64) % 4)
+        payload_bytes = base64.urlsafe_b64decode(payload_b64_padded)
+        payload = json.loads(payload_bytes)
+        
+        # Determine verification approach
+        alg = header.get("alg", "UNKNOWN")
+        
+        return {
+            "success": True,
+            "raw_header": header,
+            "raw_payload": payload,
+            "algorithm": alg,
+            "key_id": header.get("kid"),
+            "token_type": header.get("typ"),
+            "user_id": payload.get("sub"),
+            "email": payload.get("email"),
+            "audience": payload.get("aud"),
+            "issuer": payload.get("iss"),
+            "expires_at": payload.get("exp"),
+            "issued_at": payload.get("iat"),
+            "verification_note": f"Token uses {alg} - {'Use JWT_SECRET with HS256' if alg == 'HS256' else 'Need public key for ' + alg if alg in ['ES256', 'RS256'] else 'Unknown method'}"
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.get("/debug/token-algorithm")
 def debug_token_algorithm(
     authorization: str | None = Header(default=None),

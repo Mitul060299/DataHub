@@ -67,15 +67,35 @@ def _get_supabase_jwks() -> Dict[str, Any]:
 
 
 def _get_supabase_key(id_token: str) -> Optional[Any]:
+    """Get the key to verify the Supabase JWT token"""
     unverified = jwt.get_unverified_header(id_token)
     alg = unverified.get("alg", "")
+    
+    # For HMAC algorithms (HS256), use the JWT secret
     if alg.startswith("HS"):
+        print(f"Using HS256 with JWT secret for token verification")
         return settings.supabase_jwt_secret or None
+    
+    # For RSA/EC algorithms, fetch JWKS
+    print(f"Token uses {alg}, fetching JWKS for public key")
     jwks = _get_supabase_jwks()
+    if not jwks or not jwks.get("keys"):
+        print(f"WARNING: No JWKS keys available, falling back to JWT secret")
+        # Fallback: try JWT secret even for RS256/ES256 (won't work but worth trying)
+        return settings.supabase_jwt_secret or None
+    
     kid = unverified.get("kid")
+    print(f"Looking for key with kid: {kid}")
     for jwk in jwks.get("keys", []):
         if jwk.get("kid") == kid:
-            return jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
+            print(f"Found matching key with algorithm: {jwk.get('alg')}")
+            # Handle both RSA and EC keys
+            if jwk.get("kty") == "RSA":
+                return jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
+            elif jwk.get("kty") == "EC":
+                return jwt.algorithms.ECAlgorithm.from_jwk(jwk)
+    
+    print(f"ERROR: No matching key found for kid: {kid}")
     return None
 
 

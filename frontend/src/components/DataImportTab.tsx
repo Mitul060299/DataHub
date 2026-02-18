@@ -488,7 +488,7 @@ export const DataImportTab = () => {
   }, [workspaceId]);
 
   return (
-    <div className="data-import-container" style={{ padding: "24px" }}>
+    <div className="data-import-container" style={{ padding: "24px", height: "100%", overflowY: "auto" }}>
       {/* Usage Stats Banner */}
       <Alert
         message={

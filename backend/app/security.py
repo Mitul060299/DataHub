@@ -6,6 +6,7 @@ import httpx
 import jwt
 from .config import settings
 from fastapi import Header, HTTPException
+from supabase import create_client, Client
 
 
 
@@ -107,31 +108,111 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
     """
     Verify Supabase JWT token.
     
-    Supabase typically uses HS256 (symmetric signing) with JWT_SECRET.
-    We try HS256 first, then fall back to JWKS for RS256/ES256 if needed.
+    For ES256 tokens, use Supabase client which handles JWKS automatically.
+    For HS256 tokens, JWT_SECRET is the shared secret.
     """
     if not settings.supabase_url:
         print("WARNING: SUPABASE_URL not configured")
         return {}
     
-    if not settings.supabase_jwt_secret:
-        print("WARNING: SUPABASE_JWT_SECRET not configured")
-        return {}
-    
-    issuer = _get_supabase_issuer()
-    audiences = _parse_audiences(settings.supabase_jwt_audience)
-    
     # Get the algorithm from token header
     try:
         header = jwt.get_unverified_header(token)
         alg = header.get("alg", "HS256")
+        print(f"Token algorithm: {alg}, kid: {header.get('kid')}")
     except Exception as e:
         print(f"ERROR: Could not decode token header: {e}")
         return {}
     
-    # APPROACH 1: Try HS256 with JWT_SECRET (recommended by Supabase)
-    if alg == "HS256":
+    # APPROACH 1: For ES256, use Supabase client (handles JWKS internally)
+    if alg == "ES256":
         try:
+            if not settings.supabase_anon_key:
+                print("ERROR: SUPABASE_ANON_KEY not configured for ES256 verification")
+                return {}
+            
+            print(f"Attempting ES256 verification using Supabase client")
+            supabase: Client = create_client(settings.supabase_url, settings.supabase_anon_key)
+            
+            # Supabase client verifies the token and returns user data
+            user_response = supabase.auth.get_user(token)
+            
+            if user_response and user_response.user:
+                user = user_response.user
+                print(f"✅ Successfully verified token (ES256 via Supabase) for user: {user.email}")
+                
+                # Convert to JWT claims format for compatibility
+                return {
+                    "sub": user.id,
+                    "email": user.email,
+                    "role": user.role if hasattr(user, 'role') else "authenticated",
+                    "aud": "authenticated",
+                    "exp": int(datetime.now(timezone.utc).timestamp()) + 3600,  # Default expiry
+                    "iat": int(datetime.now(timezone.utc).timestamp()),
+                }
+            else:
+                print("ERROR: Supabase client returned no user data")
+                return {}
+                
+        except Exception as e:
+            print(f"ERROR: ES256 verification with Supabase client failed: {type(e).__name__}: {str(e)}")
+            # Try manual JWT verification as fallback
+            if settings.supabase_jwt_secret:
+                try:
+                    from cryptography.hazmat.primitives import serialization
+                    from cryptography.hazmat.backends import default_backend
+                    
+                    print(f"Trying manual ES256 verification with JWT_SECRET")
+                    
+                    # Try to load JWT_SECRET as public key
+                    jwt_secret = settings.supabase_jwt_secret
+                    if jwt_secret.startswith("-----BEGIN"):
+                        public_key = serialization.load_pem_public_key(
+                            jwt_secret.encode(),
+                            backend=default_backend()
+                        )
+                    else:
+                        # Try base64 decode
+                        import base64 as b64
+                        decoded_key = b64.b64decode(jwt_secret)
+                        public_key = serialization.load_pem_public_key(
+                            decoded_key,
+                            backend=default_backend()
+                        )
+                    
+                    issuer = _get_supabase_issuer()
+                    audiences = _parse_audiences(settings.supabase_jwt_audience)
+                    
+                    decoded = jwt.decode(
+                        token,
+                        public_key,
+                        algorithms=["ES256"],
+                        audience=audiences if audiences else None,
+                        issuer=issuer if issuer else None,
+                        options={
+                            "verify_signature": True,
+                            "verify_exp": True,
+                            "verify_aud": bool(audiences),
+                        }
+                    )
+                    print(f"✅ Successfully verified token (ES256 manual) for user: {decoded.get('email', decoded.get('sub'))}")
+                    return decoded
+                    
+                except Exception as manual_error:
+                    print(f"ERROR: Manual ES256 verification also failed: {type(manual_error).__name__}: {str(manual_error)}")
+                    return {}
+            return {}
+    
+    # APPROACH 2: Try HS256 with JWT_SECRET
+    if alg == "HS256":
+        if not settings.supabase_jwt_secret:
+            print("WARNING: SUPABASE_JWT_SECRET not configured")
+            return {}
+            
+        try:
+            issuer = _get_supabase_issuer()
+            audiences = _parse_audiences(settings.supabase_jwt_audience)
+            
             print(f"Attempting HS256 verification with JWT_SECRET")
             decoded = jwt.decode(
                 token,
@@ -147,67 +228,11 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
             )
             print(f"✅ Successfully verified token (HS256) for user: {decoded.get('email', decoded.get('sub'))}")
             return decoded
-        except jwt.ExpiredSignatureError:
-            print("ERROR: Token has expired")
-            return {}
-        except jwt.InvalidAudienceError:
-            print("ERROR: Invalid token audience")
-            return {}
         except Exception as e:
             print(f"ERROR: HS256 verification failed: {type(e).__name__}: {str(e)}")
-            # Don't return yet, try JWKS approach below
-    
-    # APPROACH 2: For RS256/ES256, try fetching public key from JWKS
-    if alg in ["RS256", "ES256"]:
-        print(f"Token uses {alg}, attempting JWKS verification")
-        key = _get_supabase_key(token)
-        if not key:
-            print("WARNING: Could not get public key from JWKS")
-            return {}
-        
-        try:
-            decoded = jwt.decode(
-                token,
-                key=key,
-                algorithms=[alg],
-                issuer=issuer if issuer else None,
-                audience=audiences if audiences else None,
-                options={
-                    "verify_signature": True,
-                    "verify_exp": True,
-                    "verify_aud": bool(audiences),
-                }
-            )
-            print(f"✅ Successfully verified token ({alg}) for user: {decoded.get('email', decoded.get('sub'))}")
-            return decoded
-        except Exception as e:
-            print(f"ERROR: {alg} verification failed: {type(e).__name__}: {str(e)}")
             return {}
     
-    # APPROACH 3: Last resort - try HS256 even if header says something else
-    # (Sometimes Supabase tokens claim ES256 but are actually HS256)
-    if alg != "HS256":
-        try:
-            print(f"Token claims {alg}, trying HS256 as fallback")
-            decoded = jwt.decode(
-                token,
-                settings.supabase_jwt_secret,
-                algorithms=["HS256"],
-                audience=audiences if audiences else None,
-                issuer=issuer if issuer else None,
-                options={
-                    "verify_signature": True,
-                    "verify_exp": True,
-                    "verify_aud": bool(audiences),
-                }
-            )
-            print(f"✅ Successfully verified token (HS256 fallback) for user: {decoded.get('email', decoded.get('sub'))}")
-            return decoded
-        except Exception as e:
-            print(f"ERROR: HS256 fallback failed: {type(e).__name__}: {str(e)}")
-            return {}
-    
-    print(f"ERROR: All verification methods failed for algorithm: {alg}")
+    print(f"ERROR: Unsupported algorithm or all verification methods failed: {alg}")
     return {}
 
 

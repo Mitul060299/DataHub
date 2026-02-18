@@ -178,6 +178,25 @@ def get_current_subject(authorization: str | None = Header(default=None)) -> Opt
         return None
 
 
+def get_current_user_id(authorization: str | None = Header(default=None)) -> Optional[str]:
+    """Extract the user ID (sub claim) from JWT token for database primary key"""
+    if not authorization:
+        return None
+    try:
+        scheme, token = authorization.split(" ")
+        if scheme.lower() != "bearer":
+            return None
+        if _is_jwt(token):
+            claims = _verify_supabase_token(token)
+            if not claims:
+                claims = _verify_app_token(token)
+            if claims:
+                return claims.get("sub")
+        return None
+    except Exception:
+        return None
+
+
 def require_role(required: str, role: str) -> None:
     allowed = {"viewer": 1, "editor": 2, "admin": 3}
     if allowed.get(role, 1) < allowed.get(required, 1):

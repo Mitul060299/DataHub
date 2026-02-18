@@ -4,7 +4,7 @@ import uuid
 from ..db import get_db
 from ..models import UserCreate, UserOut, UserProfileOut, UserUsage
 from ..models_db import User, DatasetMetaDB, ImportTableDB
-from ..security import get_current_role, get_current_subject, require_role
+from ..security import get_current_role, get_current_subject, get_current_user_id, require_role
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -49,12 +49,25 @@ def get_me(
     if not subject:
         raise HTTPException(status_code=401, detail="Unauthorized")
     role = get_current_role(authorization)
+    user_id = get_current_user_id(authorization)
+    
+    # Try to find user by username (email) first
     user = db.query(User).filter(User.username == subject).first()
     if not user:
-        user = User(id=str(uuid.uuid4()), username=subject, role=role, plan="Free")
+        # Create new user with Supabase user ID if available, otherwise use UUID
+        user_id_to_use = user_id if user_id else str(uuid.uuid4())
+        user = User(id=user_id_to_use, username=subject, role=role, plan="Free")
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            # Handle duplicate ID edge case
+            db.rollback()
+            user = User(id=str(uuid.uuid4()), username=subject, role=role, plan="Free")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
     workspace_filter = workspace_id or "default"
     datasets_used = (
         db.query(DatasetMetaDB)

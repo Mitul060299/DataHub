@@ -1056,6 +1056,5 @@ body[data-theme="dark"] .pipeline-sidebar { background: #0f172a !important; bord
 @media (max-width: 768px) {
   .db-options-row { flex-direction: column; }
   .db-option-button { width: 100% !important; }
-  .full-auto-sidebar { display: none !important; }
   .ml-task-cards { grid-template-columns: repeat(2, 1fr); }
 }

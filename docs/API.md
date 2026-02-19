@@ -43,20 +43,27 @@
 - GET /templates/dashboards
 - POST /templates/dashboards/{template_id}/instantiate
 - POST /governance/audit
-- POST /dashboards?name=My%20Dashboard (requires editor)
-- GET /dashboards
-- GET /dashboards/{dashboard_id}
-- POST /dashboards/{dashboard_id}/share
-- POST /dashboards/{dashboard_id}/unshare
-- POST /dashboards/unshare-all
-- POST /dashboards/purge-expired
-- GET /dashboards/shared/{share_token}
-- 429 returned if shared rate limit exceeded
-- 403 returned if signature is invalid when SHARE_SIGNING_SECRET is set (sig query param)
-- 403 returned if share scope does not match (scope query param)
-- PUT /widgets/{dashboard_id}/{widget_id}?title=...&column=...&chart_type=...&dataset_id=... (requires editor)
-- POST /widgets/{dashboard_id}/reorder?widget_ids=id1,id2 (requires editor)
-	- Returns reordered widgets list
+
+## 🗑️ Deprecated Endpoints (Removed in v0.2.0)
+- ~~POST /dashboards~~ → Use `POST /visualizations/dashboards` instead
+- ~~GET /dashboards~~ → Use `GET /visualizations/dashboards` instead
+- ~~POST /widgets~~ → Use `POST /visualizations/widgets` instead
+
+## Active Visualization Endpoints
+- POST /visualizations/dashboards (requires editor)
+- GET /visualizations/dashboards
+- GET /visualizations/dashboards/{dashboard_id}
+- POST /visualizations/dashboards/{dashboard_id}/share
+- POST /visualizations/widgets (requires editor)
+- PUT /visualizations/widgets/{widget_id} (requires editor)
+- DELETE /visualizations/widgets/{widget_id} (requires editor)
+- POST /visualizations/chart-data/{dataset_id}
+- GET /visualizations/suggest-columns/{dataset_id}
+- POST /visualizations/kpi/{dataset_id}
+- POST /visualizations/themes
+- GET /visualizations/themes
+
+## Webhooks & Jobs
 - POST /webhooks?target_url=...&event=... (requires editor)
 - GET /webhooks
 - POST /jobs?name=...&cron=...&action=... (requires editor)

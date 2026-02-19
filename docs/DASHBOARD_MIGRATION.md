@@ -176,7 +176,7 @@ The old system is **deprecated but not removed**:
 ## Support
 
 - See [VISUALIZATION.md](./VISUALIZATION.md) for complete documentation
-- Old dashboard/widget routers are removed from `main.py` but files exist for reference
+- Old dashboard/widget routers have been fully removed from the codebase
 - Contact dev team for migration assistance
 
 ## Timeline
@@ -185,12 +185,12 @@ The old system is **deprecated but not removed**:
 - **v0.2.0** - New visualization tab added, old system deprecated
 - **v0.3.0** (planned) - Old system removal (with migration tool)
 
-## Files Marked as Deprecated
+## Files Removed / Deprecated
 
-### Backend
-- `backend/app/routers/dashboards.py` - Use `visualizations.py` instead
-- `backend/app/routers/widgets.py` - Use `visualizations.py` instead
-- `backend/app/models_db.py::Dashboard` - Use `VizDashboardDB` instead
+### Backend (Removed)
+- ✅ `backend/app/routers/dashboards.py` - Removed; use `/visualizations` API instead
+- ✅ `backend/app/routers/widgets.py` - Removed; use `/visualizations` API instead
+- `backend/app/models_db.py::Dashboard` - Deprecated; use `VizDashboardDB` instead
 
 ### Frontend
 - `frontend/src/components/DashboardPanel.tsx` - Use `DataVisualizationTab.tsx` instead

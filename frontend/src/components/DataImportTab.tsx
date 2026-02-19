@@ -371,18 +371,34 @@ export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableN
         onImportComplete(response.data.tableName);
       }
     } catch (error: any) {
+      // Log full error for debugging
+      console.error("Upload error details:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.response?.data?.message,
+        detail: error.response?.data?.detail,
+        fullError: error,
+      });
+
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message ||
+        "Upload failed";
+
       setUploadedFiles((prev) =>
         prev.map((entry) =>
           entry.id === fileId
             ? {
                 ...entry,
                 status: "error",
-                error: error.response?.data?.message || "Upload failed",
+                error: errorMessage,
               }
             : entry
         )
       );
-      message.error(`Failed to upload ${file.name}`);
+
+      message.error(`Failed to upload ${file.name}: ${errorMessage}`);
     } finally {
       setIsUploading(false);
     }

@@ -9,6 +9,7 @@ import re
 import uuid
 import pandas as pd
 import os
+import logging
 
 from ..db import get_db
 from ..security import get_current_role, require_role
@@ -18,6 +19,8 @@ from ..services.object_storage import StorageService
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, ImportTableDB, ImportConnectionDB
 from .datasets import save_dataset, get_dataset_from_db
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -63,83 +66,129 @@ async def upload_file(
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
-    role = get_current_role(authorization)
-    require_role("viewer", role)
+    logger.info(f"Upload started: file={file.filename}, size={file.size}, plan={plan}, workspace={workspace_id}")
+    
+    try:
+        role = get_current_role(authorization)
+        require_role("viewer", role)
+    except HTTPException as e:
+        logger.warning(f"Authorization failed: {e.detail}")
+        raise
+
+    if not file.filename:
+        logger.error("No filename provided")
+        raise HTTPException(status_code=400, detail="File name is required")
 
     content = await file.read()
     if not content:
+        logger.error("Empty file content")
         raise HTTPException(status_code=400, detail="No file content received")
+
+    logger.info(f"File read successfully: {len(content)} bytes")
 
     plan_key = (plan or "professional").lower()
     max_size = _PLAN_LIMITS.get(plan_key, _PLAN_LIMITS["professional"])
     if len(content) > max_size:
+        logger.warning(f"File size {len(content)} exceeds limit {max_size}")
         raise HTTPException(
-            status_code=400,
-            detail=f"File size exceeds {plan_key.capitalize()} plan limit",
+            status_code=413,
+            detail=f"File size {_format_size(len(content))} exceeds {plan_key.capitalize()} plan limit of {_format_size(max_size)}",
         )
 
     try:
+        logger.info(f"Parsing file: {file.filename}")
         df = FileParserService.parse_file(content, file.filename)
+        if df.empty:
+            raise ValueError("CSV file is empty")
+        if df.shape[0] == 0:
+            raise ValueError("No data rows found in file")
+        logger.info(f"File parsed successfully: {df.shape[0]} rows, {df.shape[1]} columns")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.error(f"Parse error: {str(exc)}")
+        raise HTTPException(status_code=400, detail=f"Invalid file format: {str(exc)}") from exc
+    except Exception as exc:
+        logger.error(f"Unexpected parse error: {type(exc).__name__}: {str(exc)}")
+        raise HTTPException(status_code=400, detail=f"Error parsing file: {str(exc)}") from exc
 
-    df = df.astype(object).where(pd.notnull(df), None)
-    store_rows = int(df.shape[0]) <= settings.dataset_inline_max_rows
-    parquet_bytes, schema, row_count, stats, compression_ratio = DataConversionService.dataframe_to_parquet(
-        df,
-        original_size=len(content),
-    )
-    dataset_id = save_dataset(
-        df,
-        db,
-        workspace_id=workspace_id,
-        store_rows=store_rows,
-    )
-
-    file_base = os.path.splitext(file.filename or "dataset")[0]
-    parquet_name = f"{file_base}.parquet"
-    storage_path = StorageService.upload(workspace_id, dataset_id, parquet_bytes, parquet_name)
-
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-    if meta:
-        meta.name = file.filename
-        meta.source_type = "file_upload"
-        meta.storage_provider = settings.storage_provider
-        meta.storage_path = storage_path
-        meta.file_format = "parquet"
-        meta.schema_json = schema
-        meta.stats_json = stats
-        meta.file_size_bytes = len(content)
-        meta.compressed_size_bytes = len(parquet_bytes)
-        meta.status = "ready"
-        meta.access_tier = "hot"
-
-    table_name = _ensure_unique_table_name(db, _sanitize_table_name(file.filename))
-    table_id = str(uuid.uuid4())
-
-    db.add(
-        ImportTableDB(
-            id=table_id,
-            name=table_name,
-            dataset_id=dataset_id,
-            workspace_id=workspace_id or "default",
-            source_type="file",
-            source_name=file.filename,
-            size_bytes=len(content),
+    try:
+        df = df.astype(object).where(pd.notnull(df), None)
+        store_rows = int(df.shape[0]) <= settings.dataset_inline_max_rows
+        logger.info(f"Converting to parquet, store_rows={store_rows}")
+        parquet_bytes, schema, row_count, stats, compression_ratio = DataConversionService.dataframe_to_parquet(
+            df,
+            original_size=len(content),
         )
-    )
-    db.commit()
+        logger.info(f"Parquet conversion done: {len(parquet_bytes)} bytes, ratio={compression_ratio:.1f}%")
+        dataset_id = save_dataset(
+            df,
+            db,
+            workspace_id=workspace_id,
+            store_rows=store_rows,
+        )
+        logger.info(f"Dataset saved: {dataset_id}")
+    except Exception as exc:
+        logger.error(f"Processing error: {type(exc).__name__}: {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(exc)}") from exc
 
-    return {
-        "success": True,
-        "tableName": table_name,
-        "rowCount": int(df.shape[0]),
-        "tableCount": 1,
-        "compressionRatio": f"{compression_ratio:.1f}%",
-        "originalSize": len(content),
-        "compressedSize": len(parquet_bytes),
-        "storagePath": storage_path,
-    }
+    try:
+        file_base = os.path.splitext(file.filename or "dataset")[0]
+        parquet_name = f"{file_base}.parquet"
+        logger.info(f"Uploading to storage: {parquet_name}")
+        storage_path = StorageService.upload(workspace_id, dataset_id, parquet_bytes, parquet_name)
+        logger.info(f"Storage upload complete: {storage_path}")
+
+        meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+        if meta:
+            meta.name = file.filename
+            meta.source_type = "file_upload"
+            meta.storage_provider = settings.storage_provider
+            meta.storage_path = storage_path
+            meta.file_format = "parquet"
+            meta.schema_json = schema
+            meta.stats_json = stats
+            meta.file_size_bytes = len(content)
+            meta.compressed_size_bytes = len(parquet_bytes)
+            meta.status = "ready"
+            meta.access_tier = "hot"
+
+        table_name = _ensure_unique_table_name(db, _sanitize_table_name(file.filename))
+        table_id = str(uuid.uuid4())
+
+        db.add(
+            ImportTableDB(
+                id=table_id,
+                name=table_name,
+                dataset_id=dataset_id,
+                workspace_id=workspace_id or "default",
+                source_type="file",
+                source_name=file.filename,
+                size_bytes=len(content),
+            )
+        )
+        db.commit()
+        logger.info(f"Upload completed successfully: table={table_name}")
+
+        return {
+            "success": True,
+            "tableName": table_name,
+            "rowCount": int(df.shape[0]),
+            "tableCount": 1,
+            "compressionRatio": f"{compression_ratio:.1f}%",
+            "originalSize": len(content),
+            "compressedSize": len(parquet_bytes),
+            "storagePath": storage_path,
+            "columns": len(df.columns),
+            "fileSize": _format_size(len(content)),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Final save error: {type(exc).__name__}: {str(exc)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error saving file: {str(exc)}"
+        ) from exc
 
 
 @router.post("/test-connection")

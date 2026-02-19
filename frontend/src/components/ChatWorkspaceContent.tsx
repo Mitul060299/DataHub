@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Layout, Table, Breadcrumb, Button, Space, Tooltip, message } from 'antd';
-import { LeftOutlined, RightOutlined, SaveOutlined, ShareAltOutlined, DownloadOutlined } from '@ant-design/icons';
+import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { SaveOutlined, ShareAltOutlined, DownloadOutlined } from '@ant-design/icons';
 import ChatInterface from './ChatInterface';
 import StepsPanel from './StepsPanel';
 import '../styles/ChatWorkspaceLayout.css';

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Button, Space, Tooltip, Collapse, Badge, Empty } from 'antd';
-import { DeleteOutlined, UndoOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LoadingOutlined } from '@ant-design/icons';
+import { DeleteOutlined, UndoOutlined, SettingOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, ExclamationCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import '../styles/StepsPanel.css';
 
 export interface TransformationStep {

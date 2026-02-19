@@ -227,6 +227,61 @@ class ChatEngine:
         }
         return tiers_steps.get(self.user_plan, 1)
     
+    def handle_data_update(self, session_id: str, new_dataset_id: str, new_dataset_name: str) -> Dict[str, Any]:
+        """
+        Handle data update gracefully - update dataset while preserving chat history
+        
+        Args:
+            session_id: Current session ID
+            new_dataset_id: ID of the new dataset
+            new_dataset_name: Name of the new dataset
+            
+        Returns:
+            Dict with update status and metadata
+        """
+        session = self.db.query(ChatSessionDB).filter_by(id=session_id).first()
+        
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+        
+        # Store previous dataset info for context
+        old_dataset_id = session.dataset_id
+        old_dataset_name = session.execution_context.get('previous_dataset_names', [])
+        
+        # Update session with new dataset
+        session.dataset_id = new_dataset_id
+        
+        # Update execution context
+        session.execution_context = {
+            **session.execution_context,
+            'current_dataset_id': new_dataset_id,
+            'current_dataset_name': new_dataset_name,
+            'previous_dataset_ids': session.execution_context.get('previous_dataset_ids', []) + [old_dataset_id],
+            'previous_dataset_names': old_dataset_name + [new_dataset_name] if isinstance(old_dataset_name, list) else [new_dataset_name],
+            'data_update_timestamp': datetime.utcnow().isoformat(),
+        }
+        
+        # Create checkpoint before data update
+        self.create_checkpoint(session_id)
+        
+        # Add system message to preserve history context
+        system_message = ChatMessage(
+            role=MessageRole.SYSTEM,
+            content=f"Data updated: switched from '{old_dataset_id}' to '{new_dataset_name}'. Previous analysis history is preserved above.",
+            timestamp=datetime.utcnow().isoformat(),
+        )
+        
+        session.messages.append(asdict(system_message))
+        self.db.commit()
+        
+        return {
+            'status': 'success',
+            'message': f'Data updated to {new_dataset_name}',
+            'previous_dataset': old_dataset_id,
+            'new_dataset': new_dataset_id,
+            'history_preserved': True,
+        }
+    
     def create_checkpoint(self, session_id: str):
         """Create a snapshot for rollback capability"""
         session = self.db.query(ChatSessionDB).filter_by(id=session_id).first()

@@ -3,6 +3,7 @@ import { Layout, Table, Breadcrumb, Button, Space, Tooltip, message } from 'antd
 import { LeftOutlined, RightOutlined, SaveOutlined, ShareAltOutlined, DownloadOutlined } from '@ant-design/icons';
 import ChatInterface from './ChatInterface';
 import StepsPanel from './StepsPanel';
+import { CommandRibbon } from './CommandRibbon';
 
 const { Content, Sider } = Layout;
 
@@ -109,8 +110,22 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
     message.info('Share functionality coming soon');
   };
 
+  const handleDataUpdate = (fileName: string) => {
+    // Handle data update - chat context is silently updated
+    // Previous chat history is preserved
+    message.info(`Data updated: ${fileName}. Previous analysis history is preserved.`);
+  };
+
   return (
-    <Layout className="chat-workspace-layout">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <CommandRibbon
+        projectId={project?.id}
+        workspaceId={workspace?.id}
+        hasData={true}
+        onImportComplete={handleDataUpdate}
+        isCompact={false}
+      />
+      <Layout className="chat-workspace-layout" style={{ flex: 1 }}>
       {/* Left Sidebar - Chat Interface */}
       <Sider
         width={400}
@@ -234,6 +249,7 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
         />
       </Sider>
     </Layout>
+    </div>
   );
 };
 

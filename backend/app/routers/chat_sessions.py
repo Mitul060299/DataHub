@@ -409,3 +409,39 @@ async def rollback_to_checkpoint(
             "version": snapshot_version,
         }
     }
+
+
+@router.post("/sessions/{session_id}/update-data")
+async def update_session_data(
+    session_id: str,
+    new_dataset_id: str,
+    new_dataset_name: str,
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+):
+    """Update the dataset for an active session while preserving chat history"""
+    
+    session = db.query(ChatSessionDB).filter(
+        ChatSessionDB.id == session_id,
+        ChatSessionDB.user_id == current_user_id
+    ).first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    user_plan = 'free'  # TODO: Get from user context
+    engine = ChatEngine(db=db, user_id=current_user_id, workspace_id="default", user_plan=user_plan)
+    
+    try:
+        result = engine.handle_data_update(
+            session_id=session_id,
+            new_dataset_id=new_dataset_id,
+            new_dataset_name=new_dataset_name
+        )
+        
+        return {
+            "success": True,
+            "data": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

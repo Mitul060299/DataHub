@@ -62,6 +62,7 @@ import {
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./styles.css";
+import "./styles/CommandRibbon.css";
 import { DataImportTab } from "./components/DataImportTab";
 import { DataCleaningTab } from "./components/DataCleaningTab";
 import { DataTransformTab } from "./components/DataTransformTab";
@@ -70,6 +71,7 @@ import { MLTab } from "./components/MLTab";
 import FullAutoTab from "./components/FullAutoTab";
 import { HomePage } from "./components/HomePage";
 import ChatWorkspaceContent from "./components/ChatWorkspaceContent";
+import { CommandRibbon } from "./components/CommandRibbon";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
@@ -346,7 +348,7 @@ const AppShell = () => {
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
-  const [selectedTable, setSelectedTable] = useState("sales_data");
+  const [selectedTable, setSelectedTable] = useState("");
   const [pipelineName, setPipelineName] = useState("Untitled Pipeline");
 
   const maxImportSize = limits.maxFileSize;
@@ -1090,15 +1092,69 @@ const AppShell = () => {
     </div>
   );
 
-  const ProjectWorkspaceContent = () => (
-    <ChatWorkspaceContent
-      workspace={activeWorkspace}
-      project={activeProject}
-      dataset={{ id: selectedTable, name: selectedTable || "Untitled" }}
-      userPlan={plan as any}
-      onSessionCreated={(sessionId) => console.log("Chat session created:", sessionId)}
-    />
-  );
+  const hasDataLoaded = selectedTable && selectedTable !== '';
+
+  const handleImportComplete = (fileName: string) => {
+    // Update selected table with imported file name
+    setSelectedTable(fileName);
+  };
+
+  const ProjectWorkspaceContent = () => {
+    if (!hasDataLoaded) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <CommandRibbon
+            projectId={activeProject?.id}
+            workspaceId={activeWorkspace?.id}
+            hasData={false}
+            onImportComplete={handleImportComplete}
+          />
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '40px',
+            textAlign: 'center',
+            color: '#8c8c8c',
+          }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '20px',
+              opacity: 0.3,
+            }}>
+              📊
+            </div>
+            <h2 style={{ fontSize: '24px', marginBottom: '12px', color: '#262626' }}>
+              No Data Loaded
+            </h2>
+            <p style={{ fontSize: '16px', marginBottom: '32px', maxWidth: '400px' }}>
+              Start by importing a CSV file or connecting to a data source using the Import button above.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <CommandRibbon
+          projectId={activeProject?.id}
+          workspaceId={activeWorkspace?.id}
+          hasData={hasDataLoaded}
+          onImportComplete={handleImportComplete}
+        />
+        <ChatWorkspaceContent
+          workspace={activeWorkspace}
+          project={activeProject}
+          dataset={{ id: selectedTable, name: selectedTable || "Untitled" }}
+          userPlan={plan as any}
+          onSessionCreated={(sessionId) => console.log("Chat session created:", sessionId)}
+        />
+      </div>
+    );
+  };
 
   const renderContent = () => {
     if (activeMainTab === "home") return <HomeContent />;

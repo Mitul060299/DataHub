@@ -218,7 +218,7 @@ const dataSourceOptions: Array<{
   },
 ];
 
-export const DataImportTab = () => {
+export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableName: string) => void }) => {
   const { plan, limits, usage, workspaceId } = useUser();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [databases, setDatabases] = useState<DatabaseConnection[]>([]);
@@ -365,6 +365,11 @@ export const DataImportTab = () => {
 
       fetchTables();
       message.success(`${file.name} uploaded successfully!`);
+      
+      // Call the callback if provided
+      if (onImportComplete && response.data.tableName) {
+        onImportComplete(response.data.tableName);
+      }
     } catch (error: any) {
       setUploadedFiles((prev) =>
         prev.map((entry) =>

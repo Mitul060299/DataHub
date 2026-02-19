@@ -69,6 +69,7 @@ import DataVisualizationTab from "./components/DataVisualizationTab";
 import { MLTab } from "./components/MLTab";
 import FullAutoTab from "./components/FullAutoTab";
 import { HomePage } from "./components/HomePage";
+import ChatWorkspaceContent from "./components/ChatWorkspaceContent";
 import { formatFileSize, useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
@@ -1090,58 +1091,13 @@ const AppShell = () => {
   );
 
   const ProjectWorkspaceContent = () => (
-    <Layout className="ai-body">
-      <Sider width={280} className="data-sidebar">
-        <Tabs
-          tabPosition="left"
-          items={dataOperationsTabs.map(tab => ({ key: tab.key, label: tab.label }))}
-          className="data-operations-tabs"
-          activeKey={activeDataTab}
-          onChange={setActiveDataTab}
-        />
-      </Sider>
-      <Content className="center-workspace">
-        <Breadcrumb className="project-breadcrumb">
-          <Breadcrumb.Item onClick={() => setActiveProject(null)}>
-            {activeWorkspace?.name}
-          </Breadcrumb.Item>
-          <Breadcrumb.Item>{activeProject?.name}</Breadcrumb.Item>
-        </Breadcrumb>
-        {dataOperationsTabs.find(tab => tab.key === activeDataTab)?.children}
-      </Content>
-      <Sider width={320} className="pipeline-sidebar">
-        <div className="pipeline-header">
-          <Input
-            className="pipeline-name-input"
-            value={pipelineName}
-            onChange={(e) => setPipelineName(e.target.value)}
-            placeholder="Pipeline name"
-            bordered={false}
-          />
-          <div className="pipeline-status-row">
-            <Tag>draft</Tag>
-            <Text type="secondary" style={{ fontSize: 12 }}>Not saved</Text>
-          </div>
-          <div className="pipeline-select-row">
-            <Text type="secondary" style={{ fontSize: 12 }}>Run existing pipeline</Text>
-            <Select placeholder="Select pipeline" style={{ width: "100%" }} />
-          </div>
-        </div>
-        <div className="pipeline-steps-container">
-          <Text strong style={{ display: "block", marginBottom: 12 }}>
-            Add steps to build your pipeline.
-          </Text>
-          <Button className="add-step-button" icon={<PlusOutlined />}>Add Step</Button>
-        </div>
-        <div className="pipeline-actions">
-          <Button icon={<SaveOutlined />} block>Save Pipeline</Button>
-          <Button icon={<ClockCircleOutlined />} block>Schedule</Button>
-          <Button type="primary" icon={<PlayCircleOutlined />} block size="large">
-            Execute Now
-          </Button>
-        </div>
-      </Sider>
-    </Layout>
+    <ChatWorkspaceContent
+      workspace={activeWorkspace}
+      project={activeProject}
+      dataset={{ id: selectedTable, name: selectedTable || "Untitled" }}
+      userPlan={plan as any}
+      onSessionCreated={(sessionId) => console.log("Chat session created:", sessionId)}
+    />
   );
 
   const renderContent = () => {

@@ -308,3 +308,178 @@ class VizDashboardFilterDB(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
+
+# ==================== CHAT & PIPELINE MODELS ====================
+
+class ChatSessionDB(Base):
+    """Stores chat conversation sessions with full message history and reproducibility context"""
+    __tablename__ = "chat_sessions"
+    
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False)
+    dataset_id = Column(String, nullable=False)
+    
+    title = Column(String(500), nullable=True)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, default='active')
+    
+    messages = Column(JSONB, nullable=False, server_default='[]')
+    pipeline_id = Column(String, nullable=True)
+    
+    execution_context = Column(JSONB, nullable=False, server_default='{}')
+    parameters = Column(JSONB, nullable=False, server_default='{}')
+    artifacts = Column(JSONB, nullable=False, server_default='{}')
+    
+    shared_with = Column(JSONB, nullable=False, server_default='[]')
+    tags = Column(ARRAY(String(255)), server_default='{}')
+    pinned = Column(Boolean, nullable=False, default=False)
+    is_template = Column(Boolean, nullable=False, default=False)
+    
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    __table_args__ = (
+        Index("idx_chat_sessions_user", "user_id"),
+        Index("idx_chat_sessions_workspace", "workspace_id"),
+        Index("idx_chat_sessions_dataset", "dataset_id"),
+        Index("idx_chat_sessions_status", "status"),
+        Index("idx_chat_sessions_created", "created_at"),
+    )
+
+
+class PipelineV2DB(Base):
+    """Reproducible pipelines - reusable sequences of transformation steps"""
+    __tablename__ = "pipelines_v2"
+    
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False)
+    
+    name = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    type = Column(String(50), nullable=False, default='manual')
+    status = Column(String(50), nullable=False, default='draft')
+    
+    steps = Column(JSONB, nullable=False)
+    execution_config = Column(JSONB, nullable=False, server_default='{}')
+    
+    version = Column(Integer, nullable=False, default=1)
+    parent_pipeline_id = Column(String, nullable=True)
+    checksum = Column(String(64), nullable=True)
+    
+    tags = Column(ARRAY(String(255)), nullable=True)
+    is_public = Column(Boolean, nullable=False, default=False)
+    
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_pipelines_v2_user", "user_id"),
+        Index("idx_pipelines_v2_workspace", "workspace_id"),
+        Index("idx_pipelines_v2_status", "status"),
+    )
+
+
+class PipelineRunV2DB(Base):
+    """Execution records for pipelines - tracks each run and results"""
+    __tablename__ = "pipeline_runs_v2"
+    
+    id = Column(String, primary_key=True)
+    pipeline_id = Column(String, nullable=False)
+    user_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
+    
+    status = Column(String(50), nullable=False, default='pending')
+    step_results = Column(JSONB, nullable=False, server_default='{}')
+    
+    input_dataset_id = Column(String, nullable=True)
+    output_dataset_id = Column(String, nullable=True)
+    
+    metrics = Column(JSONB, nullable=False, server_default='{}')
+    execution_log = Column(JSONB, nullable=False, server_default='[]')
+    
+    triggered_by = Column(String(50), nullable=False, default='manual')
+    error_message = Column(Text, nullable=True)
+    
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_pipeline_runs_v2_pipeline", "pipeline_id"),
+        Index("idx_pipeline_runs_v2_session", "session_id"),
+        Index("idx_pipeline_runs_v2_status", "status"),
+    )
+
+
+class TransformationStepDB(Base):
+    """Individual transformation steps within a session - for visualization in UI"""
+    __tablename__ = "transformation_steps"
+    
+    id = Column(String, primary_key=True)
+    chat_session_id = Column(String, nullable=False)
+    pipeline_run_id = Column(String, nullable=True)
+    
+    step_number = Column(Integer, nullable=False)
+    action_type = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    parameters = Column(JSONB, nullable=True)
+    sql_generated = Column(Text, nullable=True)
+    
+    input_rows = Column(Integer, nullable=True)
+    output_rows = Column(Integer, nullable=True)
+    execution_time_ms = Column(Integer, nullable=True)
+    
+    status = Column(String(50), nullable=False, default='completed')
+    error_details = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_transformation_steps_session", "chat_session_id"),
+        Index("idx_transformation_steps_run", "pipeline_run_id"),
+    )
+
+
+class ChatTemplateDB(Base):
+    """Reusable chat templates for common workflows"""
+    __tablename__ = "chat_templates"
+    
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False)
+    
+    name = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    
+    initial_prompt = Column(Text, nullable=True)
+    execution_flow = Column(JSONB, nullable=True)
+    
+    is_public = Column(Boolean, nullable=False, default=False)
+    usage_count = Column(Integer, nullable=False, default=0)
+    
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_chat_templates_workspace", "workspace_id"),
+        Index("idx_chat_templates_category", "category"),
+    )
+
+
+class ChatSessionSnapshotDB(Base):
+    """Point-in-time snapshots of session state for rollback/checkpoint functionality"""
+    __tablename__ = "chat_session_snapshots"
+    
+    id = Column(String, primary_key=True)
+    session_id = Column(String, nullable=False)
+    
+    version = Column(Integer, nullable=False)
+    snapshot_type = Column(String(50), nullable=True)
+    messages_count = Column(Integer, nullable=True)
+    dataset_state = Column(JSONB, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+

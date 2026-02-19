@@ -1,13 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, Input, Button, Spin, Empty, Avatar, Badge, Space, Tooltip } from 'antd';
-import {
-  SendOutlined,
-  LoadingOutlined,
-  BotOutlined,
-  UserOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-} from '@ant-design/icons';
+import { SendOutlined, LoadingOutlined, BotOutlined, UserOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import '../styles/ChatInterface.css';
 
 export interface ChatMessage {

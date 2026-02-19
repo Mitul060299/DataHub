@@ -1,11 +1,11 @@
-"""Add ML tables - Revision 0018"""
+"""Add ML tables - Revision 0019"""
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = '0018'
-down_revision = '0017'
+revision = '0019'
+down_revision = '0018_fix_visualization_column_types'
 branch_labels = None
 depends_on = None
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, Input, Button, Spin, Empty, Avatar, Badge, Space, Tooltip } from 'antd';
-import { SendOutlined, LoadingOutlined, BotOutlined, UserOutlined } from '@ant-design/icons';
+import { SendOutlined, LoadingOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 
 export interface ChatMessage {
   id: string;
@@ -161,7 +161,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               >
                 <div className="message-avatar">
                   <Avatar
-                    icon={msg.role === 'user' ? <UserOutlined /> : <BotOutlined />}
+                    icon={msg.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
                     style={{
                       backgroundColor: msg.role === 'user' ? '#1890ff' : '#52c41a',
                     }}

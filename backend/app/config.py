@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List
 import os
+import re
 
 
 def _parse_origins(value: str) -> List[str]:
@@ -18,6 +19,19 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
     if normalized == "":
         return default
     return normalized in {"1", "true", "yes", "on"}
+
+
+def _normalize_aws_region(value: str | None, default: str = "us-east-1") -> str:
+    if not value:
+        return default
+    candidate = value.strip()
+    if not candidate:
+        return default
+
+    region_match = re.search(r"\b[a-z]{2}-[a-z]+-\d\b", candidate.lower())
+    if region_match:
+        return region_match.group(0)
+    return candidate
 
 
 class Settings(BaseModel):
@@ -76,7 +90,7 @@ class Settings(BaseModel):
     storage_provider: str = os.getenv("STORAGE_PROVIDER", "s3")
     s3_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
     s3_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-    s3_region: str = os.getenv("AWS_REGION", "us-east-1")
+    s3_region: str = _normalize_aws_region(os.getenv("AWS_REGION", "us-east-1"))
     s3_bucket_name: str = os.getenv("S3_BUCKET_NAME", "")
     r2_account_id: str = os.getenv("R2_ACCOUNT_ID", "")
     r2_access_key_id: str = os.getenv("R2_ACCESS_KEY_ID", "")

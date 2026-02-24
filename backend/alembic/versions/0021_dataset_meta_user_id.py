@@ -12,7 +12,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = "0021_dataset_meta_user_id"
-down_revision = "0020_chat_pipelines"
+down_revision = "0020"
 branch_labels = None
 depends_on = None
 

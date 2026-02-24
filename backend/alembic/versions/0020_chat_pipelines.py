@@ -1,7 +1,7 @@
 """Add Chat Sessions and Reproducible Pipeline tables
 
 Revision ID: 0020
-Revises: 0019
+Revises: 0018_fix_visualization_column_types
 Create Date: 2026-02-19 12:00:00.000000
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = '0020'
-down_revision = '0019'
+down_revision = '0018_fix_visualization_column_types'
 branch_labels = None
 depends_on = None
 

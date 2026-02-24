@@ -7,6 +7,7 @@ import pandas as pd
 import uuid
 import difflib
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect, text
 from ..models import (
     DatasetPreview,
     DatasetMeta,
@@ -35,6 +36,7 @@ _DATASET_LAST_ACCESS: Dict[str, float] = {}
 _CHUNK_SIZE = 1000
 _MAX_CACHE = settings.dataset_cache_max
 _CACHE_TTL = settings.dataset_cache_ttl_seconds
+_DATASET_META_SCHEMA_CHECKED = False
 
 
 def _touch_cache(dataset_id: str) -> None:
@@ -77,6 +79,29 @@ def _chunk_rows(rows: list[dict], size: int) -> list[list[dict]]:
     return [rows[i : i + size] for i in range(0, len(rows), size)]
 
 
+def _ensure_dataset_meta_schema(db: Session) -> None:
+    global _DATASET_META_SCHEMA_CHECKED
+    if _DATASET_META_SCHEMA_CHECKED:
+        return
+
+    inspector = inspect(db.bind)
+    existing_columns = {col["name"] for col in inspector.get_columns("dataset_meta")}
+    if "user_id" not in existing_columns:
+        db.execute(text("ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS user_id VARCHAR"))
+
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("dataset_meta")}
+    if "idx_datasets_user_workspace" not in existing_indexes:
+        db.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_datasets_user_workspace "
+                "ON dataset_meta (user_id, workspace_id)"
+            )
+        )
+
+    db.commit()
+    _DATASET_META_SCHEMA_CHECKED = True
+
+
 @router.post("/upload", response_model=DatasetPreview)
 async def upload_dataset(
     file: UploadFile = File(...),
@@ -86,6 +111,7 @@ async def upload_dataset(
 ) -> DatasetPreview:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    _ensure_dataset_meta_schema(db)
     content = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(content))
     df = df.astype(object).where(pd.notnull(df), None)
@@ -146,6 +172,7 @@ def save_dataset(
     store_rows: bool = True,
     meta_extra: dict | None = None,
 ) -> str:
+    _ensure_dataset_meta_schema(db)
     dataset_id = str(uuid.uuid4())
     df = df.astype(object).where(pd.notnull(df), None)
     if store_rows and int(df.shape[0]) <= 5000:

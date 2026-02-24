@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy import text
 from alembic import context
 import os
 import sys
@@ -43,6 +44,23 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        version_len = connection.execute(
+            text(
+                """
+                SELECT character_maximum_length
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'alembic_version'
+                  AND column_name = 'version_num'
+                """
+            )
+        ).scalar_one_or_none()
+
+        if isinstance(version_len, int) and version_len < 255:
+            connection.execute(
+                text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)")
+            )
+
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():

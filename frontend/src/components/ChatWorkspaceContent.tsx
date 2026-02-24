@@ -5,7 +5,7 @@ import ChatInterface from './ChatInterface';
 import StepsPanel from './StepsPanel';
 import { CommandRibbon } from './CommandRibbon';
 import { WorkspaceHeaderActions } from './WorkspaceHeaderActions';
-import { invalidateAnalyticsCache } from '../api';
+import { api, invalidateAnalyticsCache } from '../api';
 
 const { Content, Sider } = Layout;
 
@@ -15,6 +15,7 @@ export interface ChatWorkspaceContentProps {
   dataset?: any;
   userPlan?: 'free' | 'professional' | 'team' | 'business' | 'enterprise';
   onSessionCreated?: (sessionId: string) => void;
+  onDatasetSelected?: (selection: { datasetId: string; tableName: string }) => void;
 }
 
 export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
@@ -23,6 +24,7 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
   dataset,
   userPlan = 'free',
   onSessionCreated,
+  onDatasetSelected,
 }) => {
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -91,61 +93,58 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
     }
   }, [headerRef, tableRef, stepsRef]);
 
-  // Simulate loading dataset
+  // Load dataset preview from API
   useEffect(() => {
+    let cancelled = false;
     setSessionId(undefined);
-    setIsLoadingData(true);
-    // Mock data loading - in real app, fetch from API
-    setTimeout(() => {
-      setDatasetColumns([
-        { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
-        { title: 'Name', dataIndex: 'name', key: 'name', width: 150 },
-        { title: 'Email', dataIndex: 'email', key: 'email', width: 200 },
-        { title: 'Age', dataIndex: 'age', key: 'age', width: 80 },
-        { title: 'City', dataIndex: 'city', key: 'city', width: 120 },
-      ]);
-
-      setDatasetRows([
-        {
-          id: 1,
-          name: 'John Doe',
-          email: 'john@example.com',
-          age: 28,
-          city: 'New York',
-        },
-        {
-          id: 2,
-          name: 'Jane Smith',
-          email: 'jane@example.com',
-          age: 34,
-          city: 'San Francisco',
-        },
-        {
-          id: 3,
-          name: 'Bob Johnson',
-          email: 'bob@example.com',
-          age: 45,
-          city: 'Chicago',
-        },
-        {
-          id: 4,
-          name: 'Alice Williams',
-          email: 'alice@example.com',
-          age: 29,
-          city: 'Boston',
-        },
-        {
-          id: 5,
-          name: 'Charlie Brown',
-          email: 'charlie@example.com',
-          age: 52,
-          city: 'Seattle',
-        },
-      ]);
-
+    if (!dataset?.id) {
+      setDatasetColumns([]);
+      setDatasetRows([]);
       setIsLoadingData(false);
-    }, 500);
+      return;
+    }
 
+    const loadPreview = async () => {
+      setIsLoadingData(true);
+      try {
+        const response = await api.get(`/datasets/${encodeURIComponent(dataset.id)}/preview`, {
+          params: { offset: 0, limit: 100 },
+        });
+        const rows = response.data?.rows || [];
+        const columns = response.data?.columns || [];
+
+        if (cancelled) return;
+        setDatasetColumns(
+          columns.map((col: string) => ({
+            title: col,
+            dataIndex: col,
+            key: col,
+            width: 160,
+          }))
+        );
+        setDatasetRows(
+          rows.map((row: Record<string, unknown>, index: number) => ({
+            key: `${dataset.id}-${index}`,
+            ...row,
+          }))
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setDatasetColumns([]);
+          setDatasetRows([]);
+          message.error('Failed to load dataset preview');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingData(false);
+        }
+      }
+    };
+
+    loadPreview();
+    return () => {
+      cancelled = true;
+    };
   }, [dataset?.id]);
 
   const handleStepsUpdate = useCallback((newSteps: any[]) => {
@@ -175,15 +174,14 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
     message.info('Share functionality coming soon');
   };
 
-  const handleDataUpdate = (fileName: string) => {
+  const handleDataUpdate = (selection: { datasetId: string; tableName: string }) => {
     invalidateAnalyticsCache({
-      datasetId: dataset?.id,
+      datasetId: selection.datasetId,
       workspaceId: workspace?.id,
     });
     setDataVersion((prev) => prev + 1);
-    // Handle data update - chat context is silently updated
-    // Previous chat history is preserved
-    message.info(`Data updated: ${fileName}. Previous analysis history is preserved.`);
+    onDatasetSelected?.(selection);
+    message.info(`Data updated: ${selection.tableName}. Previous analysis history is preserved.`);
   };
 
   const isOutputStale = steps.length > 0 && dataVersion > lastExecutionDataVersion;
@@ -242,7 +240,7 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
       >
         <ChatInterface
           sessionId={sessionId}
-          datasetId={dataset?.id || 'default'}
+          datasetId={dataset?.id || ''}
           userPlan={userPlan}
           onSessionUpdated={handleStepsUpdate}
           onSessionCreated={(createdId) => {
@@ -311,7 +309,7 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
               showTotal: (total) => `Total ${total} rows`,
             }}
             loading={isLoadingData}
-            rowKey="id"
+            rowKey="key"
             size="small"
             scroll={{ x: 1200 }}
           />

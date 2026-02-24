@@ -112,6 +112,11 @@ type MarketplacePipeline = {
   tags: string[];
 };
 
+type ActiveDataset = {
+  datasetId: string;
+  tableName: string;
+};
+
 const MARKETPLACE_PIPELINES: MarketplacePipeline[] = [
   {
     id: "1",
@@ -326,7 +331,7 @@ const AppShell = () => {
       return PROJECTS;
     }
   });
-  const [selectedTable, setSelectedTable] = useState("");
+  const [activeDataset, setActiveDataset] = useState<ActiveDataset | null>(null);
 
   useEffect(() => {
     document.body.setAttribute("data-theme", themeMode);
@@ -362,6 +367,10 @@ const AppShell = () => {
   useEffect(() => {
     localStorage.setItem("projects", JSON.stringify(projects));
   }, [projects]);
+
+  useEffect(() => {
+    setActiveDataset(null);
+  }, [activeWorkspace?.id, activeProject?.id]);
 
   const loadWorkspaces = useCallback(async () => {
     try {
@@ -945,11 +954,10 @@ const AppShell = () => {
     </div>
   );
 
-  const hasDataLoaded = selectedTable && selectedTable !== '';
+  const hasDataLoaded = !!activeDataset?.datasetId;
 
-  const handleImportComplete = (fileName: string) => {
-    // Update selected table with imported file name
-    setSelectedTable(fileName);
+  const handleImportComplete = (selection: { datasetId: string; tableName: string }) => {
+    setActiveDataset(selection);
   };
 
   const ProjectWorkspaceContent = () => {
@@ -986,10 +994,7 @@ const AppShell = () => {
               Stage 1 starts with data import. Use the Import button above or load a sample dataset to explore the workspace flow.
             </p>
             <Space>
-              <Button type="primary" onClick={() => setSelectedTable('sample_customers.csv')}>
-                Load Sample Dataset
-              </Button>
-              <Button onClick={() => notify.info('Use Import for files, then chat and execution stages to iterate safely.') }>
+              <Button onClick={() => notify.info('Use Import, then click Use in workspace for the dataset you want to work with.') }>
                 What can I do here?
               </Button>
             </Space>
@@ -1010,8 +1015,9 @@ const AppShell = () => {
           <ChatWorkspaceContent
             workspace={activeWorkspace}
             project={activeProject}
-            dataset={{ id: selectedTable, name: selectedTable || "Untitled" }}
+            dataset={{ id: activeDataset?.datasetId, name: activeDataset?.tableName || "Untitled" }}
             userPlan={plan as any}
+            onDatasetSelected={handleImportComplete}
             onSessionCreated={(sessionId) => console.log("Chat session created:", sessionId)}
           />
         </Suspense>

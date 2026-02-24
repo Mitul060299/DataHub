@@ -58,6 +58,7 @@ interface UploadedFile {
   status: "uploading" | "processing" | "completed" | "error";
   progress: number;
   tableName?: string;
+  datasetId?: string;
   tableCount?: number;
   rowCount?: number;
   uploadedAt: Date;
@@ -77,10 +78,16 @@ interface DatabaseConnection {
 
 interface TableInfo {
   name: string;
+  datasetId: string;
   rowCount: number;
   columnCount: number;
   size: string;
   lastUpdated: string;
+}
+
+interface ImportSelection {
+  datasetId: string;
+  tableName: string;
 }
 
 const api = axios.create({
@@ -218,7 +225,7 @@ const dataSourceOptions: Array<{
   },
 ];
 
-export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableName: string) => void }) => {
+export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (selection: ImportSelection) => void }) => {
   const { plan, limits, usage, workspaceId } = useUser();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [databases, setDatabases] = useState<DatabaseConnection[]>([]);
@@ -356,6 +363,7 @@ export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableN
                 status: "completed",
                 progress: 100,
                 tableName: response.data.tableName,
+                datasetId: response.data.datasetId,
                 tableCount: response.data.tableCount,
                 rowCount: response.data.rowCount,
               }
@@ -367,8 +375,11 @@ export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableN
       message.success(`${file.name} uploaded successfully!`);
       
       // Call the callback if provided
-      if (onImportComplete && response.data.tableName) {
-        onImportComplete(response.data.tableName);
+      if (onImportComplete && response.data.tableName && response.data.datasetId) {
+        onImportComplete({
+          datasetId: response.data.datasetId,
+          tableName: response.data.tableName,
+        });
       }
     } catch (error: any) {
       // Log full error for debugging
@@ -502,6 +513,14 @@ export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableN
     } catch (error) {
       message.error("Failed to export table");
     }
+  };
+
+  const handleUseInWorkspace = (table: TableInfo) => {
+    if (!onImportComplete) {
+      return;
+    }
+    onImportComplete({ datasetId: table.datasetId, tableName: table.name });
+    message.success(`Selected ${table.name} for workspace`);
   };
 
   useEffect(() => {
@@ -707,10 +726,17 @@ export const DataImportTab = ({ onImportComplete }: { onImportComplete?: (tableN
         ) : (
           <List
             dataSource={tables}
-            rowKey={(table) => table.name}
+            rowKey={(table) => table.datasetId || table.name}
             renderItem={(table) => (
               <List.Item
                 actions={[
+                  <Button
+                    type="primary"
+                    icon={<CloudUploadOutlined />}
+                    onClick={() => handleUseInWorkspace(table)}
+                  >
+                    Use in workspace
+                  </Button>,
                   <Button
                     type="link"
                     icon={<EyeOutlined />}

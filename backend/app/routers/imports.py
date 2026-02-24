@@ -181,6 +181,7 @@ async def upload_file(
 
         return {
             "success": True,
+            "datasetId": dataset_id,
             "tableName": table_name,
             "rowCount": int(df.shape[0]),
             "tableCount": 1,
@@ -328,6 +329,7 @@ async def list_tables(
         results.append(
             {
                 "name": table.name,
+                "datasetId": table.dataset_id,
                 "rowCount": row_count,
                 "columnCount": column_count,
                 "size": _format_size(table.size_bytes),

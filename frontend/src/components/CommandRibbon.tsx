@@ -22,7 +22,7 @@ interface CommandRibbonProps {
   onShare?: () => void;
   onSchedule?: () => void;
   isCompact?: boolean;
-  onImportComplete?: (fileName: string) => void;
+  onImportComplete?: (selection: { datasetId: string; tableName: string }) => void;
 }
 
 export const CommandRibbon: React.FC<CommandRibbonProps> = ({
@@ -45,11 +45,11 @@ export const CommandRibbon: React.FC<CommandRibbonProps> = ({
     setImportModalOpen(true);
   };
 
-  const handleImportComplete = (fileName: string) => {
+  const handleImportComplete = (selection: { datasetId: string; tableName: string }) => {
     setImportModalOpen(false);
-    message.success(`Data imported: ${fileName}`);
+    message.success(`Data imported: ${selection.tableName}`);
     if (onImportComplete) {
-      onImportComplete(fileName);
+      onImportComplete(selection);
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Input, Button, Spin, Empty, Avatar, Badge, Space, Tooltip } from 'antd';
+import { Card, Input, Button, Spin, Empty, Avatar, Badge, Space, Tooltip, message } from 'antd';
 import { SendOutlined, LoadingOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { createChatSession, streamChatSessionMessage } from '../api';
 
@@ -86,6 +86,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const sendMessage = async () => {
     if (!inputValue.trim()) return;
+    if (!datasetId) {
+      message.warning('Select a dataset in workspace before running AI commands.');
+      return;
+    }
 
     const userMsg: ChatMessage = {
       id: Math.random().toString(),

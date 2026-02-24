@@ -1,6 +1,12 @@
 from fastapi import APIRouter, HTTPException, Header, Depends
 from sqlalchemy.orm import Session
-from ..models import TransformationRecipe, DatasetPreview, RecipeVersionOut
+from ..models import (
+    TransformationRecipe,
+    DatasetPreview,
+    RecipeVersionOut,
+    RecipeRetentionPolicyOut,
+    RecipeRetentionPolicyUpdate,
+)
 from ..services.recipes import recipe_store
 from ..services.transformer import apply_steps
 from .datasets import get_dataset, get_dataset_from_db, save_dataset
@@ -49,6 +55,34 @@ def list_recipe_versions(dataset_id: str) -> list[RecipeVersionOut]:
         )
         for v in versions
     ]
+
+
+@router.get("/retention/recipes-policy", response_model=RecipeRetentionPolicyOut)
+def get_recipe_retention_policy() -> RecipeRetentionPolicyOut:
+    policy = recipe_store.retention_policy()
+    return RecipeRetentionPolicyOut(**policy)
+
+
+@router.put("/retention/recipes-policy", response_model=RecipeRetentionPolicyOut)
+def update_recipe_retention_policy(
+    payload: RecipeRetentionPolicyUpdate,
+    authorization: str | None = Header(default=None),
+) -> RecipeRetentionPolicyOut:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    policy = recipe_store.set_retention_policy(
+        max_versions=payload.max_versions,
+        max_age_days=payload.max_age_days,
+    )
+    audit_store.add(
+        AuditEntry(
+            action="recipe.retention_policy.update",
+            actor=authorization or "unknown",
+            target="global",
+            metadata=policy,
+        )
+    )
+    return RecipeRetentionPolicyOut(**policy)
 
 
 @router.post("/recipes/{dataset_id}/revert/{version_id}", response_model=TransformationRecipe)

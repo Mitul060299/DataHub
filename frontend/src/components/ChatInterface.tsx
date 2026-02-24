@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, Input, Button, Spin, Empty, Avatar, Badge, Space, Tooltip } from 'antd';
 import { SendOutlined, LoadingOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { createChatSession, streamChatSessionMessage } from '../api';
 
 export interface ChatMessage {
   id: string;
@@ -18,10 +19,24 @@ export interface StreamingEvent {
   timestamp: number;
 }
 
+type ConfirmationEventData = {
+  category?: string;
+  block_reason?: string;
+  retryable?: boolean;
+  retry_actions?: string[];
+  details?: Record<string, any>;
+  policy?: {
+    max_rows?: number;
+    max_columns?: number;
+    max_request_chars?: number;
+  };
+};
+
 interface ChatInterfaceProps {
-  sessionId: string;
+  sessionId?: string;
   datasetId: string;
   onSessionUpdated?: (sessionData: any) => void;
+  onSessionCreated?: (sessionId: string) => void;
   userPlan?: 'free' | 'professional' | 'team' | 'business' | 'enterprise';
 }
 
@@ -29,13 +44,37 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   sessionId,
   datasetId,
   onSessionUpdated,
+  onSessionCreated,
   userPlan = 'free',
 }) => {
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionId || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState<StreamingEvent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveSessionId(sessionId || null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    setMessages([]);
+    setEvents([]);
+    setActiveSessionId(null);
+  }, [datasetId]);
+
+  const ensureSession = async (initialRequest?: string): Promise<string> => {
+    if (activeSessionId) return activeSessionId;
+    const response = await createChatSession(datasetId, initialRequest);
+    const createdId = response?.data?.id;
+    if (!createdId) {
+      throw new Error('Failed to create chat session');
+    }
+    setActiveSessionId(createdId);
+    onSessionCreated?.(createdId);
+    return createdId;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -63,54 +102,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setEvents([]);
 
     try {
-      const response = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          content: userInput,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to send message');
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6)) as StreamingEvent;
-              setEvents((prev) => [...prev, event]);
-
-              if (event.type === 'message') {
-                const aiMsg: ChatMessage = {
-                  id: Math.random().toString(),
-                  timestamp: event.timestamp,
-                  role: 'assistant',
-                  content: event.content,
-                  type: 'text',
-                  metadata: event.data,
-                };
-                setMessages((prev) => [...prev, aiMsg]);
-              }
-            } catch (e) {
-              console.error('Failed to parse event:', e);
-            }
-          }
+      const ensuredSessionId = await ensureSession(userInput);
+      const streamEvents = await streamChatSessionMessage(ensuredSessionId, userInput);
+      for (const event of streamEvents) {
+        setEvents((prev) => [...prev, event as StreamingEvent]);
+        if (event.type === 'message') {
+          const aiMsg: ChatMessage = {
+            id: Math.random().toString(),
+            timestamp: event.timestamp,
+            role: 'assistant',
+            content: event.content,
+            type: 'text',
+            metadata: event.data,
+          };
+          setMessages((prev) => [...prev, aiMsg]);
         }
       }
     } catch (error) {
@@ -237,6 +242,52 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                             <li key={i}>{step.description}</li>
                           ))}
                         </ol>
+                      </div>
+                    )}
+
+                    {event.type === 'confirmation_needed' && (
+                      <div className="confirmation-block">
+                        <p className="confirmation-caption">
+                          This request requires confirmation before retry.
+                        </p>
+                        {(() => {
+                          const data = (event.data || {}) as ConfirmationEventData;
+                          return (
+                            <>
+                              {data.block_reason && (
+                                <p className="confirmation-reason">
+                                  <strong>Reason:</strong> {data.block_reason}
+                                </p>
+                              )}
+                              {data.policy && (
+                                <p className="confirmation-policy">
+                                  <strong>Guardrails:</strong> rows ≤ {data.policy.max_rows ?? '-'}, columns ≤ {data.policy.max_columns ?? '-'}, request chars ≤ {data.policy.max_request_chars ?? '-'}
+                                </p>
+                              )}
+                              {data.retry_actions && data.retry_actions.length > 0 && (
+                                <div className="confirmation-actions">
+                                  <p className="confirmation-actions-title">Suggested retry actions</p>
+                                  <Space wrap>
+                                    {data.retry_actions.map((action, idx) => (
+                                      <Button
+                                        key={`${action}-${idx}`}
+                                        size="small"
+                                        onClick={() => setInputValue(action)}
+                                      >
+                                        {action}
+                                      </Button>
+                                    ))}
+                                  </Space>
+                                </div>
+                              )}
+                              {data.retryable === false && (
+                                <p className="confirmation-non-retryable">
+                                  This action is currently blocked until admin policy is updated.
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </Card>

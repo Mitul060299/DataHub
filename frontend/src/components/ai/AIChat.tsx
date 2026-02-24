@@ -31,9 +31,34 @@ export function AIChat({ context, currentDataset, onAction, suggestions }: Props
     [suggestions, contextSuggestions]
   );
 
+  const continuityKey = useMemo(
+    () => `ai-chat-continuity:${context}:${currentDataset?.id ?? "global"}`,
+    [context, currentDataset?.id]
+  );
+
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(continuityKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as AIMessage[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          return;
+        }
+      }
+    } catch {
+    }
     setMessages([welcomeMessage]);
-  }, [welcomeMessage]);
+  }, [welcomeMessage, continuityKey]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    try {
+      const capped = messages.slice(-50);
+      localStorage.setItem(continuityKey, JSON.stringify(capped));
+    } catch {
+    }
+  }, [messages, continuityKey]);
 
   const appendMessage = (message: AIMessage) => {
     setMessages((prev) => [...prev, message]);
@@ -55,6 +80,7 @@ export function AIChat({ context, currentDataset, onAction, suggestions }: Props
       role: "assistant",
       content: response.message,
       actions: response.actions,
+      status: response.status,
     };
     appendMessage(aiMessage);
   };
@@ -72,6 +98,7 @@ export function AIChat({ context, currentDataset, onAction, suggestions }: Props
       role: "assistant",
       content: response.message,
       actions: response.actions,
+      status: response.status,
     };
     appendMessage(aiMessage);
     if (response.autoExecute && response.actions) {
@@ -80,6 +107,14 @@ export function AIChat({ context, currentDataset, onAction, suggestions }: Props
   };
 
   const handleAction = (action: AIAction) => {
+    if (action.type === "retry_suggestion") {
+      setInput(action.label ?? "");
+      return;
+    }
+    if (action.type === "load_dataset_context") {
+      setInput("Load a dataset and retry this request.");
+      return;
+    }
     onAction(action);
   };
 

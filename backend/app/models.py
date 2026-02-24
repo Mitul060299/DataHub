@@ -73,6 +73,65 @@ class RecipeVersionOut(BaseModel):
     created_at: str
 
 
+class RecipeRetentionPolicyOut(BaseModel):
+    max_versions: int
+    max_age_days: int
+
+
+class RecipeRetentionPolicyUpdate(BaseModel):
+    max_versions: Optional[int] = Field(default=None, ge=1, le=1000)
+    max_age_days: Optional[int] = Field(default=None, ge=1, le=3650)
+
+
+class StorageTierPolicyOut(BaseModel):
+    hot_max_size_bytes: int
+    warm_max_size_bytes: int
+    warm_after_days: int
+    archive_after_days: int
+    storage_classes: Dict[str, str] = Field(default_factory=dict)
+
+
+class StorageTierPolicyUpdate(BaseModel):
+    hot_max_size_bytes: Optional[int] = Field(default=None, ge=1)
+    warm_max_size_bytes: Optional[int] = Field(default=None, ge=1)
+    warm_after_days: Optional[int] = Field(default=None, ge=1, le=3650)
+    archive_after_days: Optional[int] = Field(default=None, ge=1, le=3650)
+
+
+class AutomationGuardrailPolicyOut(BaseModel):
+    enabled: bool
+    max_rows: int
+    max_columns: int
+    max_request_chars: int
+    max_steps: int
+    allow_ml_training: bool
+
+
+class AutomationGuardrailPolicyUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    max_rows: Optional[int] = Field(default=None, ge=1)
+    max_columns: Optional[int] = Field(default=None, ge=1)
+    max_request_chars: Optional[int] = Field(default=None, ge=10, le=20000)
+    max_steps: Optional[int] = Field(default=None, ge=1, le=100)
+    allow_ml_training: Optional[bool] = None
+
+
+class AIOperatingControlsOut(BaseModel):
+    enable_durable_memory: bool
+    max_message_chars: int
+    max_stream_events: int
+    allowed_intents: List[str] = Field(default_factory=list)
+    prompt_starters: Dict[str, List[str]] = Field(default_factory=dict)
+
+
+class AIOperatingControlsUpdate(BaseModel):
+    enable_durable_memory: Optional[bool] = None
+    max_message_chars: Optional[int] = Field(default=None, ge=10, le=20000)
+    max_stream_events: Optional[int] = Field(default=None, ge=1, le=5000)
+    allowed_intents: Optional[List[str]] = None
+    prompt_starters: Optional[Dict[str, List[str]]] = None
+
+
 class AuthToken(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -309,6 +368,24 @@ class UsageSummary(BaseModel):
     unique_actors: int
     actions: List[ActionCount] = Field(default_factory=list)
     targets: List[TargetCount] = Field(default_factory=list)
+
+
+class TenantIsolationViolation(BaseModel):
+    category: str
+    severity: Literal["high", "medium", "low"] = "medium"
+    table: str
+    record_id: str
+    workspace_id: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TenantIsolationReport(BaseModel):
+    checked_at: str
+    scope_workspace_id: Optional[str] = None
+    total_records_scanned: int = 0
+    total_violations: int = 0
+    violations_by_category: Dict[str, int] = Field(default_factory=dict)
+    violations: List[TenantIsolationViolation] = Field(default_factory=list)
 
 
 class CorrelationPair(BaseModel):

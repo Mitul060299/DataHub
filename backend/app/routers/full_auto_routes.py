@@ -75,6 +75,25 @@ async def start_auto_analysis(
         raise HTTPException(status_code=500, detail='Internal server error')
 
 
+@router.get('/guardrails/check')
+async def check_auto_guardrails(
+    dataset_id: str,
+    user_request: str,
+    current_user_id: str = Depends(get_current_subject),
+    controller: FullAutoController = Depends(get_controller)
+):
+    """Run automation guardrail precheck and return confirmation/retry guidance."""
+    try:
+        return controller.evaluate_guardrails(
+            user_id=current_user_id,
+            dataset_id=dataset_id,
+            user_request=user_request,
+        )
+    except Exception as e:
+        print(f"Error in check_auto_guardrails: {e}")
+        raise HTTPException(status_code=500, detail='Failed to evaluate guardrails')
+
+
 @router.get('/sessions')
 async def get_user_sessions(
     current_user_id: str = Depends(get_current_subject),

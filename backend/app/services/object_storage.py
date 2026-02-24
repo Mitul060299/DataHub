@@ -9,6 +9,7 @@ import boto3
 from botocore.config import Config
 
 from ..config import settings
+from ..services.storage_tiering import storage_tier_service
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,14 @@ class StorageService:
         return base
 
     @classmethod
-    def upload(cls, user_id: Optional[str], dataset_id: str, buffer: bytes, file_name: str) -> str:
+    def upload(
+        cls,
+        user_id: Optional[str],
+        dataset_id: str,
+        buffer: bytes,
+        file_name: str,
+        storage_tier: str = "hot",
+    ) -> str:
         key_prefix = user_id or "anonymous"
         key = f"{key_prefix}/{dataset_id}/{file_name}"
 
@@ -106,11 +114,17 @@ class StorageService:
             client = cls._r2_client()
             if not settings.r2_bucket_name:
                 raise ValueError("R2_BUCKET_NAME is required for R2 uploads")
+            put_kwargs = {
+                "Bucket": settings.r2_bucket_name,
+                "Key": key,
+                "Body": buffer,
+                "ContentType": "application/octet-stream",
+            }
+            storage_class = storage_tier_service.resolve_storage_class(storage_tier, provider)
+            if storage_class:
+                put_kwargs["StorageClass"] = storage_class
             client.put_object(
-                Bucket=settings.r2_bucket_name,
-                Key=key,
-                Body=buffer,
-                ContentType="application/octet-stream",
+                **put_kwargs,
             )
             return f"r2://{settings.r2_bucket_name}/{key}"
 
@@ -118,13 +132,14 @@ class StorageService:
             client = cls._s3_client()
             if not settings.s3_bucket_name:
                 raise ValueError("S3_BUCKET_NAME is required for S3 uploads")
+            storage_class = storage_tier_service.resolve_storage_class(storage_tier, provider) or "STANDARD"
             client.put_object(
                 Bucket=settings.s3_bucket_name,
                 Key=key,
                 Body=buffer,
                 ContentType="application/octet-stream",
                 ServerSideEncryption="AES256",
-                StorageClass="STANDARD",
+                StorageClass=storage_class,
             )
             return f"s3://{settings.s3_bucket_name}/{key}"
 

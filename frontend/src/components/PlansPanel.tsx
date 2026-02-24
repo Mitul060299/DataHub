@@ -21,7 +21,6 @@ const planData = {
     { name: "Enterprise", price: "Custom", period: "", features: ["Unlimited storage", "Custom AI limits", "On-premise option", "White-label", "Custom integrations", "24/7 dedicated support"] },
   ],
 };
-};
 
 export function PlansPanel({ onSelectPlan }: Props) {
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");

@@ -13,7 +13,8 @@ type AuthContextValue = {
   signUpWithPassword: (
     email: string,
     password: string,
-    fullName?: string
+    fullName?: string,
+    role?: "analyst" | "engineer" | "manager" | "admin"
   ) => Promise<{ error: AuthError | null }>;
   signInWithProvider: (provider: "google" | "github") => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
@@ -67,11 +68,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
-  const signUpWithPassword = async (email: string, password: string, fullName?: string) => {
+  const signUpWithPassword = async (
+    email: string,
+    password: string,
+    fullName?: string,
+    role?: "analyst" | "engineer" | "manager" | "admin"
+  ) => {
+    const metadata: Record<string, string> = {};
+    if (fullName) {
+      metadata.full_name = fullName;
+    }
+    if (role) {
+      metadata.role = role;
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: fullName ? { data: { full_name: fullName } } : undefined,
+      options: Object.keys(metadata).length ? { data: metadata } : undefined,
     });
     return { error };
   };

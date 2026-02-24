@@ -1,6 +1,102 @@
 import axios from "axios";
 import { getAuthToken } from "./utils/auth";
 
+const ANALYTICS_CACHE_TTL_MS = 60_000;
+
+type CacheEntry<T> = {
+  value: T;
+  expiresAt: number;
+};
+
+const analyticsCache = new Map<string, CacheEntry<unknown>>();
+const analyticsPending = new Map<string, Promise<unknown>>();
+
+const toStableParams = (params?: Record<string, unknown>) => {
+  if (!params) return "";
+  const keys = Object.keys(params).sort();
+  return keys
+    .map((key) => `${key}:${String(params[key])}`)
+    .join("|");
+};
+
+const analyticsKey = (scope: string, datasetId: string, params?: Record<string, unknown>) => {
+  const suffix = toStableParams(params);
+  return suffix ? `${scope}:${datasetId}:${suffix}` : `${scope}:${datasetId}`;
+};
+
+const readAnalyticsCache = <T>(key: string): T | null => {
+  const cached = analyticsCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    analyticsCache.delete(key);
+    return null;
+  }
+  return cached.value as T;
+};
+
+const writeAnalyticsCache = <T>(key: string, value: T) => {
+  analyticsCache.set(key, {
+    value,
+    expiresAt: Date.now() + ANALYTICS_CACHE_TTL_MS,
+  });
+};
+
+const getCachedAnalytics = async <T>(key: string, loader: () => Promise<T>): Promise<T> => {
+  const cached = readAnalyticsCache<T>(key);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const pending = analyticsPending.get(key) as Promise<T> | undefined;
+  if (pending) {
+    return pending;
+  }
+
+  const request = loader()
+    .then((value) => {
+      writeAnalyticsCache(key, value);
+      return value;
+    })
+    .finally(() => {
+      analyticsPending.delete(key);
+    });
+
+  analyticsPending.set(key, request as Promise<unknown>);
+  return request;
+};
+
+export function invalidateAnalyticsCache(options?: { datasetId?: string; workspaceId?: string }) {
+  if (!options?.datasetId && !options?.workspaceId) {
+    analyticsCache.clear();
+    analyticsPending.clear();
+    return;
+  }
+
+  const datasetId = options.datasetId;
+  const workspaceId = options.workspaceId;
+
+  const shouldDrop = (key: string) => {
+    if (datasetId && !key.includes(`:${datasetId}`)) {
+      return false;
+    }
+    if (workspaceId && !key.includes(`workspace_id:${workspaceId}`)) {
+      return false;
+    }
+    return true;
+  };
+
+  for (const key of analyticsCache.keys()) {
+    if (shouldDrop(key)) {
+      analyticsCache.delete(key);
+    }
+  }
+  for (const key of analyticsPending.keys()) {
+    if (shouldDrop(key)) {
+      analyticsPending.delete(key);
+    }
+  }
+}
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
 });
@@ -23,31 +119,46 @@ export async function uploadDataset(file: File) {
   const response = await api.post("/datasets/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" }
   });
+  invalidateAnalyticsCache();
   return response.data;
 }
 
 export async function fetchProfile(datasetId: string) {
-  const response = await api.get(`/profiling/${datasetId}`);
-  return response.data;
+  const key = analyticsKey("profile", datasetId);
+  return getCachedAnalytics(key, async () => {
+    const response = await api.get(`/profiling/${datasetId}`);
+    return response.data;
+  });
 }
 
 export async function fetchInsights(datasetId: string, workspaceId?: string) {
-  const response = await api.get(`/insights/${datasetId}`, {
-    params: workspaceId ? { workspace_id: workspaceId } : undefined
+  const params = workspaceId ? { workspace_id: workspaceId } : undefined;
+  const key = analyticsKey("insights", datasetId, params);
+  return getCachedAnalytics(key, async () => {
+    const response = await api.get(`/insights/${datasetId}`, {
+      params
+    });
+    return response.data;
   });
-  return response.data;
 }
 
 export async function fetchInsightActions(datasetId: string) {
-  const response = await api.get(`/insights/${datasetId}/actions`);
-  return response.data;
+  const key = analyticsKey("insight-actions", datasetId);
+  return getCachedAnalytics(key, async () => {
+    const response = await api.get(`/insights/${datasetId}/actions`);
+    return response.data;
+  });
 }
 
 export async function fetchAgentSuggestions(datasetId: string, workspaceId?: string) {
-  const response = await api.get(`/agents/suggest/${datasetId}`, {
-    params: workspaceId ? { workspace_id: workspaceId } : undefined
+  const params = workspaceId ? { workspace_id: workspaceId } : undefined;
+  const key = analyticsKey("agent-suggestions", datasetId, params);
+  return getCachedAnalytics(key, async () => {
+    const response = await api.get(`/agents/suggest/${datasetId}`, {
+      params
+    });
+    return response.data;
   });
-  return response.data;
 }
 
 export async function getOidcLoginUrl() {
@@ -90,6 +201,77 @@ export async function chatWithAgent(
     params: workspaceId ? { workspace_id: workspaceId } : undefined
   });
   return response.data;
+}
+
+export type ChatSessionStreamEvent = {
+  type: string;
+  content: string;
+  data?: Record<string, unknown>;
+  timestamp: number;
+};
+
+export async function createChatSession(datasetId: string, initialRequest?: string) {
+  const response = await api.post("/api/chat/sessions", null, {
+    params: {
+      dataset_id: datasetId,
+      initial_request: initialRequest,
+    },
+  });
+  return response.data as {
+    success: boolean;
+    data?: {
+      id: string;
+      title: string;
+      dataset_id: string;
+      status: string;
+      created_at: string;
+    };
+  };
+}
+
+export async function streamChatSessionMessage(sessionId: string, content: string) {
+  const token = getAuthToken();
+  const baseUrl = (api.defaults.baseURL || "").replace(/\/$/, "");
+  const streamUrl = `${baseUrl}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages?content=${encodeURIComponent(content)}`;
+
+  const response = await fetch(streamUrl, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to send message");
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("No response body");
+  }
+
+  const events: ChatSessionStreamEvent[] = [];
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6)) as ChatSessionStreamEvent;
+        events.push(event);
+      } catch {
+      }
+    }
+  }
+
+  return events;
 }
 
 export async function fetchContext(workspaceId: string) {
@@ -159,63 +341,6 @@ export async function revertRecipe(datasetId: string, versionId: string) {
   return response.data;
 }
 
-// ========================================
-// DEPRECATED: Old Dashboard API
-// Use /visualizations endpoints instead
-// ========================================
-
-export async function listDashboards() {
-  const response = await api.get("/dashboards");
-  return response.data;
-}
-
-export async function createDashboard(name: string) {
-  const response = await api.post(`/dashboards?name=${encodeURIComponent(name)}`);
-  return response.data;
-}
-
-export async function updateDashboard(dashboardId: string, payload: { name?: string; widgets?: any[] }) {
-  const response = await api.put(`/dashboards/${dashboardId}`, payload);
-  return response.data;
-}
-
-export async function deleteDashboard(dashboardId: string) {
-  const response = await api.delete(`/dashboards/${dashboardId}`);
-  return response.data;
-}
-
-export async function shareDashboard(dashboardId: string, expiresInHours?: number, scope?: string) {
-  const params: Record<string, unknown> = {};
-  if (expiresInHours) params.expires_in_hours = expiresInHours;
-  if (scope) params.scope = scope;
-  const response = await api.post(`/dashboards/${dashboardId}/share`, null, {
-    params: Object.keys(params).length ? params : undefined
-  });
-  return response.data as { share_token: string; share_url?: string };
-}
-
-export async function unshareDashboard(dashboardId: string) {
-  const response = await api.post(`/dashboards/${dashboardId}/unshare`);
-  return response.data;
-}
-
-export async function unshareAllDashboards() {
-  const response = await api.post("/dashboards/unshare-all");
-  return response.data;
-}
-
-export async function purgeExpiredDashboards() {
-  const response = await api.post("/dashboards/purge-expired");
-  return response.data;
-}
-
-export async function fetchSharedDashboard(shareToken: string, scope?: string) {
-  const response = await api.get(`/dashboards/shared/${shareToken}`, {
-    params: scope ? { scope } : undefined
-  });
-  return response.data;
-}
-
 export async function listDatasets() {
   const response = await api.get("/datasets");
   return response.data;
@@ -255,6 +380,7 @@ export async function fetchColumnSuggestions(datasetId: string, query: string, l
 
 export async function deleteDataset(datasetId: string) {
   const response = await api.delete(`/datasets/${datasetId}`);
+  invalidateAnalyticsCache({ datasetId });
   return response.data;
 }
 

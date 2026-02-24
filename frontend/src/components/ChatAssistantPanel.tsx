@@ -1,6 +1,6 @@
 import { Button, Input, List, Space, Typography } from "antd";
-import { useMemo, useState } from "react";
-import { chatWithAgent } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { createChatSession, streamChatSessionMessage } from "../api";
 import { ChatMessage } from "../types";
 import { notify } from "../utils/notify";
 
@@ -13,6 +13,24 @@ export function ChatAssistantPanel({ datasetId, workspaceId }: Props) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<ChatMessage[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSessionId(null);
+    setHistory([]);
+  }, [datasetId, workspaceId]);
+
+  const ensureSession = async (initialRequest?: string) => {
+    if (!datasetId) return null;
+    if (sessionId) return sessionId;
+    const response = await createChatSession(datasetId, initialRequest);
+    const created = response?.data?.id;
+    if (!created) {
+      throw new Error("Failed to create chat session");
+    }
+    setSessionId(created);
+    return created;
+  };
 
   const canSend = useMemo(() => !!datasetId && message.trim().length > 0 && !loading, [datasetId, message, loading]);
 
@@ -24,10 +42,26 @@ export function ChatAssistantPanel({ datasetId, workspaceId }: Props) {
     setMessage("");
     setLoading(true);
     try {
-      const response = await chatWithAgent(datasetId, nextMessage, nextHistory, workspaceId || undefined);
-      setHistory((current) => [...current, { role: "assistant", content: response.reply }]);
-      if (response?.notes?.length) {
-        notify.info(response.notes.join(" "));
+      const activeSessionId = await ensureSession(nextMessage);
+      if (!activeSessionId) {
+        throw new Error("No active session");
+      }
+      const events = await streamChatSessionMessage(activeSessionId, nextMessage);
+      const assistantReplies = events.filter((event) => event.type === "message");
+      if (assistantReplies.length === 0) {
+        setHistory((current) => [...current, { role: "assistant", content: "No assistant response received." }]);
+      } else {
+        setHistory((current) => [
+          ...current,
+          ...assistantReplies.map((event) => ({
+            role: "assistant" as const,
+            content: event.content,
+          })),
+        ]);
+      }
+      const confirmationEvent = events.find((event) => event.type === "confirmation_needed");
+      if (confirmationEvent?.data?.message) {
+        notify.info(String(confirmationEvent.data.message));
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Failed to get assistant response.";

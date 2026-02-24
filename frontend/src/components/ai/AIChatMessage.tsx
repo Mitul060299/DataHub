@@ -11,7 +11,9 @@ type Props = {
 
 export function AIChatMessage({ message, onAction }: Props) {
   return (
-    <div className={`ai-message ${message.role === "user" ? "ai-message-user" : "ai-message-ai"}`}>
+    <div
+      className={`ai-message ${message.role === "user" ? "ai-message-user" : "ai-message-ai"} ${message.status ? `ai-message-status-${message.status}` : ""}`}
+    >
       <Text>{message.content}</Text>
       {message.actions && message.actions.length > 0 && (
         <Space wrap className="ai-message-actions">

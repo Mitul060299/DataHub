@@ -20,6 +20,7 @@ interface StepsPanelProps {
   onRollback?: (stepNumber: number) => void;
   onDelete?: (stepNumber: number) => void;
   onEdit?: (stepNumber: number) => void;
+  title?: string;
 }
 
 const getStatusIcon = (status: string) => {
@@ -62,6 +63,7 @@ export const StepsPanel: React.FC<StepsPanelProps> = ({
   onRollback,
   onDelete,
   onEdit,
+  title = 'Transformation Steps',
 }) => {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
 
@@ -80,7 +82,7 @@ export const StepsPanel: React.FC<StepsPanelProps> = ({
   if (!steps || steps.length === 0) {
     return (
       <div className="steps-panel">
-        <Card title="Transformation Steps" bordered={false} size="small">
+        <Card title={title} bordered={false} size="small">
           <Empty description="No steps yet" />
         </Card>
       </div>
@@ -92,7 +94,7 @@ export const StepsPanel: React.FC<StepsPanelProps> = ({
       <Card
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>Transformation Steps</span>
+            <span>{title}</span>
             <Badge count={steps.length} style={{ backgroundColor: '#1890ff' }} />
           </div>
         }

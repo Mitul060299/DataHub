@@ -15,7 +15,8 @@ from sqlalchemy import desc
 from app.db import get_db
 from app.security import get_current_subject
 from app.models_db import ChatSessionDB, TransformationStepDB, PipelineV2DB, ChatSessionSnapshotDB
-from app.services.chat_engine import ChatEngine, EventType
+from app.services.chat_engine import ChatEngine, EventType, ChatEvent
+from app.services.ai_operating_controls import get_ai_operating_controls
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -240,14 +241,25 @@ async def send_message_to_session(
         workspace_id=session.workspace_id,
         user_plan=user_plan
     )
+    ai_controls = get_ai_operating_controls()
     
     async def event_generator():
         """Generate SSE events for streaming response"""
+        event_count = 0
         async for event in engine.process_message(
             session_id=session_id,
             user_message=content,
             dataset_id=str(session.dataset_id)
         ):
+            if event_count >= ai_controls.max_stream_events:
+                capped_event = ChatEvent(
+                    type=EventType.DONE,
+                    content="Stream event cap reached",
+                    data={"max_stream_events": ai_controls.max_stream_events},
+                )
+                yield capped_event.to_sse()
+                break
+            event_count += 1
             yield event.to_sse()
     
     return StreamingResponse(

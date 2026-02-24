@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Layout, Table, Breadcrumb, Button, Space, Tooltip, message } from 'antd';
-import { LeftOutlined, RightOutlined, SaveOutlined, ShareAltOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Layout, Table, Breadcrumb, Button, Tooltip, Alert, message, Tour } from 'antd';
+import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import ChatInterface from './ChatInterface';
 import StepsPanel from './StepsPanel';
 import { CommandRibbon } from './CommandRibbon';
+import { WorkspaceHeaderActions } from './WorkspaceHeaderActions';
+import { invalidateAnalyticsCache } from '../api';
 
 const { Content, Sider } = Layout;
 
@@ -22,16 +24,76 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
   userPlan = 'free',
   onSessionCreated,
 }) => {
-  const [sessionId] = useState<string>(() => `session_${Date.now()}`);
+  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [chatCollapsed, setChatCollapsed] = useState(false);
-  const [stepsCollapsed, setStepsCollapsed] = useState(false);
+  const [stepsCollapsed, setStepsCollapsed] = useState(true);
   const [steps, setSteps] = useState<any[]>([]);
   const [datasetRows, setDatasetRows] = useState<any[]>([]);
   const [datasetColumns, setDatasetColumns] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [saveState, setSaveState] = useState<'saved' | 'syncing' | 'recovered'>('saved');
+  const [dataVersion, setDataVersion] = useState(0);
+  const [lastExecutionDataVersion, setLastExecutionDataVersion] = useState(0);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourReady, setTourReady] = useState(false);
+  const [headerRef, setHeaderRef] = useState<HTMLDivElement | null>(null);
+  const [tableRef, setTableRef] = useState<HTMLDivElement | null>(null);
+  const [stepsRef, setStepsRef] = useState<HTMLDivElement | null>(null);
+
+  const workspaceKey = `${workspace?.id || 'workspace'}:${project?.id || 'project'}`;
+  const uiStateKey = `workspace-ui-state:${workspaceKey}`;
+  const onboardKey = `workspace-onboarding-seen:${workspaceKey}`;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(uiStateKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (typeof parsed.chatCollapsed === 'boolean') setChatCollapsed(parsed.chatCollapsed);
+      if (typeof parsed.stepsCollapsed === 'boolean') setStepsCollapsed(parsed.stepsCollapsed);
+      setSaveState('recovered');
+      const timer = setTimeout(() => setSaveState('saved'), 1200);
+      return () => clearTimeout(timer);
+    } catch {
+      return;
+    }
+  }, [uiStateKey]);
+
+  useEffect(() => {
+    if (!tourReady) return;
+    const seen = localStorage.getItem(onboardKey) === 'true';
+    if (!seen) {
+      setTourOpen(true);
+    }
+  }, [tourReady, onboardKey]);
+
+  useEffect(() => {
+    setSaveState('syncing');
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          uiStateKey,
+          JSON.stringify({
+            chatCollapsed,
+            stepsCollapsed,
+          })
+        );
+      } catch {
+      }
+      setSaveState('saved');
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [chatCollapsed, stepsCollapsed, uiStateKey]);
+
+  useEffect(() => {
+    if (headerRef && tableRef && stepsRef) {
+      setTourReady(true);
+    }
+  }, [headerRef, tableRef, stepsRef]);
 
   // Simulate loading dataset
   useEffect(() => {
+    setSessionId(undefined);
     setIsLoadingData(true);
     // Mock data loading - in real app, fetch from API
     setTimeout(() => {
@@ -84,14 +146,14 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
       setIsLoadingData(false);
     }, 500);
 
-    if (onSessionCreated) {
-      onSessionCreated(sessionId);
-    }
-  }, [dataset?.id, sessionId, onSessionCreated]);
+  }, [dataset?.id]);
 
   const handleStepsUpdate = useCallback((newSteps: any[]) => {
     setSteps(newSteps);
-  }, []);
+    if (newSteps.length > 0) {
+      setLastExecutionDataVersion(dataVersion);
+    }
+  }, [dataVersion]);
 
   const handleExportData = () => {
     message.success('Data exported successfully');
@@ -99,9 +161,12 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
 
   const handleSavePipeline = async () => {
     try {
+      setSaveState('syncing');
       // API call to save pipeline
+      setTimeout(() => setSaveState('saved'), 300);
       message.success('Pipeline saved successfully');
     } catch (error) {
+      setSaveState('saved');
       message.error('Failed to save pipeline');
     }
   };
@@ -111,13 +176,53 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
   };
 
   const handleDataUpdate = (fileName: string) => {
+    invalidateAnalyticsCache({
+      datasetId: dataset?.id,
+      workspaceId: workspace?.id,
+    });
+    setDataVersion((prev) => prev + 1);
     // Handle data update - chat context is silently updated
     // Previous chat history is preserved
     message.info(`Data updated: ${fileName}. Previous analysis history is preserved.`);
   };
 
+  const isOutputStale = steps.length > 0 && dataVersion > lastExecutionDataVersion;
+
+  const persistenceTag =
+    saveState === 'syncing'
+      ? { color: 'processing', label: 'Syncing' }
+      : saveState === 'recovered'
+        ? { color: 'gold', label: 'Recovered' }
+        : { color: 'success', label: 'Saved' };
+
+  const onboardingSteps = [
+    {
+      title: 'Stage 1: Direct actions',
+      description: 'Use the command ribbon for import, actions, and quick operations.',
+      target: () => headerRef as HTMLElement,
+    },
+    {
+      title: 'Stage 2: Explore data',
+      description: 'Review your dataset preview and validate rows before transformations.',
+      target: () => tableRef as HTMLElement,
+    },
+    {
+      title: 'Stage 3: Execute and track',
+      description: 'Expand execution stages on the right to review steps, rollback, and refine.',
+      target: () => stepsRef as HTMLElement,
+    },
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Tour
+        open={tourOpen}
+        onClose={() => {
+          setTourOpen(false);
+          localStorage.setItem(onboardKey, 'true');
+        }}
+        steps={onboardingSteps}
+      />
       <CommandRibbon
         projectId={project?.id}
         workspaceId={workspace?.id}
@@ -140,6 +245,10 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
           datasetId={dataset?.id || 'default'}
           userPlan={userPlan}
           onSessionUpdated={handleStepsUpdate}
+          onSessionCreated={(createdId) => {
+            setSessionId(createdId);
+            onSessionCreated?.(createdId);
+          }}
         />
       </Sider>
 
@@ -155,37 +264,18 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
 
       {/* Center - Data Table View */}
       <Content className="center-workspace">
-        <div className="data-table-header">
+        <div className="data-table-header" ref={setHeaderRef}>
           <div className="data-table-header-title">
-            Dataset: <strong>{dataset?.name || 'Untitled'}</strong> ({datasetRows.length} rows)
+            Stage 2: Explore Data • <strong>{dataset?.name || 'Untitled'}</strong> ({datasetRows.length} rows)
           </div>
           <div className="data-table-header-actions">
-            <Space>
-              <Button
-                size="small"
-                icon={<DownloadOutlined />}
-                onClick={handleExportData}
-                title="Download as CSV"
-              >
-                Export
-              </Button>
-              <Button
-                size="small"
-                icon={<SaveOutlined />}
-                onClick={handleSavePipeline}
-                title="Save as pipeline"
-              >
-                Save
-              </Button>
-              <Button
-                size="small"
-                icon={<ShareAltOutlined />}
-                onClick={handleSharePipeline}
-                title="Share pipeline"
-              >
-                Share
-              </Button>
-            </Space>
+            <WorkspaceHeaderActions
+              persistence={persistenceTag}
+              onHelp={() => setTourOpen(true)}
+              onExport={handleExportData}
+              onSave={handleSavePipeline}
+              onShare={handleSharePipeline}
+            />
           </div>
         </div>
 
@@ -195,7 +285,23 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
           <Breadcrumb.Item>{dataset?.name}</Breadcrumb.Item>
         </Breadcrumb>
 
-        <div className="data-table-wrapper">
+        {isOutputStale && (
+          <div style={{ padding: '8px 16px' }}>
+            <Alert
+              type="warning"
+              showIcon
+              message="Upstream data changed"
+              description="Execution stages may be stale. Re-run or update steps to refresh outputs against the latest dataset."
+              action={
+                <Button size="small" onClick={() => setLastExecutionDataVersion(dataVersion)}>
+                  Mark reviewed
+                </Button>
+              }
+            />
+          </div>
+        )}
+
+        <div className="data-table-wrapper" ref={setTableRef}>
           <Table
             columns={datasetColumns}
             dataSource={datasetRows}
@@ -221,7 +327,7 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
         collapsed={stepsCollapsed}
         style={{ overflow: stepsCollapsed ? 'hidden' : 'auto', padding: stepsCollapsed ? 0 : 16 }}
       >
-        <div style={{ marginBottom: '8px', textAlign: 'right' }}>
+        <div ref={setStepsRef} style={{ marginBottom: '8px', textAlign: 'right' }}>
           <Tooltip title={stepsCollapsed ? 'Show Steps' : 'Hide Steps'}>
             <Button
               type="text"
@@ -233,6 +339,7 @@ export const ChatWorkspaceContent: React.FC<ChatWorkspaceContentProps> = ({
         </div>
 
         <StepsPanel
+          title="Execution Stages"
           steps={steps}
           onRollback={(stepNum) => {
             message.info(`Rollback to step ${stepNum}`);

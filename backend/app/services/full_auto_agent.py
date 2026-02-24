@@ -554,14 +554,28 @@ Guidelines:
         }
     ]
 
-    def __init__(self, user_id: str, dataset_id: str, df: pd.DataFrame):
+    def __init__(self, user_id: str, dataset_id: str, df: pd.DataFrame, max_iterations: int = 10, allowed_tools: Optional[List[str]] = None):
         self.user_id = user_id
         self.dataset_id = dataset_id
         self.df = df
         self.executor = ToolExecutor(user_id, dataset_id, df)
         self.client = _get_client()
         self.iteration = 0
-        self.max_iterations = 10
+        self.max_iterations = max(1, int(max_iterations))
+        self.allowed_tools = set(allowed_tools or [
+            "assess_quality",
+            "clean_data",
+            "transform_data",
+            "compute_statistics",
+            "train_ml_model",
+            "create_visualization",
+            "generate_insights",
+            "make_plan",
+            "ask_user",
+        ])
+        self.agent_tools = [
+            tool for tool in self.AGENT_TOOLS if tool.get('function', {}).get('name') in self.allowed_tools
+        ]
 
     async def run(self, user_request: str, event_callback=None):
         """
@@ -597,7 +611,7 @@ Guidelines:
                 response = self.client.chat.completions.create(
                     model='gpt-4',
                     messages=messages,
-                    tools=self.AGENT_TOOLS,
+                    tools=self.agent_tools,
                     tool_choice='auto',
                     temperature=0.7,
                     max_tokens=2000,
@@ -632,6 +646,8 @@ Guidelines:
                     )
 
                     try:
+                        if tool_name not in self.allowed_tools:
+                            raise ValueError(f'Tool {tool_name} is blocked by automation guardrails')
                         # Execute tool
                         result = await self.executor.execute(tool_name, tool_args)
 

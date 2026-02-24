@@ -256,6 +256,21 @@ body[data-theme="dark"] .ai-body {
   flex: 1.5 !important;
 }
 
+.ai-message-status-confirmation {
+  border-left: 3px solid #faad14;
+  padding-left: 8px;
+}
+
+.ai-message-status-error {
+  border-left: 3px solid #ff4d4f;
+  padding-left: 8px;
+}
+
+.ai-message-status-success {
+  border-left: 3px solid #52c41a;
+  padding-left: 8px;
+}
+
 .chat-header {
   padding: 14px 18px;
   border-bottom: 1px solid #e2e8f0;

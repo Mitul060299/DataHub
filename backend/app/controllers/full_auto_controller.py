@@ -6,7 +6,7 @@ Handles API logic for autonomous agent orchestration with SSE streaming
 import json
 import asyncio
 import uuid
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Any
 from datetime import datetime
 
 from fastapi import HTTPException
@@ -16,6 +16,12 @@ from app.db import get_db
 from app.models_db import DatasetMetaDB, DatasetChunkDB, DatasetDataDB
 
 from app.services.full_auto_agent import FullAutoAgent, AgentEvent
+from app.services.audit import audit_store
+from app.models import AuditEntry
+from app.services.automation_guardrails import (
+    get_automation_guardrail_policy,
+    allowed_automation_tools,
+)
 
 
 class FullAutoController:
@@ -25,6 +31,103 @@ class FullAutoController:
         self.db = db
         self._sessions = {}  # in-memory session tracking
         self._event_queues = {}  # asyncio.Queue per session
+
+    def _guardrail_block_payload(
+        self,
+        reason: str,
+        message: str,
+        policy: Any,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        retry_guidance = {
+            "disabled": ["Ask an admin to enable automation guardrails policy"],
+            "request_too_large": ["Shorten the request and retry", "Split the request into smaller steps"],
+            "dataset_too_large": ["Filter or sample the dataset, then retry", "Ask an admin to increase size limits"],
+            "dataset_too_large_runtime": ["Filter or sample the dataset, then retry", "Ask an admin to increase size limits"],
+        }
+        return {
+            "allowed": False,
+            "block_reason": reason,
+            "message": message,
+            "confirmation_required": True,
+            "retryable": reason != "disabled",
+            "retry_actions": retry_guidance.get(reason, ["Adjust inputs and retry"]),
+            "policy": {
+                "enabled": bool(policy.enabled),
+                "max_rows": int(policy.max_rows),
+                "max_columns": int(policy.max_columns),
+                "max_request_chars": int(policy.max_request_chars),
+                "max_steps": int(policy.max_steps),
+                "allow_ml_training": bool(policy.allow_ml_training),
+            },
+            "details": details or {},
+        }
+
+    def _build_guardrail_sse_event(self, block: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "type": "confirmation_needed",
+            "content": block.get("message", "Blocked by automation guardrails"),
+            "data": {
+                "category": "automation_guardrail",
+                **block,
+            },
+            "timestamp": datetime.utcnow().timestamp(),
+        }
+
+    def evaluate_guardrails(
+        self,
+        user_id: str,
+        dataset_id: str,
+        user_request: str,
+    ) -> dict[str, Any]:
+        policy = get_automation_guardrail_policy()
+        request_text = (user_request or "").strip()
+
+        if not policy.enabled:
+            return self._guardrail_block_payload(
+                reason="disabled",
+                message="Automation is disabled by admin policy",
+                policy=policy,
+            )
+
+        if len(request_text) > policy.max_request_chars:
+            return self._guardrail_block_payload(
+                reason="request_too_large",
+                message=f"Request exceeds automation guardrail limit of {policy.max_request_chars} characters",
+                policy=policy,
+                details={"request_length": len(request_text)},
+            )
+
+        dataset_meta = self.db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first() if self.db else None
+        if dataset_meta:
+            dataset_rows = int(dataset_meta.row_count or 0)
+            dataset_cols = len(dataset_meta.columns or [])
+            if dataset_rows > policy.max_rows or dataset_cols > policy.max_columns:
+                return self._guardrail_block_payload(
+                    reason="dataset_too_large",
+                    message=(
+                        f"Dataset exceeds automation guardrails "
+                        f"(rows <= {policy.max_rows}, columns <= {policy.max_columns})"
+                    ),
+                    policy=policy,
+                    details={
+                        "rows": dataset_rows,
+                        "columns": dataset_cols,
+                    },
+                )
+
+        return {
+            "allowed": True,
+            "message": "Automation precheck passed",
+            "policy": {
+                "enabled": bool(policy.enabled),
+                "max_rows": int(policy.max_rows),
+                "max_columns": int(policy.max_columns),
+                "max_request_chars": int(policy.max_request_chars),
+                "max_steps": int(policy.max_steps),
+                "allow_ml_training": bool(policy.allow_ml_training),
+            },
+        }
 
     async def load_dataset(self, dataset_id: str, user_id: str) -> pd.DataFrame:
         """Load dataset from database by ID for analysis"""
@@ -74,8 +177,31 @@ class FullAutoController:
             'events': [],
         }
         self._event_queues[session_id] = event_queue
+        policy = get_automation_guardrail_policy()
 
         try:
+            precheck = self.evaluate_guardrails(user_id=user_id, dataset_id=dataset_id, user_request=user_request)
+            if not precheck.get("allowed"):
+                self._sessions[session_id]['status'] = 'blocked'
+                audit_store.add(
+                    AuditEntry(
+                        action='automation.guardrail.block',
+                        actor=user_id,
+                        target=dataset_id,
+                        metadata={
+                            'reason': precheck.get('block_reason', 'unknown'),
+                            **(precheck.get('details') or {}),
+                            'max_request_chars': policy.max_request_chars,
+                            'max_rows': policy.max_rows,
+                            'max_columns': policy.max_columns,
+                        },
+                    )
+                )
+                event_dict = self._build_guardrail_sse_event(precheck)
+                self._sessions[session_id]['events'].append(event_dict)
+                yield self._sse_event(event_dict)
+                return
+
             # Load dataset
             try:
                 df = await self.load_dataset(dataset_id, user_id)
@@ -88,8 +214,46 @@ class FullAutoController:
                 self._sessions[session_id]['status'] = 'failed'
                 return
 
+            if len(df) > policy.max_rows or len(df.columns) > policy.max_columns:
+                self._sessions[session_id]['status'] = 'blocked'
+                block = self._guardrail_block_payload(
+                    reason='dataset_too_large_runtime',
+                    message=(
+                        f'Dataset exceeds automation guardrails '
+                        f'(rows <= {policy.max_rows}, columns <= {policy.max_columns})'
+                    ),
+                    policy=policy,
+                    details={
+                        'rows': len(df),
+                        'columns': len(df.columns),
+                    },
+                )
+                audit_store.add(
+                    AuditEntry(
+                        action='automation.guardrail.block',
+                        actor=user_id,
+                        target=dataset_id,
+                        metadata={
+                            'reason': block.get('block_reason', 'dataset_too_large_runtime'),
+                            **(block.get('details') or {}),
+                            'max_rows': policy.max_rows,
+                            'max_columns': policy.max_columns,
+                        },
+                    )
+                )
+                event_dict = self._build_guardrail_sse_event(block)
+                self._sessions[session_id]['events'].append(event_dict)
+                yield self._sse_event(event_dict)
+                return
+
             # Initialize agent
-            agent = FullAutoAgent(user_id, dataset_id, df)
+            agent = FullAutoAgent(
+                user_id,
+                dataset_id,
+                df,
+                max_iterations=policy.max_steps,
+                allowed_tools=allowed_automation_tools(policy),
+            )
 
             # Stream events
             async for event in agent.run(user_request):

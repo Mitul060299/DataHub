@@ -1,10 +1,34 @@
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
-from ..models import AuditEntry, UsageSummary, ActionCount, TargetCount
+from ..models import (
+    AuditEntry,
+    UsageSummary,
+    ActionCount,
+    TargetCount,
+    TenantIsolationReport,
+    AutomationGuardrailPolicyOut,
+    AutomationGuardrailPolicyUpdate,
+    AIOperatingControlsOut,
+    AIOperatingControlsUpdate,
+)
 from ..services.audit import audit_store
 from ..services.cache import profile_cache
 from ..services.query_cache import QueryCacheService
+from ..services.tenant_isolation_audit import generate_tenant_isolation_report
+from ..services.tenant_isolation_monitor import (
+    get_tenant_isolation_monitor_status,
+    run_tenant_isolation_verification_job,
+)
+from ..services.automation_guardrails import (
+    get_automation_guardrail_policy,
+    update_automation_guardrail_policy,
+)
+from ..services.ai_operating_controls import (
+    get_ai_operating_controls,
+    update_ai_operating_controls,
+    get_prompt_starters_for_role,
+)
 from ..routers.datasets import dataset_cache_stats
 from ..db import get_db
 from ..models_db import AuditLogDB
@@ -97,3 +121,104 @@ def cache_stats(authorization: str | None = Header(default=None), db: Session = 
         "dataset_cache": dataset_cache_stats(),
         "query_cache": QueryCacheService.stats_last_24h(db),
     }
+
+
+@router.get("/tenant-isolation-report", response_model=TenantIsolationReport)
+def tenant_isolation_report(
+    workspace_id: str | None = None,
+    limit: int = 200,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> TenantIsolationReport:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    return generate_tenant_isolation_report(db, scope_workspace_id=workspace_id, limit=limit)
+
+
+@router.get("/tenant-isolation-monitor/status")
+def tenant_isolation_monitor_status(authorization: str | None = Header(default=None)) -> dict:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    return get_tenant_isolation_monitor_status()
+
+
+@router.post("/tenant-isolation-monitor/run")
+def run_tenant_isolation_monitor(authorization: str | None = Header(default=None)) -> dict:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    result = run_tenant_isolation_verification_job()
+    audit_store.add(
+        AuditEntry(
+            action="tenant.isolation.monitor.run",
+            actor=authorization or "unknown",
+            target="tenant_isolation_monitor",
+            metadata={
+                "status": result.get("status"),
+                "total_violations": result.get("total_violations", 0),
+                "webhook_deliveries": result.get("webhook_deliveries", 0),
+            },
+        )
+    )
+    return result
+
+
+@router.get("/automation-guardrails", response_model=AutomationGuardrailPolicyOut)
+def get_automation_guardrails(authorization: str | None = Header(default=None)) -> AutomationGuardrailPolicyOut:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    return get_automation_guardrail_policy()
+
+
+@router.put("/automation-guardrails", response_model=AutomationGuardrailPolicyOut)
+def put_automation_guardrails(
+    payload: AutomationGuardrailPolicyUpdate,
+    authorization: str | None = Header(default=None),
+) -> AutomationGuardrailPolicyOut:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    policy = update_automation_guardrail_policy(payload)
+    audit_store.add(
+        AuditEntry(
+            action="automation.guardrails.update",
+            actor=authorization or "unknown",
+            target="automation_guardrails",
+            metadata=policy.dict(),
+        )
+    )
+    return policy
+
+
+@router.get("/ai-operating-controls", response_model=AIOperatingControlsOut)
+def get_ai_controls(authorization: str | None = Header(default=None)) -> AIOperatingControlsOut:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    return get_ai_operating_controls()
+
+
+@router.put("/ai-operating-controls", response_model=AIOperatingControlsOut)
+def put_ai_controls(
+    payload: AIOperatingControlsUpdate,
+    authorization: str | None = Header(default=None),
+) -> AIOperatingControlsOut:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    policy = update_ai_operating_controls(payload)
+    audit_store.add(
+        AuditEntry(
+            action="ai.controls.update",
+            actor=authorization or "unknown",
+            target="ai_operating_controls",
+            metadata=policy.dict(),
+        )
+    )
+    return policy
+
+
+@router.get("/ai-prompt-starters")
+def get_ai_prompt_starters(
+    role_name: str = "viewer",
+    authorization: str | None = Header(default=None),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    return {"role": role_name, "starters": get_prompt_starters_for_role(role_name)}

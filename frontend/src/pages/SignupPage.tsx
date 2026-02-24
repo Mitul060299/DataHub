@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, Typography } from "antd";
+import { Alert, Button, Form, Input, Select, Typography } from "antd";
 import { GithubOutlined, GoogleOutlined, LockOutlined, MailOutlined, UserOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -21,11 +21,21 @@ export function SignupPage() {
     }
   }, [session, navigate]);
 
-  const handleSubmit = async (values: { name: string; email: string; password: string }) => {
+  const handleSubmit = async (values: {
+    name: string;
+    email: string;
+    password: string;
+    role: "analyst" | "engineer" | "manager" | "admin";
+  }) => {
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    const { error } = await signUpWithPassword(values.email, values.password, values.name);
+    const { error } = await signUpWithPassword(
+      values.email,
+      values.password,
+      values.name,
+      values.role
+    );
     setLoading(false);
     if (error) {
       setErrorMessage(error.message);
@@ -83,6 +93,21 @@ export function SignupPage() {
                 rules={[{ required: true, message: "Create a password" }]}
               >
                 <Input.Password prefix={<LockOutlined />} placeholder="At least 8 characters" />
+              </Form.Item>
+              <Form.Item
+                label="Primary role"
+                name="role"
+                initialValue="analyst"
+                rules={[{ required: true, message: "Choose your role" }]}
+              >
+                <Select
+                  options={[
+                    { label: "Analyst", value: "analyst" },
+                    { label: "Engineer", value: "engineer" },
+                    { label: "Manager", value: "manager" },
+                    { label: "Admin", value: "admin" },
+                  ]}
+                />
               </Form.Item>
               <Button type="primary" htmlType="submit" className="auth-action" loading={loading}>
                 Create account

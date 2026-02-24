@@ -21,6 +21,7 @@ from app.models_db import (
     ChatSessionSnapshotDB,
 )
 from app.config import settings
+from app.services.ai_operating_controls import get_ai_operating_controls, classify_intent
 
 
 class MessageRole(str, Enum):
@@ -170,6 +171,26 @@ class ChatEngine:
         if not session:
             yield ChatEvent(type=EventType.ERROR, content="Session not found")
             return
+
+        ai_controls = get_ai_operating_controls()
+        if len((user_message or "").strip()) > ai_controls.max_message_chars:
+            yield ChatEvent(
+                type=EventType.ERROR,
+                content=f"Message exceeds max length ({ai_controls.max_message_chars} chars)",
+            )
+            return
+
+        detected_intent = classify_intent(user_message)
+        if detected_intent not in set(ai_controls.allowed_intents or ["general"]):
+            yield ChatEvent(
+                type=EventType.CONFIRMATION_NEEDED,
+                content=f"Intent '{detected_intent}' is currently restricted by policy",
+                data={"intent": detected_intent, "allowed_intents": ai_controls.allowed_intents},
+            )
+            return
+
+        if ai_controls.enable_durable_memory:
+            self.create_checkpoint(session_id)
         
         user_msg = ChatMessage(
             role=MessageRole.USER,

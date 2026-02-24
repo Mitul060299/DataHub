@@ -7,7 +7,15 @@ import pandas as pd
 import uuid
 import difflib
 from sqlalchemy.orm import Session
-from ..models import DatasetPreview, DatasetMeta, DatasetPage, DatasetQueryRequest, DatasetQueryResponse
+from ..models import (
+    DatasetPreview,
+    DatasetMeta,
+    DatasetPage,
+    DatasetQueryRequest,
+    DatasetQueryResponse,
+    StorageTierPolicyOut,
+    StorageTierPolicyUpdate,
+)
 from ..services.events import emit_event
 from ..security import get_current_role, require_role
 from ..db import get_db
@@ -16,6 +24,7 @@ from ..services.cache import invalidate_profile_cache
 from ..services.duckdb_service import DuckDBService
 from ..services.query_cache import QueryCacheService
 from ..services.object_storage import StorageService
+from ..services.storage_tiering import storage_tier_service
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -85,12 +94,17 @@ async def upload_dataset(
         _DATASETS[dataset_id] = df
         _touch_cache(dataset_id)
         _evict_cache()
+    initial_tier = storage_tier_service.assign_initial_tier(
+        file_size_bytes=len(content),
+        row_count=int(df.shape[0]),
+    )
     db.add(
         DatasetMetaDB(
             id=dataset_id,
             workspace_id=workspace_id or "default",
             columns=list(df.columns),
             row_count=int(df.shape[0]),
+            access_tier=initial_tier,
             parent_id=None,
         )
     )
@@ -144,6 +158,10 @@ def save_dataset(
         "columns": list(df.columns),
         "row_count": int(df.shape[0]),
         "parent_id": parent_id,
+        "access_tier": storage_tier_service.assign_initial_tier(
+            row_count=int(df.shape[0]),
+            parent_tier=(meta_extra or {}).get("access_tier") if meta_extra else None,
+        ),
     }
     if meta_extra:
         meta_kwargs.update(meta_extra)
@@ -171,6 +189,65 @@ def save_dataset(
     db.commit()
     emit_event("dataset.transformed", {"dataset_id": dataset_id})
     return dataset_id
+
+
+@router.get("/storage-tier/policy", response_model=StorageTierPolicyOut)
+def get_storage_tier_policy(
+    authorization: str | None = Header(default=None),
+) -> StorageTierPolicyOut:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    return StorageTierPolicyOut(**storage_tier_service.policy())
+
+
+@router.put("/storage-tier/policy", response_model=StorageTierPolicyOut)
+def update_storage_tier_policy(
+    payload: StorageTierPolicyUpdate,
+    authorization: str | None = Header(default=None),
+) -> StorageTierPolicyOut:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+    updated = storage_tier_service.update_policy(
+        hot_max_size_bytes=payload.hot_max_size_bytes,
+        warm_max_size_bytes=payload.warm_max_size_bytes,
+        warm_after_days=payload.warm_after_days,
+        archive_after_days=payload.archive_after_days,
+    )
+    return StorageTierPolicyOut(**updated)
+
+
+@router.post("/storage-tier/rebalance")
+def rebalance_storage_tiers(
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("admin", role)
+
+    query = db.query(DatasetMetaDB)
+    if workspace_id:
+        query = query.filter(DatasetMetaDB.workspace_id == workspace_id)
+    datasets = query.all()
+
+    updated_count = 0
+    for meta in datasets:
+        current_tier = meta.access_tier or "hot"
+        next_tier = storage_tier_service.rebalance_tier(
+            current_tier=current_tier,
+            created_at=meta.created_at,
+            last_queried_at=meta.last_queried_at,
+        )
+        if next_tier != current_tier:
+            meta.access_tier = next_tier
+            updated_count += 1
+    db.commit()
+    return {
+        "status": "ok",
+        "updated": updated_count,
+        "total": len(datasets),
+        "workspace_id": workspace_id,
+    }
 
 
 def get_dataset(dataset_id: str) -> pd.DataFrame:

@@ -16,6 +16,7 @@ from ..security import get_current_role, require_role
 from ..services.file_parser import FileParserService
 from ..services.data_conversion import DataConversionService
 from ..services.object_storage import StorageService
+from ..services.storage_tiering import storage_tier_service
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, ImportTableDB, ImportConnectionDB
 from .datasets import save_dataset, get_dataset_from_db
 from ..config import settings
@@ -133,8 +134,18 @@ async def upload_file(
     try:
         file_base = os.path.splitext(file.filename or "dataset")[0]
         parquet_name = f"{file_base}.parquet"
+        initial_tier = storage_tier_service.assign_initial_tier(
+            file_size_bytes=len(content),
+            row_count=int(df.shape[0]),
+        )
         logger.info(f"Uploading to storage: {parquet_name}")
-        storage_path = StorageService.upload(workspace_id, dataset_id, parquet_bytes, parquet_name)
+        storage_path = StorageService.upload(
+            workspace_id,
+            dataset_id,
+            parquet_bytes,
+            parquet_name,
+            storage_tier=initial_tier,
+        )
         logger.info(f"Storage upload complete: {storage_path}")
 
         meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
@@ -149,7 +160,7 @@ async def upload_file(
             meta.file_size_bytes = len(content)
             meta.compressed_size_bytes = len(parquet_bytes)
             meta.status = "ready"
-            meta.access_tier = "hot"
+            meta.access_tier = initial_tier
 
         table_name = _ensure_unique_table_name(db, _sanitize_table_name(file.filename))
         table_id = str(uuid.uuid4())

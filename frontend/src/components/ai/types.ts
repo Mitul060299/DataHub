@@ -6,11 +6,14 @@ export type AIAction = {
   payload?: Record<string, unknown>;
 };
 
+export type AIStatus = "info" | "confirmation" | "success" | "error";
+
 export type AIMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   actions?: AIAction[];
+  status?: AIStatus;
 };
 
 export type DatasetSummary = {
@@ -25,4 +28,5 @@ export type AIResponse = {
   actions?: AIAction[];
   suggestions?: string[];
   autoExecute?: boolean;
+  status?: AIStatus;
 };

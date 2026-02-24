@@ -20,6 +20,7 @@ import {
   Menu,
   Switch,
   Modal,
+  Spin,
 } from "antd";
 import {
   HomeOutlined,
@@ -28,14 +29,8 @@ import {
   DatabaseOutlined,
   SwapOutlined,
   ExperimentOutlined,
-  BranchesOutlined,
-  CheckCircleOutlined,
-  RobotOutlined,
-  SendOutlined,
   BulbOutlined,
   EyeOutlined,
-  SaveOutlined,
-  PlayCircleOutlined,
   ClockCircleOutlined,
   PlusOutlined,
   UserOutlined,
@@ -59,35 +54,29 @@ import {
   LogoutOutlined,
   DownOutlined,
 } from "@ant-design/icons";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState, useCallback } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./styles.css";
 import "./styles/CommandRibbon.css";
-import { DataImportTab } from "./components/DataImportTab";
-import { DataCleaningTab } from "./components/DataCleaningTab";
-import { DataTransformTab } from "./components/DataTransformTab";
-import DataVisualizationTab from "./components/DataVisualizationTab";
-import { MLTab } from "./components/MLTab";
-import FullAutoTab from "./components/FullAutoTab";
-import { HomePage } from "./components/HomePage";
-import ChatWorkspaceContent from "./components/ChatWorkspaceContent";
 import { CommandRibbon } from "./components/CommandRibbon";
-import { formatFileSize, useUser } from "./contexts/UserContext";
+import { useUser } from "./contexts/UserContext";
 import { useAuth } from "./contexts/AuthContext";
-import { LoginPage } from "./pages/LoginPage";
-import { SignupPage } from "./pages/SignupPage";
 import { createWorkspace, listWorkspaces } from "./api";
 import { notify } from "./utils/notify";
 
-const { Header, Content, Sider } = Layout;
-const { TextArea } = Input;
-const { Title, Text } = Typography;
+const HomePage = lazy(() =>
+  import("./components/HomePage").then((module) => ({ default: module.HomePage }))
+);
+const ChatWorkspaceContent = lazy(() => import("./components/ChatWorkspaceContent"));
+const LoginPage = lazy(() =>
+  import("./pages/LoginPage").then((module) => ({ default: module.LoginPage }))
+);
+const SignupPage = lazy(() =>
+  import("./pages/SignupPage").then((module) => ({ default: module.SignupPage }))
+);
 
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-};
+const { Header } = Layout;
+const { Title, Text } = Typography;
 
 type Workspace = {
   id: string;
@@ -285,13 +274,19 @@ const planColors: Record<string, string> = {
 
 const MAIN_TABS = new Set(["home", "workspaces", "marketplace", "settings"]);
 
+const LazyFallback = () => (
+  <div style={{ display: "grid", placeItems: "center", minHeight: "220px" }}>
+    <Spin size="large" />
+  </div>
+);
+
 const resolveMainTab = (search: string) => {
   const tab = new URLSearchParams(search).get("tab");
   return tab && MAIN_TABS.has(tab) ? tab : "home";
 };
 
 const AppShell = () => {
-  const { plan, limits, user, setWorkspaceId } = useUser();
+  const { plan, user, setWorkspaceId } = useUser();
   const { user: authUser, signOut, session } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -316,16 +311,7 @@ const AppShell = () => {
       return null;
     }
   });
-  const [activeDataTab, setActiveDataTab] = useState(() => {
-    try {
-      return localStorage.getItem("activeDataTab") || "import";
-    } catch {
-      return "import";
-    }
-  });
-  const [activeInsightTab, setActiveInsightTab] = useState("suggestions");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
-  const [importGuidanceShown, setImportGuidanceShown] = useState(false);
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
@@ -340,19 +326,7 @@ const AppShell = () => {
       return PROJECTS;
     }
   });
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content: "Hello! I'm your AI Data Analyst. Select a dataset to start.",
-      timestamp: "11:15 AM",
-    },
-  ]);
-  const [inputMessage, setInputMessage] = useState("");
   const [selectedTable, setSelectedTable] = useState("");
-  const [pipelineName, setPipelineName] = useState("Untitled Pipeline");
-
-  const maxImportSize = limits.maxFileSize;
-  const maxImportLabel = maxImportSize < 0 ? "Unlimited" : formatFileSize(maxImportSize);
 
   useEffect(() => {
     document.body.setAttribute("data-theme", themeMode);
@@ -383,11 +357,6 @@ const AppShell = () => {
       localStorage.removeItem("activeProject");
     }
   }, [activeProject]);
-
-  // Persist activeDataTab to localStorage
-  useEffect(() => {
-    localStorage.setItem("activeDataTab", activeDataTab);
-  }, [activeDataTab]);
 
   // Persist projects to localStorage
   useEffect(() => {
@@ -458,125 +427,7 @@ const AppShell = () => {
     setNewProjectName("");
   };
 
-  useEffect(() => {
-    if (activeDataTab !== "import" || importGuidanceShown) return;
-    const guidance = `I can help you import your data! Here is what you can do:\n\nUpload files:\n- Drag and drop CSV, Excel, JSON, or Parquet files\n- Your ${plan} plan allows files up to ${maxImportLabel}\n\nConnect databases:\n- PostgreSQL, MySQL, SQL Server, MongoDB\n- Warehouses: Snowflake, BigQuery, Redshift\n- Cloud storage: S3, Azure Blob, Google Cloud Storage\n\nWhat would you like to import?`;
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        content: guidance,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
-    setImportGuidanceShown(true);
-  }, [activeDataTab, importGuidanceShown, maxImportLabel, plan]);
-
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: inputMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
-    setInputMessage("");
-  };
-
   const unreadCount = useMemo(() => NOTIFICATIONS.filter((item) => !item.read).length, []);
-
-  const dataOperationsTabs = [
-    {
-      key: "import",
-      label: (
-        <span className="data-tab-label">
-          <DatabaseOutlined /> Data Import
-        </span>
-      ),
-      children: <DataImportTab />,
-    },
-    {
-      key: "cleaning",
-      label: (
-        <span className="data-tab-label">
-          <CheckCircleOutlined /> Clean
-        </span>
-      ),
-      children: <DataCleaningTab />,
-    },
-    {
-      key: "transform",
-      label: (
-        <span className="data-tab-label">
-          <SwapOutlined /> Transform
-        </span>
-      ),
-      children: <DataTransformTab />,
-    },
-    {
-      key: "visualization",
-      label: (
-        <span className="data-tab-label">
-          <BarChartOutlined /> Visualization
-        </span>
-      ),
-      children: <DataVisualizationTab />,
-    },
-    {
-      key: "ml",
-      label: (
-        <span className="data-tab-label">
-          <ExperimentOutlined /> ML/DL
-        </span>
-      ),
-      children: <MLTab />,
-    },
-    {
-      key: "auto",
-      label: (
-        <span className="data-tab-label">
-          <RobotOutlined /> Full Auto
-        </span>
-      ),
-      children: activeProject ? <FullAutoTab projectId={activeProject.id} datasetId={selectedTable || ''} /> : null,
-    },
-  ];
-
-  const insightTabs = [
-    {
-      key: "suggestions",
-      label: (
-        <span>
-          <BulbOutlined /> AI Suggestions
-        </span>
-      ),
-      children: (
-        <div className="insights-content">
-          <div style={{ textAlign: "center", padding: 32 }}>
-            <Text type="secondary">No AI suggestions yet.</Text>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "preview",
-      label: (
-        <span>
-          <EyeOutlined /> Data Preview
-        </span>
-      ),
-      children: (
-        <div className="insights-content">
-          <Select value={selectedTable} onChange={setSelectedTable} style={{ width: 200, marginBottom: 16 }}>
-            <Select.Option value="sales_data">sales_data</Select.Option>
-          </Select>
-          <Text type="secondary">Table preview will appear here</Text>
-        </div>
-      ),
-    },
-  ];
 
   const handleNavigate = (tab: string) => {
     if (tab === "workspaces" && !session) {
@@ -727,7 +578,9 @@ const AppShell = () => {
 
   const HomeContent = () => (
     <div className="full-width-content home-page-wrapper">
-      <HomePage />
+      <Suspense fallback={<LazyFallback />}>
+        <HomePage />
+      </Suspense>
     </div>
   );
 
@@ -1130,8 +983,16 @@ const AppShell = () => {
               No Data Loaded
             </h2>
             <p style={{ fontSize: '16px', marginBottom: '32px', maxWidth: '400px' }}>
-              Start by importing a CSV file or connecting to a data source using the Import button above.
+              Stage 1 starts with data import. Use the Import button above or load a sample dataset to explore the workspace flow.
             </p>
+            <Space>
+              <Button type="primary" onClick={() => setSelectedTable('sample_customers.csv')}>
+                Load Sample Dataset
+              </Button>
+              <Button onClick={() => notify.info('Use Import for files, then chat and execution stages to iterate safely.') }>
+                What can I do here?
+              </Button>
+            </Space>
           </div>
         </div>
       );
@@ -1145,13 +1006,15 @@ const AppShell = () => {
           hasData={hasDataLoaded}
           onImportComplete={handleImportComplete}
         />
-        <ChatWorkspaceContent
-          workspace={activeWorkspace}
-          project={activeProject}
-          dataset={{ id: selectedTable, name: selectedTable || "Untitled" }}
-          userPlan={plan as any}
-          onSessionCreated={(sessionId) => console.log("Chat session created:", sessionId)}
-        />
+        <Suspense fallback={<LazyFallback />}>
+          <ChatWorkspaceContent
+            workspace={activeWorkspace}
+            project={activeProject}
+            dataset={{ id: selectedTable, name: selectedTable || "Untitled" }}
+            userPlan={plan as any}
+            onSessionCreated={(sessionId) => console.log("Chat session created:", sessionId)}
+          />
+        </Suspense>
       </div>
     );
   };
@@ -1263,8 +1126,22 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/app" replace />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
+      <Route
+        path="/login"
+        element={
+          <Suspense fallback={<LazyFallback />}>
+            <LoginPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          <Suspense fallback={<LazyFallback />}>
+            <SignupPage />
+          </Suspense>
+        }
+      />
       <Route path="/app" element={<AppShell />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>

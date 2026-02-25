@@ -571,22 +571,8 @@ def preview_dataset(
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    chunk_size = _CHUNK_SIZE
-    start_chunk = offset // chunk_size
-    end_chunk = (offset + limit - 1) // chunk_size
-
-    chunks = (
-        db.query(DatasetChunkDB)
-        .filter(DatasetChunkDB.dataset_id == dataset_id)
-        .filter(DatasetChunkDB.chunk_index >= start_chunk)
-        .filter(DatasetChunkDB.chunk_index <= end_chunk)
-        .order_by(DatasetChunkDB.chunk_index.asc())
-        .all()
-    )
-
-    rows: list[dict] = []
-    for chunk in chunks:
-        rows.extend(chunk.rows or [])
+    df = get_dataset_from_db(dataset_id, db)
+    rows: list[dict] = df.to_dict(orient="records")
 
     if filter_col and filter_op and filter_val is not None:
         def _matches(row: dict) -> bool:
@@ -614,8 +600,7 @@ def preview_dataset(
         if sort_dir.lower() == "desc":
             rows.reverse()
 
-    local_offset = offset - (start_chunk * chunk_size)
-    page_rows = rows[local_offset : local_offset + limit]
+    page_rows = rows[offset : offset + limit]
 
     return DatasetPage(
         dataset_id=dataset_id,

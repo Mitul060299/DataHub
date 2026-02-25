@@ -331,9 +331,19 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
         return df
 
     data = db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).first()
-    if not data:
+    if data:
+        df = pd.DataFrame(data.rows)
+        _DATASETS[dataset_id] = df
+        _touch_cache(dataset_id)
+        _evict_cache()
+        return df
+
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta or not meta.storage_path:
         raise KeyError("Dataset not found")
-    df = pd.DataFrame(data.rows)
+
+    query_path = StorageService.get_query_path(meta.storage_path)
+    df = pd.read_parquet(query_path)
     _DATASETS[dataset_id] = df
     _touch_cache(dataset_id)
     _evict_cache()
@@ -459,7 +469,7 @@ def clear_dataset_cache(
 @router.delete("/{dataset_id}")
 def delete_dataset(dataset_id: str, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     role = get_current_role(authorization)
-    require_role("editor", role)
+    require_role("viewer", role)
     if dataset_id in _DATASETS:
         _DATASETS.pop(dataset_id, None)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()

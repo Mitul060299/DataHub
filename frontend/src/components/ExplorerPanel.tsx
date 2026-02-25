@@ -51,9 +51,10 @@ export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
       if (activeDataset?.id === dataset.id) {
         setActiveDataset(null);
       }
-      await loadDatasets();
     } catch {
       await Promise.resolve();
+    } finally {
+      await loadDatasets();
     }
   };
 

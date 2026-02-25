@@ -4,10 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
 import { UserProvider } from "./contexts/UserContext";
-import "./styles.css";
-import "./styles/ChatInterface.css";
-import "./styles/StepsPanel.css";
-import "./styles/ChatWorkspaceLayout.css";
+import "./styles/global.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

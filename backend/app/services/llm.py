@@ -52,24 +52,24 @@ def _parse_steps(raw: str) -> List[TransformationStep]:
 
 def _provider_config() -> tuple[str, str, str]:
     provider = settings.llm_provider.lower()
-    if provider == "groq" and settings.groq_api_key:
-        return provider, settings.groq_api_key, settings.groq_model
-    if provider == "openai" and settings.openai_api_key:
-        return provider, settings.openai_api_key, settings.openai_model
-    return "", "", ""
+    if provider != "groq":
+        raise RuntimeError("Unsupported LLM_PROVIDER. Only 'groq' is supported.")
+    if not settings.groq_api_key:
+        raise RuntimeError("GROQ_API_KEY is not configured.")
+    return provider, settings.groq_api_key, settings.groq_model
 
 
 def _provider_base_url(provider: str) -> str:
-    if provider == "groq":
-        return settings.groq_base_url
-    return "https://api.openai.com/v1"
+    if provider != "groq":
+        raise RuntimeError("Unsupported LLM provider.")
+    return settings.groq_base_url
 
 
 def suggest_steps_llm(df: pd.DataFrame, context_text: str) -> Tuple[List[TransformationStep], List[str]]:
-    provider, api_key, model = _provider_config()
-    if not provider or not api_key:
-        steps = suggest_steps(df)
-        return steps, ["LLM not configured; using rule-based suggestions."]
+    try:
+        provider, api_key, model = _provider_config()
+    except RuntimeError as exc:
+        return [], [str(exc)]
 
     prompt = _build_payload(df, context_text)
 
@@ -133,9 +133,10 @@ def chat_with_dataset(
     message: str,
     history: List[dict],
 ) -> Tuple[str, List[str]]:
-    provider, api_key, model = _provider_config()
-    if not provider or not api_key:
-        return _fallback_chat_response(df, message), ["LLM not configured; using fallback responses."]
+    try:
+        provider, api_key, model = _provider_config()
+    except RuntimeError as exc:
+        return f"Groq configuration error: {str(exc)}", [str(exc)]
 
     summary = _dataset_summary(df)
     request_body = {
@@ -185,8 +186,6 @@ def generate_insight_narrative(
     context_text: str = "",
 ) -> str | None:
     provider, api_key, model = _provider_config()
-    if not provider or not api_key:
-        return None
 
     payload = {
         "highlights": highlights,

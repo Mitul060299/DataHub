@@ -13,7 +13,7 @@
 - CSV export streams from chunks without loading full datasets in memory.
 
 ### Proactive, Autonomous AI Agents
-- LLM-assisted suggestions supported via OpenAI API when configured.
+- LLM-assisted suggestions supported via Groq API when configured.
 - Fallback rule-based suggestions if no LLM is configured.
 
 ### Business Context Memory

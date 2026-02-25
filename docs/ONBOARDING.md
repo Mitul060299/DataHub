@@ -33,8 +33,7 @@ Use the sample CSV in samples/customers.csv to test uploads and profiling.
 - Run migrations with Alembic when you are ready to manage schema versions.
 
 ## LLM Suggestions (Optional)
-- Set LLM_PROVIDER=openai and OPENAI_API_KEY in .env to enable LLM suggestions.
-- Otherwise, rule-based suggestions are used.
+- Set LLM_PROVIDER=groq and GROQ_API_KEY in .env to enable LLM suggestions.
 
 ## RBAC (Scaffold)
 - Use /auth/login?username=...&role=editor to get a token for editor actions.

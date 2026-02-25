@@ -20,7 +20,11 @@ class AIAgentService:
         context = AIAgentService._get_dataset_context(dataset_id, db)
         provider, api_key, model = AIAgentService._provider_config()
         if not provider or not api_key:
-            return {"issues": [], "suggestions": []}
+            return {
+                "issues": [],
+                "suggestions": [],
+                "error": "Groq is not configured. Set LLM_PROVIDER=groq and GROQ_API_KEY.",
+            }
 
         system_prompt = (
             "You are a data quality expert analyzing datasets.\n\n"
@@ -103,7 +107,7 @@ class AIAgentService:
         provider, api_key, model = AIAgentService._provider_config()
         if not provider or not api_key:
             return {
-                "response": "LLM is not configured. Please set GROQ_API_KEY or OPENAI_API_KEY.",
+                "response": "Groq is not configured. Please set LLM_PROVIDER=groq and GROQ_API_KEY.",
                 "transformation": None,
                 "needsConfirmation": False,
             }
@@ -229,15 +233,13 @@ class AIAgentService:
         provider = settings.llm_provider.lower()
         if provider == "groq" and settings.groq_api_key:
             return provider, settings.groq_api_key, settings.groq_model
-        if provider == "openai" and settings.openai_api_key:
-            return provider, settings.openai_api_key, settings.openai_model
         return "", "", ""
 
     @staticmethod
     def _provider_base_url(provider: str) -> str:
         if provider == "groq":
             return settings.groq_base_url
-        return "https://api.openai.com/v1"
+        return ""
 
     @staticmethod
     def _safe_json(raw: str) -> Any:

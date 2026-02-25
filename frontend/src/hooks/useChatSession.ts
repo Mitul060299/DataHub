@@ -18,6 +18,12 @@ export type ChatResponsePayload = {
   response: string;
   needsConfirmation?: boolean;
   transformation?: TransformationPayload;
+  plan?: string[];
+  artifact?: {
+    type: string;
+    title?: string;
+    content?: string;
+  };
 };
 
 export function useChatSession() {
@@ -33,11 +39,29 @@ export function useChatSession() {
   }) => {
     setSending(true);
     try {
-      const response = await api.post<ChatResponsePayload>(`/chat-sessions/${sessionId}/message`, payload);
-      if (response.data.session_id) {
-        setSessionId(response.data.session_id);
-      }
-      return response.data;
+      const response = await api.post<{
+        response?: string;
+        transformation?: TransformationPayload;
+        needsConfirmation?: boolean;
+        plan?: string[];
+        artifact?: {
+          type: string;
+          title?: string;
+          content?: string;
+        };
+      }>(`/cleaning/datasets/${payload.dataset_id}/chat`, {
+        message: payload.message,
+        conversationHistory: payload.conversation_history,
+      });
+
+      return {
+        session_id: sessionId,
+        response: response.data.response ?? "No response returned.",
+        transformation: response.data.transformation,
+        needsConfirmation: response.data.needsConfirmation,
+        plan: response.data.plan,
+        artifact: response.data.artifact,
+      } satisfies ChatResponsePayload;
     } finally {
       setSending(false);
     }

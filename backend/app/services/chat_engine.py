@@ -22,6 +22,8 @@ from app.models_db import (
 )
 from app.config import settings
 from app.services.ai_operating_controls import get_ai_operating_controls, classify_intent
+from app.services.agent_graph import AgentGraphService
+from app.services.data_transformation_service import DataTransformationService
 
 
 class MessageRole(str, Enum):
@@ -210,19 +212,99 @@ class ChatEngine:
                 type=EventType.THINKING,
                 content="Analyzing your request..."
             )
-            
-            max_steps = self._get_max_steps_for_tier()
-            
+
+            conversation_history: list[dict[str, Any]] = []
+            for item in session.messages[-12:]:
+                role = item.get("role")
+                content = item.get("content")
+                if role in {"user", "assistant"} and content:
+                    conversation_history.append({"role": role, "content": content})
+
+            agent_result = AgentGraphService.process_command(
+                dataset_id=dataset_id,
+                user_message=user_message,
+                conversation_history=conversation_history,
+                db=self.db,
+            )
+
+            plan_steps = agent_result.get("plan") if isinstance(agent_result.get("plan"), list) else []
+            transformation = agent_result.get("transformation") if isinstance(agent_result.get("transformation"), dict) else None
+            needs_confirmation = bool(agent_result.get("needsConfirmation", False))
+            artifact = agent_result.get("artifact") if isinstance(agent_result.get("artifact"), dict) else None
+            response_text = str(agent_result.get("response") or "")
+
             yield ChatEvent(
                 type=EventType.PLAN,
-                content=f"I'll help you with this request",
-                data={'steps': []}
+                content="Execution plan ready",
+                data={"steps": plan_steps}
             )
-            
+
+            steps_executed = 0
+
+            if transformation:
+                yield ChatEvent(
+                    type=EventType.TRANSFORMATION,
+                    content=transformation.get("description") or "Transformation prepared",
+                    data=transformation,
+                )
+
+                if needs_confirmation:
+                    yield ChatEvent(
+                        type=EventType.CONFIRMATION_NEEDED,
+                        content="Please confirm before applying this transformation.",
+                        data={"transformation": transformation},
+                    )
+                elif transformation.get("sql"):
+                    yield ChatEvent(
+                        type=EventType.STEP_START,
+                        content="Applying transformation...",
+                        data={"operation": transformation.get("operation")},
+                    )
+                    execution_result = DataTransformationService.execute_transformation(
+                        dataset_id=dataset_id,
+                        user_id=self.user_id,
+                        transformation=transformation,
+                        db=self.db,
+                    )
+                    steps_executed += 1
+                    yield ChatEvent(
+                        type=EventType.STEP_RESULT,
+                        content="Transformation execution finished",
+                        data=execution_result,
+                    )
+
+            if artifact:
+                yield ChatEvent(
+                    type=EventType.ARTIFACT,
+                    content=artifact.get("title") or "Artifact generated",
+                    data=artifact,
+                )
+
+            assistant_msg = ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=response_text,
+                type="text",
+                metadata={
+                    "plan": plan_steps,
+                    "needs_confirmation": needs_confirmation,
+                    "transformation": transformation,
+                    "artifact": artifact,
+                },
+            )
+            session.messages.append(assistant_msg.to_dict())
+
+            yield ChatEvent(
+                type=EventType.MESSAGE,
+                content=response_text or "Done.",
+            )
+
             yield ChatEvent(
                 type=EventType.DONE,
-                content="Ready to process your request",
-                data={'steps_executed': 0}
+                content="Request processed",
+                data={
+                    "steps_executed": steps_executed,
+                    "confirmation_required": needs_confirmation,
+                }
             )
             
             session.status = 'completed'

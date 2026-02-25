@@ -43,12 +43,19 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
       conversation_history: [...history, { role: "user", content: userMessage.content }],
     });
 
+    const planText = response.plan?.length
+      ? `\n\nPlan:\n${response.plan.map((step, index) => `${index + 1}. ${step}`).join("\n")}`
+      : "";
+    const artifactText = response.artifact?.content
+      ? `\n\nGenerated Report:\n${response.artifact.content}`
+      : "";
+
     setMessages((current) => [
       ...current,
       {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: response.response,
+        content: `${response.response}${planText}${artifactText}`,
         transformation: response.transformation,
         stepStatus: response.transformation ? "pending" : undefined,
       },
@@ -58,7 +65,13 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
   const applyStep = async (messageId: string, transformation: TransformationPayload) => {
     if (!dataset || !transformation.sql) return;
     setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "applying" } : msg)));
-    await executeTransformation({ dataset_id: dataset.id, sql: transformation.sql });
+    await executeTransformation({
+      dataset_id: dataset.id,
+      sql: transformation.sql,
+      operation: transformation.operation,
+      description: transformation.description,
+      affectedRows: transformation.affectedRows,
+    });
     addStep({
       id: crypto.randomUUID(),
       stepNumber: Date.now(),

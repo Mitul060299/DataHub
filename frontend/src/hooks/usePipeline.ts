@@ -22,8 +22,23 @@ export function usePipeline() {
     URL.revokeObjectURL(url);
   };
 
-  const executeTransformation = async (payload: { dataset_id: string; sql: string }) => {
-    const response = await api.post("/transformations/execute", payload);
+  const executeTransformation = async (payload: {
+    dataset_id: string;
+    sql: string;
+    operation?: string;
+    description?: string;
+    affectedRows?: string;
+    columns?: string[];
+  }) => {
+    const response = await api.post(`/cleaning/datasets/${payload.dataset_id}/transform`, {
+      transformation: {
+        operation: payload.operation ?? "custom_sql",
+        sql: payload.sql,
+        description: payload.description ?? "Run SQL transformation",
+        affectedRows: payload.affectedRows,
+        columns: payload.columns,
+      },
+    });
     return response.data;
   };
 

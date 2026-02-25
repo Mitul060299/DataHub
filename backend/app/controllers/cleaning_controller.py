@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..security import get_current_role, get_current_subject, require_role
 from ..models_db import DatasetMetaDB, TransformationHistoryDB
 from ..services.ai_agent_service import AIAgentService
+from ..services.agent_graph import AgentGraphService
 from ..services.data_transformation_service import DataTransformationService
 
 
@@ -38,7 +39,7 @@ class CleaningController:
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
-        return AIAgentService.process_command(dataset_id, message, conversation_history, db)
+        return AgentGraphService.process_command(dataset_id, message, conversation_history, db)
 
     @staticmethod
     def execute_transformation(

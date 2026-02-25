@@ -26,6 +26,18 @@ export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
+  const removeDataset = async (dataset: Dataset) => {
+    try {
+      await api.delete(`/datasets/${dataset.id}`);
+    } catch {
+      await Promise.resolve();
+    }
+    setDatasets((current) => current.filter((item) => item.id !== dataset.id));
+    if (activeDataset?.id === dataset.id) {
+      setActiveDataset(null);
+    }
+  };
+
   useEffect(() => {
     const loadDatasets = async () => {
       if (!activeProject?.id) {
@@ -78,6 +90,7 @@ export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
           activeDatasetId={activeDataset?.id}
           onSelect={setActiveDataset}
           onImport={() => setImportModalOpen(true)}
+          onRemove={(dataset) => void removeDataset(dataset)}
         />
         <PipelineSection
           onSchedule={() => setScheduleModalOpen(true)}

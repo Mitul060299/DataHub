@@ -29,7 +29,7 @@ export interface WorkspaceContextValue {
   activeProject: Project | null;
   setActiveProject: (project: Project) => void;
   activeDataset: Dataset | null;
-  setActiveDataset: (dataset: Dataset) => void;
+  setActiveDataset: (dataset: Dataset | null) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
 }

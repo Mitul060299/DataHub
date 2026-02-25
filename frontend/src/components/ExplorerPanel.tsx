@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
+import { useCallback, useEffect, useState } from "react";
+import { api, deleteDataset } from "../api";
 import { usePipeline } from "../hooks/usePipeline";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { IconChevronDown, IconTeam } from "./Icons";
@@ -26,38 +26,40 @@ export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
-  const removeDataset = async (dataset: Dataset) => {
+  const loadDatasets = useCallback(async () => {
+    if (!activeProject?.id) {
+      setDatasets([]);
+      return;
+    }
     try {
-      await api.delete(`/datasets/${dataset.id}`);
+      const response = await api.get("/datasets", { params: { project_id: activeProject.id } });
+      const mapped = (response.data ?? []).map((item: Record<string, unknown>) => ({
+        id: String(item.id ?? item.dataset_id ?? ""),
+        name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
+        rows: Number(item.row_count ?? item.rows ?? 0),
+      }));
+      setDatasets(mapped);
+    } catch {
+      setDatasets([]);
+    }
+  }, [activeProject?.id]);
+
+  const removeDataset = async (dataset: Dataset) => {
+    if (!dataset.id) return;
+    try {
+      await deleteDataset(dataset.id);
+      if (activeDataset?.id === dataset.id) {
+        setActiveDataset(null);
+      }
+      await loadDatasets();
     } catch {
       await Promise.resolve();
-    }
-    setDatasets((current) => current.filter((item) => item.id !== dataset.id));
-    if (activeDataset?.id === dataset.id) {
-      setActiveDataset(null);
     }
   };
 
   useEffect(() => {
-    const loadDatasets = async () => {
-      if (!activeProject?.id) {
-        setDatasets([]);
-        return;
-      }
-      try {
-        const response = await api.get("/datasets", { params: { project_id: activeProject.id } });
-        const mapped = (response.data ?? []).map((item: Record<string, unknown>) => ({
-          id: String(item.id ?? item.dataset_id ?? ""),
-          name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
-          rows: Number(item.row_count ?? item.rows ?? 0),
-        }));
-        setDatasets(mapped);
-      } catch {
-        setDatasets([]);
-      }
-    };
     void loadDatasets();
-  }, [activeProject?.id]);
+  }, [loadDatasets]);
 
   return (
     <aside style={{ width: "var(--sw)", minWidth: "var(--sw)", borderRight: "1px solid var(--bd)", background: "var(--bg1)", padding: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -105,7 +107,14 @@ export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
         onClose={() => setProjectModalOpen(false)}
         onSelect={setActiveProject}
       />
-      <ImportModal open={importModalOpen} onClose={() => setImportModalOpen(false)} onImported={() => setImportModalOpen(false)} />
+      <ImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImported={() => {
+          setImportModalOpen(false);
+          void loadDatasets();
+        }}
+      />
       <ScheduleModal
         open={scheduleModalOpen}
         onClose={() => setScheduleModalOpen(false)}

@@ -34,32 +34,44 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
     const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: input };
     setMessages((current) => [...current, userMessage]);
     setInput("");
+    try {
+      const response = await sendMessage({
+        message: userMessage.content,
+        dataset_id: dataset.id,
+        workspace_id: workspaceId,
+        project_id: projectId,
+        conversation_history: [...history, { role: "user", content: userMessage.content }],
+      });
 
-    const response = await sendMessage({
-      message: userMessage.content,
-      dataset_id: dataset.id,
-      workspace_id: workspaceId,
-      project_id: projectId,
-      conversation_history: [...history, { role: "user", content: userMessage.content }],
-    });
+      const planText = response.plan?.length
+        ? `\n\nPlan:\n${response.plan.map((step, index) => `${index + 1}. ${step}`).join("\n")}`
+        : "";
+      const artifactText = response.artifact?.content
+        ? `\n\nGenerated Report:\n${response.artifact.content}`
+        : "";
 
-    const planText = response.plan?.length
-      ? `\n\nPlan:\n${response.plan.map((step, index) => `${index + 1}. ${step}`).join("\n")}`
-      : "";
-    const artifactText = response.artifact?.content
-      ? `\n\nGenerated Report:\n${response.artifact.content}`
-      : "";
-
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: `${response.response}${planText}${artifactText}`,
-        transformation: response.transformation,
-        stepStatus: response.transformation ? "pending" : undefined,
-      },
-    ]);
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `${response.response}${planText}${artifactText}`,
+          transformation: response.transformation,
+          stepStatus: response.transformation ? "pending" : undefined,
+        },
+      ]);
+    } catch (error: unknown) {
+      const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
+      const message = maybeError.response?.data?.detail ?? maybeError.message ?? "Chat request failed.";
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `Error: ${message}`,
+        },
+      ]);
+    }
   };
 
   const applyStep = async (messageId: string, transformation: TransformationPayload) => {

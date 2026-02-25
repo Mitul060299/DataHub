@@ -60,12 +60,22 @@ class AgentGraphService:
                 "needs_confirmation": False,
             }
 
-        payload = AIAgentService.process_command(
-            dataset_id=state["dataset_id"],
-            user_message=state["message"],
-            conversation_history=state.get("conversation_history", []),
-            db=db,
-        )
+        try:
+            payload = AIAgentService.process_command(
+                dataset_id=state["dataset_id"],
+                user_message=state["message"],
+                conversation_history=state.get("conversation_history", []),
+                db=db,
+            )
+        except Exception as exc:
+            return {
+                "error": str(exc),
+                "response": f"Agent planning failed: {str(exc)}",
+                "transformation": None,
+                "needs_confirmation": False,
+                "plan": [],
+                "artifact": None,
+            }
 
         transformation = payload.get("transformation") if isinstance(payload.get("transformation"), dict) else None
         plan = AgentGraphService._build_plan(state.get("message", ""), transformation)
@@ -195,7 +205,16 @@ class AgentGraphService:
         initial_state["_db"] = db  # type: ignore[index]
 
         if compiled is None:
-            payload = AIAgentService.process_command(dataset_id, user_message, conversation_history, db)
+            try:
+                payload = AIAgentService.process_command(dataset_id, user_message, conversation_history, db)
+            except Exception as exc:
+                return {
+                    "response": f"Agent execution failed: {str(exc)}",
+                    "transformation": None,
+                    "needsConfirmation": False,
+                    "plan": [],
+                    "artifact": None,
+                }
             return {
                 "response": payload.get("response") or "",
                 "transformation": payload.get("transformation"),

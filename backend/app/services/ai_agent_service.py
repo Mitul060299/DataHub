@@ -16,6 +16,16 @@ from ..models_db import DatasetMetaDB, DatasetChunkDB, DatasetDataDB
 
 class AIAgentService:
     @staticmethod
+    def _resolve_model_name(model: str) -> str:
+        normalized = (model or "").strip().lower()
+        aliases = {
+            "llama 3.1 8b instant": "llama-3.1-8b-instant",
+            "llama3.1-8b-instant": "llama-3.1-8b-instant",
+            "llama3.1 8b instant": "llama-3.1-8b-instant",
+        }
+        return aliases.get(normalized, model)
+
+    @staticmethod
     def analyze_dataset(dataset_id: str, db: Session) -> dict[str, Any]:
         context = AIAgentService._get_dataset_context(dataset_id, db)
         provider, api_key, model = AIAgentService._provider_config()
@@ -78,16 +88,23 @@ class AIAgentService:
             "Identify ALL data quality issues and suggest cleaning operations."
         )
 
-        response = AIAgentService._call_llm(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            provider=provider,
-            api_key=api_key,
-            model=model,
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = AIAgentService._call_llm(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                provider=provider,
+                api_key=api_key,
+                model=model,
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:
+            return {
+                "issues": [],
+                "suggestions": [],
+                "error": f"Groq request failed: {str(exc)}",
+            }
 
         payload = AIAgentService._safe_json(response)
         if not isinstance(payload, dict):
@@ -176,13 +193,20 @@ class AIAgentService:
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": user_message})
 
-        response = AIAgentService._call_llm(
-            messages,
-            provider=provider,
-            api_key=api_key,
-            model=model,
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = AIAgentService._call_llm(
+                messages,
+                provider=provider,
+                api_key=api_key,
+                model=model,
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:
+            return {
+                "response": f"Groq request failed: {str(exc)}. Verify GROQ_API_KEY and GROQ_MODEL.",
+                "transformation": None,
+                "needsConfirmation": False,
+            }
         payload = AIAgentService._safe_json(response)
         if not isinstance(payload, dict):
             return {
@@ -212,8 +236,9 @@ class AIAgentService:
         response_format: dict[str, Any] | None = None,
     ) -> str:
         base_url = AIAgentService._provider_base_url(provider)
+        resolved_model = AIAgentService._resolve_model_name(model)
         body: dict[str, Any] = {
-            "model": model,
+            "model": resolved_model,
             "messages": messages,
             "temperature": 0.3,
         }

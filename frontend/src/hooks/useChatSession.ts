@@ -56,7 +56,7 @@ export function useChatSession() {
 
       return {
         session_id: sessionId,
-        response: response.data.response ?? "No response returned.",
+        response: (response.data.response ?? "").trim() || "No response returned from AI service.",
         transformation: response.data.transformation,
         needsConfirmation: response.data.needsConfirmation,
         plan: response.data.plan,

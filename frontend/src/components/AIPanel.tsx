@@ -32,7 +32,16 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
   const handleSend = async () => {
     if (!input.trim() || !dataset) return;
     const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: input };
-    setMessages((current) => [...current, userMessage]);
+    const assistantMessageId = crypto.randomUUID();
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "Thinking...",
+      },
+    ]);
     setInput("");
     try {
       const response = await sendMessage({
@@ -49,27 +58,32 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
       const artifactText = response.artifact?.content
         ? `\n\nGenerated Report:\n${response.artifact.content}`
         : "";
+      const finalContent = `${response.response || "I could not generate a response."}${planText}${artifactText}`;
 
       setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `${response.response}${planText}${artifactText}`,
-          transformation: response.transformation,
-          stepStatus: response.transformation ? "pending" : undefined,
-        },
+        ...current.map((message) => (
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                content: finalContent,
+                transformation: response.transformation,
+                stepStatus: response.transformation ? "pending" : undefined,
+              }
+            : message
+        )),
       ]);
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
       const message = maybeError.response?.data?.detail ?? maybeError.message ?? "Chat request failed.";
       setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `Error: ${message}`,
-        },
+        ...current.map((item) => (
+          item.id === assistantMessageId
+            ? {
+                ...item,
+                content: `Error: ${message}`,
+              }
+            : item
+        )),
       ]);
     }
   };

@@ -23,6 +23,13 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173
+    port: 5173,
+    proxy: {
+      "/api": {
+        target: "https://datahub-0dbp.onrender.com",
+        changeOrigin: true,
+        secure: true,
+      }
+    }
   }
 });

@@ -98,8 +98,7 @@ export function invalidateAnalyticsCache(options?: { datasetId?: string; workspa
 }
 
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
-const isLocalHost = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const defaultApiBaseUrl = isLocalHost ? "http://localhost:8000" : "/api";
+const defaultApiBaseUrl = "/api";
 
 const api = axios.create({
   baseURL: configuredApiBaseUrl || defaultApiBaseUrl

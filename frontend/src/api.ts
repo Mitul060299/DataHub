@@ -97,8 +97,12 @@ export function invalidateAnalyticsCache(options?: { datasetId?: string; workspa
   }
 }
 
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+const isLocalHost = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const defaultApiBaseUrl = isLocalHost ? "http://localhost:8000" : "/api";
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
+  baseURL: configuredApiBaseUrl || defaultApiBaseUrl
 });
 
 api.interceptors.request.use((config) => {
@@ -211,7 +215,7 @@ export type ChatSessionStreamEvent = {
 };
 
 export async function createChatSession(datasetId: string, initialRequest?: string) {
-  const response = await api.post("/api/chat/sessions", null, {
+  const response = await api.post("/chat/sessions", null, {
     params: {
       dataset_id: datasetId,
       initial_request: initialRequest,
@@ -232,7 +236,8 @@ export async function createChatSession(datasetId: string, initialRequest?: stri
 export async function streamChatSessionMessage(sessionId: string, content: string) {
   const token = getAuthToken();
   const baseUrl = (api.defaults.baseURL || "").replace(/\/$/, "");
-  const streamUrl = `${baseUrl}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages?content=${encodeURIComponent(content)}`;
+  const streamPath = `/chat/sessions/${encodeURIComponent(sessionId)}/messages?content=${encodeURIComponent(content)}`;
+  const streamUrl = `${baseUrl}${streamPath}`;
 
   const response = await fetch(streamUrl, {
     method: "POST",

@@ -74,7 +74,10 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
       ]);
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
-      const message = maybeError.response?.data?.detail ?? maybeError.message ?? "Chat request failed.";
+      const rawMessage = maybeError.response?.data?.detail ?? maybeError.message ?? "Chat request failed.";
+      const message = rawMessage.toLowerCase().includes("network error")
+        ? "Network Error: Backend API is unreachable. Start backend on http://localhost:8000 (or set VITE_API_BASE_URL to your running API)."
+        : rawMessage;
       setMessages((current) => [
         ...current.map((item) => (
           item.id === assistantMessageId

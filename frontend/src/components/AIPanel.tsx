@@ -67,7 +67,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
                 ...message,
                 content: finalContent,
                 transformation: response.transformation,
-                stepStatus: response.transformation ? "pending" : undefined,
+                stepStatus: response.transformation ? "pending" as const : undefined,
               }
             : message
         )),

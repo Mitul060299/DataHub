@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { api } from "../api";
+import { getAuthToken } from "../utils/auth";
+
+const RENDER_API_BASE_URL = "https://datahub-0dbp.onrender.com";
 
 export type ConversationMessage = {
   role: "user" | "assistant";
@@ -39,28 +42,69 @@ export function useChatSession() {
   }) => {
     setSending(true);
     try {
-      const response = await api.post<{
-        response?: string;
-        transformation?: TransformationPayload;
-        needsConfirmation?: boolean;
-        plan?: string[];
-        artifact?: {
-          type: string;
-          title?: string;
-          content?: string;
+      let response;
+      try {
+        response = await api.post<{
+          response?: string;
+          transformation?: TransformationPayload;
+          needsConfirmation?: boolean;
+          plan?: string[];
+          artifact?: {
+            type: string;
+            title?: string;
+            content?: string;
+          };
+        }>(`/cleaning/datasets/${payload.dataset_id}/chat`, {
+          message: payload.message,
+          conversationHistory: payload.conversation_history,
+        });
+      } catch (error: unknown) {
+        const maybeError = error as { message?: string };
+        const isNetworkFailure = (maybeError.message || "").toLowerCase().includes("network error");
+        if (!isNetworkFailure) {
+          throw error;
+        }
+
+        const token = getAuthToken();
+        response = await api.post<{
+          response?: string;
+          transformation?: TransformationPayload;
+          needsConfirmation?: boolean;
+          plan?: string[];
+          artifact?: {
+            type: string;
+            title?: string;
+            content?: string;
+          };
+        }>(`${RENDER_API_BASE_URL}/cleaning/datasets/${payload.dataset_id}/chat`, {
+          message: payload.message,
+          conversationHistory: payload.conversation_history,
+        }, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+      }
+
+      const typedResponse = response as {
+        data: {
+          response?: string;
+          transformation?: TransformationPayload;
+          needsConfirmation?: boolean;
+          plan?: string[];
+          artifact?: {
+            type: string;
+            title?: string;
+            content?: string;
+          };
         };
-      }>(`/cleaning/datasets/${payload.dataset_id}/chat`, {
-        message: payload.message,
-        conversationHistory: payload.conversation_history,
-      });
+      };
 
       return {
         session_id: sessionId,
-        response: (response.data.response ?? "").trim() || "No response returned from AI service.",
-        transformation: response.data.transformation,
-        needsConfirmation: response.data.needsConfirmation,
-        plan: response.data.plan,
-        artifact: response.data.artifact,
+        response: (typedResponse.data.response ?? "").trim() || "No response returned from AI service.",
+        transformation: typedResponse.data.transformation,
+        needsConfirmation: typedResponse.data.needsConfirmation,
+        plan: typedResponse.data.plan,
+        artifact: typedResponse.data.artifact,
       } satisfies ChatResponsePayload;
     } finally {
       setSending(false);

@@ -217,6 +217,8 @@ def _map_supabase_role(claims: Dict[str, Any]) -> str:
     if not raw_role:
         raw_role = claims.get("role")
     if not raw_role:
+        if claims.get("sub"):
+            return "editor"
         return "viewer"
     normalized = str(raw_role).lower()
     if normalized in {"service_role", "supabase_admin", "admin"}:

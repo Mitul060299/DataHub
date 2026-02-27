@@ -217,14 +217,12 @@ class DataTransformationService:
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
             raise ValueError("Dataset not found")
-        if not dataset.storage_path:
-            raise ValueError("Dataset storage path is missing")
 
         current_rows = _load_dataset_rows(dataset, db)
         undo_snapshot = _build_undo_snapshot(dataset, current_rows)
 
         start_time = time.time()
-        result_rows = DuckDBService.query_parquet(dataset.storage_path, transformation["sql"])
+        result_rows = DuckDBService.query_rows(current_rows, transformation["sql"])
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         df = pd.DataFrame(result_rows)
@@ -389,18 +387,17 @@ def _run_background_job(
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
             raise ValueError("Dataset not found")
-        if not dataset.storage_path:
-            raise ValueError("Dataset storage path is missing")
+        current_rows = _load_dataset_rows(dataset, db)
 
         start_time = time.time()
         _job_store.update(job_id, progress=25)
         count_sql = f"SELECT COUNT(*) AS total_count FROM ({transformation['sql']}) AS subquery"
-        count_rows = DuckDBService.query_parquet(dataset.storage_path, count_sql)
+        count_rows = DuckDBService.query_rows(current_rows, count_sql)
         total_count = int(count_rows[0]["total_count"]) if count_rows else 0
 
         _job_store.update(job_id, progress=60)
         preview_sql = f"SELECT * FROM ({transformation['sql']}) AS subquery LIMIT 100"
-        preview_rows = DuckDBService.query_parquet(dataset.storage_path, preview_sql)
+        preview_rows = DuckDBService.query_rows(current_rows, preview_sql)
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         DataTransformationService._save_history(

@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 import duckdb
+import pandas as pd
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -74,10 +75,31 @@ class DuckDBService:
         columns = list(rows[0].keys()) if rows else []
         return {"rows": rows, "columns": columns}
 
+    @classmethod
+    def query_rows(cls, rows: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+        connection = cls._ensure_db()
+        dataset_df = pd.DataFrame(rows or [])
+        view_name = "dataset_rows"
+        connection.register(view_name, dataset_df)
+        try:
+            sql_query = cls._inject_relation(query, view_name)
+            return cls._execute(connection, sql_query)
+        finally:
+            try:
+                connection.unregister(view_name)
+            except Exception:
+                pass
+
     @staticmethod
     def _inject_path(query: str, file_path: str) -> str:
         pattern = re.compile(r"\bfrom\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
         replacement = f"FROM read_parquet('{file_path}')"
+        return pattern.sub(replacement, query, count=1)
+
+    @staticmethod
+    def _inject_relation(query: str, relation_name: str) -> str:
+        pattern = re.compile(r"\bfrom\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
+        replacement = f"FROM {relation_name}"
         return pattern.sub(replacement, query, count=1)
 
     @staticmethod

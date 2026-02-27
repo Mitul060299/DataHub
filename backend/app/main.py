@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request
 import os
+import logging
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipelines_v2
 from .routers import ml_routes, full_auto_routes
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
@@ -13,24 +15,50 @@ from .config import settings
 from .services.pipelines import start_scheduler
 
 app = FastAPI(title="DataHub API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+ALLOWED_CORS_ORIGINS = [
+    "https://datahub.org.in",
+    "https://www.datahub.org.in",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=ALLOWED_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
 @app.on_event("startup")
 def create_tables() -> None:
+    logger.warning("CORS ORIGINS LOADED: %s", settings.cors_origins)
+    logger.warning("GROQ KEY SET: %s", bool(settings.groq_api_key))
+    logger.warning("APP ENV: %s", settings.app_env)
     if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
         Base.metadata.create_all(bind=engine)
     try:
         start_scheduler()
     except Exception:
         pass
+
+
+@app.middleware("http")
+async def cors_on_error(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        response = JSONResponse(status_code=500, content={"detail": str(exc)})
+
+    origin = request.headers.get("origin", "")
+    if origin in ALLOWED_CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 
 @app.middleware("http")

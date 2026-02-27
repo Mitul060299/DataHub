@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import SessionLocal
-from ..models_db import DatasetMetaDB, TransformationHistoryDB
+from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, TransformationHistoryDB
 from ..services.duckdb_service import DuckDBService
 from ..services.data_conversion import DataConversionService
 
@@ -104,6 +104,11 @@ class TransformationJobStore:
 _redis_store = RedisJobStore(settings.redis_url)
 _job_store = TransformationJobStore(_redis_store)
 _executor = ThreadPoolExecutor(max_workers=2)
+_CHUNK_SIZE = 1000
+
+
+def _chunk_rows(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
+    return [rows[index : index + size] for index in range(0, len(rows), size)]
 
 
 class DataTransformationService:
@@ -157,15 +162,38 @@ class DataTransformationService:
             execution_time_ms=execution_time_ms,
         )
 
-        if DataTransformationService._changes_structure(transformation.get("operation", "")):
-            df = pd.DataFrame(result_rows)
-            schema = DataConversionService._infer_schema(df) if not df.empty else {}
-            stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
-            dataset.schema_json = schema
-            dataset.stats_json = stats
-            dataset.columns = list(df.columns)
-            dataset.row_count = int(df.shape[0])
-            db.commit()
+        df = pd.DataFrame(result_rows)
+        transformed_rows = df.astype(object).where(pd.notnull(df), None).to_dict(orient="records")
+
+        db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()
+        db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
+
+        chunks = _chunk_rows(transformed_rows, _CHUNK_SIZE)
+        for index, chunk in enumerate(chunks):
+            db.add(
+                DatasetChunkDB(
+                    id=f"{dataset_id}:{index}",
+                    dataset_id=dataset_id,
+                    chunk_index=index,
+                    rows=chunk,
+                )
+            )
+
+        if len(transformed_rows) <= 5000:
+            db.add(
+                DatasetDataDB(
+                    id=dataset_id,
+                    rows=transformed_rows,
+                )
+            )
+
+        schema = DataConversionService._infer_schema(df) if not df.empty else {}
+        stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
+        dataset.schema_json = schema
+        dataset.stats_json = stats
+        dataset.columns = list(df.columns)
+        dataset.row_count = int(df.shape[0])
+        db.commit()
 
         columns = list(result_rows[0].keys()) if result_rows else []
         return {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "../api";
 
@@ -28,10 +28,35 @@ interface PipelineContextValue {
 }
 
 const PipelineContext = createContext<PipelineContextValue | undefined>(undefined);
+const PIPELINE_STEPS_STORAGE_KEY = "datahub_pipeline_steps_v1";
+
+
+const loadPersistedSteps = (): PipelineStep[] => {
+  try {
+    const raw = localStorage.getItem(PIPELINE_STEPS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((step) => ({
+      ...step,
+      appliedAt: new Date(step.appliedAt),
+    }));
+  } catch {
+    return [];
+  }
+};
 
 export function PipelineProvider({ children }: { children: ReactNode }) {
-  const [steps, setSteps] = useState<PipelineStep[]>([]);
+  const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps());
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PIPELINE_STEPS_STORAGE_KEY, JSON.stringify(steps));
+    } catch {
+      return;
+    }
+  }, [steps]);
 
   const addStep = (step: PipelineStep) => {
     setSteps((current) => [...current, step]);

@@ -105,10 +105,83 @@ _redis_store = RedisJobStore(settings.redis_url)
 _job_store = TransformationJobStore(_redis_store)
 _executor = ThreadPoolExecutor(max_workers=2)
 _CHUNK_SIZE = 1000
+_UNDO_SNAPSHOT_PREFIX = "__UNDO_SNAPSHOT__:"
+_UNDO_MAX_ROWS = 50000
 
 
 def _chunk_rows(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
     return [rows[index : index + size] for index in range(0, len(rows), size)]
+
+
+def _load_dataset_rows(dataset: DatasetMetaDB, db: Session) -> list[dict[str, Any]]:
+    chunks = (
+        db.query(DatasetChunkDB)
+        .filter(DatasetChunkDB.dataset_id == dataset.id)
+        .order_by(DatasetChunkDB.chunk_index.asc())
+        .all()
+    )
+    if chunks:
+        rows: list[dict[str, Any]] = []
+        for chunk in chunks:
+            rows.extend(chunk.rows or [])
+        return rows
+
+    data = db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset.id).first()
+    if data:
+        return list(data.rows or [])
+
+    if dataset.storage_path:
+        preview = DuckDBService.get_preview(dataset.storage_path, limit=max(1, _UNDO_MAX_ROWS))
+        return list(preview.get("rows") or [])
+
+    return []
+
+
+def _write_dataset_rows(dataset_id: str, rows: list[dict[str, Any]], db: Session) -> None:
+    db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()
+    db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
+
+    chunks = _chunk_rows(rows, _CHUNK_SIZE)
+    for index, chunk in enumerate(chunks):
+        db.add(
+            DatasetChunkDB(
+                id=f"{dataset_id}:{index}",
+                dataset_id=dataset_id,
+                chunk_index=index,
+                rows=chunk,
+            )
+        )
+
+    if len(rows) <= 5000:
+        db.add(
+            DatasetDataDB(
+                id=dataset_id,
+                rows=rows,
+            )
+        )
+
+
+def _build_undo_snapshot(dataset: DatasetMetaDB, current_rows: list[dict[str, Any]]) -> str | None:
+    if len(current_rows) > _UNDO_MAX_ROWS:
+        return None
+    payload = {
+        "rows": current_rows,
+        "columns": list(dataset.columns or []),
+        "row_count": int(dataset.row_count or len(current_rows)),
+        "schema_json": dataset.schema_json or {},
+        "stats_json": dataset.stats_json or {},
+    }
+    return _UNDO_SNAPSHOT_PREFIX + json.dumps(payload)
+
+
+def _parse_undo_snapshot(raw: str | None) -> dict[str, Any] | None:
+    if not raw or not raw.startswith(_UNDO_SNAPSHOT_PREFIX):
+        return None
+    try:
+        payload = json.loads(raw[len(_UNDO_SNAPSHOT_PREFIX) :])
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 class DataTransformationService:
@@ -147,45 +220,17 @@ class DataTransformationService:
         if not dataset.storage_path:
             raise ValueError("Dataset storage path is missing")
 
+        current_rows = _load_dataset_rows(dataset, db)
+        undo_snapshot = _build_undo_snapshot(dataset, current_rows)
+
         start_time = time.time()
         result_rows = DuckDBService.query_parquet(dataset.storage_path, transformation["sql"])
         execution_time_ms = int((time.time() - start_time) * 1000)
 
-        DataTransformationService._save_history(
-            db,
-            dataset_id,
-            user_id,
-            transformation,
-            affected_rows=str(len(result_rows)),
-            status="completed",
-            error_message=None,
-            execution_time_ms=execution_time_ms,
-        )
-
         df = pd.DataFrame(result_rows)
         transformed_rows = df.astype(object).where(pd.notnull(df), None).to_dict(orient="records")
 
-        db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()
-        db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
-
-        chunks = _chunk_rows(transformed_rows, _CHUNK_SIZE)
-        for index, chunk in enumerate(chunks):
-            db.add(
-                DatasetChunkDB(
-                    id=f"{dataset_id}:{index}",
-                    dataset_id=dataset_id,
-                    chunk_index=index,
-                    rows=chunk,
-                )
-            )
-
-        if len(transformed_rows) <= 5000:
-            db.add(
-                DatasetDataDB(
-                    id=dataset_id,
-                    rows=transformed_rows,
-                )
-            )
+        _write_dataset_rows(dataset_id, transformed_rows, db)
 
         schema = DataConversionService._infer_schema(df) if not df.empty else {}
         stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
@@ -194,6 +239,17 @@ class DataTransformationService:
         dataset.columns = list(df.columns)
         dataset.row_count = int(df.shape[0])
         db.commit()
+
+        DataTransformationService._save_history(
+            db,
+            dataset_id,
+            user_id,
+            transformation,
+            affected_rows=str(len(result_rows)),
+            status="completed",
+            error_message=undo_snapshot,
+            execution_time_ms=execution_time_ms,
+        )
 
         columns = list(result_rows[0].keys()) if result_rows else []
         return {
@@ -213,6 +269,67 @@ class DataTransformationService:
             "progress": job.get("progress", 0),
             "result": job.get("result"),
             "error": job.get("error"),
+        }
+
+    @staticmethod
+    def undo_last_transformation(dataset_id: str, user_id: str, db: Session) -> dict[str, Any]:
+        dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+        if not dataset:
+            raise ValueError("Dataset not found")
+
+        history = (
+            db.query(TransformationHistoryDB)
+            .filter(TransformationHistoryDB.dataset_id == dataset_id)
+            .filter(TransformationHistoryDB.user_id == user_id)
+            .order_by(TransformationHistoryDB.created_at.desc())
+            .all()
+        )
+
+        snapshot_payload: dict[str, Any] | None = None
+        source_history_id: str | None = None
+        for row in history:
+            parsed = _parse_undo_snapshot(row.error_message)
+            if parsed is not None:
+                snapshot_payload = parsed
+                source_history_id = row.id
+                break
+
+        if snapshot_payload is None:
+            raise ValueError("No undo snapshot available for this dataset")
+
+        snapshot_rows = snapshot_payload.get("rows")
+        if not isinstance(snapshot_rows, list):
+            raise ValueError("Undo snapshot is invalid")
+
+        normalized_rows = pd.DataFrame(snapshot_rows).astype(object).where(pd.notnull(pd.DataFrame(snapshot_rows)), None).to_dict(orient="records")
+        _write_dataset_rows(dataset_id, normalized_rows, db)
+
+        dataset.columns = list(snapshot_payload.get("columns") or [])
+        dataset.row_count = int(snapshot_payload.get("row_count") or len(normalized_rows))
+        dataset.schema_json = snapshot_payload.get("schema_json") or {}
+        dataset.stats_json = snapshot_payload.get("stats_json") or {}
+        db.commit()
+
+        DataTransformationService._save_history(
+            db,
+            dataset_id,
+            user_id,
+            {
+                "operation": "undo",
+                "sql": "-- undo last transformation",
+                "description": f"Undo transformation {source_history_id or ''}".strip(),
+            },
+            affected_rows=str(len(normalized_rows)),
+            status="completed",
+            error_message=None,
+            execution_time_ms=None,
+        )
+
+        return {
+            "success": True,
+            "dataset_id": dataset_id,
+            "rowCount": len(normalized_rows),
+            "columns": dataset.columns,
         }
 
     @staticmethod

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { IconClock, IconDownload, IconPlay, IconTrash } from "./Icons";
 import { usePipelineContext } from "../contexts/PipelineContext";
+import { useWorkspaceContext } from "../contexts/WorkspaceContext";
+import { usePipeline } from "../hooks/usePipeline";
 
 interface PipelineSectionProps {
   onSchedule: () => void;
@@ -9,7 +11,24 @@ interface PipelineSectionProps {
 
 export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
   const { steps, clearSteps, runPipeline, scheduleInfo } = usePipelineContext();
+  const { activeDataset } = useWorkspaceContext();
+  const { undoLastTransformation } = usePipeline();
   const [open, setOpen] = useState(true);
+  const [undoing, setUndoing] = useState(false);
+
+  const handleUndoLast = async () => {
+    if (!activeDataset?.id || undoing) return;
+    setUndoing(true);
+    try {
+      await undoLastTransformation(activeDataset.id);
+      clearSteps();
+      window.location.reload();
+    } catch {
+      return;
+    } finally {
+      setUndoing(false);
+    }
+  };
 
   return (
     <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -41,10 +60,13 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           ))}
         </div>
       ) : null}
-      {open && steps.length ? (
+      {open && (steps.length || activeDataset?.id) ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => void runPipeline()}>
+          <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => void runPipeline()} disabled={!steps.length}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run Pipeline</span>
+          </button>
+          <button className="btn" style={{ width: "100%" }} onClick={() => void handleUndoLast()} disabled={!activeDataset?.id || undoing}>
+            {undoing ? "Undoing..." : "Undo Last"}
           </button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button className="btn" onClick={onSchedule}>Schedule</button>

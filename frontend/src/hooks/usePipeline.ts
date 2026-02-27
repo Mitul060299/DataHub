@@ -42,5 +42,10 @@ export function usePipeline() {
     return response.data;
   };
 
-  return { run, schedule, exportPipeline, executeTransformation };
+  const undoLastTransformation = async (datasetId: string) => {
+    const response = await api.post(`/cleaning/datasets/${datasetId}/undo`);
+    return response.data;
+  };
+
+  return { run, schedule, exportPipeline, executeTransformation, undoLastTransformation };
 }

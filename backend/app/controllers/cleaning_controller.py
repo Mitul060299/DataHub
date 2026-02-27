@@ -13,6 +13,8 @@ from ..services.data_transformation_service import DataTransformationService
 
 
 class CleaningController:
+    _UNDO_SNAPSHOT_PREFIX = "__UNDO_SNAPSHOT__:"
+
     @staticmethod
     def analyze_dataset(dataset_id: str, authorization: str | None, db: Session) -> dict[str, Any]:
         role = get_current_role(authorization)
@@ -98,10 +100,34 @@ class CleaningController:
                 "affected_rows": row.affected_rows,
                 "execution_time_ms": row.execution_time_ms,
                 "status": row.status,
-                "error_message": row.error_message,
+                "error_message": (
+                    None
+                    if isinstance(row.error_message, str)
+                    and row.error_message.startswith(CleaningController._UNDO_SNAPSHOT_PREFIX)
+                    else row.error_message
+                ),
                 "created_at": row.created_at.isoformat() if row.created_at else None,
             }
             for row in query.all()
         ]
 
         return {"history": history}
+
+    @staticmethod
+    def undo_last_transformation(
+        dataset_id: str,
+        authorization: str | None,
+        db: Session,
+    ) -> dict[str, Any]:
+        role = get_current_role(authorization)
+        require_role("viewer", role)
+
+        dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        user_id = get_current_subject(authorization) or "unknown"
+        try:
+            return DataTransformationService.undo_last_transformation(dataset_id, user_id, db)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))

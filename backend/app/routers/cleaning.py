@@ -66,6 +66,15 @@ def execute_transformation(
     )
 
 
+@router.post("/datasets/{dataset_id}/undo")
+def undo_last_transformation(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return CleaningController.undo_last_transformation(dataset_id, authorization, db)
+
+
 @router.get("/datasets/{dataset_id}/history")
 def get_history(
     dataset_id: str,

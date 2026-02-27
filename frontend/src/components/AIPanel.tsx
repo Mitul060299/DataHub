@@ -94,24 +94,34 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
   const applyStep = async (messageId: string, transformation: TransformationPayload) => {
     if (!dataset || !transformation.sql) return;
     setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "applying" } : msg)));
-    await executeTransformation({
-      dataset_id: dataset.id,
-      sql: transformation.sql,
-      operation: transformation.operation,
-      description: transformation.description,
-      affectedRows: transformation.affectedRows,
-    });
-    addStep({
-      id: crypto.randomUUID(),
-      stepNumber: Date.now(),
-      operation: transformation.operation,
-      description: transformation.description,
-      sql: transformation.sql,
-      affectedRows: transformation.affectedRows,
-      appliedAt: new Date(),
-    });
-    setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "applied" } : msg)));
-    onStepApplied();
+    try {
+      await executeTransformation({
+        dataset_id: dataset.id,
+        sql: transformation.sql,
+        operation: transformation.operation,
+        description: transformation.description,
+        affectedRows: transformation.affectedRows,
+      });
+      addStep({
+        id: crypto.randomUUID(),
+        stepNumber: Date.now(),
+        operation: transformation.operation,
+        description: transformation.description,
+        sql: transformation.sql,
+        affectedRows: transformation.affectedRows,
+        appliedAt: new Date(),
+      });
+      setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "applied" } : msg)));
+      onStepApplied();
+    } catch (error: unknown) {
+      const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
+      const detail = maybeError.response?.data?.detail ?? maybeError.message ?? "Transformation failed.";
+      setMessages((current) => current.map((msg) => (
+        msg.id === messageId
+          ? { ...msg, stepStatus: "pending", content: `${msg.content}\n\nApply failed: ${detail}` }
+          : msg
+      )));
+    }
   };
 
   const discardStep = (messageId: string) => {

@@ -49,7 +49,7 @@ class CleaningController:
         db: Session,
     ) -> dict[str, Any]:
         role = get_current_role(authorization)
-        require_role("editor", role)
+        require_role("viewer", role)
 
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:

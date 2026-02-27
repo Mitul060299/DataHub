@@ -61,6 +61,16 @@ async def cors_on_error(request: Request, call_next):
     return response
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    response = JSONResponse(status_code=500, content={"detail": str(exc)})
+    origin = request.headers.get("origin", "")
+    if origin in ALLOWED_CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
 @app.middleware("http")
 async def audit_middleware(request: Request, call_next):
     timer = start_timer(request.method, request.url.path)

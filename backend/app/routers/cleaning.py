@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Header, Depends
+from fastapi import APIRouter, Header, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -37,13 +37,18 @@ def process_command(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    return CleaningController.process_command(
-        dataset_id,
-        payload.message,
-        payload.conversationHistory,
-        authorization,
-        db,
-    )
+    try:
+        return CleaningController.process_command(
+            dataset_id,
+            payload.message,
+            payload.conversationHistory,
+            authorization,
+            db,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(exc)}")
 
 
 @router.post("/datasets/{dataset_id}/transform")

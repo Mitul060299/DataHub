@@ -54,7 +54,7 @@ class Settings(BaseModel):
     llm_provider: str = os.getenv("LLM_PROVIDER", "groq")
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     groq_base_url: str = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     cors_origins: List[str] = _parse_origins(
         os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS))
     )

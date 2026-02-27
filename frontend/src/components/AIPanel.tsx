@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
-import type { Dataset } from "../contexts/WorkspaceContext";
+import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { useChatSession, type ConversationMessage, type TransformationPayload } from "../hooks/useChatSession";
 import { usePipeline } from "../hooks/usePipeline";
 import { IconRefresh, IconZap } from "./Icons";
@@ -21,6 +21,7 @@ interface AIPanelProps {
 
 export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPanelProps) {
   const { addStep } = usePipelineContext();
+  const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
   const { sendMessage, sending, resetSession } = useChatSession();
 
@@ -95,13 +96,21 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
     if (!dataset || !transformation.sql) return;
     setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "applying" } : msg)));
     try {
-      await executeTransformation({
+      const response = await executeTransformation({
         dataset_id: dataset.id,
         sql: transformation.sql,
         operation: transformation.operation,
         description: transformation.description,
         affectedRows: transformation.affectedRows,
       });
+      const outputDataset = response.result?.outputDataset;
+      if (outputDataset?.id) {
+        setActiveDataset({
+          id: outputDataset.id,
+          name: outputDataset.name,
+          rows: outputDataset.rowCount,
+        });
+      }
       addStep({
         id: crypto.randomUUID(),
         stepNumber: Date.now(),

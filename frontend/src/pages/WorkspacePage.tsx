@@ -18,11 +18,12 @@ export function WorkspacePage() {
   const { data, loading, refetch } = useDataset(activeDataset?.id);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
 
   return (
     <main style={{ height: "calc(100% - var(--th))", display: "flex", minWidth: 0, minHeight: 0 }}>
       <ActivityBar explorerOpen={explorerOpen} onToggleExplorer={() => setExplorerOpen((value) => !value)} />
-      {explorerOpen ? <ExplorerPanel workspaceId={workspaceId} /> : null}
+      {explorerOpen ? <ExplorerPanel workspaceId={workspaceId} refreshNonce={datasetRefreshNonce} /> : null}
       <CanvasPanel
         dataset={activeDataset}
         loading={loading}
@@ -37,7 +38,10 @@ export function WorkspacePage() {
         dataset={activeDataset}
         workspaceId={workspaceId}
         projectId={activeProject?.id ?? "default"}
-        onStepApplied={() => void refetch()}
+        onStepApplied={() => {
+          setDatasetRefreshNonce((value) => value + 1);
+          void refetch();
+        }}
       />
       <ImportModal open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />
     </main>

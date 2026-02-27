@@ -1,5 +1,23 @@
 import { api } from "../api";
 
+export type TransformationOutputDataset = {
+  id: string;
+  name: string;
+  rowCount: number;
+  parentId?: string | null;
+};
+
+export type ExecuteTransformationResponse = {
+  jobId?: string;
+  result?: {
+    success: boolean;
+    rowCount: number;
+    previewData: Record<string, unknown>[];
+    columns: string[];
+    outputDataset?: TransformationOutputDataset;
+  };
+};
+
 export function usePipeline() {
   const run = async (pipelineId: string) => {
     const response = await api.post(`/pipelines/${pipelineId}/run`);
@@ -29,7 +47,7 @@ export function usePipeline() {
     description?: string;
     affectedRows?: string;
     columns?: string[];
-  }) => {
+  }): Promise<ExecuteTransformationResponse> => {
     const response = await api.post(`/cleaning/datasets/${payload.dataset_id}/transform`, {
       transformation: {
         operation: payload.operation ?? "custom_sql",
@@ -39,7 +57,7 @@ export function usePipeline() {
         columns: payload.columns,
       },
     });
-    return response.data;
+    return response.data as ExecuteTransformationResponse;
   };
 
   const undoLastTransformation = async (datasetId: string) => {

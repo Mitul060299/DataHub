@@ -184,6 +184,39 @@ def _parse_undo_snapshot(raw: str | None) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _create_transformed_dataset_version(
+    source_dataset: DatasetMetaDB,
+    transformed_rows: list[dict[str, Any]],
+    df: pd.DataFrame,
+    db: Session,
+) -> DatasetMetaDB:
+    schema = DataConversionService._infer_schema(df) if not df.empty else {}
+    stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
+
+    output_dataset = DatasetMetaDB(
+        id=str(uuid.uuid4()),
+        user_id=source_dataset.user_id,
+        workspace_id=source_dataset.workspace_id or "default",
+        name=(source_dataset.name or "dataset") + " (transformed)",
+        description=source_dataset.description,
+        source_type=source_dataset.source_type,
+        storage_provider=source_dataset.storage_provider,
+        storage_path=None,
+        file_format=source_dataset.file_format,
+        schema_json=schema,
+        stats_json=stats,
+        columns=list(df.columns),
+        row_count=int(df.shape[0]),
+        status="ready",
+        error_message=None,
+        access_tier=source_dataset.access_tier or "hot",
+        parent_id=source_dataset.id,
+    )
+    db.add(output_dataset)
+    db.flush()
+    return output_dataset
+
+
 class DataTransformationService:
     @staticmethod
     def execute_transformation(
@@ -228,19 +261,13 @@ class DataTransformationService:
         df = pd.DataFrame(result_rows)
         transformed_rows = df.astype(object).where(pd.notnull(df), None).to_dict(orient="records")
 
-        _write_dataset_rows(dataset_id, transformed_rows, db)
-
-        schema = DataConversionService._infer_schema(df) if not df.empty else {}
-        stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
-        dataset.schema_json = schema
-        dataset.stats_json = stats
-        dataset.columns = list(df.columns)
-        dataset.row_count = int(df.shape[0])
+        output_dataset = _create_transformed_dataset_version(dataset, transformed_rows, df, db)
+        _write_dataset_rows(output_dataset.id, transformed_rows, db)
         db.commit()
 
         DataTransformationService._save_history(
             db,
-            dataset_id,
+            output_dataset.id,
             user_id,
             transformation,
             affected_rows=str(len(result_rows)),
@@ -255,6 +282,12 @@ class DataTransformationService:
             "rowCount": len(result_rows),
             "previewData": result_rows[:100],
             "columns": columns,
+            "outputDataset": {
+                "id": output_dataset.id,
+                "name": output_dataset.name,
+                "rowCount": output_dataset.row_count,
+                "parentId": output_dataset.parent_id,
+            },
         }
 
     @staticmethod

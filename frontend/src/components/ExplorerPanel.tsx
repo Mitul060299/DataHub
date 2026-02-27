@@ -13,9 +13,10 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 
 interface ExplorerPanelProps {
   workspaceId: string;
+  refreshNonce?: number;
 }
 
-export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
+export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members } = useWorkspaceContext();
   const { steps, setScheduleInfo } = usePipelineContext();
   const { exportPipeline, schedule } = usePipeline();
@@ -60,7 +61,7 @@ export function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
 
   useEffect(() => {
     void loadDatasets();
-  }, [loadDatasets]);
+  }, [loadDatasets, refreshNonce]);
 
   return (
     <aside style={{ width: "var(--sw)", minWidth: "var(--sw)", borderRight: "1px solid var(--bd)", background: "var(--bg1)", padding: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>

@@ -191,7 +191,10 @@ class AgentGraphService:
         conversation_history: list[dict[str, Any]],
         db: Session,
     ) -> dict[str, Any]:
-        compiled = cls._compile_graph()
+        try:
+            compiled = cls._compile_graph()
+        except Exception:
+            compiled = None
 
         initial_state: AgentGraphState = {
             "dataset_id": dataset_id,

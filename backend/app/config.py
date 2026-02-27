@@ -4,11 +4,19 @@ import os
 import re
 
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://datahub.org.in",
+    "https://www.datahub.org.in",
+]
+
+
 def _parse_origins(value: str) -> List[str]:
     if not value:
-        return ["*"]
+        return DEFAULT_CORS_ORIGINS
     if value.strip() == "*":
-        return ["*"]
+        return DEFAULT_CORS_ORIGINS
     return [origin.strip() for origin in value.split(",") if origin.strip()]
 
 
@@ -47,7 +55,9 @@ class Settings(BaseModel):
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     groq_base_url: str = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
     groq_model: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-    cors_origins: List[str] = _parse_origins(os.getenv("CORS_ORIGINS", "*"))
+    cors_origins: List[str] = _parse_origins(
+        os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS))
+    )
     oidc_issuer: str = os.getenv("OIDC_ISSUER", "")
     oidc_client_id: str = os.getenv("OIDC_CLIENT_ID", "")
     oidc_client_secret: str = os.getenv("OIDC_CLIENT_SECRET", "")

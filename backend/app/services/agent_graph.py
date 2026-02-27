@@ -30,24 +30,7 @@ class AgentGraphService:
 
     @classmethod
     def _compile_graph(cls):
-        if cls._compiled_graph is not None:
-            return cls._compiled_graph
-        if StateGraph is None or END is None:
-            return None
-
-        graph = StateGraph(AgentGraphState)
-        graph.add_node("plan_step", cls._node_plan)
-        graph.add_node("safety_step", cls._node_safety)
-        graph.add_node("artifact_step", cls._node_artifact)
-        graph.add_node("finalize_step", cls._node_finalize)
-        graph.set_entry_point("plan_step")
-        graph.add_edge("plan_step", "safety_step")
-        graph.add_edge("safety_step", "artifact_step")
-        graph.add_edge("artifact_step", "finalize_step")
-        graph.add_edge("finalize_step", END)
-
-        cls._compiled_graph = graph.compile()
-        return cls._compiled_graph
+        return None
 
     @staticmethod
     def _node_plan(state: AgentGraphState) -> AgentGraphState:

@@ -98,7 +98,7 @@ export function invalidateAnalyticsCache(options?: { datasetId?: string; workspa
 }
 
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
-const defaultApiBaseUrl = "/api";
+const defaultApiBaseUrl = "https://datahub-0dbp.onrender.com";
 
 const api = axios.create({
   baseURL: configuredApiBaseUrl || defaultApiBaseUrl

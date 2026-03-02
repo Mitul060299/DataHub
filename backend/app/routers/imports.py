@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -62,6 +62,7 @@ def _ensure_unique_table_name(db: Session, name: str) -> str:
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    dataset_name: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     plan: str | None = Header(default=None, alias="X-Plan"),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
@@ -79,6 +80,8 @@ async def upload_file(
     if not file.filename:
         logger.error("No filename provided")
         raise HTTPException(status_code=400, detail="File name is required")
+
+    resolved_dataset_name = (dataset_name or "").strip() or file.filename
 
     content = await file.read()
     if not content:
@@ -125,6 +128,7 @@ async def upload_file(
             db,
             workspace_id=workspace_id,
             store_rows=store_rows,
+            meta_extra={"name": resolved_dataset_name},
         )
         logger.info(f"Dataset saved: {dataset_id}")
     except Exception as exc:
@@ -150,7 +154,7 @@ async def upload_file(
 
         meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if meta:
-            meta.name = file.filename
+            meta.name = resolved_dataset_name
             meta.source_type = "file_upload"
             meta.storage_provider = settings.storage_provider
             meta.storage_path = storage_path

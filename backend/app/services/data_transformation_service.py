@@ -255,7 +255,7 @@ class DataTransformationService:
         undo_snapshot = _build_undo_snapshot(dataset, current_rows)
 
         start_time = time.time()
-        result_rows = DuckDBService.query_rows(current_rows, transformation["sql"])
+        result_rows = DuckDBService.transform_rows(current_rows, transformation["sql"])
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         df = pd.DataFrame(result_rows)
@@ -424,13 +424,11 @@ def _run_background_job(
 
         start_time = time.time()
         _job_store.update(job_id, progress=25)
-        count_sql = f"SELECT COUNT(*) AS total_count FROM ({transformation['sql']}) AS subquery"
-        count_rows = DuckDBService.query_rows(current_rows, count_sql)
-        total_count = int(count_rows[0]["total_count"]) if count_rows else 0
+        transformed_rows = DuckDBService.transform_rows(current_rows, transformation["sql"])
+        total_count = len(transformed_rows)
 
         _job_store.update(job_id, progress=60)
-        preview_sql = f"SELECT * FROM ({transformation['sql']}) AS subquery LIMIT 100"
-        preview_rows = DuckDBService.query_rows(current_rows, preview_sql)
+        preview_rows = transformed_rows[:100]
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         DataTransformationService._save_history(

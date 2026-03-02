@@ -15,12 +15,24 @@ export interface PipelineStep {
   sql?: string;
   affectedRows?: string;
   appliedAt: Date;
+  inputDataset?: {
+    id: string;
+    name: string;
+    rows: number;
+  };
+  outputDataset?: {
+    id: string;
+    name: string;
+    rowCount: number;
+    parentId?: string | null;
+  };
 }
 
 interface PipelineContextValue {
   steps: PipelineStep[];
   addStep: (step: PipelineStep) => void;
   removeStep: (stepId: string) => void;
+  keepStepsThrough: (stepId: string) => void;
   clearSteps: () => void;
   runPipeline: () => Promise<void>;
   scheduleInfo: ScheduleInfo | null;
@@ -66,6 +78,14 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     setSteps((current) => current.filter((step) => step.id !== stepId));
   };
 
+  const keepStepsThrough = (stepId: string) => {
+    setSteps((current) => {
+      const index = current.findIndex((step) => step.id === stepId);
+      if (index < 0) return current;
+      return current.slice(0, index + 1);
+    });
+  };
+
   const clearSteps = () => {
     setSteps([]);
   };
@@ -80,7 +100,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, clearSteps, runPipeline, scheduleInfo, setScheduleInfo }),
+    () => ({ steps, addStep, removeStep, keepStepsThrough, clearSteps, runPipeline, scheduleInfo, setScheduleInfo }),
     [steps, scheduleInfo],
   );
 

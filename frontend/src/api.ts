@@ -116,9 +116,12 @@ api.interceptors.request.use((config) => {
 // Export the api instance for direct use in components
 export { api };
 
-export async function uploadDataset(file: File) {
+export async function uploadDataset(file: File, datasetName?: string) {
   const formData = new FormData();
   formData.append("file", file);
+  if (datasetName?.trim()) {
+    formData.append("dataset_name", datasetName.trim());
+  }
   const response = await api.post("/datasets/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" }
   });

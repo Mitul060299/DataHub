@@ -119,6 +119,19 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
         sql: transformation.sql,
         affectedRows: transformation.affectedRows,
         appliedAt: new Date(),
+        inputDataset: {
+          id: dataset.id,
+          name: dataset.name,
+          rows: dataset.rows,
+        },
+        outputDataset: outputDataset
+          ? {
+              id: outputDataset.id,
+              name: outputDataset.name,
+              rowCount: outputDataset.rowCount,
+              parentId: outputDataset.parentId,
+            }
+          : undefined,
       });
       setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "applied" } : msg)));
       onStepApplied();

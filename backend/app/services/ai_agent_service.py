@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from typing import Any
 
@@ -185,6 +186,11 @@ class AIAgentService:
             "    \"columns\": [\"col1\", \"col2\"]\n"
             "  }\n"
             "}\n"
+            "SQL RULES:\n"
+            "- Use dataset as the input relation/table name (never use table as relation name)\n"
+            "- SELECT statements are allowed for projection/filter/aggregation transforms\n"
+            "- Mutation statements are allowed when needed (UPDATE/DELETE/ALTER TABLE)\n"
+            "- Keep SQL valid for DuckDB syntax\n"
             "If no transformation is required, set transformation to null and needsConfirmation to false."
         )
 
@@ -220,6 +226,8 @@ class AIAgentService:
 
         transformation = payload.get("transformation")
         if isinstance(transformation, dict):
+            raw_sql = str(transformation.get("sql") or "")
+            transformation["sql"] = AIAgentService._normalize_transformation_sql(raw_sql)
             transformation = {
                 "id": str(uuid.uuid4()),
                 **transformation,
@@ -275,6 +283,13 @@ class AIAgentService:
             return json.loads(raw)
         except Exception:
             return {}
+
+    @staticmethod
+    def _normalize_transformation_sql(sql: str) -> str:
+        normalized = (sql or "").strip()
+        if not normalized:
+            return normalized
+        return re.sub(r"\btable\b", "dataset", normalized, flags=re.IGNORECASE)
 
     @staticmethod
     def _get_dataset_context(dataset_id: str, db: Session) -> dict[str, Any]:

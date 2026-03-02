@@ -2,7 +2,6 @@ import { useState } from "react";
 import { IconClock, IconDownload, IconPlay, IconTrash } from "./Icons";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
-import { usePipeline } from "../hooks/usePipeline";
 
 interface PipelineSectionProps {
   onSchedule: () => void;
@@ -10,21 +9,63 @@ interface PipelineSectionProps {
 }
 
 export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
-  const { steps, clearSteps, runPipeline, scheduleInfo } = usePipelineContext();
-  const { activeDataset } = useWorkspaceContext();
-  const { undoLastTransformation } = usePipeline();
+  const { steps, clearSteps, keepStepsThrough, runPipeline, scheduleInfo } = usePipelineContext();
+  const { activeDataset, setActiveDataset } = useWorkspaceContext();
   const [open, setOpen] = useState(true);
   const [undoing, setUndoing] = useState(false);
 
   const handleUndoLast = async () => {
-    if (!activeDataset?.id || undoing) return;
+    const lastStep = steps[steps.length - 1];
+    if (!lastStep?.inputDataset || undoing) return;
+
+    const confirmed = window.confirm("Undo last step? This will remove 1 pipeline step.");
+    if (!confirmed) return;
+
     setUndoing(true);
     try {
-      await undoLastTransformation(activeDataset.id);
-      clearSteps();
-      window.location.reload();
+      setActiveDataset({
+        id: lastStep.inputDataset.id,
+        name: lastStep.inputDataset.name,
+        rows: lastStep.inputDataset.rows,
+      });
+      keepStepsThrough(steps[Math.max(steps.length - 2, 0)]?.id ?? "");
+      if (steps.length <= 1) {
+        clearSteps();
+      }
     } catch {
       return;
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const handleUndoFromStep = async (stepId: string) => {
+    if (undoing) return;
+    const stepIndex = steps.findIndex((step) => step.id === stepId);
+    if (stepIndex < 0) return;
+    const selectedStep = steps[stepIndex];
+    if (!selectedStep.inputDataset) return;
+
+    const removedCount = steps.length - stepIndex;
+    const confirmed = window.confirm(
+      `Undo from this step? This will remove ${removedCount} pipeline ${removedCount === 1 ? "step" : "steps"}.`,
+    );
+    if (!confirmed) return;
+
+    setUndoing(true);
+    try {
+      setActiveDataset({
+        id: selectedStep.inputDataset.id,
+        name: selectedStep.inputDataset.name,
+        rows: selectedStep.inputDataset.rows,
+      });
+
+      if (stepIndex === 0) {
+        clearSteps();
+        return;
+      }
+
+      keepStepsThrough(steps[stepIndex - 1].id);
     } finally {
       setUndoing(false);
     }
@@ -55,6 +96,16 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                 <p className="mono" style={{ fontSize: 12 }}>{step.operation}</p>
                 <p style={{ color: "var(--tx1)", fontSize: 12 }}>{step.description}</p>
                 {step.affectedRows ? <p className="mono" style={{ color: "var(--tx1)", fontSize: 11 }}>{step.affectedRows} rows</p> : null}
+                {step.inputDataset ? (
+                  <button
+                    className="btn"
+                    style={{ marginTop: 6, height: 24, fontSize: 11 }}
+                    onClick={() => void handleUndoFromStep(step.id)}
+                    disabled={undoing}
+                  >
+                    Undo From Here
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -65,7 +116,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => void runPipeline()} disabled={!steps.length}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run Pipeline</span>
           </button>
-          <button className="btn" style={{ width: "100%" }} onClick={() => void handleUndoLast()} disabled={!activeDataset?.id || undoing}>
+          <button className="btn" style={{ width: "100%" }} onClick={() => void handleUndoLast()} disabled={!steps.length || undoing}>
             {undoing ? "Undoing..." : "Undo Last"}
           </button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>

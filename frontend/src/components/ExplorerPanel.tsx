@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, deleteDataset } from "../api";
 import { usePipeline } from "../hooks/usePipeline";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { IconChevronDown, IconTeam } from "./Icons";
+import { ArtifactsSection, type ArtifactItem } from "./ArtifactsSection";
 import { DataSection } from "./DataSection";
 import { PipelineSection } from "./PipelineSection";
 import { MembersModal } from "./modals/MembersModal";
@@ -27,6 +28,50 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
+  const operationByOutputDataset = useMemo(() => {
+    const outputMap = new Map<string, string>();
+    for (const step of steps) {
+      if (step.outputDataset?.id) {
+        outputMap.set(step.outputDataset.id, step.operation);
+      }
+    }
+    return outputMap;
+  }, [steps]);
+
+  const datasetsById = useMemo(() => {
+    const datasetMap = new Map<string, Dataset>();
+    for (const dataset of datasets) {
+      datasetMap.set(dataset.id, dataset);
+    }
+    return datasetMap;
+  }, [datasets]);
+
+  const sourceDatasets = useMemo(
+    () => datasets.filter((dataset) => !dataset.parentId || !datasetsById.has(dataset.parentId)),
+    [datasets, datasetsById],
+  );
+
+  const artifacts = useMemo<ArtifactItem[]>(() => {
+    const tableOps = new Set(["group_by", "pivot", "unpivot", "join", "union", "distinct", "sample", "filter_rows", "sort"]);
+    const metricOps = new Set(["aggregate", "bin_values"]);
+    const variableOps = new Set(["create_column", "split_column", "merge_columns", "change_type", "rename_columns", "replace_values"]);
+
+    return datasets
+      .filter((dataset) => Boolean(dataset.parentId && datasetsById.has(dataset.parentId)))
+      .map((dataset) => {
+        const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
+        let kind: ArtifactItem["kind"] = "table";
+        if (metricOps.has(operation)) {
+          kind = "metric";
+        } else if (variableOps.has(operation)) {
+          kind = "variable";
+        } else if (tableOps.has(operation)) {
+          kind = "table";
+        }
+        return { ...dataset, kind };
+      });
+  }, [datasets, datasetsById, operationByOutputDataset]);
+
   const loadDatasets = useCallback(async () => {
     if (!activeProject?.id) {
       setDatasets([]);
@@ -38,6 +83,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
         id: String(item.id ?? item.dataset_id ?? ""),
         name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
         rows: Number(item.row_count ?? item.rows ?? 0),
+        parentId: item.parent_id ? String(item.parent_id) : null,
       }));
       setDatasets(mapped);
     } catch {
@@ -90,7 +136,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <DataSection
-          datasets={datasets}
+          datasets={sourceDatasets}
           activeDatasetId={activeDataset?.id}
           onSelect={setActiveDataset}
           onImport={() => setImportModalOpen(true)}
@@ -99,6 +145,12 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
         <PipelineSection
           onSchedule={() => setScheduleModalOpen(true)}
           onExport={() => exportPipeline(steps)}
+        />
+        <ArtifactsSection
+          artifacts={artifacts}
+          activeDatasetId={activeDataset?.id}
+          onSelect={setActiveDataset}
+          onRemove={(dataset) => void removeDataset(dataset)}
         />
       </div>
 

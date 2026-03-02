@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse
 from typing import Dict
 import time
@@ -134,6 +134,7 @@ def _ensure_dataset_meta_schema(db: Session) -> None:
 @router.post("/upload", response_model=DatasetPreview)
 async def upload_dataset(
     file: UploadFile = File(...),
+    dataset_name: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
@@ -144,6 +145,7 @@ async def upload_dataset(
     content = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(content))
     df = df.astype(object).where(pd.notnull(df), None)
+    resolved_name = (dataset_name or "").strip() or (file.filename or "dataset")
     dataset_id = str(uuid.uuid4())
     if int(df.shape[0]) <= 5000:
         _DATASETS[dataset_id] = df
@@ -157,6 +159,7 @@ async def upload_dataset(
         DatasetMetaDB(
             id=dataset_id,
             workspace_id=workspace_id or "default",
+            name=resolved_name,
             columns=list(df.columns),
             row_count=int(df.shape[0]),
             access_tier=initial_tier,
@@ -184,6 +187,7 @@ async def upload_dataset(
     db.commit()
     preview = DatasetPreview(
         dataset_id=dataset_id,
+        name=resolved_name,
         columns=list(df.columns),
         row_count=int(df.shape[0]),
         sample_rows=df.head(10).to_dict(orient="records"),
@@ -365,6 +369,7 @@ def list_datasets(
     return [
         DatasetMeta(
             dataset_id=row.id,
+            name=row.name,
             columns=row.columns,
             row_count=row.row_count,
             parent_id=row.parent_id,
@@ -392,6 +397,7 @@ def dataset_lineage(
         lineage.append(
             DatasetMeta(
                 dataset_id=row.id,
+                name=row.name,
                 columns=row.columns,
                 row_count=row.row_count,
                 parent_id=row.parent_id,

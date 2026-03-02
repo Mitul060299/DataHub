@@ -90,6 +90,41 @@ class DuckDBService:
             except Exception:
                 pass
 
+    @classmethod
+    def transform_rows(cls, rows: list[dict[str, Any]], sql: str) -> list[dict[str, Any]]:
+        connection = cls._ensure_db()
+        dataset_df = pd.DataFrame(rows or [])
+        connection.register("dataset_source", dataset_df)
+        try:
+            connection.execute("DROP TABLE IF EXISTS dataset")
+            connection.execute("CREATE TEMP TABLE dataset AS SELECT * FROM dataset_source")
+
+            transformed_sql = cls._normalize_dataset_sql(sql)
+            statements = cls._split_sql_statements(transformed_sql)
+            if not statements:
+                return rows
+
+            last_result: list[dict[str, Any]] | None = None
+            for statement in statements:
+                if cls._is_select_statement(statement):
+                    last_result = cls._execute(connection, statement)
+                else:
+                    connection.execute(statement)
+
+            if last_result is not None:
+                return last_result
+
+            return cls._execute(connection, "SELECT * FROM dataset")
+        finally:
+            try:
+                connection.execute("DROP TABLE IF EXISTS dataset")
+            except Exception:
+                pass
+            try:
+                connection.unregister("dataset_source")
+            except Exception:
+                pass
+
     @staticmethod
     def _inject_path(query: str, file_path: str) -> str:
         pattern = re.compile(r"\bfrom\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
@@ -101,6 +136,23 @@ class DuckDBService:
         pattern = re.compile(r"\bfrom\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
         replacement = f"FROM {relation_name}"
         return pattern.sub(replacement, query, count=1)
+
+    @staticmethod
+    def _normalize_dataset_sql(sql: str) -> str:
+        normalized = (sql or "").strip()
+        if not normalized:
+            return normalized
+        normalized = re.sub(r"\btable\b", "dataset", normalized, flags=re.IGNORECASE)
+        return re.sub(r"\bdataset_rows\b", "dataset", normalized, flags=re.IGNORECASE)
+
+    @staticmethod
+    def _split_sql_statements(sql: str) -> list[str]:
+        statements = [statement.strip() for statement in (sql or "").split(";")]
+        return [statement for statement in statements if statement]
+
+    @staticmethod
+    def _is_select_statement(sql: str) -> bool:
+        return bool(re.match(r"^\s*(select|with)\b", sql, flags=re.IGNORECASE))
 
     @staticmethod
     def _execute(connection: duckdb.DuckDBPyConnection, sql: str) -> list[dict[str, Any]]:

@@ -15,6 +15,7 @@ export interface Dataset {
   id: string;
   name: string;
   rows: number;
+  parentId?: string | null;
 }
 
 export interface Member {

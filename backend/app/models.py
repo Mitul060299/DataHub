@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Literal
 
 class DatasetPreview(BaseModel):
     dataset_id: str
+    name: Optional[str] = None
     columns: List[str]
     row_count: int
     sample_rows: List[Dict[str, Any]]
@@ -12,6 +13,7 @@ class DatasetPreview(BaseModel):
 
 class DatasetMeta(BaseModel):
     dataset_id: str
+    name: Optional[str] = None
     columns: List[str]
     row_count: int
     parent_id: Optional[str] = None

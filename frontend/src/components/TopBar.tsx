@@ -47,7 +47,13 @@ export function TopBar() {
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
-        <button className="btn" style={{ width: 30, padding: 0 }}><IconSearch size={14} /></button>
+        <button
+          className="btn"
+          style={{ width: 30, padding: 0 }}
+          onClick={() => window.dispatchEvent(new CustomEvent("datahub:datatable:focus-search"))}
+        >
+          <IconSearch size={14} />
+        </button>
         <button className="btn" style={{ width: 30, padding: 0 }}><IconBell size={14} /></button>
         <div style={{ width: 28, height: 28, borderRadius: 999, background: "var(--bg3)", border: "1px solid var(--bd2)", display: "grid", placeItems: "center", position: "relative" }}>
           U

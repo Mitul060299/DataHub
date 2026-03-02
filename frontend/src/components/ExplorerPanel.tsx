@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, deleteDataset } from "../api";
 import { usePipeline } from "../hooks/usePipeline";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
@@ -15,9 +15,10 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 interface ExplorerPanelProps {
   workspaceId: string;
   refreshNonce?: number;
+  searchFocusNonce?: number;
 }
 
-export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps) {
+export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members } = useWorkspaceContext();
   const { steps, setScheduleInfo } = usePipelineContext();
   const { exportPipeline, schedule } = usePipeline();
@@ -27,6 +28,8 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
   const [membersModalOpen, setMembersModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const operationByOutputDataset = useMemo(() => {
     const outputMap = new Map<string, string>();
@@ -46,17 +49,19 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
     return datasetMap;
   }, [datasets]);
 
-  const sourceDatasets = useMemo(
-    () => datasets.filter((dataset) => !dataset.parentId || !datasetsById.has(dataset.parentId)),
-    [datasets, datasetsById],
-  );
+  const sourceDatasets = useMemo(() => {
+    const lowered = searchQuery.trim().toLowerCase();
+    const base = datasets.filter((dataset) => !dataset.parentId || !datasetsById.has(dataset.parentId));
+    if (!lowered) return base;
+    return base.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
+  }, [datasets, datasetsById, searchQuery]);
 
   const artifacts = useMemo<ArtifactItem[]>(() => {
     const tableOps = new Set(["group_by", "pivot", "unpivot", "join", "union", "distinct", "sample", "filter_rows", "sort"]);
     const metricOps = new Set(["aggregate", "bin_values"]);
     const variableOps = new Set(["create_column", "split_column", "merge_columns", "change_type", "rename_columns", "replace_values"]);
 
-    return datasets
+    const derived = datasets
       .filter((dataset) => Boolean(dataset.parentId && datasetsById.has(dataset.parentId)))
       .map((dataset) => {
         const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
@@ -70,7 +75,11 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
         }
         return { ...dataset, kind };
       });
-  }, [datasets, datasetsById, operationByOutputDataset]);
+
+    const lowered = searchQuery.trim().toLowerCase();
+    if (!lowered) return derived;
+    return derived.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
+  }, [datasets, datasetsById, operationByOutputDataset, searchQuery]);
 
   const loadDatasets = useCallback(async () => {
     if (!activeProject?.id) {
@@ -109,6 +118,12 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
     void loadDatasets();
   }, [loadDatasets, refreshNonce]);
 
+  useEffect(() => {
+    if (typeof searchFocusNonce !== "number") return;
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, [searchFocusNonce]);
+
   return (
     <aside style={{ width: "var(--sw)", minWidth: "var(--sw)", borderRight: "1px solid var(--bd)", background: "var(--bg1)", padding: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div className="proj-selector" onClick={() => setProjectModalOpen(true)} style={{ border: "1px solid var(--bd2)", background: "var(--bg2)", borderRadius: "var(--r8)", height: 36, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", marginBottom: 10 }}>
@@ -133,6 +148,23 @@ export function ExplorerPanel({ workspaceId, refreshNonce }: ExplorerPanelProps)
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconTeam size={13} />+ Invite</span>
         </button>
       </div>
+
+      <input
+        ref={searchInputRef}
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        placeholder="Search datasets and artifacts..."
+        style={{
+          width: "100%",
+          height: 30,
+          border: "1px solid var(--bd2)",
+          borderRadius: "var(--r8)",
+          background: "var(--bg2)",
+          color: "var(--tx0)",
+          padding: "0 10px",
+          marginBottom: 10,
+        }}
+      />
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <DataSection

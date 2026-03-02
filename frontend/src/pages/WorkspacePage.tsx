@@ -19,11 +19,25 @@ export function WorkspacePage() {
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
+  const [explorerSearchFocusNonce, setExplorerSearchFocusNonce] = useState(0);
 
   return (
     <main style={{ height: "calc(100% - var(--th))", display: "flex", minWidth: 0, minHeight: 0 }}>
-      <ActivityBar explorerOpen={explorerOpen} onToggleExplorer={() => setExplorerOpen((value) => !value)} />
-      {explorerOpen ? <ExplorerPanel workspaceId={workspaceId} refreshNonce={datasetRefreshNonce} /> : null}
+      <ActivityBar
+        explorerOpen={explorerOpen}
+        onToggleExplorer={() => setExplorerOpen((value) => !value)}
+        onSearch={() => {
+          setExplorerOpen(true);
+          setExplorerSearchFocusNonce((value) => value + 1);
+        }}
+      />
+      {explorerOpen ? (
+        <ExplorerPanel
+          workspaceId={workspaceId}
+          refreshNonce={datasetRefreshNonce}
+          searchFocusNonce={explorerSearchFocusNonce}
+        />
+      ) : null}
       <CanvasPanel
         dataset={activeDataset}
         loading={loading}

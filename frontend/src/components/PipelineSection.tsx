@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IconClock, IconDownload, IconPlay, IconTrash } from "./Icons";
+import { IconClock, IconDownload, IconPlay, IconTrash, IconX } from "./Icons";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 
@@ -9,10 +9,17 @@ interface PipelineSectionProps {
 }
 
 export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
-  const { steps, clearSteps, keepStepsThrough, runPipeline, scheduleInfo } = usePipelineContext();
+  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo } = usePipelineContext();
   const { activeDataset, setActiveDataset } = useWorkspaceContext();
   const [open, setOpen] = useState(true);
   const [undoing, setUndoing] = useState(false);
+  const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
+
+  const formatStepLabel = (operation: string) => {
+    const normalized = operation.replace(/_/g, " ").trim();
+    if (!normalized) return "Step";
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
 
   const handleUndoLast = async () => {
     const lastStep = steps[steps.length - 1];
@@ -85,30 +92,93 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       </header>
       {open ? (
         <div style={{ flex: 1, overflow: "auto", display: "grid", gap: 8, paddingRight: 4 }}>
-          {!steps.length ? <p style={{ color: "var(--tx2)" }}>No steps yet. Use the AI agent to start.</p> : null}
-          {steps.map((step, index) => (
-            <div key={step.id} style={{ display: "grid", gridTemplateColumns: "20px 1fr", gap: 8 }}>
-              <div style={{ display: "grid", justifyItems: "center", color: "var(--gr)" }}>
-                <span style={{ width: 16, height: 16, borderRadius: 999, border: "1px solid var(--gr)", fontSize: 10, display: "grid", placeItems: "center" }}>{index + 1}</span>
-                {index !== steps.length - 1 ? <span style={{ width: 1, background: "var(--bd2)", minHeight: 18 }} /> : null}
+          <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", overflow: "hidden" }}>
+            <div style={{ borderBottom: "1px solid var(--bd)", padding: "6px 8px", fontSize: 11, letterSpacing: "0.08em", color: "var(--tx1)", fontWeight: 600 }}>
+              APPLIED STEPS
+            </div>
+
+            <div style={{ borderBottom: "1px solid var(--bd)", minHeight: 28, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", color: "var(--tx1)" }}>
+              <span style={{ fontSize: 12 }}>Source</span>
+              <span className="mono" style={{ fontSize: 11, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {activeDataset?.name ?? "No dataset"}
+              </span>
+            </div>
+
+            {!steps.length ? (
+              <div style={{ minHeight: 36, display: "grid", placeItems: "center", color: "var(--tx2)", fontSize: 12 }}>
+                No steps yet
               </div>
-              <div style={{ paddingBottom: 8 }}>
-                <p className="mono" style={{ fontSize: 12 }}>{step.operation}</p>
-                <p style={{ color: "var(--tx1)", fontSize: 12 }}>{step.description}</p>
-                {step.affectedRows ? <p className="mono" style={{ color: "var(--tx1)", fontSize: 11 }}>{step.affectedRows} rows</p> : null}
-                {step.inputDataset ? (
+            ) : null}
+
+            {steps.map((step, index) => (
+              (() => {
+                const isActiveStep = index === steps.length - 1;
+                return (
+              <div
+                key={step.id}
+                onMouseEnter={() => setHoveredStepId(step.id)}
+                onMouseLeave={() => setHoveredStepId((current) => (current === step.id ? null : current))}
+                style={{
+                  minHeight: 30,
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  alignItems: "center",
+                  padding: "0 6px 0 6px",
+                  borderBottom: index === steps.length - 1 ? "none" : "1px solid var(--bd)",
+                  background: isActiveStep ? "var(--acl)" : "transparent",
+                  borderLeft: `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
+                }}
+              >
+                <button
+                  onClick={() => void handleUndoFromStep(step.id)}
+                  disabled={undoing}
+                  style={{
+                    textAlign: "left",
+                    minWidth: 0,
+                    color: "var(--tx0)",
+                    fontSize: 12,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={step.description || formatStepLabel(step.operation)}
+                >
+                  {formatStepLabel(step.operation)}
+                </button>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    opacity: hoveredStepId === step.id ? 1 : 0,
+                    pointerEvents: hoveredStepId === step.id ? "auto" : "none",
+                    transition: "opacity 120ms ease",
+                  }}
+                >
                   <button
                     className="btn"
-                    style={{ marginTop: 6, height: 24, fontSize: 11 }}
+                    style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                    title="Undo from this step"
                     onClick={() => void handleUndoFromStep(step.id)}
                     disabled={undoing}
                   >
-                    Undo From Here
+                    ↺
                   </button>
-                ) : null}
+                  <button
+                    className="btn"
+                    style={{ height: 20, width: 20, padding: 0 }}
+                    title="Remove step"
+                    onClick={() => removeStep(step.id)}
+                    disabled={undoing}
+                  >
+                    <IconX size={12} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+                );
+              })()
+            ))}
+          </div>
         </div>
       ) : null}
       {open && (steps.length || activeDataset?.id) ? (

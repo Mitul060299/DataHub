@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconFilter, IconSearch } from "./Icons";
 
 type SortDirection = "asc" | "desc";
@@ -21,6 +21,18 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const focusHandler = () => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    window.addEventListener("datahub:datatable:focus-search", focusHandler);
+    return () => {
+      window.removeEventListener("datahub:datatable:focus-search", focusHandler);
+    };
+  }, []);
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -77,6 +89,7 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
         <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
           <IconSearch size={14} className="search-icon" />
           <input
+            ref={searchInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search rows..."

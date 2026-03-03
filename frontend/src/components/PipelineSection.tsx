@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { IconClock, IconDownload, IconPlay, IconTrash, IconX } from "./Icons";
+import { IconChevronDown, IconClock, IconCopy, IconDownload, IconPlay, IconTrash, IconX } from "./Icons";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
@@ -10,21 +10,44 @@ interface PipelineSectionProps {
   onExport: () => void;
 }
 
+type WorkflowTemplate = {
+  id: string;
+  name: string;
+};
+
+type RunStatusSummary = {
+  status: "success" | "failure";
+  elapsedMs: number;
+  rows: number | null;
+};
+
 export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
+
   const [open, setOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
+
+  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [pipelineWorkflowId, setPipelineWorkflowId] = useState("");
   const [runtimeParametersText, setRuntimeParametersText] = useState("{}");
+
   const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [workflowMessage, setWorkflowMessage] = useState<string | null>(null);
+  const [runStatusSummary, setRunStatusSummary] = useState<RunStatusSummary | null>(null);
+
+  const [runCtaHovered, setRunCtaHovered] = useState(false);
+  const [resultsHovered, setResultsHovered] = useState(false);
+
   const [availableDatasets, setAvailableDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [bindingAlias, setBindingAlias] = useState("ref_data");
   const [bindingDatasetId, setBindingDatasetId] = useState("");
   const [bindingAliasToRemove, setBindingAliasToRemove] = useState("");
+
   const [artifactRunId, setArtifactRunId] = useState("");
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactData, setArtifactData] = useState<PipelineRunArtifact | null>(null);
@@ -35,14 +58,57 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
   };
 
+  const formatElapsed = (elapsedMs: number) => {
+    const totalSeconds = Math.max(0, Math.round(elapsedMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${seconds}s`;
+  };
+
+  const getStepVisual = (operation: string) => {
+    const normalized = operation.toLowerCase();
+    if (normalized === "source") return { background: "#1a2a1a", color: "#4ade80" };
+    if (["transform", "group_by", "join", "filter"].includes(normalized)) return { background: "#1a1a2e", color: "#818cf8" };
+    if (["output", "export"].includes(normalized)) return { background: "#1a2a2a", color: "#38bdf8" };
+    return { background: "#27272a", color: "#71717a" };
+  };
+
+  const parseRuntimeParameters = () => {
+    try {
+      const parsed = JSON.parse(runtimeParametersText || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return null;
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const getCurrentDatasetBindings = (): Record<string, unknown> => {
+    const parsed = parseRuntimeParameters();
+    if (!parsed) return {};
+    const bindings = parsed.dataset_bindings;
+    if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) {
+      return {};
+    }
+    return bindings as Record<string, unknown>;
+  };
+
+  const currentBindings = getCurrentDatasetBindings();
+  const currentBindingAliases = Object.keys(currentBindings);
+
   useEffect(() => {
     const loadDatasets = async () => {
       try {
         const response = await api.get("/datasets", { params: { project_id: activeProject?.id } });
-        const mapped = (response.data ?? []).map((item: Record<string, unknown>) => ({
-          id: String(item.id ?? item.dataset_id ?? ""),
-          name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
-        })).filter((item: { id: string }) => Boolean(item.id));
+        const mapped = (response.data ?? [])
+          .map((item: Record<string, unknown>) => ({
+            id: String(item.id ?? item.dataset_id ?? ""),
+            name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
+          }))
+          .filter((item: { id: string }) => Boolean(item.id));
+
         setAvailableDatasets(mapped);
         if (!bindingDatasetId && mapped.length) {
           setBindingDatasetId(mapped[0].id);
@@ -51,7 +117,39 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
         setAvailableDatasets([]);
       }
     };
+
     void loadDatasets();
+  }, [activeProject?.id]);
+
+  useEffect(() => {
+    const loadWorkflowTemplates = async () => {
+      try {
+        const response = await api.get("/api/pipelines");
+        const payload = response.data as { data?: unknown; pipelines?: unknown } | unknown[];
+        const source = Array.isArray(payload)
+          ? payload
+          : (Array.isArray((payload as { data?: unknown })?.data)
+            ? (payload as { data: unknown[] }).data
+            : Array.isArray((payload as { pipelines?: unknown })?.pipelines)
+              ? (payload as { pipelines: unknown[] }).pipelines
+              : []);
+
+        const mapped = source
+          .map((item) => {
+            const row = item as Record<string, unknown>;
+            const id = String(row.id ?? "").trim();
+            const name = String(row.name ?? row.title ?? `Pipeline ${id}`);
+            return { id, name };
+          })
+          .filter((item) => Boolean(item.id));
+
+        setWorkflowTemplates(mapped);
+      } catch {
+        setWorkflowTemplates([]);
+      }
+    };
+
+    void loadWorkflowTemplates();
   }, [activeProject?.id]);
 
   const addBindingToRuntimeParameters = () => {
@@ -61,15 +159,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       return;
     }
 
-    let parsedParameters: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(runtimeParametersText || "{}");
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setWorkflowMessage("Runtime parameters must be a JSON object before adding bindings.");
-        return;
-      }
-      parsedParameters = parsed as Record<string, unknown>;
-    } catch {
+    const parsedParameters = parseRuntimeParameters();
+    if (!parsedParameters) {
       setWorkflowMessage("Runtime parameters JSON is invalid.");
       return;
     }
@@ -90,22 +181,6 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     setWorkflowMessage(`Added binding: ${alias} -> ${bindingDatasetId}`);
   };
 
-  const getCurrentDatasetBindings = (): Record<string, unknown> => {
-    try {
-      const parsed = JSON.parse(runtimeParametersText || "{}");
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return {};
-      }
-      const bindings = (parsed as Record<string, unknown>).dataset_bindings;
-      if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) {
-        return {};
-      }
-      return bindings as Record<string, unknown>;
-    } catch {
-      return {};
-    }
-  };
-
   const removeBindingFromRuntimeParameters = () => {
     const alias = bindingAliasToRemove.trim();
     if (!alias) {
@@ -113,15 +188,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       return;
     }
 
-    let parsedParameters: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(runtimeParametersText || "{}");
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setWorkflowMessage("Runtime parameters must be a JSON object before removing bindings.");
-        return;
-      }
-      parsedParameters = parsed as Record<string, unknown>;
-    } catch {
+    const parsedParameters = parseRuntimeParameters();
+    if (!parsedParameters) {
       setWorkflowMessage("Runtime parameters JSON is invalid.");
       return;
     }
@@ -145,38 +213,84 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     setWorkflowMessage(`Removed binding: ${alias}`);
   };
 
-  const currentBindingAliases = Object.keys(getCurrentDatasetBindings());
-  const currentBindings = getCurrentDatasetBindings();
+  const getRunIdFromResponse = (response: unknown): string | null => {
+    const root = response as Record<string, unknown>;
+    const candidates = [
+      root?.run_id,
+      root?.runId,
+      (root?.data as Record<string, unknown> | undefined)?.run_id,
+      (root?.data as Record<string, unknown> | undefined)?.runId,
+      (root?.data as Record<string, unknown> | undefined)?.id,
+      root?.id,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+    return null;
+  };
+
+  const getRowsFromResponse = (response: unknown): number | null => {
+    const root = response as Record<string, unknown>;
+    const candidates = [
+      root?.rows_affected,
+      root?.row_count,
+      (root?.data as Record<string, unknown> | undefined)?.rows_affected,
+      (root?.data as Record<string, unknown> | undefined)?.row_count,
+      ((root?.data as Record<string, unknown> | undefined)?.output as Record<string, unknown> | undefined)?.row_count,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  };
 
   const handleRunWorkflowPipeline = async () => {
-    if (!activeDataset?.id || !pipelineWorkflowId.trim() || runningWorkflow) return;
+    const effectivePipelineId = pipelineWorkflowId.trim() || selectedTemplateId.trim();
+    if (!activeDataset?.id || !effectivePipelineId || runningWorkflow) return;
 
-    let parsedParameters: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(runtimeParametersText || "{}");
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        parsedParameters = parsed as Record<string, unknown>;
-      } else {
-        setWorkflowMessage("Runtime parameters must be a JSON object.");
-        return;
-      }
-    } catch {
+    const parsedParameters = parseRuntimeParameters();
+    if (!parsedParameters) {
       setWorkflowMessage("Runtime parameters JSON is invalid.");
       return;
     }
 
     setRunningWorkflow(true);
     setWorkflowMessage(null);
+    const startedAt = Date.now();
+
     try {
-      await runPipelineWorkflow(pipelineWorkflowId.trim(), {
+      const response = await runPipelineWorkflow(effectivePipelineId, {
         input_dataset_id: activeDataset.id,
         runtime_parameters: parsedParameters,
         triggered_by: "manual",
       });
-      setWorkflowMessage("Workflow pipeline run started.");
+
+      const elapsedMs = Date.now() - startedAt;
+      const runId = getRunIdFromResponse(response);
+      const rows = getRowsFromResponse(response);
+
+      if (runId) {
+        setArtifactRunId(runId);
+      }
+
+      setRunStatusSummary({
+        status: "success",
+        elapsedMs,
+        rows,
+      });
+      setWorkflowMessage(runId ? "Workflow pipeline run completed." : "Workflow pipeline run completed. Run ID unavailable.");
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
-      setWorkflowMessage(maybeError.response?.data?.detail ?? maybeError.message ?? "Unable to start workflow pipeline run.");
+      setWorkflowMessage(maybeError.response?.data?.detail ?? maybeError.message ?? "Unable to run workflow pipeline.");
+      setRunStatusSummary({
+        status: "failure",
+        elapsedMs: Date.now() - startedAt,
+        rows: null,
+      });
     } finally {
       setRunningWorkflow(false);
     }
@@ -184,12 +298,20 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
 
   const handleLoadRunArtifact = async () => {
     if (!artifactRunId.trim() || artifactLoading) return;
+
     setArtifactLoading(true);
     setWorkflowMessage(null);
+
     try {
       const response = await getPipelineRunArtifact(artifactRunId.trim(), 20);
       setArtifactData(response.data);
       setWorkflowMessage("Run artifact loaded.");
+      if (response.data?.output?.row_count != null && runStatusSummary) {
+        setRunStatusSummary({
+          ...runStatusSummary,
+          rows: response.data.output.row_count,
+        });
+      }
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
       setArtifactData(null);
@@ -199,13 +321,14 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     }
   };
 
-  const handleCopyRunId = async () => {
-    if (!artifactRunId.trim()) {
-      setWorkflowMessage("Enter a run ID to copy.");
+  const handleCopyRunId = async (runId: string) => {
+    if (!runId.trim()) {
+      setWorkflowMessage("Run ID is unavailable for this run.");
       return;
     }
+
     try {
-      await navigator.clipboard.writeText(artifactRunId.trim());
+      await navigator.clipboard.writeText(runId.trim());
       setWorkflowMessage("Run ID copied.");
     } catch {
       setWorkflowMessage("Unable to copy run ID.");
@@ -217,6 +340,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       setWorkflowMessage("Load a run artifact before downloading.");
       return;
     }
+
     const blob = new Blob([JSON.stringify(artifactData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -245,8 +369,6 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       if (steps.length <= 1) {
         clearSteps();
       }
-    } catch {
-      return;
     } finally {
       setUndoing(false);
     }
@@ -254,8 +376,10 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
 
   const handleUndoFromStep = async (stepId: string) => {
     if (undoing) return;
+
     const stepIndex = steps.findIndex((step) => step.id === stepId);
     if (stepIndex < 0) return;
+
     const selectedStep = steps[stepIndex];
     if (!selectedStep.inputDataset) return;
 
@@ -287,8 +411,20 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   return (
     <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em" }}>
+        <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", display: "inline-flex", alignItems: "center", gap: 6 }}>
           {open ? "▼" : "▶"} PIPELINE
+          <span
+            style={{
+              background: "#27272a",
+              borderRadius: 10,
+              padding: "1px 7px",
+              fontSize: 10,
+              color: "#71717a",
+              letterSpacing: "normal",
+            }}
+          >
+            {steps.length} {steps.length === 1 ? "step" : "steps"}
+          </span>
         </button>
         {open ? (
           <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps">
@@ -296,6 +432,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           </button>
         ) : null}
       </header>
+
       {open ? (
         <div style={{ flex: 1, overflow: "auto", display: "grid", gap: 8, paddingRight: 4 }}>
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", overflow: "hidden" }}>
@@ -316,210 +453,343 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
               </div>
             ) : null}
 
-            {steps.map((step, index) => (
-              (() => {
-                const isActiveStep = index === steps.length - 1;
-                return (
-              <div
-                key={step.id}
-                onMouseEnter={() => setHoveredStepId(step.id)}
-                onMouseLeave={() => setHoveredStepId((current) => (current === step.id ? null : current))}
-                style={{
-                  minHeight: 30,
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  alignItems: "center",
-                  padding: "0 6px 0 6px",
-                  borderBottom: index === steps.length - 1 ? "none" : "1px solid var(--bd)",
-                  background: isActiveStep ? "var(--acl)" : "transparent",
-                  borderLeft: `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
-                }}
-              >
-                <button
-                  onClick={() => void handleUndoFromStep(step.id)}
-                  disabled={undoing}
-                  style={{
-                    textAlign: "left",
-                    minWidth: 0,
-                    color: "var(--tx0)",
-                    fontSize: 12,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={step.description || formatStepLabel(step.operation)}
-                >
-                  {formatStepLabel(step.operation)}
-                </button>
+            {steps.map((step, index) => {
+              const isActiveStep = index === steps.length - 1;
+              const stepStatus: "completed" | "active" | "pending" = isActiveStep
+                ? "active"
+                : (index < steps.length - 1 ? "completed" : "pending");
+              const statusColor = stepStatus === "completed"
+                ? "#22c55e"
+                : (stepStatus === "active" ? "#5B6AF0" : "#3f3f46");
+              const stepVisual = getStepVisual(step.operation);
+
+              return (
                 <div
+                  key={step.id}
+                  onMouseEnter={() => setHoveredStepId(step.id)}
+                  onMouseLeave={() => setHoveredStepId((current) => (current === step.id ? null : current))}
                   style={{
-                    display: "inline-flex",
+                    minHeight: 30,
+                    display: "grid",
+                    gridTemplateColumns: "18px 1fr auto auto",
                     alignItems: "center",
-                    gap: 4,
-                    opacity: hoveredStepId === step.id ? 1 : 0,
-                    pointerEvents: hoveredStepId === step.id ? "auto" : "none",
-                    transition: "opacity 120ms ease",
+                    gap: 6,
+                    padding: "0 6px",
+                    borderBottom: index === steps.length - 1 ? "none" : "1px solid var(--bd)",
+                    background: isActiveStep ? "#1c1c3a" : "transparent",
+                    borderLeft: `2px solid ${isActiveStep ? "#5B6AF0" : "transparent"}`,
                   }}
                 >
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 4,
+                      background: stepVisual.background,
+                      color: stepVisual.color,
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                    title={formatStepLabel(step.operation)}
+                  >
+                    {formatStepLabel(step.operation).charAt(0)}
+                  </div>
+
                   <button
-                    className="btn"
-                    style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
-                    title="Undo from this step"
                     onClick={() => void handleUndoFromStep(step.id)}
                     disabled={undoing}
+                    style={{
+                      textAlign: "left",
+                      minWidth: 0,
+                      color: "var(--tx0)",
+                      fontSize: 12,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={step.description || formatStepLabel(step.operation)}
                   >
-                    ↺
+                    {formatStepLabel(step.operation)}
                   </button>
-                  <button
-                    className="btn"
-                    style={{ height: 20, width: 20, padding: 0 }}
-                    title="Remove step"
-                    onClick={() => removeStep(step.id)}
-                    disabled={undoing}
+
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      opacity: hoveredStepId === step.id ? 1 : 0,
+                      pointerEvents: hoveredStepId === step.id ? "auto" : "none",
+                      transition: "opacity 120ms ease",
+                    }}
                   >
-                    <IconX size={12} />
-                  </button>
+                    <button
+                      className="btn"
+                      style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                      title="Undo from this step"
+                      onClick={() => void handleUndoFromStep(step.id)}
+                      disabled={undoing}
+                    >
+                      ↺
+                    </button>
+                    <button
+                      className="btn"
+                      style={{ height: 20, width: 20, padding: 0 }}
+                      title="Remove step"
+                      onClick={() => removeStep(step.id)}
+                      disabled={undoing}
+                    >
+                      <IconX size={12} />
+                    </button>
+                  </div>
+
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      background: statusColor,
+                      boxShadow: stepStatus === "active" ? "0 0 8px rgba(91,106,240,0.45)" : "none",
+                    }}
+                  />
                 </div>
-              </div>
-                );
-              })()
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}
+
       {open && (steps.length || activeDataset?.id) ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8, display: "grid", gap: 8 }}>
-            <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>WORKFLOW RUN CONFIG</div>
-            <input
-              value={pipelineWorkflowId}
-              onChange={(event) => setPipelineWorkflowId(event.target.value)}
-              placeholder="Workflow Pipeline ID"
-              style={{ width: "100%", height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: "0 8px" }}
-            />
-            <textarea
-              value={runtimeParametersText}
-              onChange={(event) => setRuntimeParametersText(event.target.value)}
-              rows={4}
-              placeholder='{"dataset_bindings":{"ref_data":"<dataset-id>"}}'
-              style={{ width: "100%", resize: "vertical", border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: 8 }}
-            />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 6 }}>
-              <input
-                value={bindingAlias}
-                onChange={(event) => setBindingAlias(event.target.value)}
-                placeholder="Alias (e.g. ref_data)"
-                style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: "0 8px" }}
-              />
-              <select
-                value={bindingDatasetId}
-                onChange={(event) => setBindingDatasetId(event.target.value)}
-                style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: "0 8px" }}
+            <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>WORKFLOW TEMPLATE</div>
+            <select
+              value={selectedTemplateId}
+              onChange={(event) => setSelectedTemplateId(event.target.value)}
+              style={{
+                width: "100%",
+                height: 34,
+                background: "#111113",
+                border: "1px solid #27272a",
+                borderRadius: 6,
+                padding: "7px 10px",
+                color: selectedTemplateId ? "#d4d4d8" : "#52525b",
+              }}
+            >
+              <option value="">Select a workflow template…</option>
+              {workflowTemplates.map((template) => (
+                <option key={template.id} value={template.id}>{template.name}</option>
+              ))}
+            </select>
+
+            {runStatusSummary ? (
+              <div
+                style={{
+                  background: "#111113",
+                  border: "1px solid #27272a",
+                  borderRadius: 6,
+                  padding: "8px 10px",
+                  display: "grid",
+                  gridTemplateColumns: "auto 1fr auto",
+                  alignItems: "center",
+                  gap: 8,
+                }}
               >
-                {availableDatasets.map((dataset) => (
-                  <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
-                ))}
-              </select>
-              <button className="btn" onClick={addBindingToRuntimeParameters} disabled={!availableDatasets.length}>
-                Add Binding
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
-              <select
-                value={bindingAliasToRemove}
-                onChange={(event) => setBindingAliasToRemove(event.target.value)}
-                style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: "0 8px" }}
-                disabled={!currentBindingAliases.length}
-              >
-                <option value="">Select binding to remove</option>
-                {currentBindingAliases.map((alias) => (
-                  <option key={alias} value={alias}>{alias}</option>
-                ))}
-              </select>
-              <button className="btn" onClick={removeBindingFromRuntimeParameters} disabled={!currentBindingAliases.length || !bindingAliasToRemove}>
-                Remove Binding
-              </button>
-            </div>
-            <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: 8 }}>
-              <div style={{ color: "var(--tx1)", fontSize: 11, marginBottom: 6 }}>Current Bindings</div>
-              {!currentBindingAliases.length ? (
-                <div style={{ color: "var(--tx2)", fontSize: 11 }}>No dataset bindings configured.</div>
-              ) : (
-                <div style={{ display: "grid", gap: 4 }}>
-                  {currentBindingAliases.map((alias) => {
-                    const value = currentBindings[alias];
-                    const matchedDataset = availableDatasets.find((dataset) => dataset.id === String(value));
-                    return (
-                      <div key={alias} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
-                        <span className="mono" style={{ color: "var(--tx0)" }}>{alias}</span>
-                        <span style={{ color: "var(--tx1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {matchedDataset ? `${matchedDataset.name} (${matchedDataset.id})` : String(value ?? "")}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <button className="btn" style={{ width: "100%" }} onClick={() => void handleRunWorkflowPipeline()} disabled={!activeDataset?.id || !pipelineWorkflowId.trim() || runningWorkflow}>
-              {runningWorkflow ? "Starting Workflow Run..." : "Run Workflow Pipeline"}
-            </button>
-            <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: 8, display: "grid", gap: 6 }}>
-              <div style={{ color: "var(--tx1)", fontSize: 11 }}>Run Artifact Viewer</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
-                <input
-                  value={artifactRunId}
-                  onChange={(event) => setArtifactRunId(event.target.value)}
-                  placeholder="Run ID"
-                  style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: runStatusSummary.status === "success" ? "#22c55e" : "#ef4444",
+                  }}
                 />
-                <button className="btn" onClick={() => void handleLoadRunArtifact()} disabled={!artifactRunId.trim() || artifactLoading}>
-                  {artifactLoading ? "Loading..." : "Load"}
-                </button>
+                <span style={{ fontSize: 12, color: "var(--tx1)" }}>
+                  {runStatusSummary.status === "success"
+                    ? `Completed · ${runStatusSummary.rows != null ? `${runStatusSummary.rows} rows` : "see results"}`
+                    : "Failed · see results"}
+                </span>
+                <span className="mono" style={{ fontSize: 11, color: "#3f3f46" }}>
+                  {formatElapsed(runStatusSummary.elapsedMs)}
+                </span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                <button className="btn" onClick={() => void handleCopyRunId()} disabled={!artifactRunId.trim()}>
-                  Copy Run ID
-                </button>
-                <button className="btn" onClick={handleDownloadArtifactJson} disabled={!artifactData}>
-                  Download Artifact JSON
-                </button>
-              </div>
-              {artifactData ? (
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div className="mono" style={{ fontSize: 11, color: "var(--tx1)" }}>
-                    Status: {artifactData.run.status} · Output Rows: {artifactData.output.row_count}
-                  </div>
-                  <div className="mono" style={{ fontSize: 11, color: "var(--tx1)", maxHeight: 84, overflow: "auto", border: "1px solid var(--bd2)", borderRadius: "var(--r6)", padding: 6, background: "var(--bg2)" }}>
-                    Params: {JSON.stringify(artifactData.runtime_parameters)}
-                  </div>
-                  <div style={{ maxHeight: 120, overflow: "auto", border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: 6 }}>
-                    <div className="mono" style={{ fontSize: 11, color: "var(--tx1)", marginBottom: 4 }}>Preview</div>
-                    {!artifactData.output.preview_rows.length ? (
-                      <div style={{ color: "var(--tx2)", fontSize: 11 }}>No preview rows available.</div>
-                    ) : (
-                      artifactData.output.preview_rows.slice(0, 5).map((row, index) => (
-                        <div key={`artifact-row-${index}`} className="mono" style={{ fontSize: 11, color: "var(--tx1)", borderTop: index ? "1px solid var(--bd)" : "none", paddingTop: index ? 4 : 0, marginTop: index ? 4 : 0 }}>
-                          {JSON.stringify(row)}
-                        </div>
-                      ))
-                    )}
-                  </div>
+            ) : null}
+
+            <button
+              onClick={() => void handleRunWorkflowPipeline()}
+              disabled={!activeDataset?.id || !(pipelineWorkflowId.trim() || selectedTemplateId.trim()) || runningWorkflow}
+              onMouseEnter={() => setRunCtaHovered(true)}
+              onMouseLeave={() => setRunCtaHovered(false)}
+              style={{
+                width: "100%",
+                borderRadius: 7,
+                padding: 10,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#fff",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                transition: "all 120ms ease",
+                background: runningWorkflow ? "#3f3f46" : (runCtaHovered ? "#4f5edb" : "#5B6AF0"),
+                transform: runCtaHovered && !runningWorkflow ? "translateY(-1px)" : "translateY(0)",
+                boxShadow: runningWorkflow ? "none" : "0 2px 12px rgba(91,106,240,0.25)",
+                cursor: runningWorkflow ? "not-allowed" : "pointer",
+                opacity: runningWorkflow ? 0.9 : 1,
+              }}
+            >
+              {runningWorkflow ? (
+                <>
+                  <span className="badge-dot pulse" style={{ background: "#a1a1aa" }} />
+                  Running…
+                </>
+              ) : (
+                <>
+                  <IconPlay size={14} />
+                  Run Pipeline
+                </>
+              )}
+            </button>
+
+            {runStatusSummary ? (
+              <button
+                onClick={() => void handleLoadRunArtifact()}
+                onMouseEnter={() => setResultsHovered(true)}
+                onMouseLeave={() => setResultsHovered(false)}
+                disabled={!artifactRunId.trim() || artifactLoading}
+                style={{
+                  width: "100%",
+                  border: `1px solid ${resultsHovered ? "#3f3f46" : "#27272a"}`,
+                  borderRadius: 6,
+                  background: resultsHovered ? "#1f1f22" : "transparent",
+                  fontSize: 12,
+                  color: resultsHovered ? "#a1a1aa" : "#71717a",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 7,
+                  padding: "8px 10px",
+                  transition: "all 120ms ease",
+                }}
+                title={artifactRunId ? "Load artifact for the latest run" : "No run id available yet"}
+              >
+                <IconCopy size={13} />
+                {artifactLoading ? "Loading Results..." : "View Run Results"}
+              </button>
+            ) : null}
+
+            <button
+              onClick={() => setAdvancedOpen((value) => !value)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                color: "#3f3f46",
+                fontSize: 11,
+                fontFamily: "DM Sans, sans-serif",
+              }}
+            >
+              <span style={{ display: "inline-flex", transform: advancedOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
+                <IconChevronDown size={12} />
+              </span>
+              Advanced config
+            </button>
+
+            {advancedOpen ? (
+              <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg3)", padding: 8, display: "grid", gap: 6 }}>
+                <input
+                  value={pipelineWorkflowId}
+                  onChange={(event) => setPipelineWorkflowId(event.target.value)}
+                  placeholder="Pipeline ID (optional override)"
+                  className="mono"
+                  style={{ width: "100%", height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+                />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 6 }}>
+                  <input
+                    value={bindingAlias}
+                    onChange={(event) => setBindingAlias(event.target.value)}
+                    placeholder="Alias"
+                    style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+                  />
+                  <select
+                    value={bindingDatasetId}
+                    onChange={(event) => setBindingDatasetId(event.target.value)}
+                    style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+                  >
+                    {availableDatasets.map((dataset) => (
+                      <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
+                    ))}
+                  </select>
+                  <button className="btn" onClick={addBindingToRuntimeParameters} disabled={!availableDatasets.length}>
+                    Add
+                  </button>
                 </div>
-              ) : null}
-            </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
+                  <select
+                    value={bindingAliasToRemove}
+                    onChange={(event) => setBindingAliasToRemove(event.target.value)}
+                    style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+                    disabled={!currentBindingAliases.length}
+                  >
+                    <option value="">Select binding to remove</option>
+                    {currentBindingAliases.map((alias) => (
+                      <option key={alias} value={alias}>{alias}</option>
+                    ))}
+                  </select>
+                  <button className="btn" onClick={removeBindingFromRuntimeParameters} disabled={!currentBindingAliases.length || !bindingAliasToRemove}>
+                    Remove
+                  </button>
+                </div>
+
+                {!currentBindingAliases.length ? (
+                  <div style={{ color: "var(--tx2)", fontSize: 11 }}>No bindings configured.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 4 }}>
+                    {currentBindingAliases.map((alias) => {
+                      const value = currentBindings[alias];
+                      const matchedDataset = availableDatasets.find((dataset) => dataset.id === String(value));
+                      return (
+                        <div key={alias} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
+                          <span className="mono" style={{ color: "var(--tx0)" }}>{alias}</span>
+                          <span className="mono" style={{ color: "var(--tx1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {matchedDataset ? matchedDataset.id : String(value ?? "")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  <button className="btn" onClick={() => void handleCopyRunId(artifactRunId)} disabled={!artifactRunId.trim()}>
+                    Copy Run ID
+                  </button>
+                  <button className="btn" onClick={handleDownloadArtifactJson} disabled={!artifactData}>
+                    Download Artifact JSON
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {workflowMessage ? <div style={{ color: "var(--tx1)", fontSize: 11 }}>{workflowMessage}</div> : null}
           </div>
-          <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => void runPipeline()} disabled={!steps.length}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run Pipeline</span>
+
+          <button className="btn" style={{ width: "100%" }} onClick={() => void runPipeline()} disabled={!steps.length}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run Applied Steps</span>
           </button>
+
           <button className="btn" style={{ width: "100%" }} onClick={() => void handleUndoLast()} disabled={!steps.length || undoing}>
             {undoing ? "Undoing..." : "Undo Last"}
           </button>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button className="btn" onClick={onSchedule}>Schedule</button>
             <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
           </div>
+
           {scheduleInfo ? (
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--gr)" }}>
               <span className="badge-dot pulse" style={{ background: "var(--gr)" }} />

@@ -3,10 +3,11 @@ import uuid
 from ..state import AgentState, ExecutionResult
 from ....db import SessionLocal
 from ....models_db import DatasetMetaDB
-from ...pipeline_engine import PipelineEngine
 
 
 async def execute_step(state: AgentState) -> dict:
+    from ...pipeline_engine import PipelineEngine
+
     idx = state["current_step_index"]
     plan = state["plan"]
 

@@ -16,9 +16,10 @@ interface ExplorerPanelProps {
   workspaceId: string;
   refreshNonce?: number;
   searchFocusNonce?: number;
+  width?: number;
 }
 
-export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce }: ExplorerPanelProps) {
+export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members } = useWorkspaceContext();
   const { steps, setScheduleInfo } = usePipelineContext();
   const { exportPipeline, schedule } = usePipeline();
@@ -125,7 +126,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce }: E
   }, [searchFocusNonce]);
 
   return (
-    <aside style={{ width: "var(--sw)", minWidth: "var(--sw)", borderRight: "1px solid var(--bd)", background: "var(--bg1)", padding: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <aside style={{ width: width ?? 228, minWidth: width ?? 228, borderRight: "1px solid var(--bd)", background: "var(--bg1)", padding: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div className="proj-selector" onClick={() => setProjectModalOpen(true)} style={{ border: "1px solid var(--bd2)", background: "var(--bg2)", borderRadius: "var(--r8)", height: 36, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", marginBottom: 10 }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 20, height: 20, borderRadius: 5, background: activeProject?.color ?? "var(--ac)", display: "grid", placeItems: "center", fontSize: 11 }}>

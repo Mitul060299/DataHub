@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityBar } from "../components/ActivityBar";
 import { AIPanel } from "../components/AIPanel";
 import { CanvasPanel } from "../components/CanvasPanel";
@@ -20,6 +20,30 @@ export function WorkspacePage() {
   const [importOpen, setImportOpen] = useState(false);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
   const [explorerSearchFocusNonce, setExplorerSearchFocusNonce] = useState(0);
+  const [explorerWidth, setExplorerWidth] = useState(280);
+  const [resizingExplorer, setResizingExplorer] = useState(false);
+
+  useEffect(() => {
+    if (!resizingExplorer) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const minWidth = 220;
+      const maxWidth = 520;
+      const activityBarWidth = 52;
+      const nextWidth = Math.max(minWidth, Math.min(maxWidth, event.clientX - activityBarWidth));
+      setExplorerWidth(nextWidth);
+    };
+
+    const stopResizing = () => setResizingExplorer(false);
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopResizing);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resizingExplorer]);
 
   return (
     <main style={{ height: "calc(100% - var(--th))", display: "flex", minWidth: 0, minHeight: 0 }}>
@@ -32,11 +56,28 @@ export function WorkspacePage() {
         }}
       />
       {explorerOpen ? (
-        <ExplorerPanel
-          workspaceId={workspaceId}
-          refreshNonce={datasetRefreshNonce}
-          searchFocusNonce={explorerSearchFocusNonce}
-        />
+        <>
+          <ExplorerPanel
+            workspaceId={workspaceId}
+            refreshNonce={datasetRefreshNonce}
+            searchFocusNonce={explorerSearchFocusNonce}
+            width={explorerWidth}
+          />
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            title="Drag to resize"
+            onMouseDown={() => setResizingExplorer(true)}
+            style={{
+              width: 6,
+              cursor: "col-resize",
+              background: resizingExplorer ? "var(--bd3)" : "transparent",
+              borderRight: "1px solid var(--bd)",
+              borderLeft: "1px solid var(--bd)",
+              flexShrink: 0,
+            }}
+          />
+        </>
       ) : null}
       <CanvasPanel
         dataset={activeDataset}

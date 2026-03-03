@@ -1,170 +1,145 @@
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from collections.abc import AsyncIterator
+from typing import Any
 
+from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import Session
 
-from .ai_agent_service import AIAgentService
-
-try:
-    from langgraph.graph import END, StateGraph
-except Exception:
-    END = None
-    StateGraph = None
-
-
-class AgentGraphState(TypedDict, total=False):
-    dataset_id: str
-    message: str
-    conversation_history: list[dict[str, Any]]
-    response: str
-    transformation: dict[str, Any] | None
-    needs_confirmation: bool
-    plan: list[str]
-    artifact: dict[str, Any] | None
-    error: str | None
+from .agent.graph import agent_graph
 
 
 class AgentGraphService:
-    _compiled_graph = None
+    @staticmethod
+    def _build_initial_state(
+        dataset_id: str,
+        message: str,
+        pipeline_steps: list[dict[str, Any]],
+        plan_approved: bool,
+    ) -> dict[str, Any]:
+        return {
+            "messages": [HumanMessage(content=message)] if message else [],
+            "dataset_id": dataset_id,
+            "schema": {},
+            "stats": {},
+            "sample_rows": [],
+            "pipeline_steps": pipeline_steps or [],
+            "plan_approved": plan_approved,
+            "intent": "",
+            "plan": [],
+            "current_step_index": 0,
+            "execution_results": [],
+            "retry_count": 0,
+            "error": None,
+            "final_response": "",
+            "chart_config": None,
+            "query_results": None,
+        }
 
     @classmethod
-    def _compile_graph(cls):
-        return None
-
-    @staticmethod
-    def _node_plan(state: AgentGraphState) -> AgentGraphState:
-        db: Session | None = state.get("_db")  # type: ignore[assignment]
-        if db is None:
-            return {
-                "error": "Database session is unavailable.",
-                "response": "Unable to process request right now.",
-                "transformation": None,
-                "needs_confirmation": False,
+    async def process_command_stream(
+        cls,
+        dataset_id: str,
+        user_message: str,
+        session_id: str,
+        pipeline_steps: list[dict[str, Any]],
+        plan_approved: bool,
+        db: Session,
+    ) -> AsyncIterator[dict[str, Any]]:
+        _ = db
+        config = {"configurable": {"thread_id": session_id}}
+        if plan_approved and not user_message.strip():
+            existing_state = agent_graph.get_state(config)
+            snapshot_values = existing_state.values if existing_state else {}
+            if not snapshot_values:
+                yield {
+                    "type": "agent.error",
+                    "error": "No pending plan found for this session. Please send a new request first.",
+                }
+                return
+            initial_state = {
+                **snapshot_values,
+                "dataset_id": snapshot_values.get("dataset_id", dataset_id),
+                "plan_approved": True,
+                "pipeline_steps": pipeline_steps or snapshot_values.get("pipeline_steps", []),
             }
+        else:
+            initial_state = cls._build_initial_state(
+                dataset_id=dataset_id,
+                message=user_message,
+                pipeline_steps=pipeline_steps,
+                plan_approved=plan_approved,
+            )
 
         try:
-            payload = AIAgentService.process_command(
-                dataset_id=state["dataset_id"],
-                user_message=state["message"],
-                conversation_history=state.get("conversation_history", []),
-                db=db,
-            )
+            async for event in agent_graph.astream_events(initial_state, config=config, version="v2"):
+                event_name = event.get("event", "")
+                node_name = event.get("name", "")
+                data = event.get("data", {})
+
+                if event_name != "on_chain_end":
+                    continue
+
+                if node_name == "context_loader":
+                    yield {"type": "agent.thinking", "message": "Loading dataset context..."}
+
+                elif node_name == "intent_classifier":
+                    intent = data.get("output", {}).get("intent", "")
+                    yield {"type": "agent.thinking", "message": f"Intent: {intent}"}
+
+                elif node_name == "planner":
+                    plan = data.get("output", {}).get("plan", [])
+                    yield {
+                        "type": "agent.plan",
+                        "plan": plan,
+                        "message": "Plan ready for approval",
+                    }
+
+                elif node_name == "plan_presenter":
+                    output = data.get("output", {})
+                    messages = output.get("messages", [])
+                    plan_text = messages[-1].content if messages else ""
+                    yield {"type": "agent.plan_presented", "text": plan_text}
+
+                elif node_name == "execute_step":
+                    output = data.get("output", {})
+                    results = output.get("execution_results", [])
+                    if results:
+                        last = results[-1]
+                        if last.get("success"):
+                            yield {
+                                "type": "agent.step.done",
+                                "step": last.get("step_number"),
+                                "operation": last.get("operation"),
+                                "rows_affected": last.get("rows_affected"),
+                            }
+                        else:
+                            yield {
+                                "type": "agent.step.error",
+                                "step": last.get("step_number"),
+                                "error": last.get("error"),
+                            }
+
+                elif node_name == "reflect":
+                    retry = data.get("output", {}).get("retry_count", 0)
+                    yield {"type": "agent.step.retry", "attempt": retry}
+
+                elif node_name == "pipeline_recorder":
+                    yield {"type": "agent.thinking", "message": "Saving pipeline steps..."}
+
+                elif node_name == "responder":
+                    output = data.get("output", {})
+                    final = output.get("final_response", "")
+                    messages = output.get("messages", [])
+                    response_text = messages[-1].content if messages else final
+                    yield {
+                        "type": "agent.done",
+                        "response": response_text,
+                        "pipeline_steps": output.get("pipeline_steps", []),
+                    }
+
         except Exception as exc:
-            return {
-                "error": str(exc),
-                "response": f"Agent planning failed: {str(exc)}",
-                "transformation": None,
-                "needs_confirmation": False,
-                "plan": [],
-                "artifact": None,
-            }
-
-        transformation = payload.get("transformation") if isinstance(payload.get("transformation"), dict) else None
-        plan = AgentGraphService._build_plan(state.get("message", ""), transformation)
-
-        return {
-            "response": str(payload.get("response") or ""),
-            "transformation": transformation,
-            "needs_confirmation": bool(payload.get("needsConfirmation", False)),
-            "plan": plan,
-            "artifact": None,
-            "error": None,
-        }
-
-    @staticmethod
-    def _node_safety(state: AgentGraphState) -> AgentGraphState:
-        transformation = state.get("transformation")
-        if not isinstance(transformation, dict):
-            return {}
-
-        operation = str(transformation.get("operation") or "").lower()
-        destructive_ops = {"drop_columns", "delete_rows", "truncate", "overwrite"}
-        if operation in destructive_ops:
-            existing = str(state.get("response") or "").strip()
-            safety_note = "This action may be destructive. Please confirm before applying."
-            next_response = f"{existing}\n\n{safety_note}" if existing else safety_note
-            return {
-                "response": next_response,
-                "needs_confirmation": True,
-            }
-
-        return {}
-
-    @staticmethod
-    def _node_artifact(state: AgentGraphState) -> AgentGraphState:
-        message = (state.get("message") or "").lower()
-        wants_report = any(token in message for token in ["report", "doc", "documentation", "summary note"])
-        if not wants_report:
-            return {}
-
-        plan = state.get("plan") or []
-        transformation = state.get("transformation")
-        response = state.get("response") or ""
-
-        lines = [
-            "# DataHub Agent Report",
-            "",
-            "## Request",
-            state.get("message") or "",
-            "",
-            "## Plan",
-        ]
-        if plan:
-            lines.extend([f"- {step}" for step in plan])
-        else:
-            lines.append("- No explicit plan was generated.")
-
-        lines.extend(["", "## Agent Response", response or "No response generated."])
-
-        if isinstance(transformation, dict):
-            lines.extend([
-                "",
-                "## Proposed Transformation",
-                f"- Operation: {transformation.get('operation', 'unknown')}",
-                f"- Description: {transformation.get('description', 'n/a')}",
-                f"- Requires confirmation: {'Yes' if state.get('needs_confirmation') else 'No'}",
-            ])
-
-        markdown = "\n".join(lines).strip()
-        artifact = {
-            "type": "markdown",
-            "title": "DataHub Agent Report",
-            "content": markdown,
-        }
-
-        return {
-            "artifact": artifact,
-            "response": f"{response}\n\nI also generated a report artifact for this request.".strip(),
-        }
-
-    @staticmethod
-    def _node_finalize(state: AgentGraphState) -> AgentGraphState:
-        if state.get("error"):
-            return {
-                "response": state.get("response") or state["error"] or "Failed to process request.",
-                "transformation": None,
-                "needs_confirmation": False,
-            }
-        return {}
-
-    @staticmethod
-    def _build_plan(message: str, transformation: dict[str, Any] | None) -> list[str]:
-        base_plan = [
-            "Understand user intent",
-            "Validate dataset context",
-            "Generate safe transformation strategy",
-        ]
-        if isinstance(transformation, dict):
-            base_plan.append("Return transformation preview for user confirmation")
-        else:
-            base_plan.append("Return analysis/Q&A response")
-
-        lowered = (message or "").lower()
-        if any(token in lowered for token in ["report", "doc", "documentation", "summary"]):
-            base_plan.append("Generate markdown report artifact")
-
-        return base_plan
+            yield {"type": "agent.error", "error": str(exc)}
 
     @classmethod
     def process_command(
@@ -174,55 +149,14 @@ class AgentGraphService:
         conversation_history: list[dict[str, Any]],
         db: Session,
     ) -> dict[str, Any]:
-        try:
-            compiled = cls._compile_graph()
-        except Exception:
-            compiled = None
-
-        initial_state: AgentGraphState = {
-            "dataset_id": dataset_id,
-            "message": user_message,
-            "conversation_history": conversation_history,
-            "response": "",
+        _ = dataset_id
+        _ = user_message
+        _ = conversation_history
+        _ = db
+        return {
+            "response": "This endpoint now streams agent events. Use the SSE chat flow.",
             "transformation": None,
-            "needs_confirmation": False,
-            "error": None,
+            "needsConfirmation": False,
+            "plan": [],
+            "artifact": None,
         }
-        initial_state["_db"] = db  # type: ignore[index]
-
-        if compiled is None:
-            try:
-                payload = AIAgentService.process_command(dataset_id, user_message, conversation_history, db)
-            except Exception as exc:
-                return {
-                    "response": f"Agent execution failed: {str(exc)}",
-                    "transformation": None,
-                    "needsConfirmation": False,
-                    "plan": [],
-                    "artifact": None,
-                }
-            return {
-                "response": payload.get("response") or "",
-                "transformation": payload.get("transformation"),
-                "needsConfirmation": bool(payload.get("needsConfirmation", False)),
-                "plan": cls._build_plan(user_message, payload.get("transformation") if isinstance(payload.get("transformation"), dict) else None),
-                "artifact": None,
-            }
-
-        try:
-            result = compiled.invoke(initial_state)
-            return {
-                "response": str(result.get("response") or ""),
-                "transformation": result.get("transformation") if isinstance(result.get("transformation"), dict) else None,
-                "needsConfirmation": bool(result.get("needs_confirmation", False)),
-                "plan": result.get("plan") if isinstance(result.get("plan"), list) else [],
-                "artifact": result.get("artifact") if isinstance(result.get("artifact"), dict) else None,
-            }
-        except Exception as exc:
-            return {
-                "response": f"Agent execution failed: {str(exc)}",
-                "transformation": None,
-                "needsConfirmation": False,
-                "plan": [],
-                "artifact": None,
-            }

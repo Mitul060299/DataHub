@@ -1,15 +1,20 @@
 import { useMemo, useState } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
-import { useChatSession, type ConversationMessage, type TransformationPayload } from "../hooks/useChatSession";
+import { useChatSession, type AgentEvent, type ConversationMessage, type PlanStep, type TransformationPayload } from "../hooks/useChatSession";
 import { usePipeline } from "../hooks/usePipeline";
 import { IconRefresh, IconZap } from "./Icons";
+import PlanCard from "./PlanCard";
 import { StepCard } from "./StepCard";
 
 type Message = ConversationMessage & {
   id: string;
   transformation?: TransformationPayload;
   stepStatus?: "pending" | "applying" | "applied" | "discarded";
+  plan?: PlanStep[];
+  planPending?: boolean;
+  planApproved?: boolean;
+  planRejected?: boolean;
 };
 
 interface AIPanelProps {
@@ -20,7 +25,7 @@ interface AIPanelProps {
 }
 
 export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPanelProps) {
-  const { addStep } = usePipelineContext();
+  const { addStep, steps } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
   const { sendMessage, sending, resetSession } = useChatSession();
@@ -30,66 +35,108 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || !dataset) return;
-    const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: input };
-    const assistantMessageId = crypto.randomUUID();
-    setMessages((current) => [
-      ...current,
-      userMessage,
-      {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "Thinking...",
-      },
-    ]);
+  const handleAgentEvent = (event: AgentEvent) => {
+    switch (event.type) {
+      case "agent.plan": {
+        const plan = (event.plan as PlanStep[] | undefined) || [];
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "Here's my plan:",
+            plan,
+            planPending: true,
+          },
+        ]);
+        break;
+      }
+      case "agent.done": {
+        const responseText = typeof event.response === "string" ? event.response : "Done.";
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: responseText,
+          },
+        ]);
+        break;
+      }
+      case "agent.error": {
+        const errorText = typeof event.error === "string" ? event.error : "Unknown error";
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `Error: ${errorText}`,
+          },
+        ]);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  const handleSend = async (text?: string, approvePlan?: boolean) => {
+    if (!dataset) return;
+    const content = (text || input).trim();
+    if (!content && !approvePlan) return;
+
+    if (content) {
+      setMessages((previous) => [
+        ...previous,
+        { id: crypto.randomUUID(), role: "user", content },
+      ]);
+    }
     setInput("");
+
     try {
-      const response = await sendMessage({
-        message: userMessage.content,
+      await sendMessage({
+        message: content,
         dataset_id: dataset.id,
         workspace_id: workspaceId,
         project_id: projectId,
-        conversation_history: [...history, { role: "user", content: userMessage.content }],
+        conversation_history: [...history, ...(content ? [{ role: "user" as const, content }] : [])],
+        pipeline_steps: steps.map((step) => ({
+          operation: step.operation,
+          description: step.description,
+          sql: step.sql,
+          rows_affected: step.affectedRows,
+        })),
+        plan_approved: approvePlan ?? false,
+        onEvent: handleAgentEvent,
       });
-
-      const planText = response.plan?.length
-        ? `\n\nPlan:\n${response.plan.map((step, index) => `${index + 1}. ${step}`).join("\n")}`
-        : "";
-      const artifactText = response.artifact?.content
-        ? `\n\nGenerated Report:\n${response.artifact.content}`
-        : "";
-      const finalContent = `${response.response || "I could not generate a response."}${planText}${artifactText}`;
-
-      setMessages((current) => [
-        ...current.map((message) => (
-          message.id === assistantMessageId
-            ? {
-                ...message,
-                content: finalContent,
-                transformation: response.transformation,
-                stepStatus: response.transformation ? "pending" as const : undefined,
-              }
-            : message
-        )),
-      ]);
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
       const rawMessage = maybeError.response?.data?.detail ?? maybeError.message ?? "Chat request failed.";
       const message = rawMessage.toLowerCase().includes("network error")
         ? "Network Error: Backend API is unreachable. Ensure /api routes are configured (Vercel rewrite or Vite proxy) and backend is reachable on Render."
         : rawMessage;
-      setMessages((current) => [
-        ...current.map((item) => (
-          item.id === assistantMessageId
-            ? {
-                ...item,
-                content: `Error: ${message}`,
-              }
-            : item
-        )),
+      setMessages((previous) => [
+        ...previous,
+        { id: crypto.randomUUID(), role: "assistant", content: `Error: ${message}` },
       ]);
     }
+  };
+
+  const approvePlan = () => {
+    setMessages((previous) => previous.map((message) => (
+      message.planPending
+        ? { ...message, planPending: false, planApproved: true }
+        : message
+    )));
+    void handleSend("", true);
+  };
+
+  const rejectPlan = () => {
+    setMessages((previous) => previous.map((message) => (
+      message.planPending
+        ? { ...message, planPending: false, planRejected: true }
+        : message
+    )));
   };
 
   const applyStep = async (messageId: string, transformation: TransformationPayload) => {
@@ -188,6 +235,16 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
                   status={message.stepStatus ?? "pending"}
                   onApply={() => void applyStep(message.id, message.transformation!)}
                   onDiscard={() => discardStep(message.id)}
+                />
+              ) : null}
+              {message.plan ? (
+                <PlanCard
+                  steps={message.plan}
+                  pending={Boolean(message.planPending)}
+                  approved={message.planApproved}
+                  rejected={message.planRejected}
+                  onApprove={approvePlan}
+                  onReject={rejectPlan}
                 />
               ) : null}
             </div>

@@ -7,7 +7,7 @@ import pandas as pd
 
 from ..config import settings
 from ..models import TransformationStep
-from .agent import suggest_steps
+from .agent_heuristics import suggest_steps
 
 
 SYSTEM_PROMPT = """

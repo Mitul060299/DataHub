@@ -9,6 +9,8 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..db import SessionLocal
+from ..models_db import DatasetChunkDB, DatasetDataDB, DatasetMetaDB
 from .object_storage import StorageService
 from .query_cache import QueryCacheService
 
@@ -213,3 +215,92 @@ class DuckDBService:
         columns = [col[0] for col in result.description]
         rows = result.fetchall()
         return [dict(zip(columns, row)) for row in rows]
+
+    @classmethod
+    def _load_dataset_rows(cls, dataset_id: str) -> tuple[DatasetMetaDB | None, list[dict[str, Any]]]:
+        db = SessionLocal()
+        try:
+            dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+            if not dataset:
+                return None, []
+
+            chunks = (
+                db.query(DatasetChunkDB)
+                .filter(DatasetChunkDB.dataset_id == dataset_id)
+                .order_by(DatasetChunkDB.chunk_index.asc())
+                .all()
+            )
+            if chunks:
+                rows: list[dict[str, Any]] = []
+                for chunk in chunks:
+                    rows.extend(chunk.rows or [])
+                return dataset, rows
+
+            data = db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).first()
+            if data and isinstance(data.rows, list):
+                return dataset, list(data.rows)
+
+            if dataset.storage_path:
+                preview = cls.get_preview(dataset.storage_path, limit=max(1, int(dataset.row_count or 1000)))
+                return dataset, list(preview.get("rows") or [])
+
+            return dataset, []
+        finally:
+            db.close()
+
+    @staticmethod
+    def _infer_schema_from_rows(rows: list[dict[str, Any]]) -> dict[str, str]:
+        if not rows:
+            return {}
+        sample = rows[0]
+        schema: dict[str, str] = {}
+        for column, value in sample.items():
+            schema[column] = type(value).__name__ if value is not None else "unknown"
+        return schema
+
+    @classmethod
+    def get_schema(cls, dataset_id: str) -> dict:
+        dataset, rows = cls._load_dataset_rows(dataset_id)
+        if dataset and isinstance(dataset.schema_json, dict) and dataset.schema_json:
+            return dict(dataset.schema_json)
+        return cls._infer_schema_from_rows(rows)
+
+    @classmethod
+    def get_column_stats(cls, dataset_id: str) -> dict:
+        dataset, rows = cls._load_dataset_rows(dataset_id)
+        if dataset and isinstance(dataset.stats_json, dict) and dataset.stats_json:
+            return dict(dataset.stats_json)
+        if not rows:
+            return {}
+
+        frame = pd.DataFrame(rows)
+        stats: dict[str, dict[str, Any]] = {}
+        for column in frame.columns:
+            series = frame[column]
+            non_null = series.dropna()
+            stats[column] = {
+                "nulls": int(series.isna().sum()),
+                "min": None if non_null.empty else non_null.min(),
+                "max": None if non_null.empty else non_null.max(),
+                "unique": int(non_null.nunique(dropna=True)),
+            }
+        return stats
+
+    @classmethod
+    def get_sample_rows(cls, dataset_id: str, limit: int = 10) -> list:
+        _, rows = cls._load_dataset_rows(dataset_id)
+        return rows[: max(0, int(limit))]
+
+    @classmethod
+    def execute_sql(cls, dataset_id: str, sql: str) -> dict:
+        _, rows = cls._load_dataset_rows(dataset_id)
+        before_count = len(rows)
+        transformed_rows = cls.transform_rows(rows, sql)
+        after_count = len(transformed_rows)
+        rows_affected = abs(after_count - before_count)
+        if rows_affected == 0 and (sql or "").strip():
+            rows_affected = after_count
+        return {
+            "rows_affected": rows_affected,
+            "success": True,
+        }

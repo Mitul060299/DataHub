@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import HTTPException, Header
@@ -42,6 +43,32 @@ class CleaningController:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         return AgentGraphService.process_command(dataset_id, message, conversation_history, db)
+
+    @staticmethod
+    async def process_command_stream(
+        dataset_id: str,
+        message: str,
+        session_id: str,
+        pipeline_steps: list[dict[str, Any]],
+        plan_approved: bool,
+        authorization: str | None,
+        db: Session,
+    ) -> AsyncIterator[dict[str, Any]]:
+        role = get_current_role(authorization)
+        require_role("viewer", role)
+
+        dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        return AgentGraphService.process_command_stream(
+            dataset_id=dataset_id,
+            user_message=message,
+            session_id=session_id,
+            pipeline_steps=pipeline_steps,
+            plan_approved=plan_approved,
+            db=db,
+        )
 
     @staticmethod
     def execute_transformation(

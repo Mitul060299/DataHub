@@ -439,6 +439,7 @@ class PipelineEngine:
                 relation_rows=relation_rows,
                 sql=sql,
                 output_relation='dataset',
+                dataset_id=dataset_id,
             )
 
             output_meta = self._persist_output_dataset(

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
+import type { CalculatedColumn } from "../types";
 import { IconBarChart, IconDownload, IconPlay, IconTable, IconUpload } from "./Icons";
 import { DataTable } from "./DataTable";
 import { ChartView } from "./ChartView";
@@ -8,17 +9,20 @@ import { ChartView } from "./ChartView";
 type CanvasTab = "data" | "charts";
 
 interface CanvasPanelProps {
+  workspaceId: string;
   dataset: Dataset | null;
   loading: boolean;
   columns: string[];
   rows: Record<string, unknown>[];
+  calculatedColumns: CalculatedColumn[];
   lastAction: string;
   onImport: () => void;
   onExport: () => void;
   onRun: () => void;
+  onColumnsChanged: () => void;
 }
 
-export function CanvasPanel({ dataset, loading, columns, rows, lastAction, onImport, onExport, onRun }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onExport, onRun, onColumnsChanged }: CanvasPanelProps) {
   const { steps } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
 
@@ -44,9 +48,18 @@ export function CanvasPanel({ dataset, loading, columns, rows, lastAction, onImp
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         {tab === "data" ? (
-          <DataTable loading={loading} rows={rows} columns={columns} stepCount={steps.length} lastAction={lastAction} />
+          <DataTable
+            datasetId={dataset?.id}
+            loading={loading}
+            rows={rows}
+            columns={columns}
+            calculatedColumns={calculatedColumns}
+            stepCount={steps.length}
+            lastAction={lastAction}
+            onColumnsChanged={onColumnsChanged}
+          />
         ) : (
-          <ChartView />
+          <ChartView workspaceId={workspaceId} datasetId={dataset?.id} />
         )}
       </div>
     </section>

@@ -55,17 +55,21 @@ class DuckDBService:
             return cached, True
 
         start_time = time.time()
-        result = cls.query_parquet(storage_path, query)
+        result = cls.query_parquet(storage_path, query, dataset_id=dataset_id)
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         QueryCacheService.set(db, dataset_id, user_id, query, result, execution_time_ms)
         return result, False
 
     @classmethod
-    def query_parquet(cls, storage_path: str, query: str) -> list[dict[str, Any]]:
+    def query_parquet(cls, storage_path: str, query: str, dataset_id: str | None = None) -> list[dict[str, Any]]:
         connection = cls._ensure_db()
         file_path = StorageService.get_query_path(storage_path)
         sql_query = cls._inject_path(query, file_path)
+        if dataset_id:
+            from .calculated_columns_service import CalculatedColumnsService
+
+            sql_query = CalculatedColumnsService.inject_calculated_columns(sql_query, dataset_id)
         return cls._execute(connection, sql_query)
 
     @classmethod
@@ -78,13 +82,17 @@ class DuckDBService:
         return {"rows": rows, "columns": columns}
 
     @classmethod
-    def query_rows(cls, rows: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    def query_rows(cls, rows: list[dict[str, Any]], query: str, dataset_id: str | None = None) -> list[dict[str, Any]]:
         connection = cls._ensure_db()
         dataset_df = pd.DataFrame(rows or [])
         view_name = "dataset_rows"
         connection.register(view_name, dataset_df)
         try:
             sql_query = cls._inject_relation(query, view_name)
+            if dataset_id:
+                from .calculated_columns_service import CalculatedColumnsService
+
+                sql_query = CalculatedColumnsService.inject_calculated_columns(sql_query, dataset_id)
             return cls._execute(connection, sql_query)
         finally:
             try:
@@ -93,13 +101,18 @@ class DuckDBService:
                 pass
 
     @classmethod
-    def transform_rows(cls, rows: list[dict[str, Any]], sql: str) -> list[dict[str, Any]]:
+    def transform_rows(cls, rows: list[dict[str, Any]], sql: str, dataset_id: str | None = None) -> list[dict[str, Any]]:
         connection = cls._ensure_db()
         dataset_df = pd.DataFrame(rows or [])
         connection.register("dataset_source", dataset_df)
         try:
             connection.execute("DROP TABLE IF EXISTS dataset")
-            connection.execute("CREATE TEMP TABLE dataset AS SELECT * FROM dataset_source")
+            base_select = "SELECT * FROM dataset_source"
+            if dataset_id:
+                from .calculated_columns_service import CalculatedColumnsService
+
+                base_select = CalculatedColumnsService.inject_calculated_columns(base_select, dataset_id)
+            connection.execute(f"CREATE TEMP TABLE dataset AS {base_select}")
 
             transformed_sql = cls._normalize_dataset_sql(sql)
             statements = cls._split_sql_statements(transformed_sql)
@@ -133,6 +146,7 @@ class DuckDBService:
         relation_rows: dict[str, list[dict[str, Any]]],
         sql: str,
         output_relation: str = "dataset",
+        dataset_id: str | None = None,
     ) -> list[dict[str, Any]]:
         connection = cls._ensure_db()
         relation_rows = relation_rows or {}
@@ -150,7 +164,12 @@ class DuckDBService:
                 source_name = f"{name}_source"
                 connection.register(source_name, frame)
                 try:
-                    connection.execute(f"CREATE TEMP TABLE {name} AS SELECT * FROM {source_name}")
+                    base_select = f"SELECT * FROM {source_name}"
+                    if dataset_id and name == output_relation:
+                        from .calculated_columns_service import CalculatedColumnsService
+
+                        base_select = CalculatedColumnsService.inject_calculated_columns(base_select, dataset_id)
+                    connection.execute(f"CREATE TEMP TABLE {name} AS {base_select}")
                 finally:
                     try:
                         connection.unregister(source_name)
@@ -295,7 +314,7 @@ class DuckDBService:
     def execute_sql(cls, dataset_id: str, sql: str) -> dict:
         _, rows = cls._load_dataset_rows(dataset_id)
         before_count = len(rows)
-        transformed_rows = cls.transform_rows(rows, sql)
+        transformed_rows = cls.transform_rows(rows, sql, dataset_id=dataset_id)
         after_count = len(transformed_rows)
         rows_affected = abs(after_count - before_count)
         if rows_affected == 0 and (sql or "").strip():

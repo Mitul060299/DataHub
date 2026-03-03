@@ -80,20 +80,30 @@ export function WorkspacePage() {
         </>
       ) : null}
       <CanvasPanel
+        workspaceId={workspaceId}
         dataset={activeDataset}
         loading={loading}
         columns={data?.columns ?? []}
         rows={data?.rows ?? []}
+        calculatedColumns={data?.calculatedColumns ?? []}
         lastAction={steps.length ? steps[steps.length - 1].operation : "Idle"}
         onImport={() => setImportOpen(true)}
         onExport={() => exportPipeline(steps)}
         onRun={() => void runPipeline()}
+        onColumnsChanged={() => {
+          setDatasetRefreshNonce((value) => value + 1);
+          void refetch();
+        }}
       />
       <AIPanel
         dataset={activeDataset}
         workspaceId={workspaceId}
         projectId={activeProject?.id ?? "default"}
         onStepApplied={() => {
+          setDatasetRefreshNonce((value) => value + 1);
+          void refetch();
+        }}
+        onDatasetMutated={() => {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();
         }}

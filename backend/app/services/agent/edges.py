@@ -3,7 +3,7 @@ from .state import AgentState
 
 def route_intent(state: AgentState) -> str:
     intent = state.get("intent", "converse")
-    if intent in ("transform", "sql_query", "visualise", "join"):
+    if intent in ("transform", "add_column", "sql_query", "visualise", "join"):
         return "planner"
     return "responder"
 

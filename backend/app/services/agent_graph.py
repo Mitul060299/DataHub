@@ -23,6 +23,8 @@ class AgentGraphService:
             "schema": {},
             "stats": {},
             "sample_rows": [],
+            "calculated_columns": [],
+            "dashboards": [],
             "pipeline_steps": pipeline_steps or [],
             "plan_approved": plan_approved,
             "intent": "",
@@ -107,6 +109,27 @@ class AgentGraphService:
                     if results:
                         last = results[-1]
                         if last.get("success"):
+                            if isinstance(last.get("column_added"), dict):
+                                column = last.get("column_added", {})
+                                yield {
+                                    "type": "column_added",
+                                    "column": {
+                                        "name": column.get("name"),
+                                        "formula": column.get("formula"),
+                                        "column_type": column.get("column_type"),
+                                    },
+                                }
+                            if isinstance(last.get("tile_created"), dict):
+                                tile = last.get("tile_created", {})
+                                yield {
+                                    "type": "tile_created",
+                                    "tile": {
+                                        "id": tile.get("id"),
+                                        "dashboard_id": tile.get("dashboard_id"),
+                                        "title": tile.get("title"),
+                                        "chart_type": tile.get("chart_type"),
+                                    },
+                                }
                             yield {
                                 "type": "agent.step.done",
                                 "step": last.get("step_number"),

@@ -1,6 +1,7 @@
 INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the user's message into exactly one of these intents:
 
 - transform   : user wants to clean or modify data (remove duplicates, fill nulls, filter, rename, cast types, etc.)
+- add_column  : user wants to create a new calculated or static column
 - sql_query   : user wants to query or aggregate data without permanently changing it
 - visualise   : user wants a chart, graph, or visual summary
 - join        : user wants to merge or join two datasets
@@ -27,6 +28,12 @@ PIPELINE STEPS ALREADY APPLIED:
 AVAILABLE TEMPLATES (reuse these before building from scratch):
 {available_templates}
 
+CALCULATED COLUMNS (already available in every query, treat as real columns):
+{calculated_columns}
+
+AVAILABLE DASHBOARDS (for visual outputs):
+{dashboards}
+
 USER GOAL:
 {user_goal}
 
@@ -38,6 +45,8 @@ RULES:
 5. Base estimated_rows on the stats provided — be specific, not vague
 6. Mark a step reversible:false only if it permanently drops columns or destroys data
 7. If a template matches, set template_id to that template id, otherwise template_id must be null
+8. If user asks to add a calculated column, generate exactly one step with operation "add_column" and include parameters: column_name, formula, column_type (dynamic/static), display_name (optional)
+9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart" and include parameters: dashboard_id (if known), title, chart_type, query_spec
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {

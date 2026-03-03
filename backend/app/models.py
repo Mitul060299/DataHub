@@ -38,6 +38,62 @@ class DatasetQueryResponse(BaseModel):
     cached: bool
 
 
+class CalculatedColumnCreate(BaseModel):
+    name: str
+    formula: str
+    column_type: str = "dynamic"
+    display_name: str | None = None
+
+
+class CalculatedColumnDB(BaseModel):
+    id: str
+    dataset_id: str
+    name: str
+    formula: str
+    column_type: str
+    cached_value: str | None
+    display_name: str | None
+    created_at: str
+
+
+class DashboardTileCreate(BaseModel):
+    dataset_id: str | None = None
+    title: str
+    chart_type: str
+    query_spec: dict[str, Any] = Field(default_factory=dict)
+    layout: dict[str, Any] = Field(default_factory=dict)
+
+
+class DashboardTileOut(BaseModel):
+    id: str
+    dashboard_id: str
+    dataset_id: str | None = None
+    title: str
+    chart_type: str
+    query_spec: dict[str, Any] = Field(default_factory=dict)
+    layout: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+
+
+class DashboardV2Create(BaseModel):
+    workspace_id: str = "default"
+    dataset_id: str | None = None
+    name: str
+    description: str | None = None
+    layout: dict[str, Any] = Field(default_factory=dict)
+
+
+class DashboardV2Out(BaseModel):
+    id: str
+    workspace_id: str
+    dataset_id: str | None = None
+    name: str
+    description: str | None = None
+    layout: dict[str, Any] = Field(default_factory=dict)
+    tiles: list[DashboardTileOut] = Field(default_factory=list)
+    created_at: str
+
+
 class ChartSeriesPoint(BaseModel):
     label: str
     value: int

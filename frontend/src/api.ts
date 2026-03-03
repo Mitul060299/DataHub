@@ -411,6 +411,182 @@ export async function fetchDatasetPage(
   return response.data;
 }
 
+export async function listCalculatedColumns(datasetId: string) {
+  const response = await api.get(`/datasets/${datasetId}/columns`);
+  return response.data as Array<{
+    id: string;
+    dataset_id: string;
+    name: string;
+    formula: string;
+    column_type: string;
+    cached_value?: string | null;
+    display_name?: string | null;
+    created_at: string;
+  }>;
+}
+
+export async function createCalculatedColumn(
+  datasetId: string,
+  payload: {
+    name: string;
+    formula: string;
+    column_type?: "dynamic" | "static";
+    display_name?: string;
+  }
+) {
+  const response = await api.post(`/datasets/${datasetId}/columns`, payload);
+  return response.data as {
+    id: string;
+    dataset_id: string;
+    name: string;
+    formula: string;
+    column_type: string;
+    cached_value?: string | null;
+    display_name?: string | null;
+    created_at: string;
+  };
+}
+
+export async function deleteCalculatedColumn(datasetId: string, columnId: string) {
+  const response = await api.delete(`/datasets/${datasetId}/columns/${columnId}`);
+  return response.data as { success: boolean; column_id: string };
+}
+
+export async function listDashboardsV2(workspaceId?: string) {
+  const response = await api.get("/dashboards", {
+    params: workspaceId ? { workspace_id: workspaceId } : undefined,
+  });
+  return response.data as Array<{
+    id: string;
+    workspace_id: string;
+    dataset_id?: string | null;
+    name: string;
+    description?: string | null;
+    layout: Record<string, unknown>;
+    tiles: Array<{
+      id: string;
+      dashboard_id: string;
+      dataset_id?: string | null;
+      title: string;
+      chart_type: string;
+      query_spec: Record<string, unknown>;
+      layout: Record<string, unknown>;
+      created_at: string;
+    }>;
+    created_at: string;
+  }>;
+}
+
+export async function createDashboardV2(payload: {
+  workspace_id: string;
+  dataset_id?: string;
+  name: string;
+  description?: string;
+  layout?: Record<string, unknown>;
+}) {
+  const response = await api.post("/dashboards", payload);
+  return response.data as {
+    id: string;
+    workspace_id: string;
+    dataset_id?: string | null;
+    name: string;
+    description?: string | null;
+    layout: Record<string, unknown>;
+    tiles: Array<{
+      id: string;
+      dashboard_id: string;
+      dataset_id?: string | null;
+      title: string;
+      chart_type: string;
+      query_spec: Record<string, unknown>;
+      layout: Record<string, unknown>;
+      created_at: string;
+    }>;
+    created_at: string;
+  };
+}
+
+export async function addDashboardTile(payload: {
+  dashboard_id: string;
+  dataset_id?: string;
+  title: string;
+  chart_type: string;
+  query_spec?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
+}) {
+  const response = await api.post(`/dashboards/${payload.dashboard_id}/tiles`, {
+    dataset_id: payload.dataset_id,
+    title: payload.title,
+    chart_type: payload.chart_type,
+    query_spec: payload.query_spec ?? {},
+    layout: payload.layout ?? {},
+  });
+  return response.data as {
+    id: string;
+    dashboard_id: string;
+    dataset_id?: string | null;
+    title: string;
+    chart_type: string;
+    query_spec: Record<string, unknown>;
+    layout: Record<string, unknown>;
+    created_at: string;
+  };
+}
+
+export async function publishDashboardV2(dashboardId: string, expiresInHours?: number) {
+  const response = await api.post(`/dashboards/${dashboardId}/publish`, null, {
+    params: expiresInHours ? { expires_in_hours: expiresInHours } : undefined,
+  });
+  return response.data as {
+    dashboard_id: string;
+    publish_token: string;
+    public_url?: string;
+    expires_at?: string | null;
+  };
+}
+
+export async function unpublishDashboardV2(dashboardId: string) {
+  const response = await api.delete(`/dashboards/${dashboardId}/publish`);
+  return response.data as { success: boolean; dashboard_id: string };
+}
+
+export async function fetchPublicDashboard(publishToken: string) {
+  const response = await api.get(`/public/dashboards/${publishToken}`);
+  return response.data as {
+    id: string;
+    workspace_id: string;
+    dataset_id?: string | null;
+    name: string;
+    description?: string | null;
+    layout: Record<string, unknown>;
+    tiles: Array<{
+      id: string;
+      dashboard_id: string;
+      dataset_id?: string | null;
+      title: string;
+      chart_type: string;
+      query_spec: Record<string, unknown>;
+      layout: Record<string, unknown>;
+      created_at: string;
+    }>;
+    created_at: string;
+  };
+}
+
+export async function fetchPublicDashboardTiles(publishToken: string) {
+  const response = await api.get(`/public/dashboards/${publishToken}/tiles`);
+  return response.data as Array<{
+    id: string;
+    dashboard_id: string;
+    dataset_id?: string | null;
+    title: string;
+    chart_type: string;
+    query_spec: Record<string, unknown>;
+    layout: Record<string, unknown>;
+    created_at: string;
+  }>;
+}
+
 export async function fetchChartSummary(
   datasetId: string,
   column: string,

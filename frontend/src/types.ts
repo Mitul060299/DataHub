@@ -22,6 +22,17 @@ export interface DatasetPage {
   total_rows: number;
 }
 
+export interface CalculatedColumn {
+  id: string;
+  dataset_id: string;
+  name: string;
+  formula: string;
+  column_type: string;
+  cached_value?: string | null;
+  display_name?: string | null;
+  created_at: string;
+}
+
 export interface ChartSeriesPoint {
   label: string;
   value: number;
@@ -50,6 +61,28 @@ export interface DashboardWidget {
   title: string;
   chart_type: string;
   config: Record<string, unknown>;
+}
+
+export interface DashboardV2Tile {
+  id: string;
+  dashboard_id: string;
+  dataset_id?: string | null;
+  title: string;
+  chart_type: string;
+  query_spec: Record<string, unknown>;
+  layout: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DashboardV2 {
+  id: string;
+  workspace_id: string;
+  dataset_id?: string | null;
+  name: string;
+  description?: string | null;
+  layout: Record<string, unknown>;
+  tiles: DashboardV2Tile[];
+  created_at: string;
 }
 
 export interface BusinessRule {

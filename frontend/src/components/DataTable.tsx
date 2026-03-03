@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createCalculatedColumn, deleteCalculatedColumn } from "../api";
+import type { CalculatedColumn } from "../types";
 import { IconFilter, IconSearch } from "./Icons";
 
 type SortDirection = "asc" | "desc";
 
 interface DataTableProps {
+  datasetId?: string;
   loading: boolean;
   rows: Record<string, unknown>[];
   columns: string[];
+  calculatedColumns: CalculatedColumn[];
   stepCount: number;
   lastAction: string;
+  onColumnsChanged: () => void;
 }
 
 const statusColor: Record<string, string> = {
@@ -17,10 +22,16 @@ const statusColor: Record<string, string> = {
   Shipped: "var(--ac)",
 };
 
-export function DataTable({ loading, rows, columns, stepCount, lastAction }: DataTableProps) {
+export function DataTable({ datasetId, loading, rows, columns, calculatedColumns, stepCount, lastAction, onColumnsChanged }: DataTableProps) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [columnName, setColumnName] = useState("");
+  const [columnFormula, setColumnFormula] = useState("");
+  const [columnType, setColumnType] = useState<"dynamic" | "static">("dynamic");
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [columnsError, setColumnsError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,6 +70,53 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
     }
     setSortKey(column);
     setSortDirection("asc");
+  };
+
+  const getErrorMessage = (error: unknown) => {
+    const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
+    return maybeError.response?.data?.detail ?? maybeError.message ?? "Request failed";
+  };
+
+  const handleAddCalculatedColumn = async () => {
+    if (!datasetId || submitting) return;
+    const name = columnName.trim();
+    const formula = columnFormula.trim();
+    if (!name || !formula) {
+      setColumnsError("Name and formula are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    setColumnsError(null);
+    try {
+      await createCalculatedColumn(datasetId, {
+        name,
+        formula,
+        column_type: columnType,
+      });
+      setColumnName("");
+      setColumnFormula("");
+      setColumnType("dynamic");
+      onColumnsChanged();
+    } catch (error) {
+      setColumnsError(getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteCalculatedColumn = async (columnId: string) => {
+    if (!datasetId || deletingId) return;
+    setDeletingId(columnId);
+    setColumnsError(null);
+    try {
+      await deleteCalculatedColumn(datasetId, columnId);
+      onColumnsChanged();
+    } catch (error) {
+      setColumnsError(getErrorMessage(error));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) {
@@ -100,6 +158,67 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
         <button className="btn" style={{ width: 32, padding: 0 }} aria-label="Filter">
           <IconFilter size={14} />
         </button>
+      </div>
+
+      <div style={{ padding: 8, borderBottom: "1px solid var(--bd)", display: "grid", gap: 8 }}>
+        <div className="mono" style={{ color: "var(--tx1)", fontSize: 11 }}>Calculated columns</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {calculatedColumns.map((column) => (
+            <div
+              key={column.id}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 8px",
+                borderRadius: "var(--r6)",
+                border: "1px solid var(--bd2)",
+                background: "var(--bg2)",
+              }}
+            >
+              <span className="mono" style={{ fontSize: 11 }}>{column.name}</span>
+              <span className="mono" style={{ fontSize: 10, color: "var(--tx1)" }}>{column.column_type}</span>
+              <button
+                className="btn"
+                style={{ height: 20, padding: "0 6px" }}
+                onClick={() => void handleDeleteCalculatedColumn(column.id)}
+                disabled={deletingId === column.id}
+              >
+                {deletingId === column.id ? "..." : "×"}
+              </button>
+            </div>
+          ))}
+          {!calculatedColumns.length ? <span className="mono" style={{ color: "var(--tx1)", fontSize: 11 }}>None</span> : null}
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr auto auto", gap: 6 }}>
+            <input
+              value={columnName}
+              onChange={(event) => setColumnName(event.target.value)}
+              placeholder="Column name"
+              style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+            />
+            <input
+              value={columnFormula}
+              onChange={(event) => setColumnFormula(event.target.value)}
+              placeholder="Formula (e.g. price * quantity)"
+              style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+            />
+            <select
+              value={columnType}
+              onChange={(event) => setColumnType(event.target.value as "dynamic" | "static")}
+              style={{ height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 8px" }}
+            >
+              <option value="dynamic">dynamic</option>
+              <option value="static">static</option>
+            </select>
+            <button className="btn" onClick={() => void handleAddCalculatedColumn()} disabled={!datasetId || submitting}>
+              {submitting ? "Adding..." : "Add"}
+            </button>
+          </div>
+          {columnsError ? <div className="mono" style={{ color: "var(--er)", fontSize: 11 }}>{columnsError}</div> : null}
+        </div>
       </div>
 
       <div style={{ flex: 1, overflow: "auto" }}>

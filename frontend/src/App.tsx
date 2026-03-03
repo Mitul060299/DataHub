@@ -3,6 +3,7 @@ import { AppShell } from "./AppShell";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketplacePage } from "./pages/MarketplacePage";
+import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignupPage } from "./pages/SignupPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
@@ -12,6 +13,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<Navigate to="/workspace" replace />} />
         <Route path="home" element={<HomePage />} />

@@ -101,6 +101,25 @@ class DatasetChunkDB(Base):
     rows = Column(JSONB, nullable=False, default=list)
 
 
+class CalculatedColumnDB(Base):
+    __tablename__ = "calculated_columns"
+
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, ForeignKey("dataset_meta.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    formula = Column(Text, nullable=False)
+    column_type = Column(String, nullable=False, default="dynamic")
+    cached_value = Column(Text, nullable=True)
+    display_name = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_calculated_columns_dataset", "dataset_id"),
+        Index("uq_calculated_columns_dataset_name", "dataset_id", "name", unique=True),
+    )
+
+
 class ImportTableDB(Base):
     __tablename__ = "import_tables"
     id = Column(String, primary_key=True)
@@ -307,6 +326,59 @@ class VizDashboardFilterDB(Base):
     applies_to_widgets = Column(ARRAY(Integer), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class DashboardV2DB(Base):
+    __tablename__ = "dashboards_v2"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    dataset_id = Column(String, nullable=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    layout = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_dashboards_v2_workspace", "workspace_id"),
+        Index("idx_dashboards_v2_user", "user_id"),
+    )
+
+
+class DashboardTileDB(Base):
+    __tablename__ = "dashboard_tiles"
+
+    id = Column(String, primary_key=True)
+    dashboard_id = Column(String, ForeignKey("dashboards_v2.id", ondelete="CASCADE"), nullable=False)
+    dataset_id = Column(String, nullable=True)
+    title = Column(String, nullable=False)
+    chart_type = Column(String, nullable=False)
+    query_spec = Column(JSONB, nullable=False, default=dict)
+    layout = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_dashboard_tiles_dashboard", "dashboard_id"),
+    )
+
+
+class DashboardPublishDB(Base):
+    __tablename__ = "dashboard_publishes"
+
+    id = Column(String, primary_key=True)
+    dashboard_id = Column(String, ForeignKey("dashboards_v2.id", ondelete="CASCADE"), nullable=False)
+    publish_token = Column(String, nullable=False, unique=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_dashboard_publishes_dashboard", "dashboard_id"),
+    )
 
 
 # ==================== CHAT & PIPELINE MODELS ====================

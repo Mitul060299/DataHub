@@ -12,7 +12,7 @@ _llm = ChatGroq(
     groq_api_key=os.getenv("GROQ_API_KEY"),
 )
 
-VALID_INTENTS = {"transform", "sql_query", "visualise", "join", "converse"}
+VALID_INTENTS = {"transform", "add_column", "sql_query", "visualise", "join", "converse"}
 
 
 async def intent_classifier(state: AgentState) -> dict:

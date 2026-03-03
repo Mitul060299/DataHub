@@ -3,11 +3,11 @@ import uuid
 from ..state import AgentState, ExecutionResult
 from ....db import SessionLocal
 from ....models_db import DatasetMetaDB
+from ...calculated_columns_service import CalculatedColumnsService
+from ...dashboards_v2_service import DashboardsV2Service
 
 
 async def execute_step(state: AgentState) -> dict:
-    from ...pipeline_engine import PipelineEngine
-
     idx = state["current_step_index"]
     plan = state["plan"]
 
@@ -25,6 +25,106 @@ async def execute_step(state: AgentState) -> dict:
         operation = str(step.get("operation") or "transform")
         parameters = step.get("parameters") if isinstance(step.get("parameters"), dict) else {}
         step_sql = str(parameters.get("sql") or "").strip()
+
+        if operation in {"add_column", "create_column"} or state.get("intent") == "add_column":
+            column_name = str(parameters.get("column_name") or parameters.get("name") or "").strip()
+            formula = str(parameters.get("formula") or "").strip()
+            column_type = str(parameters.get("column_type") or "dynamic").strip().lower()
+            display_name = parameters.get("display_name")
+
+            if not column_name:
+                raise ValueError("Column name is required for add_column")
+            if not formula:
+                raise ValueError("Formula is required for add_column")
+
+            created = CalculatedColumnsService.create_column(
+                dataset_id=state["dataset_id"],
+                name=column_name,
+                formula=formula,
+                column_type=column_type,
+                display_name=str(display_name) if isinstance(display_name, str) else None,
+            )
+
+            execution_result: ExecutionResult = {
+                "step_number": step["step_number"],
+                "operation": "add_column",
+                "success": True,
+                "rows_affected": None,
+                "run_id": None,
+                "sql": formula,
+                "error": None,
+                "column_added": {
+                    "id": created.id,
+                    "name": created.name,
+                    "formula": created.formula,
+                    "column_type": created.column_type,
+                },
+            }
+            return {
+                "execution_results": [*state.get("execution_results", []), execution_result],
+                "current_step_index": idx + 1,
+                "retry_count": 0,
+                "error": None,
+            }
+
+        if operation in {"create_chart", "visualise"} or state.get("intent") == "visualise":
+            dashboard_id = str(parameters.get("dashboard_id") or "").strip()
+            title = str(parameters.get("title") or step.get("description") or "AI chart").strip()
+            chart_type = str(parameters.get("chart_type") or "bar").strip().lower()
+            query_spec = parameters.get("query_spec") if isinstance(parameters.get("query_spec"), dict) else {}
+            layout = parameters.get("layout") if isinstance(parameters.get("layout"), dict) else {}
+
+            user_id = dataset.user_id or "agent"
+            workspace_id = dataset.workspace_id or "default"
+
+            if not dashboard_id:
+                existing = DashboardsV2Service.list_dashboards(user_id=user_id, workspace_id=workspace_id)
+                if existing:
+                    dashboard_id = existing[0].id
+                else:
+                    created_dashboard = DashboardsV2Service.create_dashboard(
+                        user_id=user_id,
+                        workspace_id=workspace_id,
+                        dataset_id=state["dataset_id"],
+                        name="AI Dashboard",
+                        description="Auto-created by agent",
+                        layout={},
+                    )
+                    dashboard_id = created_dashboard.id
+
+            tile = DashboardsV2Service.add_tile(
+                user_id=user_id,
+                dashboard_id=dashboard_id,
+                dataset_id=state["dataset_id"],
+                title=title,
+                chart_type=chart_type,
+                query_spec=query_spec,
+                layout=layout,
+            )
+
+            execution_result = {
+                "step_number": step["step_number"],
+                "operation": "create_chart",
+                "success": True,
+                "rows_affected": None,
+                "run_id": None,
+                "sql": None,
+                "error": None,
+                "tile_created": {
+                    "id": tile.id,
+                    "dashboard_id": tile.dashboard_id,
+                    "title": tile.title,
+                    "chart_type": tile.chart_type,
+                },
+            }
+            return {
+                "execution_results": [*state.get("execution_results", []), execution_result],
+                "current_step_index": idx + 1,
+                "retry_count": 0,
+                "error": None,
+            }
+
+        from ...pipeline_engine import PipelineEngine
 
         engine = PipelineEngine(
             db=db,

@@ -1,4 +1,4 @@
-from typing import Annotated, Optional, TypedDict
+from typing import Annotated, NotRequired, Optional, TypedDict
 
 from langgraph.graph.message import add_messages
 
@@ -8,6 +8,7 @@ class PlanStep(TypedDict):
     operation: str
     description: str
     parameters: dict
+    sql: NotRequired[str]
     template_id: Optional[str]
     estimated_rows: str
     reversible: bool
@@ -21,6 +22,8 @@ class ExecutionResult(TypedDict):
     run_id: Optional[str]
     sql: Optional[str]
     error: Optional[str]
+    column_added: NotRequired[dict]
+    tile_created: NotRequired[dict]
 
 
 class AgentState(TypedDict):
@@ -31,6 +34,8 @@ class AgentState(TypedDict):
     stats: dict
     sample_rows: list
     available_templates: list[dict]
+    calculated_columns: list[dict]
+    dashboards: list[dict]
 
     pipeline_steps: list[dict]
 

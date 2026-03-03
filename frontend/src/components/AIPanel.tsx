@@ -22,9 +22,10 @@ interface AIPanelProps {
   workspaceId: string;
   projectId: string;
   onStepApplied: () => void;
+  onDatasetMutated?: () => void;
 }
 
-export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPanelProps) {
+export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onDatasetMutated }: AIPanelProps) {
   const { addStep, steps } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -73,6 +74,14 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied }: AIPa
             content: `Error: ${errorText}`,
           },
         ]);
+        break;
+      }
+      case "column_added": {
+        onDatasetMutated?.();
+        break;
+      }
+      case "tile_created": {
+        window.dispatchEvent(new CustomEvent("datahub:dashboard:refresh"));
         break;
       }
       default:

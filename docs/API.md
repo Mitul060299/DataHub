@@ -44,6 +44,87 @@
 - POST /templates/dashboards/{template_id}/instantiate
 - POST /governance/audit
 
+## Pipeline Workflows (Generic Reusable Workflows)
+- POST /api/pipelines
+- GET /api/pipelines
+- GET /api/pipelines/{pipeline_id}
+- PATCH /api/pipelines/{pipeline_id}
+- POST /api/pipelines/{pipeline_id}/publish
+- POST /api/pipelines/{pipeline_id}/clone
+- POST /api/pipelines/{pipeline_id}/run
+- GET /api/pipelines/{pipeline_id}/runs
+- GET /api/pipelines/runs/{run_id}
+- GET /api/pipelines/runs/{run_id}/artifact?preview_limit=100
+
+### Create Pipeline Workflow (Example)
+```json
+{
+	"name": "Generic Multi-Dataset Workflow",
+	"description": "Reusable configurable transformation flow",
+	"workspace_id": "default",
+	"is_public": false,
+	"execution_config": {
+		"default_parameters": {
+			"period": "2026-02",
+			"variance_threshold": 0.01
+		}
+	},
+	"steps": [
+		{
+			"id": "step-1",
+			"action_type": "transform",
+			"description": "Join source relations and compute variance",
+			"sql": "SELECT a.key, a.amount - b.amount AS variance FROM dataset a LEFT JOIN ref_data b ON a.key = b.key",
+			"parameters": {
+				"dataset_bindings": {
+					"ref_data": "{{reference_dataset_id}}"
+				}
+			}
+		}
+	]
+}
+```
+
+### Run Pipeline Workflow with Runtime Parameters (Example)
+```json
+{
+	"input_dataset_id": "primary-dataset-id",
+	"session_id": "optional-session-id",
+	"triggered_by": "manual",
+	"runtime_parameters": {
+		"period": "2026-03",
+		"reference_dataset_id": "secondary-dataset-id",
+		"dataset_bindings": {
+			"ref_data": "secondary-dataset-id",
+			"coa_data": "third-dataset-id"
+		}
+	}
+}
+```
+
+### Runtime Parameter Notes
+- `execution_config.default_parameters` are pipeline defaults.
+- `runtime_parameters` override defaults per run.
+- `dataset_bindings` maps SQL relation aliases (for example `ref_data`) to dataset IDs.
+- String tokens like `"{{some_param}}"` in step bindings resolve from `runtime_parameters`.
+
+### Clone Pipeline Workflow (Example)
+```json
+{
+	"name": "Generic Multi-Dataset Workflow (copy)",
+	"description": "Optional cloned variant",
+	"workspace_id": "default"
+}
+```
+
+### Run Artifact Package
+- `GET /api/pipelines/runs/{run_id}/artifact` returns a standardized package:
+	- run metadata
+	- immutable pipeline snapshot
+	- resolved runtime parameters
+	- step results + execution log
+	- output preview rows and columns
+
 ## 🗑️ Deprecated Endpoints (Removed in v0.2.0)
 - ~~POST /dashboards~~ → Use `POST /visualizations/dashboards` instead
 - ~~GET /dashboards~~ → Use `GET /visualizations/dashboards` instead

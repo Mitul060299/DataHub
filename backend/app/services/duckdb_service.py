@@ -125,6 +125,59 @@ class DuckDBService:
             except Exception:
                 pass
 
+    @classmethod
+    def transform_named_relations(
+        cls,
+        relation_rows: dict[str, list[dict[str, Any]]],
+        sql: str,
+        output_relation: str = "dataset",
+    ) -> list[dict[str, Any]]:
+        connection = cls._ensure_db()
+        relation_rows = relation_rows or {}
+        table_names = [name for name in relation_rows.keys() if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name or "")]
+        if output_relation not in table_names:
+            table_names.append(output_relation)
+
+        try:
+            for name in table_names:
+                connection.execute(f"DROP TABLE IF EXISTS {name}")
+
+            for name in table_names:
+                rows = relation_rows.get(name) or []
+                frame = pd.DataFrame(rows)
+                source_name = f"{name}_source"
+                connection.register(source_name, frame)
+                try:
+                    connection.execute(f"CREATE TEMP TABLE {name} AS SELECT * FROM {source_name}")
+                finally:
+                    try:
+                        connection.unregister(source_name)
+                    except Exception:
+                        pass
+
+            normalized_sql = cls._normalize_dataset_sql(sql)
+            statements = cls._split_sql_statements(normalized_sql)
+            if not statements:
+                return cls._execute(connection, f"SELECT * FROM {output_relation}")
+
+            last_result: list[dict[str, Any]] | None = None
+            for statement in statements:
+                if cls._is_select_statement(statement):
+                    last_result = cls._execute(connection, statement)
+                else:
+                    connection.execute(statement)
+
+            if last_result is not None:
+                return last_result
+
+            return cls._execute(connection, f"SELECT * FROM {output_relation}")
+        finally:
+            for name in table_names:
+                try:
+                    connection.execute(f"DROP TABLE IF EXISTS {name}")
+                except Exception:
+                    pass
+
     @staticmethod
     def _inject_path(query: str, file_path: str) -> str:
         pattern = re.compile(r"\bfrom\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)

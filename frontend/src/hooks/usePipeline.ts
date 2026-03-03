@@ -18,6 +18,57 @@ export type ExecuteTransformationResponse = {
   };
 };
 
+export type PipelineWorkflowStep = {
+  id?: string;
+  action_type?: string;
+  description?: string;
+  sql?: string;
+  query?: string;
+  parameters?: Record<string, unknown>;
+};
+
+export type PipelineWorkflowCreatePayload = {
+  name: string;
+  steps: PipelineWorkflowStep[];
+  description?: string;
+  workspace_id?: string;
+  is_public?: boolean;
+  execution_config?: {
+    default_parameters?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+};
+
+export type PipelineWorkflowRunPayload = {
+  input_dataset_id: string;
+  session_id?: string;
+  runtime_parameters?: Record<string, unknown>;
+  triggered_by?: string;
+};
+
+export type PipelineRunArtifact = {
+  run: {
+    id: string;
+    pipeline_id: string;
+    status: string;
+    triggered_by: string;
+    input_dataset_id?: string | null;
+    output_dataset_id?: string | null;
+    started_at?: string | null;
+    completed_at?: string | null;
+  };
+  pipeline_snapshot: Record<string, unknown>;
+  runtime_parameters: Record<string, unknown>;
+  step_results: Record<string, unknown>;
+  execution_log: Array<Record<string, unknown>>;
+  metrics: Record<string, unknown>;
+  output: {
+    row_count: number;
+    columns: string[];
+    preview_rows: Record<string, unknown>[];
+  };
+};
+
 export function usePipeline() {
   const run = async (pipelineId: string) => {
     const response = await api.post(`/pipelines/${pipelineId}/run`);
@@ -65,5 +116,98 @@ export function usePipeline() {
     return response.data;
   };
 
-  return { run, schedule, exportPipeline, executeTransformation, undoLastTransformation };
+  const createPipelineWorkflow = async (payload: PipelineWorkflowCreatePayload) => {
+    const response = await api.post("/api/pipelines", {
+      name: payload.name,
+      steps: payload.steps,
+      description: payload.description,
+      workspace_id: payload.workspace_id ?? "default",
+      is_public: payload.is_public ?? false,
+      execution_config: payload.execution_config ?? {},
+    });
+    return response.data as {
+      success: boolean;
+      data: {
+        id: string;
+        name: string;
+        status: string;
+        version: number;
+        steps_count: number;
+      };
+    };
+  };
+
+  const updatePipelineWorkflow = async (
+    pipelineId: string,
+    payload: {
+      name?: string;
+      description?: string;
+      steps?: PipelineWorkflowStep[];
+      execution_config?: Record<string, unknown>;
+    },
+  ) => {
+    const response = await api.patch(`/api/pipelines/${pipelineId}`, payload);
+    return response.data as {
+      success: boolean;
+      data: {
+        id: string;
+        version: number;
+        updated: boolean;
+      };
+    };
+  };
+
+  const runPipelineWorkflow = async (pipelineId: string, payload: PipelineWorkflowRunPayload) => {
+    const response = await api.post(`/api/pipelines/${pipelineId}/run`, {
+      input_dataset_id: payload.input_dataset_id,
+      session_id: payload.session_id,
+      runtime_parameters: payload.runtime_parameters ?? {},
+      triggered_by: payload.triggered_by ?? "manual",
+    });
+    return response.data;
+  };
+
+  const clonePipelineWorkflow = async (
+    pipelineId: string,
+    payload?: { name?: string; description?: string; workspace_id?: string },
+  ) => {
+    const response = await api.post(`/api/pipelines/${pipelineId}/clone`, {
+      name: payload?.name,
+      description: payload?.description,
+      workspace_id: payload?.workspace_id,
+    });
+    return response.data as {
+      success: boolean;
+      data: {
+        id: string;
+        name: string;
+        status: string;
+        version: number;
+        parent_pipeline_id?: string | null;
+      };
+    };
+  };
+
+  const getPipelineRunArtifact = async (runId: string, previewLimit = 100) => {
+    const response = await api.get(`/api/pipelines/runs/${runId}/artifact`, {
+      params: { preview_limit: previewLimit },
+    });
+    return response.data as {
+      success: boolean;
+      data: PipelineRunArtifact;
+    };
+  };
+
+  return {
+    run,
+    schedule,
+    exportPipeline,
+    executeTransformation,
+    undoLastTransformation,
+    createPipelineWorkflow,
+    updatePipelineWorkflow,
+    runPipelineWorkflow,
+    clonePipelineWorkflow,
+    getPipelineRunArtifact,
+  };
 }

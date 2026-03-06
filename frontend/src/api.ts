@@ -113,6 +113,30 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const detail = String(error?.response?.data?.detail ?? "");
+    const lower = detail.toLowerCase();
+    const isPlanError = status === 403 && (
+      lower.includes("requires") ||
+      lower.includes("plan") ||
+      lower.includes("limit") ||
+      lower.includes("storage")
+    );
+
+    if (isPlanError && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("datahub:plan-upgrade-required", {
+        detail: {
+          message: detail || "Your current plan does not include this feature.",
+        },
+      }));
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Export the api instance for direct use in components
 export { api };
 
@@ -192,6 +216,11 @@ export async function fetchCurrentUser(workspaceId?: string) {
       aiMessagesUsed: number;
     };
   };
+}
+
+export async function updateCurrentUserPlan(plan: "Free" | "Professional" | "Team" | "Business" | "Enterprise") {
+  const response = await api.post("/users/me/plan", { plan });
+  return response.data as { success: boolean; plan: string; message?: string };
 }
 
 export async function chatWithAgent(
@@ -318,6 +347,16 @@ export async function submitAgentFeedback(
     notes
   });
   return response.data;
+}
+
+export async function submitFeedbackForm(payload: {
+  name: string;
+  email: string;
+  subject?: string;
+  message: string;
+}) {
+  const response = await api.post("/feedback", payload);
+  return response.data as { success: boolean; id?: string; message?: string };
 }
 
 export async function saveRecipe(datasetId: string, steps: any[]) {

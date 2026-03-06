@@ -64,3 +64,10 @@ export const IconTeam = makeIcon(<><circle cx="8" cy="9" r="3" /><circle cx="16"
 export const IconClock = makeIcon(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>);
 export const IconCopy = makeIcon(<><rect x="9" y="9" width="11" height="11" rx="2" /><rect x="4" y="4" width="11" height="11" rx="2" /></>);
 export const IconZap = makeIcon(<path d="m13 2-9 12h6l-1 8 9-12h-6z" />);
+export const IconCreditCard = makeIcon(<><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /><path d="M7 14h3" /></>);
+export const IconLogOut = makeIcon(<><path d="M14 16l4-4-4-4" /><path d="M18 12H9" /><path d="M10 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4" /></>);
+export const IconMessageCircle = makeIcon(<><path d="M21 12a8.5 8.5 0 0 1-8.5 8.5A8.2 8.2 0 0 1 8 19.2L3 21l1.7-4.5A8.2 8.2 0 0 1 3.5 12 8.5 8.5 0 1 1 21 12Z" /></>);
+export const IconFileText = makeIcon(<><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4" /><path d="M9.5 12h7M9.5 16h7" /></>);
+export const IconGrid = makeIcon(<><rect x="4" y="4" width="7" height="7" rx="1.2" /><rect x="13" y="4" width="7" height="7" rx="1.2" /><rect x="4" y="13" width="7" height="7" rx="1.2" /><rect x="13" y="13" width="7" height="7" rx="1.2" /></>);
+export const IconShield = makeIcon(<><path d="M12 3 5 6v6c0 4.2 2.6 7.3 7 9 4.4-1.7 7-4.8 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></>);
+export const IconSend = makeIcon(<><path d="M3 12 21 4 15 20l-3.6-5.3L3 12Z" /><path d="M11.4 14.7 21 4" /></>);

@@ -1,23 +1,643 @@
+import { type CSSProperties, type FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  IconBrain,
+  IconCheck,
+  IconDatabase,
+  IconFileText,
+  IconGrid,
+  IconMessageCircle,
+  IconSend,
+  IconShare,
+  IconShield,
+  IconTeam,
+  IconUpload,
+} from "../components/Icons";
+import { useAuth } from "../contexts/AuthContext";
+import { submitFeedbackForm } from "../api";
+import "./HomePage.css";
+
+const howSteps = [
+  {
+    step: "01",
+    color: "#22c55e",
+    icon: <IconUpload size={16} color="#22c55e" />,
+    title: "Upload your data",
+    description:
+      "CSV, Excel, JSON, Parquet — or connect directly to PostgreSQL, Snowflake, BigQuery, or Redshift.",
+  },
+  {
+    step: "02",
+    color: "#818cf8",
+    icon: <IconBrain size={16} color="#818cf8" />,
+    title: "Ask in plain English",
+    description:
+      '"Remove duplicates", "join with customers", "show revenue by region as a bar chart" — the agent understands.',
+  },
+  {
+    step: "03",
+    color: "#eab308",
+    icon: <IconCheck size={16} color="#eab308" />,
+    title: "Review the plan",
+    description:
+      "The agent shows exactly what it will do before executing. Approve, edit, or ask it to try again.",
+  },
+  {
+    step: "04",
+    color: "#38bdf8",
+    icon: <IconShare size={16} color="#38bdf8" />,
+    title: "Share & publish",
+    description:
+      "Publish dashboards with one link. Every step recorded and replayable — full audit trail included.",
+  },
+];
+
+const features = [
+  {
+    title: "AI Agent",
+    color: "#818cf8",
+    icon: <IconMessageCircle size={18} color="#818cf8" />,
+    description:
+      "Understands your intent, builds a plan, shows it to you, then executes. Retries automatically on failure.",
+  },
+  {
+    title: "Recorded Pipelines",
+    color: "#22c55e",
+    icon: <IconFileText size={18} color="#22c55e" />,
+    description:
+      "Every transformation captured as a replayable step. Edit, re-run, or hand off — always transparent.",
+  },
+  {
+    title: "Cross-Dataset Dashboards",
+    color: "#38bdf8",
+    icon: <IconGrid size={18} color="#38bdf8" />,
+    description:
+      "Build Power BI-style dashboards across multiple datasets. Publish with one click via a shareable public link.",
+  },
+  {
+    title: "Any Data Source",
+    color: "#f59e0b",
+    icon: <IconDatabase size={18} color="#f59e0b" />,
+    description:
+      "CSV, Excel, JSON, Parquet. Direct connections to PostgreSQL, MySQL, Snowflake, BigQuery, Redshift.",
+  },
+  {
+    title: "Team Collaboration",
+    color: "#a78bfa",
+    icon: <IconTeam size={18} color="#a78bfa" />,
+    description:
+      "Share workspaces, co-edit pipelines, assign roles. Version history shows who changed what and when.",
+  },
+  {
+    title: "Audit & Governance",
+    color: "#f87171",
+    icon: <IconShield size={18} color="#f87171" />,
+    description:
+      "Full data lineage, approval workflows, audit logs. SOC2-ready controls for compliance-heavy industries.",
+  },
+];
+
+type PricingPlan = {
+  tier: string;
+  color: string;
+  price: string;
+  period: string;
+  features: string[];
+  buttonLabel: string;
+  buttonStyle: "ghost" | "blue" | "primary" | "amber" | "dark";
+  action: "trial" | "contact";
+  popular?: boolean;
+};
+
+const plans: PricingPlan[] = [
+  {
+    tier: "Free",
+    color: "#71717a",
+    price: "₹0",
+    period: "forever · 1 user",
+    features: ["50 AI messages/month", "100 MB storage", "CSV & Excel only", "2 projects"],
+    buttonLabel: "Get started",
+    buttonStyle: "ghost",
+    action: "trial",
+  },
+  {
+    tier: "Professional",
+    color: "#3b82f6",
+    price: "₹3,299",
+    period: "/user/month",
+    features: ["500 AI messages/month", "10 GB storage", "All file formats", "4 DB connections"],
+    buttonLabel: "Start free trial",
+    buttonStyle: "blue",
+    action: "trial",
+  },
+  {
+    tier: "Team",
+    color: "#5B6AF0",
+    price: "₹6,199",
+    period: "/user/month",
+    features: ["Unlimited AI messages", "100 GB shared pool", "Snowflake + BigQuery", "Team collaboration"],
+    buttonLabel: "Start free trial",
+    buttonStyle: "primary",
+    action: "trial",
+    popular: true,
+  },
+  {
+    tier: "Business",
+    color: "#eab308",
+    price: "₹8,299",
+    period: "/user/month",
+    features: ["SSO / SAML", "Data lineage tracking", "Advanced RBAC", "500 GB storage"],
+    buttonLabel: "Start free trial",
+    buttonStyle: "amber",
+    action: "trial",
+  },
+  {
+    tier: "Enterprise",
+    color: "#ef4444",
+    price: "Custom",
+    period: "contact us",
+    features: ["On-premise deploy", "White-label option", "24/7 dedicated support", "Custom SLA"],
+    buttonLabel: "Contact sales",
+    buttonStyle: "dark",
+    action: "contact",
+  },
+];
+
+const miniRows: Array<[string, string, string, string, string, string]> = [
+  ["North", "₹1,24,000", "Jan 24", "✓", "#22c55e", "#818cf8"],
+  ["South", "₹98,500", "Jan 24", "✓", "#22c55e", "#818cf8"],
+  ["West", "—", "Jan 24", "null", "#f87171", "#f87171"],
+  ["East", "₹2,01,300", "Jan 24", "✓", "#22c55e", "#818cf8"],
+];
+
+const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
+
 export function HomePage() {
+  const navigate = useNavigate();
+  const { session } = useAuth();
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successName, setSuccessName] = useState<string | null>(null);
+
+  const handleGetStarted = () => {
+    navigate(session ? "/workspace" : "/signup");
+  };
+
+  const handleScrollHow = () => {
+    const section = document.getElementById("how");
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handlePlanCta = (action: "trial" | "contact") => {
+    if (action === "contact") {
+      window.location.href = "mailto:hello@datahub.org.in";
+      return;
+    }
+    navigate(session ? "/workspace" : "/signup");
+  };
+
+  const handleFeedbackSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setValidationError(null);
+    setRequestError(null);
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedMessage = message.trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedMessage) {
+      setValidationError("Please enter your name, email, and message.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitFeedbackForm({
+        name: trimmedName,
+        email: trimmedEmail,
+        subject: subject.trim(),
+        message: trimmedMessage,
+      });
+      setSuccessName(trimmedName);
+      setName("");
+      setEmail("");
+      setSubject("");
+      setMessage("");
+    } catch {
+      setRequestError("Something went wrong. Email us directly at hello@datahub.org.in");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <main className="app-page" style={{ padding: 20 }}>
-      <section className="panel" style={{ padding: 18, marginBottom: 14 }}>
-        <h1 style={{ fontSize: 24, marginBottom: 8 }}>DataHub</h1>
-        <p style={{ color: "var(--tx1)", maxWidth: 760 }}>
-          AI-assisted data operations platform for importing, cleaning, transforming, and scheduling pipelines with team collaboration.
-        </p>
+    <main className="app-page home-page">
+      <section className="home-section home-hero-section">
+        <div className="home-hero-overlay" />
+        <div className="home-inner home-hero-grid">
+          <div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "7px",
+                background: "rgba(91,106,240,0.1)",
+                border: "1px solid rgba(91,106,240,0.25)",
+                borderRadius: "20px",
+                padding: "4px 12px 4px 8px",
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#818cf8",
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                marginBottom: "22px",
+              }}
+            >
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#5B6AF0",
+                  animation: "blink 2s infinite",
+                }}
+              />
+              Now in Beta — Join early access
+            </div>
+
+            <h1 className="hero-title">
+              Your data,
+              <br />
+              <span className="hero-title-gradient">understood</span>
+              <br />
+              by AI
+            </h1>
+
+            <p className="hero-subtitle">
+              Talk to your data in plain English. DataHub&apos;s AI agent cleans, transforms, and visualises — recording every
+              step so your work is always auditable, repeatable, and shareable.
+            </p>
+
+            <div className="hero-actions">
+              <button type="button" className="hero-primary-btn" onClick={handleGetStarted}>
+                ▶ Get started free
+              </button>
+              <button type="button" className="hero-ghost-btn" onClick={handleScrollHow}>
+                See how it works ↓
+              </button>
+            </div>
+          </div>
+
+          <div className="hero-window-wrap">
+            <div
+              style={{
+                background: "#111115",
+                border: "1px solid #2e2e3a",
+                borderRadius: "14px",
+                overflow: "hidden",
+                boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div
+                style={{
+                  height: "36px",
+                  background: "#18181e",
+                  borderBottom: "1px solid #22222a",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 14px",
+                  gap: "6px",
+                }}
+              >
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57" }} />
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
+                <span
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    fontSize: "11px",
+                    color: "#44445a",
+                    fontFamily: "'Geist Mono', monospace",
+                  }}
+                >
+                  datahub.org.in — workspace
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", height: "260px" }}>
+                <div
+                  style={{
+                    background: "#0d0d11",
+                    borderRight: "1px solid #22222a",
+                    padding: "10px 0",
+                    fontSize: "11px",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "8px 12px 3px",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: "#44445a",
+                    }}
+                  >
+                    DATA
+                  </div>
+                  <div style={{ padding: "6px 12px", color: "#818cf8", background: "rgba(91,106,240,0.12)" }}>sales_q4.csv</div>
+                  <div style={{ padding: "6px 12px", color: "#44445a" }}>customers.csv</div>
+                  <div
+                    style={{
+                      padding: "8px 12px 3px",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: "#44445a",
+                      marginTop: "6px",
+                    }}
+                  >
+                    PIPELINE
+                  </div>
+                  <div style={{ padding: "6px 12px", color: "#44445a" }}>Source</div>
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      color: "#818cf8",
+                      background: "rgba(91,106,240,0.12)",
+                      borderLeft: "2px solid #5B6AF0",
+                    }}
+                  >
+                    Deduplicate
+                  </div>
+                  <div style={{ padding: "6px 12px", color: "#44445a" }}>Group by</div>
+                </div>
+
+                <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "8px", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      background: "#18181e",
+                      border: "1px solid #22222a",
+                      borderRadius: "6px",
+                      overflow: "hidden",
+                      flex: 1,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4,1fr)",
+                        background: "#0d0d11",
+                        borderBottom: "1px solid #22222a",
+                      }}
+                    >
+                      {["Region", "Revenue", "Date", "Status"].map((header) => (
+                        <div
+                          key={header}
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "9px",
+                            fontWeight: 700,
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                            color: "#44445a",
+                            borderRight: "1px solid #22222a",
+                          }}
+                        >
+                          {header}
+                        </div>
+                      ))}
+                    </div>
+
+                    {miniRows.map(([region, revenue, date, status, statusColor, regionColor], index) => (
+                      <div key={`${region}-${index}`} style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", borderBottom: "1px solid #22222a" }}>
+                        <div style={{ padding: "5px 8px", fontSize: "10px", color: regionColor, fontFamily: "'Geist Mono', monospace" }}>{region}</div>
+                        <div style={{ padding: "5px 8px", fontSize: "10px", color: "#8888a0", fontFamily: "'Geist Mono', monospace" }}>{revenue}</div>
+                        <div style={{ padding: "5px 8px", fontSize: "10px", color: "#8888a0", fontFamily: "'Geist Mono', monospace" }}>{date}</div>
+                        <div style={{ padding: "5px 8px", fontSize: "10px", color: statusColor, fontFamily: "'Geist Mono', monospace" }}>{status}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      background: "rgba(91,106,240,0.1)",
+                      border: "1px solid rgba(91,106,240,0.2)",
+                      borderRadius: "8px",
+                      padding: "8px 10px",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "7px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "#5B6AF0",
+                        marginTop: 4,
+                        flexShrink: 0,
+                        animation: "blink 1.5s infinite",
+                      }}
+                    />
+                    <div style={{ fontSize: "10px", color: "#818cf8", lineHeight: 1.5 }}>
+                      <strong style={{ color: "#e8e8f0" }}>AI Agent:</strong> Found 3 duplicates and 1 null in Revenue. Removed duplicates —
+                      want me to fill the null with the regional average?
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="hero-status-badge hero-status-cleaned">
+              <span className="hero-badge-dot hero-badge-dot-green" />
+              847 rows cleaned
+            </div>
+            <div className="hero-status-badge hero-status-recorded">
+              <span className="hero-badge-dot hero-badge-dot-indigo" />
+              3 steps recorded · replayable
+            </div>
+          </div>
+        </div>
       </section>
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-        {[
-          ["Features", "Dataset import, transformations, AI workflow suggestions, and pipeline scheduling."],
-          ["Pricing", "Free, Team, and Enterprise plans with collaboration and governance controls."],
-          ["Why DataHub", "Move from raw sources to production-ready datasets in a single workspace."],
-        ].map(([title, body]) => (
-          <article key={title} className="panel" style={{ padding: 14 }}>
-            <h3 style={{ marginBottom: 8 }}>{title}</h3>
-            <p style={{ color: "var(--tx1)" }}>{body}</p>
-          </article>
-        ))}
+
+      <section id="how" className="home-section">
+        <div className="home-inner">
+          <p className="section-label">How it works</p>
+          <h2 className="section-title">From messy data to decisions in four steps</h2>
+          <p className="section-subtitle">
+            No SQL. No Python. No BI team needed. Just describe what you want — the agent handles the rest, with a full audit trail.
+          </p>
+
+          <div className="how-grid">
+            {howSteps.map((step) => (
+              <article key={step.step} className="how-card">
+                <p className="how-step">{step.step}</p>
+                <div className="how-icon-wrap" style={{ background: `${step.color}1A` }}>
+                  {step.icon}
+                </div>
+                <h3 className="how-title">{step.title}</h3>
+                <p className="how-description">{step.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="home-inner">
+          <p className="section-label">Features</p>
+          <h2 className="section-title">Everything your data team needs</h2>
+          <p className="section-subtitle">
+            Built for analysts who want the power of a data engineer without writing a single line of code.
+          </p>
+
+          <div className="features-grid">
+            {features.map((feature) => (
+              <article key={feature.title} className="feature-card" style={{ "--feature-color": feature.color } as CSSProperties}>
+                <div className="feature-icon-wrap" style={{ background: `${feature.color}1A` }}>
+                  {feature.icon}
+                </div>
+                <h3 className="feature-title">{feature.title}</h3>
+                <p className="feature-description">{feature.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="home-section">
+        <div className="home-inner">
+          <p className="section-label">Pricing</p>
+          <h2 className="section-title">Start free, scale when ready</h2>
+          <p className="section-subtitle">No credit card required. Upgrade when your team needs more.</p>
+
+          <div className="pricing-grid">
+            {plans.map((plan) => {
+              const buttonClass = [
+                "pricing-button",
+                plan.buttonStyle === "primary"
+                  ? "pricing-button-primary"
+                  : plan.buttonStyle === "blue"
+                    ? "pricing-button-blue"
+                    : plan.buttonStyle === "amber"
+                      ? "pricing-button-amber"
+                      : plan.buttonStyle === "dark"
+                        ? "pricing-button-dark"
+                        : "pricing-button-ghost",
+              ].join(" ");
+
+              return (
+                <article
+                  key={plan.tier}
+                  className={`pricing-card ${plan.tier === "Team" ? "pricing-card-team" : ""}`}
+                  style={{ "--plan-color": plan.color } as CSSProperties}
+                >
+                  {plan.popular ? <span className="pricing-popular">Popular</span> : null}
+                  <p className="pricing-tier">{plan.tier}</p>
+                  <p className="pricing-price">{plan.price}</p>
+                  <p className="pricing-period">{plan.period}</p>
+
+                  <ul className="pricing-features">
+                    {plan.features.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+
+                  {plan.action === "contact" ? (
+                    <a className={buttonClass} href="mailto:hello@datahub.org.in">
+                      {plan.buttonLabel}
+                    </a>
+                  ) : (
+                    <button type="button" className={buttonClass} onClick={() => handlePlanCta("trial")}>
+                      {plan.buttonLabel}
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="home-inner">
+          <div className="feedback-card">
+            <div>
+              <p className="section-label">We&apos;re listening</p>
+              <h2 className="feedback-title">Help us build the right thing</h2>
+              <p className="feedback-body">
+                DataHub is actively in development. Your feedback directly shapes what we build next — whether it&apos;s a missing feature,
+                a confusing flow, or something you&apos;d love to see.
+              </p>
+
+              <div className="feedback-tag-list">
+                {feedbackTags.map((tag) => (
+                  <span key={tag} className="feedback-tag">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              {successName ? (
+                <div className="feedback-success">Thanks {successName} — we&apos;ll read every word. 🙏</div>
+              ) : (
+                <form className="feedback-form" onSubmit={(event) => void handleFeedbackSubmit(event)}>
+                  <div className="feedback-row-two">
+                    <input
+                      className="feedback-input"
+                      placeholder="Name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                    <input
+                      className="feedback-input"
+                      placeholder="Email"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                    />
+                  </div>
+
+                  <input
+                    className="feedback-input"
+                    placeholder="Subject — e.g. 'Feature request: Notion connector'"
+                    value={subject}
+                    onChange={(event) => setSubject(event.target.value)}
+                  />
+
+                  <textarea
+                    className="feedback-textarea"
+                    placeholder="Tell us what's on your mind — the more detail the better..."
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                  />
+
+                  {validationError ? <p className="feedback-error">{validationError}</p> : null}
+                  {requestError ? <p className="feedback-error">{requestError}</p> : null}
+
+                  <button type="submit" className="feedback-submit" disabled={isSubmitting}>
+                    <IconSend size={14} />
+                    {isSubmitting ? "Sending..." : "Send feedback"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   );

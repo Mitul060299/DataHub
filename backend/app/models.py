@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Literal
 class DatasetPreview(BaseModel):
     dataset_id: str
     name: Optional[str] = None
+    file_format: Optional[str] = None
     columns: List[str]
     row_count: int
     sample_rows: List[Dict[str, Any]]
@@ -14,9 +15,30 @@ class DatasetPreview(BaseModel):
 class DatasetMeta(BaseModel):
     dataset_id: str
     name: Optional[str] = None
+    file_format: Optional[str] = None
     columns: List[str]
     row_count: int
     parent_id: Optional[str] = None
+
+
+class DatasetLineageNode(BaseModel):
+    dataset_id: str
+    name: Optional[str] = None
+    file_format: Optional[str] = None
+    source_type: Optional[str] = None
+    row_count: int
+    created_at: Optional[str] = None
+
+
+class DatasetLineageEdge(BaseModel):
+    from_dataset_id: str
+    to_dataset_id: str
+    relationship: str
+
+
+class DatasetLineageGraph(BaseModel):
+    nodes: List[DatasetLineageNode] = Field(default_factory=list)
+    edges: List[DatasetLineageEdge] = Field(default_factory=list)
 
 
 class DatasetPage(BaseModel):
@@ -196,7 +218,7 @@ class AuthToken(BaseModel):
 
 
 UserRole = Literal["admin", "editor", "viewer"]
-UserPlan = Literal["Free", "Professional", "Team", "Enterprise"]
+UserPlan = Literal["Free", "Professional", "Team", "Business", "Enterprise"]
 
 
 class DashboardWidget(BaseModel):

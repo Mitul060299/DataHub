@@ -14,9 +14,11 @@ import logging
 from ..db import get_db
 from ..security import get_current_role, require_role
 from ..services.file_parser import FileParserService
+from ..services.connectors import connector_registry
 from ..services.data_conversion import DataConversionService
 from ..services.object_storage import StorageService
 from ..services.storage_tiering import storage_tier_service
+from ..services.plan_guard import resolve_user_plan, enforce_file_constraints, enforce_connector_access
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, ImportTableDB, ImportConnectionDB
 from .datasets import save_dataset, get_dataset_from_db
 from ..config import settings
@@ -24,12 +26,6 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/import", tags=["import"])
-
-_PLAN_LIMITS = {
-    "free": 10 * 1024 * 1024,
-    "professional": 100 * 1024 * 1024,
-    "team": 1024 * 1024 * 1024,
-}
 
 
 def _format_size(bytes_count: int | None) -> str:
@@ -59,16 +55,30 @@ def _ensure_unique_table_name(db: Session, name: str) -> str:
     return current
 
 
+def _connector_type_map(db_type: str) -> str:
+    connector_map = {
+        "postgresql": "postgresql",
+        "mysql": "mysql",
+        "mssql": "mssql",
+        "mongodb": "mongodb",
+        "oracle": "oracle",
+        "snowflake": "snowflake",
+        "bigquery": "bigquery",
+        "redshift": "redshift",
+        "azure-sql": "azure-sql",
+    }
+    return connector_map.get(db_type, db_type)
+
+
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
     dataset_name: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
-    plan: str | None = Header(default=None, alias="X-Plan"),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
-    logger.info(f"Upload started: file={file.filename}, size={file.size}, plan={plan}, workspace={workspace_id}")
+    logger.info(f"Upload started: file={file.filename}, size={file.size}, workspace={workspace_id}")
     
     try:
         role = get_current_role(authorization)
@@ -90,14 +100,19 @@ async def upload_file(
 
     logger.info(f"File read successfully: {len(content)} bytes")
 
-    plan_key = (plan or "professional").lower()
-    max_size = _PLAN_LIMITS.get(plan_key, _PLAN_LIMITS["professional"])
-    if len(content) > max_size:
-        logger.warning(f"File size {len(content)} exceeds limit {max_size}")
-        raise HTTPException(
-            status_code=413,
-            detail=f"File size {_format_size(len(content))} exceeds {plan_key.capitalize()} plan limit of {_format_size(max_size)}",
-        )
+    try:
+        source_format = FileParserService.detect_file_format(file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_file_constraints(
+        plan=user_plan,
+        workspace_id=workspace_id or "default",
+        file_format=source_format,
+        upload_size_bytes=len(content),
+        db=db,
+    )
 
     try:
         logger.info(f"Parsing file: {file.filename}")
@@ -158,7 +173,7 @@ async def upload_file(
             meta.source_type = "file_upload"
             meta.storage_provider = settings.storage_provider
             meta.storage_path = storage_path
-            meta.file_format = "parquet"
+            meta.file_format = source_format
             meta.schema_json = schema
             meta.stats_json = stats
             meta.file_size_bytes = len(content)
@@ -195,6 +210,7 @@ async def upload_file(
             "storagePath": storage_path,
             "columns": len(df.columns),
             "fileSize": _format_size(len(content)),
+            "format": source_format,
         }
     except HTTPException:
         raise
@@ -208,32 +224,25 @@ async def upload_file(
 
 
 @router.post("/test-connection")
-async def test_connection(payload: dict) -> dict:
+async def test_connection(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
     """Test a database or storage connection before saving."""
-    from ..services.connectors import connector_registry
-    
+
     db_type = payload.get("type")
     if not db_type:
         raise HTTPException(status_code=400, detail="Database type is required")
-    
-    # Map UI connector names to backend connector names
-    connector_map = {
-        "postgresql": "postgresql",
-        "mysql": "mysql",
-        "mssql": "mssql",
-        "mongodb": "mongodb",
-        "oracle": "oracle",
-        "snowflake": "snowflake",
-        "bigquery": "bigquery",
-        "redshift": "redshift",
-        "azure-sql": "azure-sql",
-    }
-    
-    connector_name = connector_map.get(db_type, db_type)
+
+    connector_name = _connector_type_map(db_type)
     connector = connector_registry.get(connector_name)
     
     if not connector:
         raise HTTPException(status_code=400, detail=f"Unsupported connector type: {db_type}")
+
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_connector_access(user_plan, connector_name)
     
     # Check if connector has test_connection method
     if not hasattr(connector, "test_connection"):
@@ -269,15 +278,150 @@ async def test_connection(payload: dict) -> dict:
         return {"success": False, "error": str(e)}
 
 
-@router.post("/connect")
-async def connect_database(
+@router.post("/connector-import")
+async def connector_import(
     payload: dict,
+    authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     db_type = payload.get("type")
     if not db_type:
         raise HTTPException(status_code=400, detail="Database type is required")
+
+    connector_name = _connector_type_map(db_type)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_connector_access(user_plan, connector_name)
+    connector = connector_registry.get(connector_name)
+    if not connector:
+        raise HTTPException(status_code=400, detail=f"Unsupported connector type: {db_type}")
+
+    config_payload = payload.get("config") if isinstance(payload.get("config"), dict) else {}
+    config = {
+        **config_payload,
+        "host": payload.get("host", config_payload.get("host")),
+        "port": payload.get("port", config_payload.get("port")),
+        "database": payload.get("database", config_payload.get("database")),
+        "username": payload.get("username", config_payload.get("username")),
+        "password": payload.get("password", config_payload.get("password")),
+        "account": payload.get("account", config_payload.get("account")),
+        "warehouse": payload.get("warehouse", config_payload.get("warehouse")),
+        "schema": payload.get("schema", config_payload.get("schema")),
+        "project_id": payload.get("project_id", config_payload.get("project_id")),
+        "credentials_json": payload.get("credentials_json", config_payload.get("credentials_json")),
+        "query": payload.get("query", config_payload.get("query")),
+        "table": payload.get("table", config_payload.get("table")),
+        "dataset": payload.get("dataset", config_payload.get("dataset")),
+    }
+    config = {k: v for k, v in config.items() if v is not None and v != ""}
+
+    try:
+        df = connector.read(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Connector import failed: {str(exc)}") from exc
+
+    if df.empty or int(df.shape[0]) == 0:
+        raise HTTPException(status_code=400, detail="No data returned from connector")
+
+    df = df.astype(object).where(pd.notnull(df), None)
+    store_rows = int(df.shape[0]) <= settings.dataset_inline_max_rows
+    estimated_original_size = int(df.memory_usage(deep=True).sum())
+    enforce_file_constraints(
+        plan=user_plan,
+        workspace_id=workspace_id or "default",
+        file_format="parquet",
+        upload_size_bytes=max(estimated_original_size, 1),
+        db=db,
+    )
+    parquet_bytes, schema, _, stats, compression_ratio = DataConversionService.dataframe_to_parquet(
+        df,
+        original_size=max(estimated_original_size, 1),
+    )
+
+    resolved_dataset_name = (
+        (payload.get("dataset_name") or "").strip()
+        or (payload.get("name") or "").strip()
+        or f"{connector_name}_import"
+    )
+
+    dataset_id = save_dataset(
+        df,
+        db,
+        workspace_id=workspace_id,
+        store_rows=store_rows,
+        meta_extra={"name": resolved_dataset_name},
+    )
+
+    storage_name = f"{_sanitize_table_name(resolved_dataset_name)}.parquet"
+    initial_tier = storage_tier_service.assign_initial_tier(
+        row_count=int(df.shape[0]),
+    )
+    storage_path = StorageService.upload(
+        workspace_id,
+        dataset_id,
+        parquet_bytes,
+        storage_name,
+        storage_tier=initial_tier,
+    )
+
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if meta:
+        meta.name = resolved_dataset_name
+        meta.source_type = "connector_import"
+        meta.storage_provider = settings.storage_provider
+        meta.storage_path = storage_path
+        meta.file_format = connector_name
+        meta.schema_json = schema
+        meta.stats_json = stats
+        meta.file_size_bytes = None
+        meta.compressed_size_bytes = len(parquet_bytes)
+        meta.status = "ready"
+        meta.access_tier = initial_tier
+
+    table_name = _ensure_unique_table_name(db, _sanitize_table_name(resolved_dataset_name))
+    table_id = str(uuid.uuid4())
+    source_name = payload.get("table") or payload.get("query") or resolved_dataset_name
+    db.add(
+        ImportTableDB(
+            id=table_id,
+            name=table_name,
+            dataset_id=dataset_id,
+            workspace_id=workspace_id or "default",
+            source_type="connector",
+            source_name=str(source_name),
+            size_bytes=None,
+        )
+    )
+    db.commit()
+
+    return {
+        "success": True,
+        "datasetId": dataset_id,
+        "tableName": table_name,
+        "rowCount": int(df.shape[0]),
+        "tableCount": 1,
+        "columns": len(df.columns),
+        "compressionRatio": f"{compression_ratio:.1f}%",
+        "storagePath": storage_path,
+        "format": connector_name,
+    }
+
+
+@router.post("/connect")
+async def connect_database(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    db_type = payload.get("type")
+    if not db_type:
+        raise HTTPException(status_code=400, detail="Database type is required")
+
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_connector_access(user_plan, _connector_type_map(db_type))
 
     connection_id = str(uuid.uuid4())
     name = payload.get("name") or payload.get("database") or "Connection"

@@ -3,6 +3,7 @@ import { AppShell } from "./AppShell";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketplacePage } from "./pages/MarketplacePage";
+import { PricingPage } from "./pages/PricingPage";
 import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignupPage } from "./pages/SignupPage";
@@ -19,7 +20,10 @@ export function App() {
         <Route path="home" element={<HomePage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="pricing" element={<PricingPage />} />
+        <Route path="settings" element={<SettingsPage section="settings" />} />
+        <Route path="settings/profile" element={<SettingsPage section="profile" />} />
+        <Route path="settings/billing" element={<SettingsPage section="billing" />} />
       </Route>
       <Route path="*" element={<Navigate to="/workspace" replace />} />
     </Routes>

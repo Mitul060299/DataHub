@@ -17,20 +17,26 @@ from app.security import get_current_subject
 from app.models_db import ChatSessionDB, TransformationStepDB, PipelineV2DB, ChatSessionSnapshotDB
 from app.services.chat_engine import ChatEngine, EventType, ChatEvent
 from app.services.ai_operating_controls import get_ai_operating_controls
+from app.services.plan_guard import resolve_user_plan
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+def _resolve_chat_plan(db: DBSession, authorization: str | None) -> str:
+    return resolve_user_plan(db, authorization).lower()
 
 
 @router.post("/sessions")
 async def create_chat_session(
     dataset_id: str,
     initial_request: Optional[str] = None,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Initialize a new chat session for a dataset"""
     
-    user_plan = 'free'
+    user_plan = _resolve_chat_plan(db, authorization)
     engine = ChatEngine(db=db, user_id=current_user_id, workspace_id="default", user_plan=user_plan)
     
     try:
@@ -217,6 +223,7 @@ async def delete_chat_session(
 async def send_message_to_session(
     session_id: str,
     content: str,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
@@ -233,7 +240,7 @@ async def send_message_to_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    user_plan = 'free'
+    user_plan = _resolve_chat_plan(db, authorization)
     
     engine = ChatEngine(
         db=db,
@@ -428,6 +435,7 @@ async def update_session_data(
     session_id: str,
     new_dataset_id: str,
     new_dataset_name: str,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
@@ -441,7 +449,7 @@ async def update_session_data(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    user_plan = 'free'  # TODO: Get from user context
+    user_plan = _resolve_chat_plan(db, authorization)
     engine = ChatEngine(db=db, user_id=current_user_id, workspace_id="default", user_plan=user_plan)
     
     try:

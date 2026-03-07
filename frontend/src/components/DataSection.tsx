@@ -2,6 +2,23 @@ import { useState } from "react";
 import { IconDatabase, IconPlus } from "./Icons";
 import type { Dataset } from "../contexts/WorkspaceContext";
 
+const normalizeFormat = (value?: string | null) => {
+  if (!value) return null;
+  const lowered = value.toLowerCase();
+  if (["xlsx", "xls", "excel"].includes(lowered)) return "excel";
+  if (["csv", "txt", "tsv"].includes(lowered)) return "csv";
+  if (lowered === "json") return "json";
+  if (lowered === "parquet") return "parquet";
+  return lowered;
+};
+
+const formatAccent: Record<string, string> = {
+  csv: "var(--ac)",
+  excel: "var(--gr)",
+  json: "var(--or)",
+  parquet: "var(--pu)",
+};
+
 interface DataSectionProps {
   datasets: Dataset[];
   activeDatasetId?: string;
@@ -29,6 +46,8 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
         <div style={{ display: "grid", gap: 4 }}>
           {datasets.map((dataset) => {
             const active = activeDatasetId === dataset.id;
+            const normalizedFormat = normalizeFormat(dataset.format);
+            const formatColor = normalizedFormat ? (formatAccent[normalizedFormat] ?? "var(--tx1)") : null;
             return (
               <div
                 key={dataset.id}
@@ -47,6 +66,24 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
                   <IconDatabase size={14} />
                   <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dataset.name}</span>
                 </button>
+                {normalizedFormat ? (
+                  <span
+                    className="mono"
+                    style={{
+                      height: 18,
+                      borderRadius: "var(--r4)",
+                      border: `1px solid ${formatColor}`,
+                      color: formatColor,
+                      padding: "0 5px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: 10,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {normalizedFormat}
+                  </span>
+                ) : null}
                 <span className="mono" style={{ color: "var(--tx1)", fontSize: 11, marginLeft: 8 }}>{dataset.rows}</span>
                 <button
                   className="btn"

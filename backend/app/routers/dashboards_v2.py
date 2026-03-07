@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from sqlalchemy.orm import Session
 
 from ..models import DashboardTileCreate, DashboardTileOut, DashboardV2Create, DashboardV2Out
 from ..config import settings
 from ..security import get_current_role, get_current_subject, require_role
 from ..services.dashboards_v2_service import DashboardsV2Service
 from ..services.rate_limit import FixedWindowRateLimiter
+from ..db import get_db
+from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards-v2"])
 public_router = APIRouter(prefix="/api/public/dashboards", tags=["dashboards-public"])
@@ -86,9 +89,12 @@ def publish_dashboard(
     dashboard_id: str,
     expires_in_hours: int | None = None,
     authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ) -> dict[str, str | None]:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_dashboard_sharing(user_plan)
     user_id = get_current_subject(authorization)
     expires_at = (
         datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)

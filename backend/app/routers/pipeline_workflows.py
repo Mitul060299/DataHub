@@ -5,16 +5,26 @@ Path: /api/pipelines/*
 
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DBSession
 
 from app.db import get_db
 from app.security import get_current_subject
+from app.services.plan_guard import resolve_user_plan
 from app.services.pipeline_engine import PipelineEngine
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipeline-workflows"])
+
+
+def _resolve_pipeline_engine(
+    db: DBSession,
+    current_user_id: str,
+    authorization: str | None,
+) -> PipelineEngine:
+    user_plan = resolve_user_plan(db, authorization).lower()
+    return PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
 
 
 class CreatePipelineRequest(BaseModel):
@@ -49,13 +59,13 @@ class ClonePipelineRequest(BaseModel):
 @router.post("")
 async def create_pipeline(
     payload: CreatePipelineRequest,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Create a new pipeline"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     pipeline = engine.create_pipeline(
         name=payload.name,
@@ -84,13 +94,13 @@ async def list_pipelines(
     status: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
     offset: int = Query(0, ge=0),
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """List user's pipelines"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     pipelines, total = engine.list_pipelines(
         workspace_id=workspace_id,
@@ -123,13 +133,13 @@ async def list_pipelines(
 @router.get("/{pipeline_id}")
 async def get_pipeline(
     pipeline_id: str,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Get pipeline details"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     pipeline = engine.get_pipeline(pipeline_id)
     if not pipeline:
@@ -157,13 +167,13 @@ async def get_pipeline(
 async def update_pipeline(
     pipeline_id: str,
     payload: UpdatePipelineRequest,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Update pipeline"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     try:
         pipeline = engine.update_pipeline(
@@ -189,13 +199,13 @@ async def update_pipeline(
 @router.post("/{pipeline_id}/publish")
 async def publish_pipeline(
     pipeline_id: str,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Publish pipeline for execution"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     try:
         pipeline = engine.publish_pipeline(pipeline_id)
@@ -214,13 +224,13 @@ async def publish_pipeline(
 async def clone_pipeline(
     pipeline_id: str,
     payload: ClonePipelineRequest,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Clone an existing pipeline to a new draft pipeline"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     try:
         pipeline = engine.clone_pipeline(
@@ -247,13 +257,13 @@ async def clone_pipeline(
 async def execute_pipeline(
     pipeline_id: str,
     payload: RunPipelineRequest,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Execute a pipeline with SSE streaming"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     async def event_generator():
         async for event in engine.execute_pipeline(
@@ -280,13 +290,13 @@ async def get_pipeline_runs(
     pipeline_id: str,
     limit: int = Query(20, le=100),
     offset: int = Query(0, ge=0),
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Get execution history for a pipeline"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     runs, total = engine.get_pipeline_runs(
         pipeline_id=pipeline_id,
@@ -316,13 +326,13 @@ async def get_pipeline_runs(
 @router.get("/runs/{run_id}")
 async def get_run_details(
     run_id: str,
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Get detailed information about a pipeline run"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     run = engine.get_run_details(run_id)
     if not run:
@@ -350,13 +360,13 @@ async def get_run_details(
 async def get_run_artifact(
     run_id: str,
     preview_limit: int = Query(100, ge=1, le=1000),
+    authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Get a standardized artifact package for a run"""
 
-    user_plan = "free"
-    engine = PipelineEngine(db=db, user_id=current_user_id, user_plan=user_plan)
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     try:
         artifact = engine.get_run_artifact(run_id=run_id, preview_limit=preview_limit)

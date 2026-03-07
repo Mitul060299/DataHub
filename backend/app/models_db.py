@@ -1,7 +1,7 @@
-from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY
+from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
 from sqlalchemy import DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from .db import Base
 
 
@@ -164,6 +164,17 @@ class AgentFeedbackDB(Base):
     source = Column(String, nullable=False, default="suggestion")
     notes = Column(Text, nullable=True)
     metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class FeedbackDB(Base):
+    __tablename__ = "feedback"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    name = Column(Text, nullable=False)
+    email = Column(Text, nullable=False)
+    subject = Column(Text, nullable=True)
+    message = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

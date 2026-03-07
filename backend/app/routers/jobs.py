@@ -5,6 +5,7 @@ from ..models import ScheduledJob
 from ..models_db import ScheduledJobDB
 from ..db import get_db
 from ..security import get_current_role, require_role
+from ..services.plan_guard import resolve_user_plan, enforce_scheduling
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -19,6 +20,8 @@ def create_job(
 ) -> ScheduledJob:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_scheduling(user_plan)
     job_id = str(uuid.uuid4())
     db.add(ScheduledJobDB(id=job_id, name=name, cron=cron, action=action, status="scheduled"))
     db.commit()

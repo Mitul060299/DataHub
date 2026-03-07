@@ -11,6 +11,7 @@ from ..services.rate_limit import FixedWindowRateLimiter
 from ..services.share_tokens import sign_token, verify_token
 from ..services.audit import audit_store
 from ..models import AuditEntry
+from ..services.plan_guard import resolve_user_plan, enforce_workspace_limit, enforce_min_plan
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 _shared_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
@@ -24,6 +25,9 @@ def create_workspace(
 ) -> WorkspaceOut:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_plan = resolve_user_plan(db, authorization)
+    existing_count = db.query(Workspace).count()
+    enforce_workspace_limit(user_plan, existing_count)
     workspace = Workspace(id=str(uuid.uuid4()), name=payload.name, is_shared=False, share_token=None, share_expires_at=None)
     db.add(workspace)
     try:
@@ -70,6 +74,8 @@ def share_workspace(
 ) -> dict:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_min_plan(user_plan, "Team", "Workspace sharing")
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")

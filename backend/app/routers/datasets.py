@@ -11,6 +11,9 @@ from sqlalchemy import inspect, text
 from ..models import (
     DatasetPreview,
     DatasetMeta,
+    DatasetLineageGraph,
+    DatasetLineageNode,
+    DatasetLineageEdge,
     DatasetPage,
     DatasetQueryRequest,
     DatasetQueryResponse,
@@ -26,6 +29,7 @@ from ..services.duckdb_service import DuckDBService
 from ..services.query_cache import QueryCacheService
 from ..services.object_storage import StorageService
 from ..services.storage_tiering import storage_tier_service
+from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -370,6 +374,7 @@ def list_datasets(
         DatasetMeta(
             dataset_id=row.id,
             name=row.name,
+            file_format=row.file_format,
             columns=row.columns,
             row_count=row.row_count,
             parent_id=row.parent_id,
@@ -398,6 +403,7 @@ def dataset_lineage(
             DatasetMeta(
                 dataset_id=row.id,
                 name=row.name,
+                file_format=row.file_format,
                 columns=row.columns,
                 row_count=row.row_count,
                 parent_id=row.parent_id,
@@ -405,6 +411,53 @@ def dataset_lineage(
         )
         current_id = row.parent_id
     return lineage
+
+
+@router.get("/{dataset_id}/lineage/graph", response_model=DatasetLineageGraph)
+def dataset_lineage_graph(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DatasetLineageGraph:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_sso(user_plan)
+
+    nodes: list[DatasetLineageNode] = []
+    edges: list[DatasetLineageEdge] = []
+    current_id = dataset_id
+    visited = set()
+
+    while current_id and current_id not in visited:
+        visited.add(current_id)
+        row = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_id).first()
+        if not row:
+            break
+
+        nodes.append(
+            DatasetLineageNode(
+                dataset_id=row.id,
+                name=row.name,
+                file_format=row.file_format,
+                source_type=row.source_type,
+                row_count=row.row_count,
+                created_at=row.created_at.isoformat() if row.created_at else None,
+            )
+        )
+
+        if row.parent_id:
+            edges.append(
+                DatasetLineageEdge(
+                    from_dataset_id=row.parent_id,
+                    to_dataset_id=row.id,
+                    relationship="transformed_from",
+                )
+            )
+        current_id = row.parent_id
+
+    return DatasetLineageGraph(nodes=nodes, edges=edges)
 
 
 @router.get("/{dataset_id}/suggest-columns")

@@ -164,7 +164,7 @@ export function TopBar() {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => navigateAndClose("/settings?tab=profile")}
+                    onClick={() => navigateAndClose("/settings/profile")}
                     style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: "flex", alignItems: "center", gap: 8, color: "#e8e8f0", textAlign: "left" }}
                     onMouseEnter={(event) => {
                       event.currentTarget.style.background = "#22222a";
@@ -194,7 +194,7 @@ export function TopBar() {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => navigateAndClose("/settings?tab=billing")}
+                    onClick={() => navigateAndClose("/settings/billing")}
                     style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: "flex", alignItems: "center", gap: 8, color: "#e8e8f0", textAlign: "left" }}
                     onMouseEnter={(event) => {
                       event.currentTarget.style.background = "#22222a";

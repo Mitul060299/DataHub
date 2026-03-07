@@ -1,0 +1,88 @@
+name: Pricing Matrix CI
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "backend/app/models.py"
+      - "backend/app/models_db.py"
+      - "backend/app/routers/**/*.py"
+      - "backend/app/services/**/*.py"
+      - "backend/scripts/pricing_matrix_check.py"
+      - "backend/scripts/setup_live_matrix_sqlite.py"
+      - "backend/scripts/live_matrix_server.py"
+      - "backend/scripts/run_live_pricing_matrix.py"
+      - ".github/workflows/pricing-matrix.yml"
+
+jobs:
+  pricing-matrix:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: production
+      APP_SECRET_KEY: ci-pricing-matrix-secret-key-2026
+      DATABASE_URL: sqlite:///./pricing_live.db
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run offline pricing matrix
+        working-directory: backend
+        run: python scripts/pricing_matrix_check.py
+
+      - name: Seed live matrix SQLite database
+        working-directory: backend
+        run: python scripts/setup_live_matrix_sqlite.py
+
+      - name: Start live matrix server
+        working-directory: backend
+        run: |
+          python -m uvicorn scripts.live_matrix_server:app --host 127.0.0.1 --port 8000 > ../pricing-live-server.log 2>&1 &
+          echo $! > ../pricing-live-server.pid
+
+      - name: Wait for live matrix server health
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+
+          url = "http://127.0.0.1:8000/health"
+          for _ in range(60):
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status == 200:
+                          print("Live matrix server is healthy.")
+                          raise SystemExit(0)
+              except Exception:
+                  time.sleep(1)
+          raise SystemExit("Live matrix server failed health check.")
+          PY
+
+      - name: Run live pricing matrix
+        working-directory: backend
+        run: python scripts/run_live_pricing_matrix.py
+
+      - name: Stop live matrix server
+        if: always()
+        run: |
+          if [ -f pricing-live-server.pid ]; then
+            kill "$(cat pricing-live-server.pid)" || true
+            rm -f pricing-live-server.pid
+          fi
+
+      - name: Upload pricing matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pricing-matrix-reports
+          path: |
+            docs/PRICING_MATRIX_REPORT.md
+            docs/PRICING_LIVE_MATRIX_REPORT.md
+            pricing-live-server.log
+          if-no-files-found: warn

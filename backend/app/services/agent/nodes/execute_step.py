@@ -2,9 +2,10 @@ import uuid
 
 from ..state import AgentState, ExecutionResult
 from ....db import SessionLocal
-from ....models_db import DatasetMetaDB
+from ....models_db import DatasetMetaDB, User
 from ...calculated_columns_service import CalculatedColumnsService
 from ...dashboards_v2_service import DashboardsV2Service
+from ...plan_guard import normalize_plan
 
 
 async def execute_step(state: AgentState) -> dict:
@@ -126,10 +127,15 @@ async def execute_step(state: AgentState) -> dict:
 
         from ...pipeline_engine import PipelineEngine
 
+        owner_plan = "free"
+        if dataset.user_id:
+            owner = db.query(User).filter(User.id == dataset.user_id).first()
+            owner_plan = normalize_plan(owner.plan if owner else "Free").lower()
+
         engine = PipelineEngine(
             db=db,
             user_id=dataset.user_id or "agent",
-            user_plan="free",
+            user_plan=owner_plan,
         )
 
         pipeline = engine.create_pipeline(

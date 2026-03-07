@@ -7,6 +7,7 @@ from ..db import get_db
 from ..models import PipelineCreate, PipelineUpdate, PipelineSchedule, PipelineRun
 from ..models_db import PipelineDB, PipelineRunDB
 from ..security import get_current_role, require_role
+from ..services.plan_guard import resolve_user_plan, enforce_scheduling
 from ..services.pipelines import schedule_pipeline, run_pipeline_job
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -42,6 +43,8 @@ def create_pipeline(
 ) -> PipelineSchedule:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_scheduling(user_plan)
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Pipeline name is required")
     pipeline_id = str(uuid.uuid4())
@@ -102,6 +105,8 @@ def update_pipeline(
 ) -> PipelineSchedule:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_scheduling(user_plan)
     row = db.query(PipelineDB).filter(PipelineDB.id == pipeline_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Pipeline not found")
@@ -157,9 +162,12 @@ def delete_pipeline(
 def run_pipeline(
     pipeline_id: str,
     authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ) -> dict:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_scheduling(user_plan)
     run_pipeline_job(pipeline_id)
     return {"status": "queued", "pipeline_id": pipeline_id}
 

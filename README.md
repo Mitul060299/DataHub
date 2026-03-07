@@ -34,6 +34,13 @@ Modern, AI-assisted data analytics and transformation platform.
 - AI integrations are stubbed for MVP and will be expanded in Phase 2.
 - Replace placeholder secrets and tokens before production.
 
+## Pricing QA Automation
+- Pull requests to `main` that change pricing/entitlement paths run the pricing matrix workflow in `.github/workflows/pricing-matrix.yml`.
+- CI generates and uploads these artifacts:
+   - `docs/PRICING_MATRIX_REPORT.md` (offline capability + guard wiring checks)
+   - `docs/PRICING_LIVE_MATRIX_REPORT.md` (live HTTP entitlement matrix)
+- For local reproduction, follow `docs/PRICING_QA_CHECKLIST.md`.
+
 ## Platform Overview
 See docs/PLATFORM_OVERVIEW.md for capabilities, workflow, and deployment overview.
 

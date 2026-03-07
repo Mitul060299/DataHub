@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Depends
 import uuid
 from ..security import create_access_token
+from ..db import get_db
+from sqlalchemy.orm import Session
+from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.oidc import build_auth_url, exchange_code, fetch_userinfo, verify_id_token
 from ..config import settings
 from ..models import AuthToken
@@ -15,14 +18,32 @@ def login(username: str) -> AuthToken:
 
 
 @router.get("/oidc/login")
-def oidc_login() -> dict:
+def oidc_login(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
     if not settings.oidc_issuer or not settings.oidc_client_id or not settings.oidc_redirect_uri:
         raise HTTPException(status_code=400, detail="OIDC is not configured")
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_sso(user_plan)
     state = str(uuid.uuid4())
     url = build_auth_url(state)
     if not url:
         raise HTTPException(status_code=400, detail="OIDC discovery failed")
     return {"auth_url": url, "state": state}
+
+
+@router.get("/sso/status")
+def sso_status(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    user_plan = resolve_user_plan(db, authorization)
+    return {
+        "enabled": user_plan in {"Business", "Enterprise"},
+        "plan": user_plan,
+        "providers": ["google", "azure-ad", "okta"] if user_plan in {"Business", "Enterprise"} else [],
+    }
 
 
 @router.get("/oidc/callback", response_model=AuthToken)

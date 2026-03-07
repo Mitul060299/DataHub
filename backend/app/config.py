@@ -1,7 +1,9 @@
 from pydantic import BaseModel
 from typing import List
+import importlib
 import os
 import re
+import sys
 
 
 DEFAULT_CORS_ORIGINS = [
@@ -67,6 +69,10 @@ class Settings(BaseModel):
     supabase_jwt_audience: str = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated")
     supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    billing_enabled: bool = _parse_bool(os.getenv("BILLING_ENABLED"), False)
+    razorpay_key_id: str = os.getenv("RAZORPAY_KEY_ID", "")
+    razorpay_key_secret: str = os.getenv("RAZORPAY_KEY_SECRET", "")
+    razorpay_webhook_secret: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
     dataset_cache_max: int = int(os.getenv("DATASET_CACHE_MAX", "20"))
     dataset_cache_ttl_seconds: int = int(os.getenv("DATASET_CACHE_TTL", "1800"))
     profile_cache_ttl_seconds: int = int(os.getenv("PROFILE_CACHE_TTL", "300"))
@@ -135,3 +141,9 @@ class Settings(BaseModel):
 
 
 settings = Settings()
+
+try:
+    _razorpay_plans = importlib.import_module("app.razorpay_plans")
+    sys.modules[__name__ + ".razorpay_plans"] = _razorpay_plans
+except Exception:
+    pass

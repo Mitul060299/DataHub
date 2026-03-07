@@ -1,0 +1,296 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any
+import uuid
+
+from supabase import Client, create_client
+
+from ..config import settings
+
+
+_ACTIVE_STATUSES = {"active", "authenticated"}
+_TERMINAL_STATUSES = {"halted", "cancelled", "completed", "expired"}
+
+_PLAN_SLUG_TO_CANONICAL = {
+    "professional": "Professional",
+    "team": "Team",
+    "business": "Business",
+    "free": "Free",
+}
+
+_PLAN_CANONICAL_TO_SLUG = {value: key for key, value in _PLAN_SLUG_TO_CANONICAL.items()}
+
+_supabase_client: Client | None = None
+
+
+def _client() -> Client | None:
+    global _supabase_client
+
+    if _supabase_client is not None:
+        return _supabase_client
+    if not settings.supabase_url:
+        return None
+
+    service_key = settings.supabase_service_role_key or settings.supabase_anon_key
+    if not service_key:
+        return None
+
+    try:
+        _supabase_client = create_client(settings.supabase_url, service_key)
+    except Exception:
+        _supabase_client = None
+    return _supabase_client
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _timestamp_to_iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        timestamp = int(value)
+    except Exception:
+        return None
+    if timestamp <= 0:
+        return None
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+
+
+def to_canonical_plan(plan: str | None) -> str:
+    if not plan:
+        return "Free"
+    lowered = str(plan).strip().lower()
+    if lowered in _PLAN_SLUG_TO_CANONICAL:
+        return _PLAN_SLUG_TO_CANONICAL[lowered]
+    titled = str(plan).strip().title()
+    if titled in _PLAN_CANONICAL_TO_SLUG:
+        return titled
+    return "Free"
+
+
+def to_plan_slug(plan: str | None) -> str:
+    canonical = to_canonical_plan(plan)
+    return _PLAN_CANONICAL_TO_SLUG.get(canonical, "free")
+
+
+def billing_ready() -> bool:
+    return bool(settings.billing_enabled and _client())
+
+
+def get_subscription_by_razorpay_id(razorpay_subscription_id: str) -> dict[str, Any] | None:
+    client = _client()
+    if not client or not razorpay_subscription_id:
+        return None
+    try:
+        response = (
+            client.table("subscriptions")
+            .select("*")
+            .eq("razorpay_subscription_id", razorpay_subscription_id)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def get_latest_subscription(user_id: str) -> dict[str, Any] | None:
+    client = _client()
+    if not client or not user_id:
+        return None
+    try:
+        response = (
+            client.table("subscriptions")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def get_active_subscription(user_id: str) -> dict[str, Any] | None:
+    client = _client()
+    if not client or not user_id:
+        return None
+    try:
+        response = (
+            client.table("subscriptions")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(20)
+            .execute()
+        )
+        rows = response.data or []
+        for row in rows:
+            status = str(row.get("status") or "").lower()
+            if status in _ACTIVE_STATUSES:
+                return row
+        return None
+    except Exception:
+        return None
+
+
+def get_effective_plan(user_id: str) -> str | None:
+    if not settings.billing_enabled:
+        return None
+    latest = get_latest_subscription(user_id)
+    if not latest:
+        return None
+
+    status = str(latest.get("status") or "").lower()
+    if status in _ACTIVE_STATUSES:
+        return to_canonical_plan(latest.get("plan"))
+    if status in _TERMINAL_STATUSES:
+        return "Free"
+    return None
+
+
+def store_subscription(
+    user_id: str,
+    subscription: dict[str, Any],
+    plan: str,
+    billing_cycle: str,
+    quantity: int,
+) -> dict[str, Any]:
+    client = _client()
+    if not client:
+        raise RuntimeError("Supabase client is not configured")
+
+    razorpay_subscription_id = str(subscription.get("id") or "").strip()
+    if not razorpay_subscription_id:
+        raise ValueError("Missing Razorpay subscription id")
+
+    existing = get_subscription_by_razorpay_id(razorpay_subscription_id)
+    subscription_row_id = str(existing.get("id")) if existing and existing.get("id") else str(uuid.uuid4())
+
+    current_start = _timestamp_to_iso(
+        subscription.get("current_start")
+        or subscription.get("start_at")
+        or subscription.get("charge_at")
+    )
+    current_end = _timestamp_to_iso(
+        subscription.get("current_end")
+        or subscription.get("end_at")
+    )
+
+    payload = {
+        "id": subscription_row_id,
+        "user_id": user_id,
+        "razorpay_subscription_id": razorpay_subscription_id,
+        "razorpay_plan_id": str(subscription.get("plan_id") or ""),
+        "plan": to_plan_slug(plan),
+        "billing_cycle": str(billing_cycle).lower(),
+        "status": str(subscription.get("status") or "created").lower(),
+        "current_start": current_start,
+        "current_end": current_end,
+        "quantity": max(int(quantity or 1), 1),
+        "updated_at": _now_iso(),
+    }
+
+    client.table("subscriptions").upsert(payload, on_conflict="razorpay_subscription_id").execute()
+
+    user_update: dict[str, Any] = {"subscription_id": subscription_row_id}
+    if payload["status"] in _ACTIVE_STATUSES:
+        user_update["plan"] = to_canonical_plan(plan)
+    try:
+        client.table("users").update(user_update).eq("id", user_id).execute()
+    except Exception:
+        pass
+
+    return payload
+
+
+def update_subscription_status(
+    razorpay_subscription_id: str,
+    status: str,
+    user_id: str | None,
+    plan: str | None,
+) -> None:
+    client = _client()
+    if not client:
+        raise RuntimeError("Supabase client is not configured")
+
+    normalized_status = str(status or "").lower()
+    if not normalized_status:
+        raise ValueError("status is required")
+
+    updates = {
+        "status": normalized_status,
+        "updated_at": _now_iso(),
+    }
+    client.table("subscriptions").update(updates).eq("razorpay_subscription_id", razorpay_subscription_id).execute()
+
+    if not user_id:
+        row = get_subscription_by_razorpay_id(razorpay_subscription_id)
+        user_id = str(row.get("user_id")) if row and row.get("user_id") else None
+
+    if not user_id:
+        return
+
+    if normalized_status in _ACTIVE_STATUSES:
+        target_plan = to_canonical_plan(plan)
+    elif normalized_status in _TERMINAL_STATUSES:
+        target_plan = "Free"
+    else:
+        target_plan = to_canonical_plan(plan)
+
+    try:
+        client.table("users").update({"plan": target_plan}).eq("id", user_id).execute()
+    except Exception:
+        pass
+
+
+def log_payment_event(
+    *,
+    user_id: str | None,
+    subscription_id: str | None,
+    event_type: str,
+    payload: dict[str, Any],
+    payment_id: str | None = None,
+    invoice_id: str | None = None,
+    amount: int | None = None,
+    currency: str = "INR",
+    status: str | None = None,
+) -> None:
+    client = _client()
+    if not client:
+        raise RuntimeError("Supabase client is not configured")
+
+    row = {
+        "user_id": user_id,
+        "subscription_id": subscription_id,
+        "razorpay_payment_id": payment_id,
+        "razorpay_invoice_id": invoice_id,
+        "event_type": event_type,
+        "amount": amount,
+        "currency": currency,
+        "status": status,
+        "payload": payload,
+    }
+    client.table("payment_events").insert(row).execute()
+
+
+def store_proration_note(user_id: str, credit_paise: int, new_subscription_id: str) -> None:
+    payload = {
+        "credit_paise": max(int(credit_paise), 0),
+        "new_subscription_id": new_subscription_id,
+        "note": "manual processing required",
+    }
+    log_payment_event(
+        user_id=user_id,
+        subscription_id=new_subscription_id,
+        event_type="proration_credit",
+        payload=payload,
+        amount=max(int(credit_paise), 0),
+        status="pending",
+    )

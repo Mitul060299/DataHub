@@ -10,6 +10,7 @@ export interface DatasetMeta {
   dataset_id: string;
   columns: string[];
   row_count: number;
+  file_format?: string | null;
   parent_id?: string | null;
 }
 

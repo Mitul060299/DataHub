@@ -78,8 +78,8 @@ Run each check once per plan user and confirm expected status.
 8) Plan update flow
 - Endpoint: `POST /users/me/plan`
 - Verify:
-  - Free/Professional/Team/Business changes succeed
-  - Enterprise request returns sales-assisted message (no direct self-upgrade)
+  - All plans receive `403` with guidance to use billing checkout
+  - Endpoint does not mutate `users.plan` directly in API flow
 
 ## Frontend UX Checks
 

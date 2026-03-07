@@ -154,14 +154,6 @@ async def cancel_subscription(user_id: str, at_cycle_end: bool = True) -> dict[s
         current_razorpay_sub_id,
         {"cancel_at_cycle_end": 1 if at_cycle_end else 0},
     )
-
-    if not at_cycle_end:
-        billing_repository.update_subscription_status(
-            current_razorpay_sub_id,
-            "cancelled",
-            user_id,
-            "free",
-        )
     return result
 
 

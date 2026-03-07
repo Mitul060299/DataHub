@@ -5,7 +5,7 @@ from ..db import get_db
 from ..models import UserCreate, UserOut, UserProfileOut, UserUsage
 from ..models_db import User, DatasetMetaDB, ImportTableDB
 from ..security import get_current_role, get_current_subject, get_current_user_id, require_role
-from ..services.plan_guard import normalize_plan, resolve_user_plan
+from ..services.plan_guard import resolve_user_plan
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -263,9 +263,6 @@ def get_me(
         aiMessagesUsed=0,
     )
     effective_plan = resolve_user_plan(db, authorization)
-    if user.plan != effective_plan:
-        user.plan = effective_plan
-        db.commit()
     return UserProfileOut(
         id=user.id,
         username=user.username,
@@ -284,19 +281,7 @@ def update_my_plan(
     subject = get_current_subject(authorization)
     if not subject:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-    requested_plan = normalize_plan(payload.get("plan"))
-    if requested_plan == "Enterprise":
-        return {
-            "success": False,
-            "message": "Enterprise plan requires sales-assisted onboarding.",
-            "plan": requested_plan,
-        }
-
-    user = db.query(User).filter(User.username == subject).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    user.plan = requested_plan
-    db.commit()
-    return {"success": True, "plan": requested_plan}
+    raise HTTPException(
+        status_code=403,
+        detail="Direct plan updates are disabled. Use billing checkout to change plans.",
+    )

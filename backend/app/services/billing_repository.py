@@ -200,8 +200,6 @@ def store_subscription(
     client.table("subscriptions").upsert(payload, on_conflict="razorpay_subscription_id").execute()
 
     user_update: dict[str, Any] = {"subscription_id": subscription_row_id}
-    if payload["status"] in _ACTIVE_STATUSES:
-        user_update["plan"] = to_canonical_plan(plan)
     try:
         client.table("users").update(user_update).eq("id", user_id).execute()
     except Exception:

@@ -86,17 +86,10 @@ async def upgrade(
     user: CurrentUser = Depends(get_current_user),
 ):
     _ensure_billing_enabled()
-
-    try:
-        return await billing_service.upgrade_subscription(
-            user.id,
-            _normalize_plan_slug(payload.new_plan),
-            _normalize_cycle(payload.new_billing_cycle),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    raise HTTPException(
+        status_code=410,
+        detail="Direct upgrade endpoint is disabled. Use checkout via /billing/subscribe.",
+    )
 
 
 @router.post("/cancel")
@@ -187,6 +180,9 @@ async def razorpay_webhook(
     event = str(payload.get("event") or "")
     entities = payload.get("payload", {})
 
+    # Plan authority note:
+    # users.plan must only be updated through webhook status handlers below
+    # via billing_repository.update_subscription_status.
     handlers = {
         "subscription.activated": _on_activated,
         "subscription.charged": _on_charged,

@@ -71,6 +71,9 @@ export async function initiateSubscription(
   };
 
   await ensureRazorpayScriptLoaded();
+  if (typeof window.Razorpay === "undefined") {
+    throw new Error("Razorpay SDK is unavailable. Please refresh and try again.");
+  }
 
   const planLabel = `${plan.charAt(0).toUpperCase() + plan.slice(1)} — ${billingCycle}`;
   const options = {
@@ -124,17 +127,6 @@ export async function cancelSubscription(atCycleEnd: boolean = true) {
     params: { at_cycle_end: atCycleEnd },
   });
   return response.data;
-}
-
-export async function upgradeSubscription(newPlan: BillingPlanSlug, newBillingCycle: BillingCycle) {
-  const response = await api.post("/billing/upgrade", {
-    new_plan: newPlan,
-    new_billing_cycle: newBillingCycle,
-  });
-  return response.data as {
-    proration_credit_inr: number;
-    note: string;
-  };
 }
 
 export async function listInvoices() {

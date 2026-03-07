@@ -8,7 +8,6 @@ import {
   getInvoicePdfUrl,
   initiateSubscription,
   listInvoices,
-  upgradeSubscription,
   type BillingCycle,
   type BillingPlanSlug,
 } from "../services/billing";
@@ -53,6 +52,7 @@ export function BillingSettings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [showSelector, setShowSelector] = useState(false);
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export function BillingSettings() {
   }, []);
 
   const subscription = billingState?.subscription ?? null;
-  const currentPlanSlug = useMemo(() => canonicalToSlug(billingState?.plan ?? subscription?.plan ?? null), [billingState?.plan, subscription?.plan]);
+  const currentPlanSlug = useMemo(() => canonicalToSlug(billingState?.plan ?? null), [billingState?.plan]);
   const currentCycle: BillingCycle = (subscription?.billing_cycle === "annual" ? "annual" : "monthly");
   const seatCount = Math.max(Number(subscription?.quantity ?? 1), 1);
 
@@ -111,20 +111,13 @@ export function BillingSettings() {
 
   const handleSelectPlan = async (plan: BillingPlanSlug) => {
     setMessage(null);
-    setError(null);
+    setUpgradeError(null);
     setBusyPlan(plan);
     try {
-      if (billingState?.has_active_subscription) {
-        const result = await upgradeSubscription(plan, cycle);
-        setMessage(`Upgrade initiated. Proration credit: ₹${Number(result.proration_credit_inr || 0).toLocaleString("en-IN")}.`);
-      } else {
-        await initiateSubscription(plan, cycle, seatCount);
-        return;
-      }
-      await load();
+      await initiateSubscription(plan, cycle, seatCount);
     } catch (actionError: unknown) {
       const maybeError = actionError as { response?: { data?: { detail?: string } } };
-      setError(maybeError.response?.data?.detail ?? "Failed to start billing action.");
+      setUpgradeError(maybeError.response?.data?.detail ?? "Failed to start checkout. Please try again.");
     } finally {
       setBusyPlan(null);
     }
@@ -153,6 +146,25 @@ export function BillingSettings() {
       {loading ? <p style={{ color: "var(--tx1)", fontSize: 13 }}>Loading billing details...</p> : null}
       {error ? <p style={{ color: "var(--rd)", fontSize: 13 }}>{error}</p> : null}
       {message ? <p style={{ color: "var(--tx1)", fontSize: 13 }}>{message}</p> : null}
+      {upgradeError ? (
+        <div
+          style={{
+            border: "1px solid rgba(239,68,68,0.5)",
+            background: "rgba(239,68,68,0.12)",
+            borderRadius: 8,
+            padding: "10px 12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <p style={{ color: "var(--tx0)", fontSize: 13 }}>{upgradeError}</p>
+          <button className="btn" onClick={() => setUpgradeError(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {!loading && isHalted ? (
         <div

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { updateCurrentUserPlan } from "../api";
 import { useUser } from "../contexts/UserContext";
 import { billingEnabled } from "../utils/featureFlags";
 
@@ -47,9 +46,8 @@ const planCards: PlanCard[] = [
 ];
 
 export function PricingPage() {
-  const { plan, setPlan } = useUser();
+  const { plan } = useUser();
   const navigate = useNavigate();
-  const [busyPlan, setBusyPlan] = useState<PlanKey | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const currentIndex = useMemo(() => planCards.findIndex((p) => p.key === plan), [plan]);
@@ -64,21 +62,7 @@ export function PricingPage() {
       navigate("/settings/billing");
       return;
     }
-    setBusyPlan(target);
-    try {
-      const result = await updateCurrentUserPlan(target);
-      if (result.success) {
-        setPlan(target);
-        setMessage(`Plan updated to ${target}.`);
-      } else {
-        setMessage(result.message ?? "Plan update could not be completed.");
-      }
-    } catch (error: unknown) {
-      const maybeError = error as { response?: { data?: { detail?: string } } };
-      setMessage(maybeError.response?.data?.detail ?? "Failed to update plan.");
-    } finally {
-      setBusyPlan(null);
-    }
+    setMessage("Billing is disabled in this environment. Plan changes are unavailable.");
   };
 
   return (
@@ -120,11 +104,11 @@ export function PricingPage() {
               ) : (
                 <button
                   className="btn btn-primary"
-                  disabled={busyPlan === card.key || !canUpgrade}
+                  disabled={!canUpgrade}
                   onClick={() => void upgrade(card.key)}
                   style={{ marginTop: 6 }}
                 >
-                  {busyPlan === card.key ? "Updating..." : card.key === "Enterprise" ? "Contact Sales" : "Upgrade"}
+                  {card.key === "Enterprise" ? "Contact Sales" : "Upgrade"}
                 </button>
               )}
             </article>

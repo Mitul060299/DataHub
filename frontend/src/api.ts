@@ -218,11 +218,6 @@ export async function fetchCurrentUser(workspaceId?: string) {
   };
 }
 
-export async function updateCurrentUserPlan(plan: "Free" | "Professional" | "Team" | "Business" | "Enterprise") {
-  const response = await api.post("/users/me/plan", { plan });
-  return response.data as { success: boolean; plan: string; message?: string };
-}
-
 export async function chatWithAgent(
   datasetId: string,
   message: string,

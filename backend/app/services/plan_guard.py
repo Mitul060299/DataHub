@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models_db import DatasetMetaDB, User
+from ..models_db import DatasetMetaDB
 from ..security import get_current_subject, get_current_user_id
 from . import billing_repository
 
@@ -115,19 +115,7 @@ def resolve_user_plan(db: Session, authorization: str | None) -> str:
     if settings.billing_enabled and user_id:
         effective_plan = billing_repository.get_effective_plan(user_id)
         if effective_plan:
-            normalized_effective = normalize_plan(effective_plan)
-            try:
-                user = None
-                if user_id:
-                    user = db.query(User).filter(User.id == user_id).first()
-                if not user and subject:
-                    user = db.query(User).filter(User.username == subject).first()
-                if user and normalize_plan(user.plan) != normalized_effective:
-                    user.plan = normalized_effective
-                    db.commit()
-            except Exception:
-                db.rollback()
-            return normalized_effective
+            return normalize_plan(effective_plan)
 
     user = None
     if user_id:

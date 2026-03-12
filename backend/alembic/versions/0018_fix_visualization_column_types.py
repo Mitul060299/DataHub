@@ -20,7 +20,7 @@ def _quote_ident(value: str) -> str:
     return '"' + str(value).replace('"', '""') + '"'
 
 
-def _get_table_policy_snapshots(bind: sa.engine.Connection, table_name: str) -> list[dict[str, str]]:
+def _get_schema_policy_snapshots(bind: sa.engine.Connection) -> list[dict[str, str]]:
     if bind.dialect.name != "postgresql":
         return []
 
@@ -30,8 +30,9 @@ def _get_table_policy_snapshots(bind: sa.engine.Connection, table_name: str) -> 
             SELECT
                 policyname,
                 format(
-                    'CREATE POLICY %I ON %I AS %s FOR %s TO %s%s%s',
+                    'CREATE POLICY %I ON %I.%I AS %s FOR %s TO %s%s%s',
                     policyname,
+                    schemaname,
                     tablename,
                     permissive,
                     cmd,
@@ -58,21 +59,25 @@ def _get_table_policy_snapshots(bind: sa.engine.Connection, table_name: str) -> 
                     END
                 ) AS create_sql
             FROM pg_policies
-            WHERE schemaname = current_schema() AND tablename = :table_name
-            ORDER BY policyname
+            WHERE schemaname = current_schema()
+            ORDER BY tablename, policyname
             """
         ),
-        {"table_name": table_name},
     ).mappings()
     return [dict(row) for row in rows]
 
 
-def _drop_table_policies(table_name: str, policies: list[dict[str, str]]) -> None:
+def _drop_schema_policies(policies: list[dict[str, str]]) -> None:
     for policy in policies:
-        op.execute(sa.text(f"DROP POLICY IF EXISTS {_quote_ident(policy['policyname'])} ON {_quote_ident(table_name)}"))
+        op.execute(
+            sa.text(
+                f"DROP POLICY IF EXISTS {_quote_ident(policy['policyname'])} "
+                f"ON {_quote_ident(policy['schemaname'])}.{_quote_ident(policy['tablename'])}"
+            )
+        )
 
 
-def _recreate_table_policies(policies: list[dict[str, str]]) -> None:
+def _recreate_schema_policies(policies: list[dict[str, str]]) -> None:
     for policy in policies:
         create_sql = (policy.get("create_sql") or "").strip()
         if create_sql:
@@ -88,15 +93,15 @@ def _alter_with_policy_handling(
     if not inspector.has_table(table_name):
         return
 
-    policies = _get_table_policy_snapshots(bind, table_name)
+    policies = _get_schema_policy_snapshots(bind)
     if policies:
-        _drop_table_policies(table_name, policies)
+        _drop_schema_policies(policies)
 
     for alter in alterations:
         op.alter_column(table_name, **alter)
 
     if policies:
-        _recreate_table_policies(policies)
+        _recreate_schema_policies(policies)
 
 
 def upgrade():

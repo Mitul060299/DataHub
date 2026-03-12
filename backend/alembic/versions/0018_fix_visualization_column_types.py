@@ -28,6 +28,8 @@ def _get_schema_policy_snapshots(bind: sa.engine.Connection) -> list[dict[str, s
         sa.text(
             """
             SELECT
+                schemaname,
+                tablename,
                 policyname,
                 format(
                     'CREATE POLICY %I ON %I.%I AS %s FOR %s TO %s%s%s',
@@ -69,10 +71,19 @@ def _get_schema_policy_snapshots(bind: sa.engine.Connection) -> list[dict[str, s
 
 def _drop_schema_policies(policies: list[dict[str, str]]) -> None:
     for policy in policies:
+        table_name = (policy.get("tablename") or "").strip()
+        if not table_name:
+            continue
+        schema_name = (policy.get("schemaname") or "").strip()
+        target = (
+            f"{_quote_ident(schema_name)}.{_quote_ident(table_name)}"
+            if schema_name
+            else _quote_ident(table_name)
+        )
         op.execute(
             sa.text(
                 f"DROP POLICY IF EXISTS {_quote_ident(policy['policyname'])} "
-                f"ON {_quote_ident(policy['schemaname'])}.{_quote_ident(policy['tablename'])}"
+                f"ON {target}"
             )
         )
 

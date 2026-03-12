@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models_db import DatasetMetaDB
+from ..models_db import DatasetMetaDB, User
 from ..security import get_current_subject, get_current_user_id
 from . import billing_repository
 

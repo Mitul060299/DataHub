@@ -6,7 +6,7 @@ from ..models import CalculatedColumnCreate, CalculatedColumnDB
 from ..security import get_current_role, require_role
 from ..services.calculated_columns_service import CalculatedColumnsService
 
-router = APIRouter(prefix="/api/datasets", tags=["calculated-columns"])
+router = APIRouter(prefix="/datasets", tags=["calculated-columns"])
 
 
 @router.get("/{dataset_id}/columns", response_model=list[CalculatedColumnDB])

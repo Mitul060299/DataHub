@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 import base64
+import json
 import time
 import httpx
 import jwt
@@ -74,7 +75,9 @@ def _get_supabase_key(id_token: str) -> Optional[Any]:
     # For HMAC algorithms (HS256), use the JWT secret
     if alg.startswith("HS"):
         print(f"Using HS256 with JWT secret for token verification")
-        return settings.supabase_jwt_secret or None
+        if not settings.supabase_jwt_secret:
+            return None
+        return _decode_jwt_secret(settings.supabase_jwt_secret)
     
     # For RSA/EC algorithms, fetch JWKS
     print(f"Token uses {alg}, fetching JWKS for public key")
@@ -91,9 +94,9 @@ def _get_supabase_key(id_token: str) -> Optional[Any]:
             print(f"Found matching key with algorithm: {jwk.get('alg')}")
             # Handle both RSA and EC keys
             if jwk.get("kty") == "RSA":
-                return jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
+                return jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
             elif jwk.get("kty") == "EC":
-                return jwt.algorithms.ECAlgorithm.from_jwk(jwk)
+                return jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(jwk))
     
     print(f"ERROR: No matching key found for kid: {kid}")
     return None
@@ -130,10 +133,6 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
         print("WARNING: SUPABASE_URL not configured")
         return {}
     
-    if not settings.supabase_jwt_secret:
-        print("WARNING: SUPABASE_JWT_SECRET not configured")
-        return {}
-    
     # Get the algorithm from token header
     try:
         header = jwt.get_unverified_header(token)
@@ -145,53 +144,74 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
     
     issuer = _get_supabase_issuer()
     audiences = _parse_audiences(settings.supabase_jwt_audience)
-    
-    # APPROACH 1: Try HS256 with JWT_SECRET (Supabase default)
-    # Even if token claims ES256, try HS256 first in case it's misconfigured
-    jwt_secret = _decode_jwt_secret(settings.supabase_jwt_secret)
-    
-    try:
-        print(f"Attempting HS256 verification with JWT_SECRET")
-        decoded = jwt.decode(
-            token,
-            jwt_secret,
-            algorithms=["HS256"],
-            audience=audiences if audiences else None,
-            issuer=issuer if issuer else None,
-            options={
-                "verify_signature": True,
-                "verify_exp": True,
-                "verify_aud": bool(audiences),
-                "verify_iss": bool(issuer),
-            }
-        )
-        print(f"✅ Successfully verified token (HS256) for user: {decoded.get('email', decoded.get('sub'))}")
-        return decoded
-    except jwt.ExpiredSignatureError:
-        print("ERROR: Token has expired")
-        return {}
-    except jwt.InvalidAudienceError as e:
-        print(f"ERROR: Invalid audience - {str(e)}")
-        # Try without audience verification
+
+    verification_key = _get_supabase_key(token)
+    if not verification_key:
+        print(f"ERROR: Could not resolve verification key for algorithm {alg}")
+    else:
         try:
+            print(f"Attempting {alg} verification with resolved key")
+            decoded = jwt.decode(
+                token,
+                verification_key,
+                algorithms=[alg],
+                audience=audiences if audiences else None,
+                issuer=issuer if issuer else None,
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_aud": bool(audiences),
+                    "verify_iss": bool(issuer),
+                },
+            )
+            print(f"✅ Successfully verified token ({alg}) for user: {decoded.get('email', decoded.get('sub'))}")
+            return decoded
+        except jwt.ExpiredSignatureError:
+            print("ERROR: Token has expired")
+            return {}
+        except jwt.InvalidAudienceError as e:
+            print(f"ERROR: Invalid audience - {str(e)}")
+            try:
+                decoded = jwt.decode(
+                    token,
+                    verification_key,
+                    algorithms=[alg],
+                    options={"verify_signature": True, "verify_exp": True, "verify_aud": False},
+                )
+                print(f"✅ Verified token ({alg}, no audience check) for user: {decoded.get('email', decoded.get('sub'))}")
+                return decoded
+            except Exception as e2:
+                print(f"ERROR: {alg} without audience also failed: {str(e2)}")
+        except Exception as e:
+            print(f"{alg} verification failed: {type(e).__name__}: {str(e)}")
+
+    if alg != "HS256" and settings.supabase_jwt_secret:
+        jwt_secret = _decode_jwt_secret(settings.supabase_jwt_secret)
+        try:
+            print("Attempting HS256 verification fallback with JWT_SECRET")
             decoded = jwt.decode(
                 token,
                 jwt_secret,
                 algorithms=["HS256"],
-                options={"verify_signature": True, "verify_exp": True, "verify_aud": False}
+                audience=audiences if audiences else None,
+                issuer=issuer if issuer else None,
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_aud": bool(audiences),
+                    "verify_iss": bool(issuer),
+                },
             )
-            print(f"✅ Verified token (HS256, no audience check) for user: {decoded.get('email')}")
+            print(f"✅ Successfully verified token (HS256 fallback) for user: {decoded.get('email', decoded.get('sub'))}")
             return decoded
-        except Exception as e2:
-            print(f"ERROR: HS256 without audience also failed: {str(e2)}")
-    except Exception as e:
-        print(f"HS256 verification failed: {type(e).__name__}: {str(e)}")
+        except Exception as e:
+            print(f"HS256 fallback failed: {type(e).__name__}: {str(e)}")
     
     # APPROACH 2: If HS256 failed and token is ES256, try fallback decode
-    if alg == "ES256":
-        print("⚠️  FALLBACK: Token is ES256, decoding without signature verification")
+    if alg in {"ES256", "RS256"}:
+        print(f"⚠️  FALLBACK: Token is {alg}, decoding without signature verification")
         print("   NOTE: This is insecure but allows the app to function.")
-        print("   TODO: Get public key from Supabase dashboard for proper ES256 verification")
+        print("   TODO: Ensure JWKS/public key verification is configured and reachable")
         
         try:
             decoded = jwt.decode(

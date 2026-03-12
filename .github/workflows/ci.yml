@@ -16,6 +16,8 @@ jobs:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
       - run: python -m compileall backend/app
+      - run: python -m unittest tests.test_duckdb_path_guard -v
+        working-directory: backend
 
   frontend-build:
     runs-on: ubuntu-latest

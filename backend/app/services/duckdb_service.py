@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import SessionLocal
 from ..models_db import DatasetChunkDB, DatasetDataDB, DatasetMetaDB
+from .duckdb.path_guard import guard_duckdb_sql_paths
 from .object_storage import StorageService
 from .query_cache import QueryCacheService
 
@@ -70,14 +71,14 @@ class DuckDBService:
             from .calculated_columns_service import CalculatedColumnsService
 
             sql_query = CalculatedColumnsService.inject_calculated_columns(sql_query, dataset_id)
-        return cls._execute(connection, sql_query)
+        return cls._execute(connection, sql_query, allowed_paths=[file_path])
 
     @classmethod
     def get_preview(cls, storage_path: str, limit: int = 100) -> dict[str, Any]:
         connection = cls._ensure_db()
         file_path = StorageService.get_query_path(storage_path)
         sql_query = f"SELECT * FROM read_parquet('{file_path}') LIMIT {int(limit)}"
-        rows = cls._execute(connection, sql_query)
+        rows = cls._execute(connection, sql_query, allowed_paths=[file_path])
         columns = list(rows[0].keys()) if rows else []
         return {"rows": rows, "columns": columns}
 
@@ -106,13 +107,13 @@ class DuckDBService:
         dataset_df = pd.DataFrame(rows or [])
         connection.register("dataset_source", dataset_df)
         try:
-            connection.execute("DROP TABLE IF EXISTS dataset")
+            cls._execute_statement(connection, "DROP TABLE IF EXISTS dataset")
             base_select = "SELECT * FROM dataset_source"
             if dataset_id:
                 from .calculated_columns_service import CalculatedColumnsService
 
                 base_select = CalculatedColumnsService.inject_calculated_columns(base_select, dataset_id)
-            connection.execute(f"CREATE TEMP TABLE dataset AS {base_select}")
+            cls._execute_statement(connection, f"CREATE TEMP TABLE dataset AS {base_select}")
 
             transformed_sql = cls._normalize_dataset_sql(sql)
             statements = cls._split_sql_statements(transformed_sql)
@@ -124,7 +125,7 @@ class DuckDBService:
                 if cls._is_select_statement(statement):
                     last_result = cls._execute(connection, statement)
                 else:
-                    connection.execute(statement)
+                    cls._execute_statement(connection, statement)
 
             if last_result is not None:
                 return last_result
@@ -132,7 +133,7 @@ class DuckDBService:
             return cls._execute(connection, "SELECT * FROM dataset")
         finally:
             try:
-                connection.execute("DROP TABLE IF EXISTS dataset")
+                cls._execute_statement(connection, "DROP TABLE IF EXISTS dataset")
             except Exception:
                 pass
             try:
@@ -156,7 +157,7 @@ class DuckDBService:
 
         try:
             for name in table_names:
-                connection.execute(f"DROP TABLE IF EXISTS {name}")
+                cls._execute_statement(connection, f"DROP TABLE IF EXISTS {name}")
 
             for name in table_names:
                 rows = relation_rows.get(name) or []
@@ -169,7 +170,7 @@ class DuckDBService:
                         from .calculated_columns_service import CalculatedColumnsService
 
                         base_select = CalculatedColumnsService.inject_calculated_columns(base_select, dataset_id)
-                    connection.execute(f"CREATE TEMP TABLE {name} AS {base_select}")
+                    cls._execute_statement(connection, f"CREATE TEMP TABLE {name} AS {base_select}")
                 finally:
                     try:
                         connection.unregister(source_name)
@@ -186,7 +187,7 @@ class DuckDBService:
                 if cls._is_select_statement(statement):
                     last_result = cls._execute(connection, statement)
                 else:
-                    connection.execute(statement)
+                    cls._execute_statement(connection, statement)
 
             if last_result is not None:
                 return last_result
@@ -195,7 +196,7 @@ class DuckDBService:
         finally:
             for name in table_names:
                 try:
-                    connection.execute(f"DROP TABLE IF EXISTS {name}")
+                    cls._execute_statement(connection, f"DROP TABLE IF EXISTS {name}")
                 except Exception:
                     pass
 
@@ -229,8 +230,22 @@ class DuckDBService:
         return bool(re.match(r"^\s*(select|with)\b", sql, flags=re.IGNORECASE))
 
     @staticmethod
-    def _execute(connection: duckdb.DuckDBPyConnection, sql: str) -> list[dict[str, Any]]:
-        result = connection.execute(sql)
+    def _execute_statement(
+        connection: duckdb.DuckDBPyConnection,
+        sql: str,
+        allowed_paths: list[str] | None = None,
+    ) -> None:
+        guarded_sql = guard_duckdb_sql_paths(sql, allowed_paths=allowed_paths)
+        connection.execute(guarded_sql)
+
+    @staticmethod
+    def _execute(
+        connection: duckdb.DuckDBPyConnection,
+        sql: str,
+        allowed_paths: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        guarded_sql = guard_duckdb_sql_paths(sql, allowed_paths=allowed_paths)
+        result = connection.execute(guarded_sql)
         columns = [col[0] for col in result.description]
         rows = result.fetchall()
         return [dict(zip(columns, row)) for row in rows]

@@ -8,7 +8,7 @@
 - User feedback loop to correct/confirm fixes.
 - Chart-ready profiling summaries available per column.
 - Dataset listing and CSV export for downstream usage.
-- Dataset metadata persisted in Postgres.
+- Dataset metadata persisted in Supabase Postgres.
 - Dataset rows stored as JSONB and chunked for larger datasets.
 - CSV export streams from chunks without loading full datasets in memory.
 
@@ -19,43 +19,53 @@
 ### Business Context Memory
 - Context API with optional Chroma-backed persistence.
 - Default workspace context used for agent prompts.
-- Context persisted in Postgres with optional local JSON fallback.
+- Context persisted in Supabase Postgres with optional local JSON fallback.
 
 ### Deep Transformation Recipes
 - Recipe API supports multi-step definitions and apply.
-- Provenance and reversibility tracked in Phase 3.
+- Provenance and reversibility are tracked for applied transformations.
 
 ### Rich, Interactive Visualizations
-- Dashboard CRUD scaffold available (Phase 3).
-- Advanced layout, drill-down, and charting in Phase 3+.
-- Dashboards persisted in Postgres.
+- Dashboard CRUD and widget configuration are available.
+- Dashboards are persisted in Supabase Postgres.
+- Exports and shared read-only views are supported.
 
 ### Open Ecosystem & Integration
-- Plugin interface scaffolding and plugin listing endpoint.
-- Webhooks and scheduled job endpoints available (Phase 4).
+- Plugin interface and plugin listing endpoint are available.
+- Webhooks and scheduled job APIs are available.
 - Connector import API with inline CSV connector available.
 
 ### Enterprise-Grade Security & Deployment
-- Audit logging middleware and RBAC scaffolding available.
-- SSO and compliance modules in Phase 3+.
-- Compliance scaffolds available in docs/COMPLIANCE.md.
-- User and workspace records stored in Postgres via SQLAlchemy.
-- Audit logs stored in Postgres.
+- Audit logging middleware and RBAC enforcement are available.
+- Supabase JWT auth is used for session identity.
+- OIDC is configurable for enterprise SSO requirements.
+- Compliance scaffolds are available in docs/COMPLIANCE.md.
+- User/workspace records and audit logs are stored in Supabase Postgres.
 
-## 2. Underlying Solutions / Tech Map
+## 2. Architecture Snapshot
+
+- Frontend: React + Vite on Vercel.
+- Backend API: FastAPI on Render.
+- Identity + relational data: Supabase Auth + Supabase Postgres.
+- Cache: Redis (Upstash in managed deployments via REDIS_URL).
+- SQL execution engine: embedded DuckDB in backend services.
+- Object storage: Amazon S3 (default provider) for dataset parquet artifacts.
+- Optional memory service: Chroma for vector context use cases.
+
+## 3. Underlying Solutions / Tech Map
 
 | Capability | Solution / Tech |
 | --- | --- |
 | Data Cleaning & Profiling | Pandas, pyjanitor, AI/LLM agents |
-| Auto Insight/Trends | AI pipelines (Phase 2+) |
-| Context/Memory | Vector DB (Chroma) and encrypted storage |
-| AI Agents/Autowrangling | LangChain/RAG (Phase 2+) |
-| Visualization | React + charting libraries (Phase 3+) |
+| Auto Insight/Trends | Rule-based insights + optional Groq-backed generation |
+| Context/Memory | Supabase Postgres + optional Chroma |
+| AI Agents/Autowrangling | FastAPI orchestration + DuckDB SQL execution |
+| Visualization | React + charting libraries |
 | API + Connectors | FastAPI, REST, plugins/adapters |
-| Permissions & Security | JWT, RBAC, audit logging (Phase 3+) |
-| Deployment | Docker Compose, CI/CD, Helm (Phase 5+) |
+| Permissions & Security | Supabase JWT, RBAC, audit logging |
+| Deployment | Vercel + Render + Supabase + Upstash + S3 |
 
-## 3. Typical User Workflow
+## 4. Typical User Workflow
 1. Connect data sources via UI or API.
 2. Profile and clean with AI-assisted suggestions.
 3. Teach business context and validate rules.
@@ -64,13 +74,21 @@
 6. Export or deploy outputs with automation.
 7. Monitor with governance and audit trails.
 
-## 4. Deployment Approach
-- Docker Compose for local/dev.
-- Helm and cloud deployment artifacts planned in infra/.
-- SSO, encryption-at-rest, and audit logs in Phase 3+.
+## 5. Deployment Approach
+- Managed cloud topology (current):
+	- Frontend on Vercel.
+	- Backend on Render.
+	- Auth and primary Postgres on Supabase.
+	- Redis on Upstash.
+	- Dataset objects on S3.
+- Local/self-hosted topology:
+	- Docker Compose with local Postgres/Redis/optional Chroma.
+	- Storage provider is configurable (S3 default, optional R2/GCS/Azure/local).
+- Kubernetes/Helm artifacts remain available for infrastructure-managed deployments.
 
-## 5. How It Works (Under the Hood)
-- Profiling and transformation pipelines run in the backend.
-- Context memory stored in vector DB for reuse.
-- Agents propose transformations and insights with traceability.
-- UI consumes API for previews, dashboards, and export flows.
+## 6. How It Works (Under the Hood)
+- Profiling and transformation pipelines run in FastAPI backend services.
+- Dataset parquet files are stored in object storage and queried through DuckDB.
+- Query results use Redis acceleration with persisted cache metadata in Postgres.
+- Context and governance records are persisted in Supabase Postgres.
+- Frontend consumes API endpoints for previews, transformations, dashboards, sharing, and governance workflows.

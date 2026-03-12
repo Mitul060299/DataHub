@@ -10,6 +10,7 @@ import pandas as pd
 from ..db import SessionLocal
 from ..models import CalculatedColumnDB as CalculatedColumnOut
 from ..models_db import CalculatedColumnDB, DatasetMetaDB
+from .duckdb.path_guard import guard_duckdb_sql_paths
 from .duckdb_service import DuckDBService
 
 
@@ -76,7 +77,8 @@ class CalculatedColumnsService:
         connection.register(source_name, frame)
         try:
             query = f"SELECT {formula} AS _value FROM {source_name} LIMIT 1"
-            result = connection.execute(query).fetchone()
+            guarded_query = guard_duckdb_sql_paths(query)
+            result = connection.execute(guarded_query).fetchone()
             return result[0] if result else None
         except Exception as exc:
             raise ValueError(str(exc)) from exc

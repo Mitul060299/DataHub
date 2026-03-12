@@ -10,17 +10,23 @@
 	- docker compose -f docker-compose.prod.yml up -d --build
 - Frontend is served on port 80 and proxies /api to the backend
 
-## Render (Backend) + Vercel (Frontend) + Supabase
+## Render (Backend) + Vercel (Frontend) + Supabase + Upstash + S3
 ### Backend (Render)
 - Create a new Render Web Service from the backend repo
 - Build command: pip install -r requirements.txt
 - Start command: uvicorn app.main:app --host 0.0.0.0 --port 10000
 - Add environment variables:
 	- DATABASE_URL (Supabase Postgres connection string)
+	- REDIS_URL (Upstash Redis connection string)
 	- SUPABASE_URL
 	- SUPABASE_ANON_KEY
 	- SUPABASE_JWT_SECRET
 	- SUPABASE_JWT_AUD
+	- STORAGE_PROVIDER=s3
+	- AWS_ACCESS_KEY_ID
+	- AWS_SECRET_ACCESS_KEY
+	- AWS_REGION
+	- S3_BUCKET_NAME
 	- PUBLIC_BASE_URL (your Vercel frontend URL)
 	- CORS_ORIGINS (comma-separated list including your Vercel domain)
 	- METRICS_BEARER_TOKEN (optional)
@@ -36,6 +42,8 @@
 - Output directory: dist
 - Environment variables:
 	- VITE_API_BASE_URL (Render backend URL)
+	- VITE_SUPABASE_URL
+	- VITE_SUPABASE_ANON_KEY
 	- VITE_ENABLE_BILLING=false
 
 ## Single VPS (Docker Compose + Caddy)
@@ -83,7 +91,7 @@ Key values:
 
 ## Production Notes
 - Replace default secrets in values-prod.yaml
-- Use managed Postgres and Redis
+- Use Supabase Postgres and Upstash Redis in managed deployments
 - Enable TLS and reverse proxy
 - Set CORS_ORIGINS to your production domains
 - Use .env.production.example as a template
@@ -117,6 +125,8 @@ Key values:
 
 ## Beta Deployment Smoke Checklist
 - Confirm Vercel domain and Render backend URL are set
+- Confirm REDIS_URL points to Upstash and cache health is connected
+- Confirm S3 credentials and bucket are configured for dataset object storage
 - Run migrations against Supabase
 - Verify health: https://<render-backend>/health
 - Verify auth flow and core actions: login, upload dataset, preview, insights

@@ -2,17 +2,26 @@
 
 Modern, AI-assisted data analytics and transformation platform.
 
-## MVP Scope (Phase 1)
-- FastAPI backend with dataset import, profiling, and transformation recipe endpoints.
-- React frontend shell with table preview and basic insights placeholders.
-- Docker Compose for backend + Postgres + Redis + optional Chroma.
+## Current Production Stack
+- Frontend: React + Vite on Vercel
+- Backend: FastAPI on Render
+- Auth + primary relational database: Supabase Auth + Supabase Postgres
+- Cache: Redis (typically Upstash in managed deployments)
+- SQL analytics engine: DuckDB (embedded in backend)
+- Object storage: Amazon S3 (default storage provider)
+- Optional context memory: Chroma
+
+## Current Scope
+- FastAPI backend with dataset import, profiling, transformation recipes, dashboards, sharing, and governance endpoints.
+- React frontend for auth, dataset exploration, transformations, insights, and dashboard workflows.
+- Docker Compose support for local development with Postgres + Redis + optional Chroma.
 - Sample dataset for onboarding.
 
 ## Quick Start (Local)
 1. Copy environment file:
    - Create .env from .env.example and fill values.
 2. Start services:
-   - Use Docker Compose to bring up Postgres, Redis, Chroma, backend, and frontend.
+   - Use Docker Compose to bring up Postgres, Redis, optional Chroma, backend, and frontend.
 3. Open API docs:
    - Backend exposes OpenAPI at /docs.
 
@@ -20,6 +29,8 @@ Modern, AI-assisted data analytics and transformation platform.
 - Use .env.production.example as a template for production secrets and CORS.
 - Build and run production stack:
    - docker compose -f docker-compose.prod.yml up -d --build
+- Managed deployment reference:
+   - Frontend on Vercel, backend on Render, Supabase for auth/Postgres, Redis via Upstash, and S3 for dataset objects.
 - Shared dashboards can be accessed via /shared/{token} when enabled
 - Shared workspaces can be accessed via /shared-workspace/{token}
 
@@ -31,7 +42,7 @@ Modern, AI-assisted data analytics and transformation platform.
 - samples/ sample datasets
 
 ## Notes
-- AI integrations are stubbed for MVP and will be expanded in Phase 2.
+- Some ML/AutoML service modules are still stubbed and intended for further implementation.
 - Replace placeholder secrets and tokens before production.
 
 ## Pricing QA Automation

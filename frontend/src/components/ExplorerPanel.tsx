@@ -43,6 +43,28 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     return outputMap;
   }, [steps]);
 
+  const workflowLeafOutputIds = useMemo(() => {
+    const outputIds = new Set<string>();
+    const consumedIds = new Set<string>();
+
+    for (const step of steps) {
+      if (step.outputDataset?.id) {
+        outputIds.add(step.outputDataset.id);
+      }
+      if (step.inputDataset?.id) {
+        consumedIds.add(step.inputDataset.id);
+      }
+    }
+
+    const leafIds = new Set<string>();
+    for (const outputId of outputIds) {
+      if (!consumedIds.has(outputId)) {
+        leafIds.add(outputId);
+      }
+    }
+    return leafIds;
+  }, [steps]);
+
   const datasetsById = useMemo(() => {
     const datasetMap = new Map<string, Dataset>();
     for (const dataset of datasets) {
@@ -68,14 +90,14 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         .map((dataset) => dataset.parentId)
         .filter((parentId): parentId is string => Boolean(parentId))
     );
-    const hasTrackedOutputs = operationByOutputDataset.size > 0;
+    const hasTrackedOutputs = workflowLeafOutputIds.size > 0;
 
     const derived = datasets
       .filter((dataset) => Boolean(
         dataset.parentId
         && datasetsById.has(dataset.parentId)
         && !parentIds.has(dataset.id)
-        && (!hasTrackedOutputs || operationByOutputDataset.has(dataset.id))
+        && (!hasTrackedOutputs || workflowLeafOutputIds.has(dataset.id))
       ))
       .map((dataset) => {
         const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
@@ -93,7 +115,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     const lowered = searchQuery.trim().toLowerCase();
     if (!lowered) return derived;
     return derived.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
-  }, [datasets, datasetsById, operationByOutputDataset, searchQuery]);
+  }, [datasets, datasetsById, operationByOutputDataset, workflowLeafOutputIds, searchQuery]);
 
   const loadDatasets = useCallback(async () => {
     if (!activeProject?.id) {

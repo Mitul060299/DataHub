@@ -69,6 +69,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               );
             })
           : [];
+        const finalOutputDatasetId = typeof event.output_dataset_id === "string" ? event.output_dataset_id : "";
 
         const maxStepNumber = completedSteps.reduce((max, step) => {
           const stepNum = Number(step.step_number ?? 0);
@@ -94,12 +95,17 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           const outputDatasetId = typeof stepRecord.output_dataset_id === "string"
             ? stepRecord.output_dataset_id
             : undefined;
-          const hasDerivedOutput = Boolean(
-            outputDatasetId
-            && outputDatasetId !== inputDatasetId
-            && outputDatasetId !== dataset?.id
-          );
           const isFinalStep = maxStepNumber > 0 ? stepNumber === maxStepNumber : true;
+          const effectiveOutputDatasetId = (
+            isFinalStep && finalOutputDatasetId
+              ? finalOutputDatasetId
+              : outputDatasetId
+          );
+          const hasDerivedOutput = Boolean(
+            effectiveOutputDatasetId
+            && effectiveOutputDatasetId !== inputDatasetId
+            && effectiveOutputDatasetId !== dataset?.id
+          );
 
           addStep({
             id: crypto.randomUUID(),
@@ -118,7 +124,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               : undefined,
             outputDataset: hasDerivedOutput && isFinalStep
               ? {
-                  id: outputDatasetId!,
+                  id: effectiveOutputDatasetId!,
                   name: `${operation} output`,
                   rowCount: numericRows ?? 0,
                   parentId: inputDatasetId ?? null,
@@ -131,9 +137,8 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           onStepApplied();
         }
 
-        const outputDatasetId = typeof event.output_dataset_id === "string" ? event.output_dataset_id : "";
-        if (outputDatasetId) {
-          if (dataset?.id !== outputDatasetId) {
+        if (finalOutputDatasetId) {
+          if (dataset?.id !== finalOutputDatasetId) {
             const finalStep = completedSteps.find((step) => Number(step.step_number ?? 0) === maxStepNumber);
             const finalRowsRaw = finalStep?.rows_affected;
             const finalRows = typeof finalRowsRaw === "number"
@@ -142,7 +147,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                 ? Number(finalRowsRaw)
                 : 0;
             setActiveDataset({
-              id: outputDatasetId,
+              id: finalOutputDatasetId,
               name: finalStep?.description ? String(finalStep.description) : "AI Output",
               rows: finalRows,
             });

@@ -30,6 +30,7 @@ class ExecutionResult(TypedDict):
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
 
+    root_dataset_id: str
     dataset_id: str
     user_id: str
     workspace_id: str

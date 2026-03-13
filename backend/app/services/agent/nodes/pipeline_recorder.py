@@ -9,10 +9,10 @@ from ..state import AgentState
 async def pipeline_recorder(state: AgentState) -> dict:
     results = state.get("execution_results", [])
     plan = state.get("plan", [])
-    dataset_id = state.get("dataset_id")
+    root_dataset_id = state.get("root_dataset_id") or state.get("dataset_id")
 
     saved_steps = []
-    current_dataset_id = dataset_id
+    current_dataset_id = root_dataset_id
     for result in results:
         if result["success"]:
             step_idx = result["step_number"] - 1
@@ -60,10 +60,10 @@ async def pipeline_recorder(state: AgentState) -> dict:
                 step_results={
                     "executed_steps": execution_log,
                 },
-                input_dataset_id=dataset_id,
-                output_dataset_id=dataset_id,
+                input_dataset_id=root_dataset_id,
+                output_dataset_id=current_dataset_id,
                 metrics={
-                    "dataset_id": dataset_id,
+                    "dataset_id": root_dataset_id,
                     "executed_steps": execution_log,
                 },
                 execution_log=execution_log,

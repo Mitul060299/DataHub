@@ -21,6 +21,7 @@ class AgentGraphService:
     ) -> dict[str, Any]:
         return {
             "messages": [HumanMessage(content=message)] if message else [],
+            "root_dataset_id": dataset_id,
             "dataset_id": dataset_id,
             "user_id": user_id,
             "workspace_id": workspace_id,
@@ -69,6 +70,7 @@ class AgentGraphService:
                 return
             initial_state = {
                 **snapshot_values,
+                "root_dataset_id": snapshot_values.get("root_dataset_id", dataset_id),
                 "dataset_id": snapshot_values.get("dataset_id", dataset_id),
                 "user_id": snapshot_values.get("user_id", user_id),
                 "workspace_id": snapshot_values.get("workspace_id", workspace_id),

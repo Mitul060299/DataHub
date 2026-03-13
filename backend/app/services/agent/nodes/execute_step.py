@@ -170,14 +170,21 @@ async def execute_step(state: AgentState) -> dict:
             is_public=False,
         )
 
-        async for _ in engine.execute_pipeline(
+        pipeline_final_dataset_id: str | None = None
+        async for pipeline_event in engine.execute_pipeline(
             pipeline_id=str(pipeline.id),
             input_dataset_id=state["dataset_id"],
             session_id=None,
             runtime_parameters=parameters,
             triggered_by="agent",
         ):
-            pass
+            event_type = getattr(getattr(pipeline_event, "type", None), "value", None)
+            if event_type == "done":
+                event_data = getattr(pipeline_event, "data", None)
+                if isinstance(event_data, dict):
+                    final_dataset_id = event_data.get("final_dataset_id")
+                    if isinstance(final_dataset_id, str) and final_dataset_id.strip():
+                        pipeline_final_dataset_id = final_dataset_id.strip()
 
         runs, _ = engine.get_pipeline_runs(str(pipeline.id), limit=1, offset=0)
         latest_run = runs[0] if runs else None
@@ -187,6 +194,17 @@ async def execute_step(state: AgentState) -> dict:
             if latest_run and latest_run.output_dataset_id
             else None
         )
+        if not output_dataset_id and pipeline_final_dataset_id:
+            output_dataset_id = pipeline_final_dataset_id
+        if not output_dataset_id:
+            fallback_meta = (
+                db.query(DatasetMetaDB)
+                .filter(DatasetMetaDB.parent_id == state["dataset_id"])
+                .order_by(DatasetMetaDB.created_at.desc())
+                .first()
+            )
+            if fallback_meta and fallback_meta.id:
+                output_dataset_id = str(fallback_meta.id)
 
         rows_affected = None
         engine_sql = step_sql or None

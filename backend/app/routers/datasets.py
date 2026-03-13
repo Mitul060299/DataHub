@@ -21,7 +21,7 @@ from ..models import (
     StorageTierPolicyUpdate,
 )
 from ..services.events import emit_event
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..db import get_db
 from ..config import settings
 from ..services.cache import invalidate_profile_cache
@@ -145,6 +145,7 @@ async def upload_dataset(
 ) -> DatasetPreview:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
     _ensure_dataset_meta_schema(db)
     content = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(content))
@@ -162,6 +163,7 @@ async def upload_dataset(
     db.add(
         DatasetMetaDB(
             id=dataset_id,
+            user_id=user_id,
             workspace_id=workspace_id or "default",
             name=resolved_name,
             columns=list(df.columns),
@@ -206,6 +208,7 @@ def save_dataset(
     db: Session,
     parent_id: str | None = None,
     workspace_id: str | None = None,
+    user_id: str | None = None,
     store_rows: bool = True,
     meta_extra: dict | None = None,
 ) -> str:
@@ -218,6 +221,7 @@ def save_dataset(
         _evict_cache()
     meta_kwargs = {
         "id": dataset_id,
+        "user_id": user_id,
         "workspace_id": workspace_id or "default",
         "columns": list(df.columns),
         "row_count": int(df.shape[0]),

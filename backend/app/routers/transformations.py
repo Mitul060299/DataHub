@@ -10,7 +10,7 @@ from ..models import (
 from ..services.recipes import recipe_store
 from ..services.transformer import apply_steps
 from .datasets import get_dataset, get_dataset_from_db, save_dataset
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..db import get_db
 from ..services.audit import audit_store
 from ..models import AuditEntry
@@ -115,6 +115,7 @@ def apply_recipe(
 ) -> DatasetPreview:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_id = get_current_user_id(authorization)
     try:
         df = get_dataset(dataset_id)
     except KeyError:
@@ -128,7 +129,7 @@ def apply_recipe(
         raise HTTPException(status_code=404, detail="Recipe not found")
 
     transformed = apply_steps(df, recipe.steps)
-    new_id = save_dataset(transformed, db, parent_id=dataset_id)
+    new_id = save_dataset(transformed, db, parent_id=dataset_id, user_id=user_id)
     preview = DatasetPreview(
         dataset_id=new_id,
         columns=list(transformed.columns),

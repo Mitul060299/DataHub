@@ -30,6 +30,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [datasetLoadError, setDatasetLoadError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const operationByOutputDataset = useMemo(() => {
@@ -85,10 +86,15 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   const loadDatasets = useCallback(async () => {
     if (!activeProject?.id) {
       setDatasets([]);
+      setDatasetLoadError(null);
       return;
     }
     try {
-      const response = await api.get("/datasets", { params: { project_id: activeProject.id } });
+      const response = await api.get("/datasets", {
+        params: { project_id: activeProject.id },
+        headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+        timeout: 120000,
+      });
       const mapped = (response.data ?? []).map((item: Record<string, unknown>) => ({
         id: String(item.id ?? item.dataset_id ?? ""),
         name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
@@ -97,10 +103,13 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         parentId: item.parent_id ? String(item.parent_id) : null,
       }));
       setDatasets(mapped);
-    } catch {
+      setDatasetLoadError(null);
+    } catch (error: unknown) {
+      const maybeError = error as { response?: { data?: { detail?: string } } };
+      setDatasetLoadError(maybeError.response?.data?.detail ?? "Failed to load datasets");
       setDatasets([]);
     }
-  }, [activeProject?.id]);
+  }, [activeProject?.id, workspaceId]);
 
   const removeDataset = async (dataset: Dataset) => {
     if (!dataset.id) return;
@@ -167,6 +176,11 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           marginBottom: 10,
         }}
       />
+      {datasetLoadError ? (
+        <p style={{ margin: "0 0 10px", color: "var(--rd)", fontSize: 11 }}>
+          {datasetLoadError}
+        </p>
+      ) : null}
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <DataSection
@@ -197,6 +211,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       />
       <ImportModal
         open={importModalOpen}
+        workspaceId={workspaceId}
         onClose={() => setImportModalOpen(false)}
         onImported={() => {
           setImportModalOpen(false);

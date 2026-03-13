@@ -7,7 +7,7 @@ from .datasets import save_dataset
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
 from ..services.sync_store import sync_store
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..services.plan_guard import resolve_user_plan, enforce_connector_access, enforce_file_constraints
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
@@ -29,6 +29,7 @@ def import_from_connector(
 ) -> DatasetPreview:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_id = get_current_user_id(authorization)
     user_plan = resolve_user_plan(db, authorization)
     enforce_connector_access(user_plan, payload.connector)
     connector = connector_registry.get(payload.connector)
@@ -46,7 +47,7 @@ def import_from_connector(
         upload_size_bytes=max(estimated_original_size, 1),
         db=db,
     )
-    dataset_id = save_dataset(df, db, workspace_id=workspace_id)
+    dataset_id = save_dataset(df, db, workspace_id=workspace_id, user_id=user_id)
     return DatasetPreview(
         dataset_id=dataset_id,
         columns=list(df.columns),
@@ -65,6 +66,7 @@ def sync_connector(
 ) -> dict:
     role = get_current_role(authorization)
     require_role("editor", role)
+    user_id = get_current_user_id(authorization)
     user_plan = resolve_user_plan(db, authorization)
     connector_name = payload.get("connector")
     config = payload.get("config", {})
@@ -88,7 +90,7 @@ def sync_connector(
             upload_size_bytes=max(estimated_original_size, 1),
             db=db,
         )
-        new_id = save_dataset(df, db, parent_id=dataset_id, workspace_id=workspace_id)
+        new_id = save_dataset(df, db, parent_id=dataset_id, workspace_id=workspace_id, user_id=user_id)
         status = sync_store.update(key=key, mode=mode, dataset_id=new_id)
         return {
             "status": "synced",

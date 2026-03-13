@@ -108,7 +108,7 @@ export function WorkspacePage() {
           void refetch();
         }}
       />
-      <ImportModal open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />
+      <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />
     </main>
   );
 }

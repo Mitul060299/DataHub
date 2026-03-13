@@ -3,6 +3,7 @@ import { api } from "../../api";
 
 interface ImportModalProps {
   open: boolean;
+  workspaceId?: string;
   onClose: () => void;
   onImported: () => void;
 }
@@ -16,7 +17,7 @@ const sourceCards: Array<{ key: SourceType; label: string; description: string }
   { key: "redshift", label: "Redshift", description: "Host + DB + table or query" },
 ];
 
-export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
+export function ImportModal({ open, workspaceId, onClose, onImported }: ImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -81,7 +82,11 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
     }
     try {
       await api.post("/import/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+          ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
+        },
+        timeout: 300000,
       });
       onImported();
       onClose();
@@ -104,7 +109,10 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
     setTestResultText(null);
     setIsTesting(true);
     try {
-      const response = await api.post("/import/test-connection", connectorPayload());
+      const response = await api.post("/import/test-connection", connectorPayload(), {
+        headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+        timeout: 120000,
+      });
       if (response.data?.success) {
         setTestResultText(response.data?.message ?? "Connection successful");
       } else {
@@ -127,6 +135,9 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
       await api.post("/import/connector-import", {
         ...connectorPayload(),
         dataset_name: datasetName.trim() || undefined,
+      }, {
+        headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+        timeout: 300000,
       });
       onImported();
       onClose();

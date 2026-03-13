@@ -101,7 +101,10 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   useEffect(() => {
     const loadDatasets = async () => {
       try {
-        const response = await api.get("/datasets", { params: { project_id: activeProject?.id } });
+        const response = await api.get("/datasets", {
+          params: { project_id: activeProject?.id },
+          timeout: 120000,
+        });
         const mapped = (response.data ?? [])
           .map((item: Record<string, unknown>) => ({
             id: String(item.id ?? item.dataset_id ?? ""),

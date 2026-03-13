@@ -12,7 +12,7 @@ import os
 import logging
 
 from ..db import get_db
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..services.file_parser import FileParserService
 from ..services.connectors import connector_registry
 from ..services.data_conversion import DataConversionService
@@ -79,6 +79,7 @@ async def upload_file(
     db: Session = Depends(get_db),
 ) -> dict:
     logger.info(f"Upload started: file={file.filename}, size={file.size}, workspace={workspace_id}")
+    current_user_id = get_current_user_id(authorization)
     
     try:
         role = get_current_role(authorization)
@@ -142,6 +143,7 @@ async def upload_file(
             df,
             db,
             workspace_id=workspace_id,
+            user_id=current_user_id,
             store_rows=store_rows,
             meta_extra={"name": resolved_dataset_name},
         )
@@ -291,6 +293,7 @@ async def connector_import(
 
     connector_name = _connector_type_map(db_type)
     user_plan = resolve_user_plan(db, authorization)
+    current_user_id = get_current_user_id(authorization)
     enforce_connector_access(user_plan, connector_name)
     connector = connector_registry.get(connector_name)
     if not connector:
@@ -350,6 +353,7 @@ async def connector_import(
         df,
         db,
         workspace_id=workspace_id,
+        user_id=current_user_id,
         store_rows=store_rows,
         meta_extra={"name": resolved_dataset_name},
     )

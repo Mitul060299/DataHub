@@ -1,6 +1,10 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from .groq_compat import apply_groq_compat_patches
+
+apply_groq_compat_patches()
+
 from .edges import route_after_execute, route_after_present, route_after_reflect, route_intent
 from .nodes.context_loader import context_loader
 from .nodes.execute_step import execute_step

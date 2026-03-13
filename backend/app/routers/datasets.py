@@ -374,17 +374,33 @@ def list_datasets(
     if workspace_id:
         query = query.filter(DatasetMetaDB.workspace_id == workspace_id)
     rows = query.all()
-    return [
-        DatasetMeta(
-            dataset_id=row.id,
-            name=row.name,
-            file_format=row.file_format,
-            columns=row.columns,
-            row_count=row.row_count,
-            parent_id=row.parent_id,
+    datasets: list[DatasetMeta] = []
+
+    for row in rows:
+        dataset_id = str(row.id or "").strip()
+        if not dataset_id:
+            continue
+
+        raw_columns = row.columns if isinstance(row.columns, (list, tuple)) else []
+        columns = [str(column) for column in raw_columns if column is not None]
+
+        try:
+            row_count = int(row.row_count or 0)
+        except (TypeError, ValueError):
+            row_count = 0
+
+        datasets.append(
+            DatasetMeta(
+                dataset_id=dataset_id,
+                name=str(row.name) if row.name is not None else None,
+                file_format=str(row.file_format) if row.file_format is not None else None,
+                columns=columns,
+                row_count=row_count,
+                parent_id=str(row.parent_id) if row.parent_id is not None else None,
+            )
         )
-        for row in rows
-    ]
+
+    return datasets
 
 
 @router.get("/{dataset_id}/lineage", response_model=list[DatasetMeta])

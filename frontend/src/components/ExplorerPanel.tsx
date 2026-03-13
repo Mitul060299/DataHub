@@ -105,8 +105,21 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       setDatasets(mapped);
       setDatasetLoadError(null);
     } catch (error: unknown) {
-      const maybeError = error as { response?: { data?: { detail?: string } } };
-      setDatasetLoadError(maybeError.response?.data?.detail ?? "Failed to load datasets");
+      const maybeError = error as {
+        response?: { status?: number; data?: { detail?: string; message?: string } };
+        message?: string;
+      };
+      const status = maybeError.response?.status;
+      const detail = maybeError.response?.data?.detail
+        ?? maybeError.response?.data?.message
+        ?? maybeError.message
+        ?? "Failed to load datasets";
+      const message = detail.toLowerCase().includes("network error")
+        ? "Network Error: Unable to reach backend API. Verify deployment health and /api routing."
+        : status
+          ? `${detail} (HTTP ${status})`
+          : detail;
+      setDatasetLoadError(message);
       setDatasets([]);
     }
   }, [activeProject?.id, workspaceId]);

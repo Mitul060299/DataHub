@@ -94,7 +94,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
     const content = (text || input).trim();
     if (!content && !approvePlan) return;
 
-    if (content) {
+    if (content && !approvePlan) {
       setMessages((previous) => [
         ...previous,
         { id: crypto.randomUUID(), role: "user", content },
@@ -108,7 +108,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         dataset_id: dataset.id,
         workspace_id: workspaceId,
         project_id: projectId,
-        conversation_history: [...history, ...(content ? [{ role: "user" as const, content }] : [])],
+        conversation_history: [...history, ...(content && !approvePlan ? [{ role: "user" as const, content }] : [])],
         pipeline_steps: steps.map((step) => ({
           operation: step.operation,
           description: step.description,
@@ -132,12 +132,18 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   };
 
   const approvePlan = () => {
+    const latestUserPrompt = [...messages]
+      .reverse()
+      .find((message) => message.role === "user")
+      ?.content
+      ?.trim() || "";
+
     setMessages((previous) => previous.map((message) => (
       message.planPending
         ? { ...message, planPending: false, planApproved: true }
         : message
     )));
-    void handleSend("", true);
+    void handleSend(latestUserPrompt, true);
   };
 
   const rejectPlan = () => {

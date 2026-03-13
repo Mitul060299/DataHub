@@ -40,6 +40,7 @@ class AgentGraphService:
             "error": None,
             "run_id": None,
             "output_dataset_id": dataset_id,
+            "run_steps": [],
             "final_response": "",
             "chart_config": None,
             "query_results": None,
@@ -174,6 +175,7 @@ class AgentGraphService:
                         "response": response_text,
                         "run_id": output.get("run_id"),
                         "output_dataset_id": output.get("output_dataset_id"),
+                        "run_steps": output.get("run_steps", []),
                         "pipeline_steps": output.get("pipeline_steps", []),
                     }
 

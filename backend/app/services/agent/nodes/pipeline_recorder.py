@@ -84,5 +84,6 @@ async def pipeline_recorder(state: AgentState) -> dict:
     return {
         "run_id": run_id,
         "output_dataset_id": current_dataset_id,
+        "run_steps": saved_steps,
         "pipeline_steps": [*state.get("pipeline_steps", []), *saved_steps],
     }

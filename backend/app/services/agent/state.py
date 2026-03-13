@@ -53,6 +53,7 @@ class AgentState(TypedDict):
     error: Optional[str]
     run_id: Optional[str]
     output_dataset_id: Optional[str]
+    run_steps: list[dict]
 
     final_response: str
     chart_config: Optional[dict]

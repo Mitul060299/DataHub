@@ -59,5 +59,6 @@ async def responder(state: AgentState) -> dict:
         "final_response": final,
         "run_id": state.get("run_id"),
         "output_dataset_id": state.get("output_dataset_id") or state.get("dataset_id"),
+        "run_steps": state.get("run_steps", []),
         "pipeline_steps": state.get("pipeline_steps", []),
     }

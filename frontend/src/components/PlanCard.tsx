@@ -2,7 +2,7 @@ interface PlanStep {
   step_number: number;
   operation: string;
   description: string;
-  sql: string;
+  sql?: string;
   estimated_rows: string;
   reversible: boolean;
 }

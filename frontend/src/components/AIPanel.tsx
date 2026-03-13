@@ -56,27 +56,46 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         const responseText = typeof event.response === "string" ? event.response : "Done.";
 
         const runId = typeof event.run_id === "string" ? event.run_id : null;
+        const runSteps = Array.isArray(event.run_steps)
+          ? (event.run_steps as Array<Record<string, unknown>>)
+          : [];
         const pipelineSteps = Array.isArray(event.pipeline_steps)
           ? (event.pipeline_steps as Array<Record<string, unknown>>)
           : [];
-        const completedSteps = runId
-          ? pipelineSteps.filter((step) => {
-              const agentRunId = step.agent_run_id;
-              const stepRunId = step.run_id;
-              return (
-                (typeof agentRunId === "string" && agentRunId === runId)
-                || (typeof stepRunId === "string" && stepRunId === runId)
-              );
-            })
-          : [];
-        const finalOutputDatasetId = typeof event.output_dataset_id === "string" ? event.output_dataset_id : "";
+        const completedSteps = runSteps.length > 0
+          ? runSteps
+          : runId
+            ? pipelineSteps.filter((step) => {
+                const agentRunId = step.agent_run_id;
+                const stepRunId = step.run_id;
+                return (
+                  (typeof agentRunId === "string" && agentRunId === runId)
+                  || (typeof stepRunId === "string" && stepRunId === runId)
+                );
+              })
+            : [];
 
-        const maxStepNumber = completedSteps.reduce((max, step) => {
+        const sortedCompletedSteps = [...completedSteps].sort((a, b) => {
+          const left = Number(a.step_number ?? 0);
+          const right = Number(b.step_number ?? 0);
+          return (Number.isFinite(left) ? left : 0) - (Number.isFinite(right) ? right : 0);
+        });
+        const lastCompletedStep = sortedCompletedSteps.length
+          ? sortedCompletedSteps[sortedCompletedSteps.length - 1]
+          : null;
+
+        const finalOutputDatasetIdFromEvent = typeof event.output_dataset_id === "string" ? event.output_dataset_id : "";
+        const finalOutputDatasetIdFromSteps = lastCompletedStep && typeof lastCompletedStep.output_dataset_id === "string"
+          ? lastCompletedStep.output_dataset_id
+          : "";
+        const finalOutputDatasetId = finalOutputDatasetIdFromEvent || finalOutputDatasetIdFromSteps;
+
+        const maxStepNumber = sortedCompletedSteps.reduce((max, step) => {
           const stepNum = Number(step.step_number ?? 0);
           return Number.isFinite(stepNum) ? Math.max(max, stepNum) : max;
         }, 0);
 
-        for (const stepRecord of completedSteps) {
+        for (const stepRecord of sortedCompletedSteps) {
           const operation = String(stepRecord.operation ?? "transform");
           const description = String(stepRecord.description ?? "Execute transformation step");
           const sql = typeof stepRecord.sql === "string" ? stepRecord.sql : undefined;
@@ -133,13 +152,13 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           });
         }
 
-        if (completedSteps.length > 0) {
+        if (sortedCompletedSteps.length > 0) {
           onStepApplied();
         }
 
         if (finalOutputDatasetId) {
           if (dataset?.id !== finalOutputDatasetId) {
-            const finalStep = completedSteps.find((step) => Number(step.step_number ?? 0) === maxStepNumber);
+            const finalStep = sortedCompletedSteps.find((step) => Number(step.step_number ?? 0) === maxStepNumber) ?? lastCompletedStep;
             const finalRowsRaw = finalStep?.rows_affected;
             const finalRows = typeof finalRowsRaw === "number"
               ? finalRowsRaw

@@ -47,7 +47,7 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
           {datasets.map((dataset) => {
             const active = activeDatasetId === dataset.id;
             const normalizedFormat = normalizeFormat(dataset.format);
-            const formatColor = normalizedFormat ? (formatAccent[normalizedFormat] ?? "var(--tx1)") : null;
+            const formatColor = normalizedFormat ? (formatAccent[normalizedFormat] ?? "var(--tx1)") : undefined;
             return (
               <div
                 key={dataset.id}

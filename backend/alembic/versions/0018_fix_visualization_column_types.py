@@ -20,7 +20,10 @@ def _quote_ident(value: str) -> str:
     return '"' + str(value).replace('"', '""') + '"'
 
 
-def _get_schema_policy_snapshots(bind: sa.engine.Connection) -> list[dict[str, str]]:
+def _get_table_policy_snapshots(
+    bind: sa.engine.Connection,
+    table_name: str,
+) -> list[dict[str, str]]:
     if bind.dialect.name != "postgresql":
         return []
 
@@ -62,14 +65,16 @@ def _get_schema_policy_snapshots(bind: sa.engine.Connection) -> list[dict[str, s
                 ) AS create_sql
             FROM pg_policies
             WHERE schemaname = current_schema()
-            ORDER BY tablename, policyname
+              AND tablename = :table_name
+            ORDER BY policyname
             """
         ),
+        {"table_name": table_name},
     ).mappings()
     return [dict(row) for row in rows]
 
 
-def _drop_schema_policies(policies: list[dict[str, str]]) -> None:
+def _drop_table_policies(policies: list[dict[str, str]]) -> None:
     for policy in policies:
         table_name = (policy.get("tablename") or "").strip()
         if not table_name:
@@ -88,7 +93,7 @@ def _drop_schema_policies(policies: list[dict[str, str]]) -> None:
         )
 
 
-def _recreate_schema_policies(policies: list[dict[str, str]]) -> None:
+def _recreate_table_policies(policies: list[dict[str, str]]) -> None:
     for policy in policies:
         create_sql = (policy.get("create_sql") or "").strip()
         if create_sql:
@@ -104,15 +109,15 @@ def _alter_with_policy_handling(
     if not inspector.has_table(table_name):
         return
 
-    policies = _get_schema_policy_snapshots(bind)
+    policies = _get_table_policy_snapshots(bind, table_name)
     if policies:
-        _drop_schema_policies(policies)
+        _drop_table_policies(policies)
 
     for alter in alterations:
         op.alter_column(table_name, **alter)
 
     if policies:
-        _recreate_schema_policies(policies)
+        _recreate_table_policies(policies)
 
 
 def upgrade():

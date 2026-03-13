@@ -64,6 +64,7 @@ async def execute_step(state: AgentState) -> dict:
             }
             return {
                 "execution_results": [*state.get("execution_results", []), execution_result],
+                "dataset_id": state.get("dataset_id"),
                 "current_step_index": idx + 1,
                 "retry_count": 0,
                 "error": None,
@@ -76,8 +77,14 @@ async def execute_step(state: AgentState) -> dict:
             query_spec = parameters.get("query_spec") if isinstance(parameters.get("query_spec"), dict) else {}
             layout = parameters.get("layout") if isinstance(parameters.get("layout"), dict) else {}
 
-            user_id = dataset.user_id or "agent"
-            workspace_id = dataset.workspace_id or "default"
+            if not query_spec and step_sql:
+                query_spec = {
+                    "sql": step_sql,
+                    "dataset_id": state.get("dataset_id"),
+                }
+
+            user_id = state.get("user_id") or dataset.user_id or "agent"
+            workspace_id = state.get("workspace_id") or dataset.workspace_id or "default"
 
             if not dashboard_id:
                 existing = DashboardsV2Service.list_dashboards(user_id=user_id, workspace_id=workspace_id)
@@ -122,6 +129,7 @@ async def execute_step(state: AgentState) -> dict:
             }
             return {
                 "execution_results": [*state.get("execution_results", []), execution_result],
+                "dataset_id": state.get("dataset_id"),
                 "current_step_index": idx + 1,
                 "retry_count": 0,
                 "error": None,
@@ -207,6 +215,7 @@ async def execute_step(state: AgentState) -> dict:
         }
         return {
             "execution_results": [*state.get("execution_results", []), execution_result],
+            "dataset_id": output_dataset_id or state.get("dataset_id"),
             "current_step_index": idx + 1,
             "retry_count": 0,
             "error": None,

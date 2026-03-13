@@ -60,7 +60,14 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           ? (event.pipeline_steps as Array<Record<string, unknown>>)
           : [];
         const completedSteps = runId
-          ? pipelineSteps.filter((step) => typeof step.run_id === "string" && step.run_id === runId)
+          ? pipelineSteps.filter((step) => {
+              const agentRunId = step.agent_run_id;
+              const stepRunId = step.run_id;
+              return (
+                (typeof agentRunId === "string" && agentRunId === runId)
+                || (typeof stepRunId === "string" && stepRunId === runId)
+              );
+            })
           : [];
 
         for (const stepRecord of completedSteps) {
@@ -82,6 +89,11 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           const outputDatasetId = typeof stepRecord.output_dataset_id === "string"
             ? stepRecord.output_dataset_id
             : undefined;
+          const hasDerivedOutput = Boolean(
+            outputDatasetId
+            && outputDatasetId !== inputDatasetId
+            && outputDatasetId !== dataset?.id
+          );
 
           addStep({
             id: crypto.randomUUID(),
@@ -98,9 +110,9 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                   rows: dataset.rows,
                 }
               : undefined,
-            outputDataset: outputDatasetId
+            outputDataset: hasDerivedOutput
               ? {
-                  id: outputDatasetId,
+                  id: outputDatasetId!,
                   name: `${operation} output`,
                   rowCount: numericRows ?? 0,
                   parentId: inputDatasetId ?? null,

@@ -31,6 +31,8 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
 
     dataset_id: str
+    user_id: str
+    workspace_id: str
     schema: dict
     stats: dict
     sample_rows: list

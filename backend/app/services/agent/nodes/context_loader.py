@@ -6,11 +6,11 @@ from ....db import SessionLocal
 from ....models_db import ChatTemplateDB, DatasetMetaDB
 
 
-def _load_available_templates(dataset_id: str) -> list[dict]:
+def _load_available_templates(dataset_id: str, fallback_workspace_id: str | None = None) -> list[dict]:
     db = SessionLocal()
     try:
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-        workspace_id = dataset.workspace_id if dataset and dataset.workspace_id else "default"
+        workspace_id = dataset.workspace_id if dataset and dataset.workspace_id else (fallback_workspace_id or "default")
         templates = (
             db.query(ChatTemplateDB)
             .filter(ChatTemplateDB.workspace_id == workspace_id)
@@ -42,10 +42,10 @@ async def context_loader(state: AgentState) -> dict:
     finally:
         db.close()
 
-    user_id = dataset.user_id if dataset and dataset.user_id else "agent"
-    workspace_id = dataset.workspace_id if dataset and dataset.workspace_id else "default"
+    user_id = state.get("user_id") or (dataset.user_id if dataset and dataset.user_id else "agent")
+    workspace_id = state.get("workspace_id") or (dataset.workspace_id if dataset and dataset.workspace_id else "default")
 
-    available_templates = _load_available_templates(dataset_id)
+    available_templates = _load_available_templates(dataset_id, workspace_id)
     calculated_columns = [column.model_dump() for column in CalculatedColumnsService.get_columns_for_dataset(dataset_id)]
     dashboards = [
         {

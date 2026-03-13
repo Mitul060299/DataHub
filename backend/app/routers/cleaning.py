@@ -55,6 +55,7 @@ async def process_command(
                 session_id=payload.session_id,
                 pipeline_steps=payload.pipeline_steps,
                 plan_approved=payload.plan_approved,
+                workspace_id=payload.workspace_id,
                 authorization=authorization,
                 db=db,
             )

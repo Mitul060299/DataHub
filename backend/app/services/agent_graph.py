@@ -16,10 +16,14 @@ class AgentGraphService:
         message: str,
         pipeline_steps: list[dict[str, Any]],
         plan_approved: bool,
+        user_id: str,
+        workspace_id: str,
     ) -> dict[str, Any]:
         return {
             "messages": [HumanMessage(content=message)] if message else [],
             "dataset_id": dataset_id,
+            "user_id": user_id,
+            "workspace_id": workspace_id,
             "schema": {},
             "stats": {},
             "sample_rows": [],
@@ -48,6 +52,8 @@ class AgentGraphService:
         session_id: str,
         pipeline_steps: list[dict[str, Any]],
         plan_approved: bool,
+        user_id: str,
+        workspace_id: str,
         db: Session,
     ) -> AsyncIterator[dict[str, Any]]:
         _ = db
@@ -64,6 +70,8 @@ class AgentGraphService:
             initial_state = {
                 **snapshot_values,
                 "dataset_id": snapshot_values.get("dataset_id", dataset_id),
+                "user_id": snapshot_values.get("user_id", user_id),
+                "workspace_id": snapshot_values.get("workspace_id", workspace_id),
                 "plan_approved": True,
                 "pipeline_steps": pipeline_steps or snapshot_values.get("pipeline_steps", []),
             }
@@ -73,6 +81,8 @@ class AgentGraphService:
                 message=user_message,
                 pipeline_steps=pipeline_steps,
                 plan_approved=plan_approved,
+                user_id=user_id,
+                workspace_id=workspace_id,
             )
 
         try:

@@ -24,6 +24,7 @@ async def pipeline_recorder(state: AgentState) -> dict:
                         "dataset_id": next_dataset_id,
                         "input_dataset_id": current_dataset_id,
                         "output_dataset_id": next_dataset_id,
+                        "agent_run_id": None,
                         "step_number": plan_step.get("step_number", result.get("step_number")),
                         "operation": plan_step["operation"],
                         "description": plan_step["description"],
@@ -73,6 +74,10 @@ async def pipeline_recorder(state: AgentState) -> dict:
             db.add(run)
             db.commit()
             run_id = str(run.id)
+            for step in saved_steps:
+                step["agent_run_id"] = run_id
+                if not step.get("run_id"):
+                    step["run_id"] = run_id
         finally:
             db.close()
 

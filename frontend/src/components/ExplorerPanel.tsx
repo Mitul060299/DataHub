@@ -63,8 +63,14 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     const metricOps = new Set(["aggregate", "bin_values"]);
     const variableOps = new Set(["create_column", "split_column", "merge_columns", "change_type", "rename_columns", "replace_values"]);
 
+    const parentIds = new Set(
+      datasets
+        .map((dataset) => dataset.parentId)
+        .filter((parentId): parentId is string => Boolean(parentId))
+    );
+
     const derived = datasets
-      .filter((dataset) => Boolean(dataset.parentId && datasetsById.has(dataset.parentId)))
+      .filter((dataset) => Boolean(dataset.parentId && datasetsById.has(dataset.parentId) && !parentIds.has(dataset.id)))
       .map((dataset) => {
         const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
         let kind: ArtifactItem["kind"] = "table";

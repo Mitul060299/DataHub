@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import HTTPException, Header
 from sqlalchemy.orm import Session
 
-from ..security import get_current_role, get_current_subject, require_role
+from ..security import get_current_role, get_current_subject, get_current_user_id, require_role
 from ..models_db import DatasetMetaDB, TransformationHistoryDB
 from ..services.ai_agent_service import AIAgentService
 from ..services.agent_graph import AgentGraphService
@@ -51,6 +51,7 @@ class CleaningController:
         session_id: str,
         pipeline_steps: list[dict[str, Any]],
         plan_approved: bool,
+        workspace_id: str | None,
         authorization: str | None,
         db: Session,
     ) -> AsyncIterator[dict[str, Any]]:
@@ -61,12 +62,17 @@ class CleaningController:
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
+        request_user_id = get_current_user_id(authorization) or get_current_subject(authorization) or "agent"
+        effective_workspace_id = workspace_id or dataset.workspace_id or "default"
+
         return AgentGraphService.process_command_stream(
             dataset_id=dataset_id,
             user_message=message,
             session_id=session_id,
             pipeline_steps=pipeline_steps,
             plan_approved=plan_approved,
+            user_id=request_user_id,
+            workspace_id=effective_workspace_id,
             db=db,
         )
 

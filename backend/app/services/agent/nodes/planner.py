@@ -17,6 +17,7 @@ _llm = ChatGroq(
 async def planner(state: AgentState) -> dict:
     messages = state.get("messages", [])
     user_goal = messages[-1].content if messages else ""
+    requested_approval = bool(state.get("plan_approved", False))
 
     system_prompt = PLANNER_SYSTEM_PROMPT.format(
         schema=json.dumps(state.get("schema", {}), indent=2),
@@ -67,7 +68,7 @@ async def planner(state: AgentState) -> dict:
 
     return {
         "plan": plan,
-        "plan_approved": False,
+        "plan_approved": requested_approval and bool(plan),
         "current_step_index": 0,
         "execution_results": [],
         "retry_count": 0,

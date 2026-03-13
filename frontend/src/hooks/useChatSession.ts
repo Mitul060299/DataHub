@@ -111,6 +111,7 @@ export function useChatSession() {
       let finalResponse = "";
       let plan: PlanStep[] | undefined;
       let completedRunId: string | null = null;
+      const suppressPlanEvents = Boolean(payload.plan_approved);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -124,7 +125,9 @@ export function useChatSession() {
           if (!line.startsWith("data: ")) continue;
           try {
             const event = JSON.parse(line.slice(6)) as AgentEvent;
-            payload.onEvent?.(event);
+            if (!(suppressPlanEvents && event.type === "agent.plan")) {
+              payload.onEvent?.(event);
+            }
             if (event.type === "agent.plan" && Array.isArray(event.plan)) {
               plan = event.plan as PlanStep[];
             }

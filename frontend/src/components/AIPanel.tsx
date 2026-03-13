@@ -54,6 +54,70 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
       }
       case "agent.done": {
         const responseText = typeof event.response === "string" ? event.response : "Done.";
+
+        const runId = typeof event.run_id === "string" ? event.run_id : null;
+        const pipelineSteps = Array.isArray(event.pipeline_steps)
+          ? (event.pipeline_steps as Array<Record<string, unknown>>)
+          : [];
+        const completedSteps = runId
+          ? pipelineSteps.filter((step) => typeof step.run_id === "string" && step.run_id === runId)
+          : [];
+
+        for (const stepRecord of completedSteps) {
+          const operation = String(stepRecord.operation ?? "transform");
+          const description = String(stepRecord.description ?? "Execute transformation step");
+          const sql = typeof stepRecord.sql === "string" ? stepRecord.sql : undefined;
+          const stepNumber = Number(stepRecord.step_number ?? Date.now());
+          const rawRows = stepRecord.rows_affected;
+          const numericRows = typeof rawRows === "number"
+            ? rawRows
+            : Number.isFinite(Number(rawRows))
+              ? Number(rawRows)
+              : undefined;
+          const affectedRows = numericRows !== undefined ? String(numericRows) : undefined;
+
+          const inputDatasetId = typeof stepRecord.input_dataset_id === "string"
+            ? stepRecord.input_dataset_id
+            : dataset?.id;
+          const outputDatasetId = typeof stepRecord.output_dataset_id === "string"
+            ? stepRecord.output_dataset_id
+            : undefined;
+
+          addStep({
+            id: crypto.randomUUID(),
+            stepNumber,
+            operation,
+            description,
+            sql,
+            affectedRows,
+            appliedAt: new Date(),
+            inputDataset: dataset
+              ? {
+                  id: inputDatasetId || dataset.id,
+                  name: dataset.name,
+                  rows: dataset.rows,
+                }
+              : undefined,
+            outputDataset: outputDatasetId
+              ? {
+                  id: outputDatasetId,
+                  name: `${operation} output`,
+                  rowCount: numericRows ?? 0,
+                  parentId: inputDatasetId ?? null,
+                }
+              : undefined,
+          });
+        }
+
+        if (completedSteps.length > 0) {
+          onStepApplied();
+        }
+
+        const outputDatasetId = typeof event.output_dataset_id === "string" ? event.output_dataset_id : "";
+        if (outputDatasetId) {
+          onDatasetMutated?.();
+        }
+
         setMessages((previous) => [
           ...previous,
           {

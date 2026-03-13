@@ -39,7 +39,7 @@ USER GOAL:
 
 RULES:
 1. Generate the MINIMUM number of steps needed to achieve the goal
-2. Output structured operation parameters only (no raw SQL in plan steps)
+2. For data-transforming intents (transform/sql_query/join), each step MUST include executable DuckDB SQL in `sql`
 3. For multi-step goals, order steps by dependency (e.g. deduplicate before filtering)
 4. If a step is already in the pipeline, do NOT repeat it
 5. Base estimated_rows on the stats provided — be specific, not vague
@@ -47,6 +47,7 @@ RULES:
 7. If a template matches, set template_id to that template id, otherwise template_id must be null
 8. If user asks to add a calculated column, generate exactly one step with operation "add_column" and include parameters: column_name, formula, column_type (dynamic/static), display_name (optional)
 9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart" and include parameters: dashboard_id (if known), title, chart_type, query_spec
+10. SQL must reference the main dataset as `dataset`
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{
@@ -55,6 +56,7 @@ Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
       "step_number": 1,
       "operation": "remove_duplicates",
       "description": "Remove 142 exact duplicate rows based on all columns",
+      "sql": "SELECT DISTINCT * FROM dataset",
       "parameters": {{
         "key_columns": ["order_id"],
         "dimensions": [],

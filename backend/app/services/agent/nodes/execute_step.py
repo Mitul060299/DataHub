@@ -25,7 +25,7 @@ async def execute_step(state: AgentState) -> dict:
 
         operation = str(step.get("operation") or "transform")
         parameters = step.get("parameters") if isinstance(step.get("parameters"), dict) else {}
-        step_sql = str(parameters.get("sql") or "").strip()
+        step_sql = str(parameters.get("sql") or step.get("sql") or "").strip()
 
         if operation in {"add_column", "create_column"} or state.get("intent") == "add_column":
             column_name = str(parameters.get("column_name") or parameters.get("name") or "").strip()
@@ -52,6 +52,7 @@ async def execute_step(state: AgentState) -> dict:
                 "success": True,
                 "rows_affected": None,
                 "run_id": None,
+                "output_dataset_id": state.get("dataset_id"),
                 "sql": formula,
                 "error": None,
                 "column_added": {
@@ -109,6 +110,7 @@ async def execute_step(state: AgentState) -> dict:
                 "success": True,
                 "rows_affected": None,
                 "run_id": None,
+                "output_dataset_id": state.get("dataset_id"),
                 "sql": None,
                 "error": None,
                 "tile_created": {
@@ -126,6 +128,12 @@ async def execute_step(state: AgentState) -> dict:
             }
 
         from ...pipeline_engine import PipelineEngine
+
+        executable_operation = str(operation or "").strip().lower().replace(" ", "_")
+        if not step_sql and executable_operation not in {"sql", "query", "transform", "join", "aggregate"}:
+            raise ValueError(
+                f"Step '{operation}' is missing executable SQL. Please regenerate plan with SQL in each transform step."
+            )
 
         owner_plan = "free"
         if dataset.user_id:
@@ -164,7 +172,13 @@ async def execute_step(state: AgentState) -> dict:
             pass
 
         runs, _ = engine.get_pipeline_runs(str(pipeline.id), limit=1, offset=0)
-        run_id = str(runs[0].id) if runs else None
+        latest_run = runs[0] if runs else None
+        run_id = str(latest_run.id) if latest_run else None
+        output_dataset_id = (
+            str(latest_run.output_dataset_id)
+            if latest_run and latest_run.output_dataset_id
+            else None
+        )
 
         rows_affected = None
         engine_sql = step_sql or None
@@ -187,6 +201,7 @@ async def execute_step(state: AgentState) -> dict:
             "success": True,
             "rows_affected": rows_affected,
             "run_id": run_id,
+            "output_dataset_id": output_dataset_id,
             "sql": engine_sql,
             "error": None,
         }
@@ -204,6 +219,7 @@ async def execute_step(state: AgentState) -> dict:
             "success": False,
             "rows_affected": None,
             "run_id": None,
+            "output_dataset_id": None,
             "sql": None,
             "error": str(exc),
         }

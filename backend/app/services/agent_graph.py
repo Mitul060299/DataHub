@@ -33,6 +33,8 @@ class AgentGraphService:
             "execution_results": [],
             "retry_count": 0,
             "error": None,
+            "run_id": None,
+            "output_dataset_id": dataset_id,
             "final_response": "",
             "chart_config": None,
             "query_results": None,
@@ -158,6 +160,8 @@ class AgentGraphService:
                     yield {
                         "type": "agent.done",
                         "response": response_text,
+                        "run_id": output.get("run_id"),
+                        "output_dataset_id": output.get("output_dataset_id"),
                         "pipeline_steps": output.get("pipeline_steps", []),
                     }
 

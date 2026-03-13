@@ -57,4 +57,7 @@ async def responder(state: AgentState) -> dict:
     return {
         "messages": [AIMessage(content=final)],
         "final_response": final,
+        "run_id": state.get("run_id"),
+        "output_dataset_id": state.get("output_dataset_id") or state.get("dataset_id"),
+        "pipeline_steps": state.get("pipeline_steps", []),
     }

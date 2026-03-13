@@ -20,6 +20,7 @@ class ExecutionResult(TypedDict):
     success: bool
     rows_affected: Optional[int]
     run_id: Optional[str]
+    output_dataset_id: Optional[str]
     sql: Optional[str]
     error: Optional[str]
     column_added: NotRequired[dict]
@@ -48,6 +49,7 @@ class AgentState(TypedDict):
     retry_count: int
     error: Optional[str]
     run_id: Optional[str]
+    output_dataset_id: Optional[str]
 
     final_response: str
     chart_config: Optional[dict]

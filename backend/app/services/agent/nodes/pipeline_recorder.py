@@ -12,14 +12,18 @@ async def pipeline_recorder(state: AgentState) -> dict:
     dataset_id = state.get("dataset_id")
 
     saved_steps = []
+    current_dataset_id = dataset_id
     for result in results:
         if result["success"]:
             step_idx = result["step_number"] - 1
             if step_idx < len(plan):
                 plan_step = plan[step_idx]
+                next_dataset_id = result.get("output_dataset_id") or current_dataset_id
                 saved_steps.append(
                     {
-                        "dataset_id": dataset_id,
+                        "dataset_id": next_dataset_id,
+                        "input_dataset_id": current_dataset_id,
+                        "output_dataset_id": next_dataset_id,
                         "step_number": plan_step.get("step_number", result.get("step_number")),
                         "operation": plan_step["operation"],
                         "description": plan_step["description"],
@@ -28,6 +32,7 @@ async def pipeline_recorder(state: AgentState) -> dict:
                         "rows_affected": result.get("rows_affected"),
                     }
                 )
+                current_dataset_id = next_dataset_id
 
     run_id = None
     if saved_steps:
@@ -73,5 +78,6 @@ async def pipeline_recorder(state: AgentState) -> dict:
 
     return {
         "run_id": run_id,
+        "output_dataset_id": current_dataset_id,
         "pipeline_steps": [*state.get("pipeline_steps", []), *saved_steps],
     }

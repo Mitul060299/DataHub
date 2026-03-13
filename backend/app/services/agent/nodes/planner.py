@@ -57,7 +57,15 @@ async def planner(state: AgentState) -> dict:
                     "operation": str(step.get("operation") or "transform"),
                     "description": str(step.get("description") or "Execute transformation step"),
                     "parameters": step.get("parameters") if isinstance(step.get("parameters"), dict) else {},
-                    "sql": str(step.get("sql") or ""),
+                    "sql": str(
+                        step.get("sql")
+                        or (
+                            step.get("parameters", {}).get("sql")
+                            if isinstance(step.get("parameters"), dict)
+                            else ""
+                        )
+                        or ""
+                    ),
                     "template_id": str(step.get("template_id")) if step.get("template_id") else None,
                     "estimated_rows": str(step.get("estimated_rows") or "Estimated rows unavailable"),
                     "reversible": bool(step.get("reversible", True)),

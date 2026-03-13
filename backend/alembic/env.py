@@ -23,6 +23,17 @@ def get_url() -> str:
     return os.getenv("DATABASE_URL", "postgresql+psycopg://datahub:datahub@localhost:5432/datahub")
 
 
+def _env_timeout_ms(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, parsed)
+
+
 def run_migrations_offline() -> None:
     url = get_url()
     context.configure(
@@ -44,6 +55,12 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        if connection.dialect.name == "postgresql":
+            lock_timeout_ms = _env_timeout_ms("ALEMBIC_LOCK_TIMEOUT_MS", 15000)
+            statement_timeout_ms = _env_timeout_ms("ALEMBIC_STATEMENT_TIMEOUT_MS", 300000)
+            connection.execute(text(f"SET lock_timeout = '{lock_timeout_ms}ms'"))
+            connection.execute(text(f"SET statement_timeout = '{statement_timeout_ms}ms'"))
+
         version_len = connection.execute(
             text(
                 """

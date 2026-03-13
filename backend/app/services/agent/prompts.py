@@ -49,25 +49,25 @@ RULES:
 9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart" and include parameters: dashboard_id (if known), title, chart_type, query_spec
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
-{
+{{
   "steps": [
-    {
+    {{
       "step_number": 1,
       "operation": "remove_duplicates",
       "description": "Remove 142 exact duplicate rows based on all columns",
-      "parameters": {
+      "parameters": {{
         "key_columns": ["order_id"],
         "dimensions": [],
         "period": null,
         "threshold": null,
         "matching_policy": "exact"
-      },
+      }},
       "template_id": null,
       "estimated_rows": "142 rows removed",
       "reversible": true
-    }
+    }}
   ]
-}"""
+}}"""
 
 
 REFLECT_PROMPT = """You are a DuckDB SQL expert. A query failed with an error. Rewrite the SQL to fix it.

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getAuthToken } from "../utils/auth";
 
 export type ConversationMessage = {
   role: "user" | "assistant";
@@ -60,11 +61,16 @@ export function useChatSession() {
     setSending(true);
     try {
       const sid = sessionId || crypto.randomUUID();
+      const token = getAuthToken();
       if (!sessionId) setSessionId(sid);
 
       const response = await fetch(`/api/cleaning/datasets/${payload.dataset_id}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(payload.workspace_id ? { "X-Workspace-Id": payload.workspace_id } : {}),
+        },
         body: JSON.stringify({
           message: payload.message,
           session_id: sid,
@@ -78,7 +84,21 @@ export function useChatSession() {
       });
 
       if (!response.ok) {
-        throw new Error("Request failed");
+        let detail = "Request failed";
+        try {
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const body = await response.json() as { detail?: string; message?: string; error?: string };
+            detail = body.detail || body.message || body.error || detail;
+          } else {
+            const text = (await response.text()).trim();
+            if (text) {
+              detail = text;
+            }
+          }
+        } catch {
+        }
+        throw new Error(detail);
       }
 
       if (!response.body) {

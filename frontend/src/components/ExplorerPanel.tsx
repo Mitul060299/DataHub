@@ -68,9 +68,15 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         .map((dataset) => dataset.parentId)
         .filter((parentId): parentId is string => Boolean(parentId))
     );
+    const hasTrackedOutputs = operationByOutputDataset.size > 0;
 
     const derived = datasets
-      .filter((dataset) => Boolean(dataset.parentId && datasetsById.has(dataset.parentId) && !parentIds.has(dataset.id)))
+      .filter((dataset) => Boolean(
+        dataset.parentId
+        && datasetsById.has(dataset.parentId)
+        && !parentIds.has(dataset.id)
+        && (!hasTrackedOutputs || operationByOutputDataset.has(dataset.id))
+      ))
       .map((dataset) => {
         const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
         let kind: ArtifactItem["kind"] = "table";

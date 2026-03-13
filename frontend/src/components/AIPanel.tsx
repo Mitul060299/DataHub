@@ -70,6 +70,11 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             })
           : [];
 
+        const maxStepNumber = completedSteps.reduce((max, step) => {
+          const stepNum = Number(step.step_number ?? 0);
+          return Number.isFinite(stepNum) ? Math.max(max, stepNum) : max;
+        }, 0);
+
         for (const stepRecord of completedSteps) {
           const operation = String(stepRecord.operation ?? "transform");
           const description = String(stepRecord.description ?? "Execute transformation step");
@@ -94,6 +99,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             && outputDatasetId !== inputDatasetId
             && outputDatasetId !== dataset?.id
           );
+          const isFinalStep = maxStepNumber > 0 ? stepNumber === maxStepNumber : true;
 
           addStep({
             id: crypto.randomUUID(),
@@ -110,7 +116,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                   rows: dataset.rows,
                 }
               : undefined,
-            outputDataset: hasDerivedOutput
+            outputDataset: hasDerivedOutput && isFinalStep
               ? {
                   id: outputDatasetId!,
                   name: `${operation} output`,
@@ -127,6 +133,20 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
 
         const outputDatasetId = typeof event.output_dataset_id === "string" ? event.output_dataset_id : "";
         if (outputDatasetId) {
+          if (dataset?.id !== outputDatasetId) {
+            const finalStep = completedSteps.find((step) => Number(step.step_number ?? 0) === maxStepNumber);
+            const finalRowsRaw = finalStep?.rows_affected;
+            const finalRows = typeof finalRowsRaw === "number"
+              ? finalRowsRaw
+              : Number.isFinite(Number(finalRowsRaw))
+                ? Number(finalRowsRaw)
+                : 0;
+            setActiveDataset({
+              id: outputDatasetId,
+              name: finalStep?.description ? String(finalStep.description) : "AI Output",
+              rows: finalRows,
+            });
+          }
           onDatasetMutated?.();
         }
 

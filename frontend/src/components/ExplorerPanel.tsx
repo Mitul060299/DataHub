@@ -118,16 +118,11 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   }, [datasets, datasetsById, operationByOutputDataset, workflowLeafOutputIds, searchQuery]);
 
   const loadDatasets = useCallback(async () => {
-    if (!activeProject?.id) {
-      setDatasets([]);
-      setDatasetLoadError(null);
-      return;
-    }
     try {
       const response = await api.get("/datasets", {
-        params: { project_id: activeProject.id },
+        params: activeProject?.id ? { project_id: activeProject.id } : undefined,
         headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
-        timeout: 120000,
+        timeout: 30000,
       });
       const mapped = (response.data ?? []).map((item: Record<string, unknown>) => ({
         id: String(item.id ?? item.dataset_id ?? ""),
@@ -156,7 +151,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       setDatasetLoadError(message);
       setDatasets([]);
     }
-  }, [activeProject?.id, workspaceId]);
+  }, [activeProject?.id, workspaceId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const removeDataset = async (dataset: Dataset) => {
     if (!dataset.id) return;

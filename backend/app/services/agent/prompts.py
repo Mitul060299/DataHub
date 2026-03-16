@@ -47,7 +47,8 @@ RULES:
 7. If a template matches, set template_id to that template id, otherwise template_id must be null
 8. If user asks to add a calculated column, generate exactly one step with operation "add_column" and include parameters: column_name, formula, column_type (dynamic/static), display_name (optional)
 9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart" and include parameters: dashboard_id (if known), title, chart_type, query_spec
-10. SQL must reference the main dataset as `dataset`
+10. SQL must reference the current input table as `dataset`. CRITICAL FOR MULTI-STEP PLANS: in step N, `dataset` is the OUTPUT of step N-1 (not the original source table). Each step's SQL must be written against the schema that the PREVIOUS step produces. For example, if step 1 aggregates raw columns into `(sales_rep_id, total_deal_amount)`, then step 2's SQL must only reference `sales_rep_id` and `total_deal_amount` — it must NOT attempt to reference original columns like `deal_amount` that no longer exist in the intermediate result.
+11. PREFER SINGLE-STEP for queries that are one logical operation (e.g. aggregate + sort + limit is a single SQL query — do NOT split it into separate steps). Only use multiple steps when each step genuinely produces an independently meaningful intermediate dataset.
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{

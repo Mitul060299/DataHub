@@ -126,11 +126,22 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             && effectiveOutputDatasetId !== dataset?.id
           );
 
+          // Truncate long AI-generated descriptions so pipeline step labels
+          // and artifact names stay short and readable (max 40 chars).
+          const shortDescription = description.length > 40
+            ? `${description.slice(0, 38)}\u2026`
+            : description;
+          // Build a concise artifact output name: "<operation>: <short desc>"
+          const opLabel = operation.replace(/_/g, " ");
+          const rawArtifactName = `${opLabel}: ${shortDescription}`;
+          const shortArtifactName = rawArtifactName.length > 40
+            ? `${rawArtifactName.slice(0, 38)}\u2026`
+            : rawArtifactName;
           addStep({
             id: crypto.randomUUID(),
             stepNumber,
             operation,
-            description,
+            description: shortDescription,
             sql,
             affectedRows,
             appliedAt: new Date(),
@@ -144,7 +155,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             outputDataset: hasDerivedOutput && isFinalStep
               ? {
                   id: effectiveOutputDatasetId!,
-                  name: `${operation} output`,
+                  name: shortArtifactName,
                   rowCount: numericRows ?? 0,
                   parentId: inputDatasetId ?? null,
                 }
@@ -165,9 +176,11 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               : Number.isFinite(Number(finalRowsRaw))
                 ? Number(finalRowsRaw)
                 : 0;
+            const rawName = finalStep?.description ? String(finalStep.description) : "AI Output";
+            const shortName = rawName.length > 40 ? `${rawName.slice(0, 38)}\u2026` : rawName;
             setActiveDataset({
               id: finalOutputDatasetId,
-              name: finalStep?.description ? String(finalStep.description) : "AI Output",
+              name: shortName,
               rows: finalRows,
             });
           }

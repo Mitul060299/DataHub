@@ -562,10 +562,12 @@ class PipelineEngine:
         schema = DataConversionService._infer_schema(df) if not df.empty else {}
         stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
 
-        output_name = (
+        raw_output_name = (
             str(step.get('name') or step.get('description') or '').strip()
             or f"{source_dataset.name or 'dataset'} (pipeline)"
         )
+        # Truncate long AI-generated descriptions for readable sidebar names
+        output_name = raw_output_name if len(raw_output_name) <= 40 else raw_output_name[:38] + "\u2026"
 
         meta = DatasetMetaDB(
             id=output_dataset_id,

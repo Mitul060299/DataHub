@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDatasetPage, listCalculatedColumns } from "../api";
 import type { CalculatedColumn } from "../types";
 
@@ -13,12 +13,17 @@ export function useDataset(datasetId?: string) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DatasetPreviewResult | null>(null);
+  // generation counter prevents a stale concurrent load from overwriting
+  // a newer load (e.g. refetch() called with old id races against useEffect
+  // triggered by a new datasetId)
+  const genRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!datasetId) {
       setData(null);
       return;
     }
+    const gen = ++genRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -26,6 +31,7 @@ export function useDataset(datasetId?: string) {
         fetchDatasetPage(datasetId, 0, 100),
         listCalculatedColumns(datasetId),
       ]);
+      if (gen !== genRef.current) return; // superseded by a newer load
       setData({
         columns: response.columns ?? [],
         rows: response.rows ?? [],
@@ -33,10 +39,11 @@ export function useDataset(datasetId?: string) {
         calculatedColumns,
       });
     } catch (err) {
+      if (gen !== genRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load dataset preview");
       setData(null);
     } finally {
-      setLoading(false);
+      if (gen === genRef.current) setLoading(false);
     }
   }, [datasetId]);
 

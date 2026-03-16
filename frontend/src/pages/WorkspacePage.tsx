@@ -104,8 +104,12 @@ export function WorkspacePage() {
           void refetch();
         }}
         onDatasetMutated={() => {
+          // Refresh the sidebar dataset list. Do NOT call refetch() here —
+          // when activeDataset.id changes (new artifact created), useDataset
+          // reloads automatically via useEffect. Calling refetch() with the
+          // stale source-dataset id would race against and overwrite the new
+          // artifact data.
           setDatasetRefreshNonce((value) => value + 1);
-          void refetch();
         }}
       />
       <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />

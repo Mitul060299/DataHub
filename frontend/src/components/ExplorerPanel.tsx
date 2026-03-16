@@ -117,13 +117,15 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     return derived.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
   }, [datasets, datasetsById, operationByOutputDataset, workflowLeafOutputIds, searchQuery]);
 
-  const loadDatasets = useCallback(async () => {
+  const loadDatasets = useCallback(async (attempt = 0) => {
+    const requestConfig = {
+      params: activeProject?.id ? { project_id: activeProject.id } : undefined,
+      headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+      // 90s covers Render cold-start (can take 50-60s on free tier)
+      timeout: 90000,
+    };
     try {
-      const response = await api.get("/datasets", {
-        params: activeProject?.id ? { project_id: activeProject.id } : undefined,
-        headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
-        timeout: 30000,
-      });
+      const response = await api.get("/datasets", requestConfig);
       const mapped = (response.data ?? []).map((item: Record<string, unknown>) => ({
         id: String(item.id ?? item.dataset_id ?? ""),
         name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
@@ -137,7 +139,15 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       const maybeError = error as {
         response?: { status?: number; data?: { detail?: string; message?: string } };
         message?: string;
+        code?: string;
       };
+      const isTimeout = maybeError.code === "ECONNABORTED" || (maybeError.message ?? "").toLowerCase().includes("timeout");
+      // Auto-retry once on timeout (backend cold-start wakeup)
+      if (isTimeout && attempt === 0) {
+        setDatasetLoadError("Backend is waking up, retrying…");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return loadDatasets(1);
+      }
       const status = maybeError.response?.status;
       const detail = maybeError.response?.data?.detail
         ?? maybeError.response?.data?.message
@@ -145,9 +155,11 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         ?? "Failed to load datasets";
       const message = detail.toLowerCase().includes("network error")
         ? "Network Error: Unable to reach backend API. Verify deployment health and /api routing."
-        : status
-          ? `${detail} (HTTP ${status})`
-          : detail;
+        : isTimeout
+          ? "Backend is taking too long to respond. Please click retry or wait and refresh."
+          : status
+            ? `${detail} (HTTP ${status})`
+            : detail;
       setDatasetLoadError(message);
       setDatasets([]);
     }
@@ -219,9 +231,20 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         }}
       />
       {datasetLoadError ? (
-        <p style={{ margin: "0 0 10px", color: "var(--rd)", fontSize: 11 }}>
-          {datasetLoadError}
-        </p>
+        <div style={{ margin: "0 0 10px", display: "flex", alignItems: "flex-start", gap: 6 }}>
+          <p style={{ margin: 0, color: datasetLoadError.includes("waking up") ? "var(--yl)" : "var(--rd)", fontSize: 11, flex: 1 }}>
+            {datasetLoadError}
+          </p>
+          {!datasetLoadError.includes("waking up") ? (
+            <button
+              className="btn"
+              style={{ height: 20, fontSize: 10, padding: "0 6px", flexShrink: 0 }}
+              onClick={() => void loadDatasets()}
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>

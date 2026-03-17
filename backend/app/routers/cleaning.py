@@ -24,6 +24,10 @@ class CommandRequest(BaseModel):
     pipeline_steps: list[dict[str, Any]] = Field(default_factory=list)
     plan_approved: bool = False
     conversation_history: list[dict[str, Any]] = Field(default_factory=list)
+    secondary_dataset_ids: list[str] = Field(
+        default_factory=list,
+        description="Additional dataset IDs to make available for JOIN/UNION in SQL steps",
+    )
 
 
 class TransformationRequest(BaseModel):
@@ -58,6 +62,7 @@ async def process_command(
                 workspace_id=payload.workspace_id,
                 authorization=authorization,
                 db=db,
+                secondary_dataset_ids=payload.secondary_dataset_ids or [],
             )
             async for event in stream:
                 if isinstance(event, dict):

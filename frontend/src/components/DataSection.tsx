@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { IconDatabase, IconPlus } from "./Icons";
 import type { Dataset } from "../contexts/WorkspaceContext";
 
@@ -25,10 +25,26 @@ interface DataSectionProps {
   onSelect: (dataset: Dataset) => void;
   onImport: () => void;
   onRemove: (dataset: Dataset) => void;
+  onRename?: (dataset: Dataset, newName: string) => void;
 }
 
-export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove }: DataSectionProps) {
+export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename }: DataSectionProps) {
   const [open, setOpen] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const commitRename = (dataset: Dataset) => {
+    const trimmed = editingName.trim();
+    if (trimmed && trimmed !== dataset.name) onRename?.(dataset, trimmed);
+    setEditingId(null);
+  };
+
+  const startEdit = (dataset: Dataset) => {
+    setEditingName(dataset.name);
+    setEditingId(dataset.id);
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
 
   return (
     <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8 }}>
@@ -62,11 +78,39 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
                   background: active ? "var(--acl)" : "transparent",
                 }}
               >
-                <button onClick={() => onSelect(dataset)} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1, textAlign: "left" }}>
-                  <IconDatabase size={14} />
-                  <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dataset.name}</span>
-                </button>
-                {normalizedFormat ? (
+                {editingId === dataset.id ? (
+                  <>
+                    <IconDatabase size={14} style={{ flexShrink: 0 }} />
+                    <input
+                      ref={inputRef}
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => commitRename(dataset)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitRename(dataset);
+                        else if (e.key === "Escape") setEditingId(null);
+                      }}
+                      style={{
+                        flex: 1,
+                        marginLeft: 6,
+                        height: 22,
+                        fontSize: 12,
+                        background: "var(--bg3)",
+                        border: "1px solid var(--ac)",
+                        borderRadius: 4,
+                        color: "var(--tx0)",
+                        padding: "0 6px",
+                        fontFamily: "DM Mono, monospace",
+                      }}
+                    />
+                  </>
+                ) : (
+                  <button onClick={() => onSelect(dataset)} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1, textAlign: "left" }}>
+                    <IconDatabase size={14} />
+                    <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dataset.name}</span>
+                  </button>
+                )}
+                {editingId !== dataset.id && normalizedFormat ? (
                   <span
                     className="mono"
                     style={{
@@ -84,12 +128,25 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
                     {normalizedFormat}
                   </span>
                 ) : null}
-                <span className="mono" style={{ color: "var(--tx1)", fontSize: 11, marginLeft: 8 }}>{dataset.rows}</span>
+                {editingId !== dataset.id ? (
+                  <span className="mono" style={{ color: "var(--tx1)", fontSize: 11, marginLeft: 8 }}>{dataset.rows}</span>
+                ) : null}
+                {onRename ? (
+                  <button
+                    className="btn"
+                    aria-label={`Rename ${dataset.name}`}
+                    title="Rename"
+                    style={{ height: 22, width: 22, padding: 0, marginLeft: 6, borderColor: "transparent", background: "transparent", color: "var(--tx1)", fontSize: 12 }}
+                    onClick={() => startEdit(dataset)}
+                  >
+                    ✏
+                  </button>
+                ) : null}
                 <button
                   className="btn"
                   aria-label={`Remove ${dataset.name}`}
                   title="Remove dataset"
-                  style={{ height: 22, width: 22, padding: 0, marginLeft: 6, borderColor: "transparent", background: "transparent", color: "var(--tx1)" }}
+                  style={{ height: 22, width: 22, padding: 0, marginLeft: 4, borderColor: "transparent", background: "transparent", color: "var(--tx1)" }}
                   onClick={() => onRemove(dataset)}
                 >
                   ×

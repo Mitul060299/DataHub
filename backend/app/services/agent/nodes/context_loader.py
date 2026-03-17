@@ -4,6 +4,15 @@ from ...calculated_columns_service import CalculatedColumnsService
 from ...dashboards_v2_service import DashboardsV2Service
 from ....db import SessionLocal
 from ....models_db import ChatTemplateDB, DatasetMetaDB
+import re as _re
+
+
+def _sanitize_alias(name: str) -> str:
+    s = _re.sub(r"[^A-Za-z0-9_]", "_", name.strip()).lower()
+    s = _re.sub(r"_+", "_", s).strip("_")
+    if not s or s[0].isdigit():
+        s = "ds_" + s
+    return s or "dataset_extra"
 
 
 def _load_available_templates(dataset_id: str, fallback_workspace_id: str | None = None) -> list[dict]:
@@ -64,8 +73,35 @@ async def context_loader(state: AgentState) -> dict:
             "dashboards": dashboards,
         }
 
+    # Load secondary dataset schemas so the planner can generate cross-dataset SQL
+    secondary_schemas: dict = {}
+    secondary_ids: list[str] = list(state.get("secondary_dataset_ids") or [])
+    if secondary_ids:
+        sec_db = SessionLocal()
+        try:
+            for sec_id in secondary_ids:
+                sec_meta = sec_db.query(DatasetMetaDB).filter(DatasetMetaDB.id == sec_id).first()
+                if sec_meta:
+                    alias = _sanitize_alias(str(sec_meta.name or sec_id))
+                    try:
+                        secondary_schemas[alias] = {
+                            "dataset_id": sec_id,
+                            "columns": list(sec_meta.columns or []),
+                            "row_count": int(sec_meta.row_count or 0),
+                            "schema": DuckDBService.get_schema(sec_id),
+                        }
+                    except Exception:
+                        secondary_schemas[alias] = {
+                            "dataset_id": sec_id,
+                            "columns": list(sec_meta.columns or []),
+                            "row_count": int(sec_meta.row_count or 0),
+                            "schema": {},
+                        }
+        finally:
+            sec_db.close()
+
     try:
-        return {
+        base = {
             "schema": DuckDBService.get_schema(dataset_id),
             "stats": DuckDBService.get_column_stats(dataset_id),
             "sample_rows": DuckDBService.get_sample_rows(dataset_id, limit=10),
@@ -73,8 +109,11 @@ async def context_loader(state: AgentState) -> dict:
             "calculated_columns": calculated_columns,
             "dashboards": dashboards,
         }
+        if secondary_schemas:
+            base["secondary_schemas"] = secondary_schemas
+        return base
     except Exception as exc:
-        return {
+        base_err: dict = {
             "schema": {},
             "stats": {},
             "sample_rows": [],
@@ -83,3 +122,6 @@ async def context_loader(state: AgentState) -> dict:
             "dashboards": dashboards,
             "error": str(exc),
         }
+        if secondary_schemas:
+            base_err["secondary_schemas"] = secondary_schemas
+        return base_err

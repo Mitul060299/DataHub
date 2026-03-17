@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, deleteDataset } from "../api";
+import { api, deleteDataset, renameDataset } from "../api";
 import { usePipeline } from "../hooks/usePipeline";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { IconChevronDown, IconTeam } from "./Icons";
@@ -254,6 +254,10 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           onSelect={setActiveDataset}
           onImport={() => setImportModalOpen(true)}
           onRemove={(dataset) => void removeDataset(dataset)}
+          onRename={async (dataset, name) => {
+            await renameDataset(dataset.id, name);
+            void loadDatasets();
+          }}
         />
         <PipelineSection
           onSchedule={() => setScheduleModalOpen(true)}
@@ -264,6 +268,10 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           activeDatasetId={activeDataset?.id}
           onSelect={setActiveDataset}
           onRemove={(dataset) => void removeDataset(dataset)}
+          onRename={async (dataset, name) => {
+            await renameDataset(dataset.id, name);
+            void loadDatasets();
+          }}
         />
       </div>
 

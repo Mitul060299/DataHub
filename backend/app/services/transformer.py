@@ -1,9 +1,13 @@
-from typing import List
+from typing import List, Optional
 import pandas as pd
 from ..models import TransformationStep
 
 
-def apply_steps(df: pd.DataFrame, steps: List[TransformationStep]) -> pd.DataFrame:
+def apply_steps(
+    df: pd.DataFrame,
+    steps: List[TransformationStep],
+    db=None,  # optional sqlalchemy Session – required for join/union by dataset_id
+) -> pd.DataFrame:
     result = df.copy()
 
     for step in steps:
@@ -51,12 +55,45 @@ def apply_steps(df: pd.DataFrame, steps: List[TransformationStep]) -> pd.DataFra
             if index and columns and values:
                 result = result.pivot_table(index=index, columns=columns, values=values, aggfunc=aggfunc).reset_index()
         elif name == "join":
-            other = params.get("other")
+            other_dataset_id = params.get("dataset_id")
+            other_inline = params.get("other")
             on = params.get("on")
             how = params.get("how", "left")
-            if isinstance(other, list) and on:
-                other_df = pd.DataFrame(other)
+            other_df: Optional[pd.DataFrame] = None
+
+            if other_dataset_id and db is not None:
+                # Load the other dataset from storage by ID
+                from ..routers.datasets import get_dataset_from_db  # local import to avoid circular
+                try:
+                    other_df = get_dataset_from_db(str(other_dataset_id), db)
+                except KeyError:
+                    raise ValueError(f"Join dataset '{other_dataset_id}' not found")
+            elif isinstance(other_inline, list):
+                other_df = pd.DataFrame(other_inline)
+
+            if other_df is not None and on:
                 result = result.merge(other_df, on=on, how=how)
+        elif name == "union":
+            # Stack another dataset vertically, keeping all columns (outer) or common only (inner)
+            other_dataset_id = params.get("dataset_id")
+            other_inline = params.get("other")
+            distinct = bool(params.get("distinct", False))
+            join_type = "outer" if params.get("keep_all_columns", True) else "inner"
+            other_df = None
+
+            if other_dataset_id and db is not None:
+                from ..routers.datasets import get_dataset_from_db
+                try:
+                    other_df = get_dataset_from_db(str(other_dataset_id), db)
+                except KeyError:
+                    raise ValueError(f"Union dataset '{other_dataset_id}' not found")
+            elif isinstance(other_inline, list):
+                other_df = pd.DataFrame(other_inline)
+
+            if other_df is not None:
+                result = pd.concat([result, other_df], ignore_index=True, join=join_type)
+                if distinct:
+                    result = result.drop_duplicates()
         elif name == "add_column_formula":
             new_column = params.get("new_column")
             expression = params.get("expression")

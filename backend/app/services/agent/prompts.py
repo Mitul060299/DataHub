@@ -34,6 +34,10 @@ CALCULATED COLUMNS (already available in every query, treat as real columns):
 AVAILABLE DASHBOARDS (for visual outputs):
 {dashboards}
 
+ADDITIONAL DATASETS AVAILABLE FOR JOIN/UNION:
+{secondary_datasets}
+(Each entry provides the SQL alias, columns, and row count. Reference these tables by their alias in SQL. The primary input is always `dataset`.)
+
 USER GOAL:
 {user_goal}
 
@@ -49,6 +53,7 @@ RULES:
 9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart" and include parameters: dashboard_id (if known), title, chart_type, query_spec
 10. SQL must reference the current input table as `dataset`. CRITICAL FOR MULTI-STEP PLANS: in step N, `dataset` is the OUTPUT of step N-1 (not the original source table). Each step's SQL must be written against the schema that the PREVIOUS step produces. For example, if step 1 aggregates raw columns into `(sales_rep_id, total_deal_amount)`, then step 2's SQL must only reference `sales_rep_id` and `total_deal_amount` — it must NOT attempt to reference original columns like `deal_amount` that no longer exist in the intermediate result.
 11. PREFER SINGLE-STEP for queries that are one logical operation (e.g. aggregate + sort + limit is a single SQL query — do NOT split it into separate steps). Only use multiple steps when each step genuinely produces an independently meaningful intermediate dataset.
+12. When joining with a secondary dataset, use the alias from ADDITIONAL DATASETS. The binding must be declared in step parameters as: {{"relations": {{"<alias>": "<dataset_id>"}}}}
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{

@@ -27,6 +27,7 @@ async def planner(state: AgentState) -> dict:
         available_templates=json.dumps(state.get("available_templates", []), indent=2),
         calculated_columns=json.dumps(state.get("calculated_columns", []), indent=2),
         dashboards=json.dumps(state.get("dashboards", []), indent=2),
+        secondary_datasets=json.dumps(state.get("secondary_schemas", {}), indent=2),
         user_goal=user_goal,
     )
 

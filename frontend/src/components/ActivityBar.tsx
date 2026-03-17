@@ -1,4 +1,4 @@
-import { IconSearch, IconSettings, IconTable } from "./Icons";
+import { IconSearch, IconTable } from "./Icons";
 
 interface ActivityBarProps {
   explorerOpen: boolean;
@@ -17,11 +17,7 @@ export function ActivityBar({ explorerOpen, onToggleExplorer, onSearch }: Activi
           <IconSearch size={15} />
         </button>
       </div>
-      <div style={{ display: "grid", justifyItems: "center" }}>
-        <button title="Settings" style={iconButton(false)}>
-          <IconSettings size={15} />
-        </button>
-      </div>
+
     </aside>
   );
 }

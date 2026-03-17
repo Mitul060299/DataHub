@@ -18,8 +18,9 @@ class AgentGraphService:
         plan_approved: bool,
         user_id: str,
         workspace_id: str,
+        secondary_dataset_ids: list[str] | None = None,
     ) -> dict[str, Any]:
-        return {
+        state: dict[str, Any] = {
             "messages": [HumanMessage(content=message)] if message else [],
             "root_dataset_id": dataset_id,
             "dataset_id": dataset_id,
@@ -45,6 +46,10 @@ class AgentGraphService:
             "chart_config": None,
             "query_results": None,
         }
+        if secondary_dataset_ids:
+            state["secondary_dataset_ids"] = secondary_dataset_ids
+            state["secondary_schemas"] = {}
+        return state
 
     @classmethod
     async def process_command_stream(
@@ -57,6 +62,7 @@ class AgentGraphService:
         user_id: str,
         workspace_id: str,
         db: Session,
+        secondary_dataset_ids: list[str] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         _ = db
         config = {"configurable": {"thread_id": session_id}}
@@ -86,6 +92,7 @@ class AgentGraphService:
                 plan_approved=plan_approved,
                 user_id=user_id,
                 workspace_id=workspace_id,
+                secondary_dataset_ids=secondary_dataset_ids or [],
             )
 
         try:

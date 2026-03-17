@@ -48,6 +48,8 @@ class RunPipelineRequest(BaseModel):
     session_id: Optional[str] = None
     runtime_parameters: Dict[str, Any] = Field(default_factory=dict)
     triggered_by: str = "manual"
+    extra_input_dataset_ids: Optional[List[str]] = None
+    """Additional dataset IDs to register as named relations (by dataset name) in SQL steps."""
 
 
 class ClonePipelineRequest(BaseModel):
@@ -272,6 +274,7 @@ async def execute_pipeline(
             session_id=payload.session_id,
             runtime_parameters=payload.runtime_parameters,
             triggered_by=payload.triggered_by,
+            extra_input_dataset_ids=payload.extra_input_dataset_ids,
         ):
             yield event.to_sse()
 

@@ -60,6 +60,42 @@ class DatasetQueryResponse(BaseModel):
     cached: bool
 
 
+class CrossDatasetQueryRequest(BaseModel):
+    """Run a DuckDB SQL query that spans multiple datasets.
+
+    ``dataset_ids`` is a mapping of SQL alias -> dataset_id.
+    The SQL query must reference tables by the aliases provided here.
+
+    Example::
+
+        {
+            "dataset_ids": {"orders": "<uuid>", "customers": "<uuid>"},
+            "query": "SELECT c.name, SUM(o.amount) FROM orders o JOIN customers c ON o.customer_id = c.id GROUP BY 1"
+        }
+    """
+    dataset_ids: Dict[str, str]
+    query: str
+
+
+class CrossDatasetQueryResponse(BaseModel):
+    results: List[Dict[str, Any]]
+    row_count: int
+    aliases: List[str]
+
+
+class JoinableDataset(BaseModel):
+    dataset_id: str
+    name: Optional[str]
+    shared_columns: List[str]
+    total_columns: int
+    row_count: int
+
+
+class JoinableResponse(BaseModel):
+    dataset_id: str
+    joinable: List[JoinableDataset]
+
+
 class CalculatedColumnCreate(BaseModel):
     name: str
     formula: str

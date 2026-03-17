@@ -54,6 +54,7 @@ class CleaningController:
         workspace_id: str | None,
         authorization: str | None,
         db: Session,
+        secondary_dataset_ids: list[str] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         role = get_current_role(authorization)
         require_role("viewer", role)
@@ -74,6 +75,7 @@ class CleaningController:
             user_id=request_user_id,
             workspace_id=effective_workspace_id,
             db=db,
+            secondary_dataset_ids=secondary_dataset_ids or [],
         )
 
     @staticmethod

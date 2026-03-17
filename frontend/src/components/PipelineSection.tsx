@@ -22,7 +22,7 @@ type RunStatusSummary = {
 };
 
 export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
-  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo } = usePipelineContext();
+  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
 
@@ -30,6 +30,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editingStepName, setEditingStepName] = useState("");
 
   const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -57,6 +59,9 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     if (!normalized) return "Step";
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
   };
+
+  const getStepLabel = (step: (typeof steps)[0]) =>
+    (step.description || formatStepLabel(step.operation));
 
   const formatElapsed = (elapsedMs: number) => {
     const totalSeconds = Math.max(0, Math.round(elapsedMs / 1000));
@@ -495,38 +500,82 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                       fontSize: 10,
                       fontWeight: 700,
                     }}
-                    title={formatStepLabel(step.operation)}
+                    title={getStepLabel(step)}
                   >
                     {formatStepLabel(step.operation).charAt(0)}
                   </div>
 
-                  <button
-                    onClick={() => void handleUndoFromStep(step.id)}
-                    disabled={undoing}
-                    style={{
-                      textAlign: "left",
-                      minWidth: 0,
-                      color: "var(--tx0)",
-                      fontSize: 12,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                    title={step.description || formatStepLabel(step.operation)}
-                  >
-                    {formatStepLabel(step.operation)}
-                  </button>
+                  {editingStepId === step.id ? (
+                    <input
+                      autoFocus
+                      value={editingStepName}
+                      onChange={(e) => setEditingStepName(e.target.value)}
+                      onBlur={() => {
+                        renameStep(step.id, editingStepName);
+                        setEditingStepId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          renameStep(step.id, editingStepName);
+                          setEditingStepId(null);
+                        } else if (e.key === "Escape") {
+                          setEditingStepId(null);
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        height: 22,
+                        fontSize: 12,
+                        background: "var(--bg3)",
+                        border: "1px solid var(--ac)",
+                        borderRadius: 4,
+                        color: "var(--tx0)",
+                        padding: "0 6px",
+                      }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => void handleUndoFromStep(step.id)}
+                      disabled={undoing}
+                      style={{
+                        textAlign: "left",
+                        minWidth: 0,
+                        color: "var(--tx0)",
+                        fontSize: 12,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={getStepLabel(step)}
+                    >
+                      {getStepLabel(step).length > 26
+                        ? getStepLabel(step).slice(0, 24) + "\u2026"
+                        : getStepLabel(step)}
+                    </button>
+                  )}
 
                   <div
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 4,
-                      opacity: hoveredStepId === step.id ? 1 : 0,
-                      pointerEvents: hoveredStepId === step.id ? "auto" : "none",
+                      opacity: hoveredStepId === step.id && editingStepId !== step.id ? 1 : 0,
+                      pointerEvents: hoveredStepId === step.id && editingStepId !== step.id ? "auto" : "none",
                       transition: "opacity 120ms ease",
                     }}
                   >
+                    <button
+                      className="btn"
+                      style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                      title="Rename step"
+                      onClick={() => {
+                        setEditingStepName(getStepLabel(step));
+                        setEditingStepId(step.id);
+                      }}
+                    >
+                      ✏
+                    </button>
                     <button
                       className="btn"
                       style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}

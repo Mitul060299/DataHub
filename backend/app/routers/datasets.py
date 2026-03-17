@@ -17,6 +17,10 @@ from ..models import (
     DatasetPage,
     DatasetQueryRequest,
     DatasetQueryResponse,
+    CrossDatasetQueryRequest,
+    CrossDatasetQueryResponse,
+    JoinableDataset,
+    JoinableResponse,
     StorageTierPolicyOut,
     StorageTierPolicyUpdate,
 )
@@ -485,6 +489,27 @@ def dataset_lineage_graph(
     return DatasetLineageGraph(nodes=nodes, edges=edges)
 
 
+@router.patch("/{dataset_id}")
+def rename_dataset(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Rename a dataset (user-facing label only)."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    meta.name = name
+    db.commit()
+    return {"dataset_id": dataset_id, "name": name}
+
+
 @router.get("/{dataset_id}/suggest-columns")
 def suggest_columns(
     dataset_id: str,
@@ -694,3 +719,91 @@ def preview_dataset(
         rows=page_rows,
         total_rows=meta.row_count,
     )
+
+
+@router.post("/cross-query", response_model=CrossDatasetQueryResponse)
+def cross_dataset_query(
+    payload: CrossDatasetQueryRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> CrossDatasetQueryResponse:
+    """Run a single DuckDB SQL query that joins/unions multiple datasets.
+
+    ``payload.dataset_ids`` maps SQL relation alias -> dataset_id.
+    The SQL query references tables by those aliases.
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+
+    if not payload.dataset_ids:
+        raise HTTPException(status_code=422, detail="dataset_ids must not be empty")
+
+    relation_rows: dict[str, list[dict]] = {}
+    for alias, dataset_id in payload.dataset_ids.items():
+        try:
+            df = get_dataset_from_db(dataset_id, db)
+            relation_rows[alias] = df.astype(object).where(pd.notnull(df), None).to_dict(orient="records")
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found (alias: {alias})")
+
+    try:
+        results = DuckDBService.transform_named_relations(
+            relation_rows=relation_rows,
+            sql=payload.query,
+            output_relation=list(payload.dataset_ids.keys())[0],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Query error: {str(exc)}")
+
+    return CrossDatasetQueryResponse(
+        results=results,
+        row_count=len(results),
+        aliases=list(payload.dataset_ids.keys()),
+    )
+
+
+@router.get("/{dataset_id}/joinable", response_model=JoinableResponse)
+def get_joinable_datasets(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> JoinableResponse:
+    """Return datasets that share at least one column name with the given dataset.
+    Useful for suggesting JOIN candidates in the UI and AI agent.
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+
+    source_meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not source_meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    source_cols = set(str(c) for c in (source_meta.columns or []))
+    if not source_cols:
+        return JoinableResponse(dataset_id=dataset_id, joinable=[])
+
+    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id != dataset_id)
+    if workspace_id:
+        query = query.filter(
+            (DatasetMetaDB.workspace_id == workspace_id) | DatasetMetaDB.workspace_id.is_(None)
+        )
+
+    joinable: list[JoinableDataset] = []
+    for meta in query.all():
+        other_cols = set(str(c) for c in (meta.columns or []))
+        shared = sorted(source_cols & other_cols)
+        if shared:
+            joinable.append(
+                JoinableDataset(
+                    dataset_id=str(meta.id),
+                    name=str(meta.name) if meta.name else None,
+                    shared_columns=shared,
+                    total_columns=len(other_cols),
+                    row_count=int(meta.row_count or 0),
+                )
+            )
+
+    joinable.sort(key=lambda j: len(j.shared_columns), reverse=True)
+
+    return JoinableResponse(dataset_id=dataset_id, joinable=joinable)

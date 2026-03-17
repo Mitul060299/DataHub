@@ -123,6 +123,7 @@ class AIAgentService:
         user_message: str,
         conversation_history: list[dict[str, Any]],
         db: Session,
+        secondary_dataset_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         context = AIAgentService._get_dataset_context(dataset_id, db)
         provider, api_key, model = AIAgentService._provider_config()
@@ -146,6 +147,32 @@ class AIAgentService:
             f"Dataset context:\n- Columns: {', '.join(context['columns'])}\n"
             f"- Row count: {context['rowCount']:,}\n"
             f"- Data types: {json.dumps(context['schema'])}\n\n"
+        )
+
+        # Include schemas of any secondary datasets so the LLM can generate
+        # correct JOIN / UNION SQL referencing the right column names.
+        if secondary_dataset_ids:
+            secondary_info_lines: list[str] = []
+            for sec_id in secondary_dataset_ids:
+                try:
+                    sec_ctx = AIAgentService._get_dataset_context(sec_id, db)
+                    sec_meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == sec_id).first()
+                    alias = (str(sec_meta.name) if sec_meta and sec_meta.name else sec_id)
+                    secondary_info_lines.append(
+                        f"- {alias} (id: {sec_id}): columns={', '.join(sec_ctx['columns'])} | "
+                        f"rows={sec_ctx['rowCount']:,}"
+                    )
+                except Exception:
+                    secondary_info_lines.append(f"- {sec_id}: (unavailable)")
+            secondary_block = "\n".join(secondary_info_lines)
+            system_prompt += (
+                "ADDITIONAL DATASETS AVAILABLE FOR JOIN/UNION:\n"
+                f"{secondary_block}\n"
+                "When generating SQL that spans multiple datasets, reference them by their SQL\n"
+                "alias names shown above. The primary dataset is always available as 'dataset'.\n\n"
+            )
+
+        system_prompt += (
             "AVAILABLE OPERATIONS:\n\n"
             "CLEANING:\n"
             "- remove_duplicates: Remove exact duplicate rows\n"

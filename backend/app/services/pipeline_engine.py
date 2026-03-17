@@ -237,10 +237,18 @@ class PipelineEngine:
         session_id: Optional[str] = None,
         runtime_parameters: Optional[Dict[str, Any]] = None,
         triggered_by: str = "manual",
+        extra_input_dataset_ids: Optional[List[str]] = None,
     ) -> AsyncGenerator[ChatEvent, None]:
         """
-        Execute pipeline steps with monitoring
-        Yields progress events to frontend
+        Execute pipeline steps with monitoring.
+        Yields progress events to frontend.
+
+        ``input_dataset_id`` becomes the primary ``dataset`` relation in every SQL
+        step.  ``extra_input_dataset_ids`` are automatically registered as named
+        relations using the dataset's stored name (sanitised to a valid SQL
+        identifier), e.g. a dataset named "customers" is available as the
+        ``customers`` table inside SQL steps.  Callers can override or extend this
+        via ``runtime_parameters["dataset_bindings"]``.
         """
         
         pipeline = self.get_pipeline(pipeline_id)
@@ -261,6 +269,23 @@ class PipelineEngine:
             "execution_config": pipeline.execution_config if isinstance(pipeline.execution_config, dict) else {},
         }
         
+        # Auto-populate dataset_bindings from extra_input_dataset_ids so SQL
+        # steps can reference extra datasets by their sanitised names.
+        if extra_input_dataset_ids:
+            auto_bindings: Dict[str, str] = {}
+            for ds_id in extra_input_dataset_ids:
+                if ds_id == input_dataset_id:
+                    continue
+                meta = self.db.query(DatasetMetaDB).filter(DatasetMetaDB.id == ds_id).first()
+                alias = self._sanitize_alias(
+                    (meta.name or ds_id) if meta else ds_id
+                )
+                auto_bindings[alias] = ds_id
+            if auto_bindings:
+                existing_bindings = resolved_parameters.get("dataset_bindings") or {}
+                merged = {**auto_bindings, **existing_bindings}  # explicit bindings win
+                resolved_parameters = {**resolved_parameters, "dataset_bindings": merged}
+
         run = PipelineRunV2DB(
             id=str(uuid.uuid4()),
             pipeline_id=pipeline_id,
@@ -273,6 +298,7 @@ class PipelineEngine:
             metrics={
                 "pipeline_snapshot": pipeline_snapshot,
                 "runtime_parameters": resolved_parameters,
+                "extra_input_dataset_ids": extra_input_dataset_ids or [],
             },
         )
         
@@ -535,6 +561,16 @@ class PipelineEngine:
             relations[alias_name] = rows
 
         return relations
+
+    @staticmethod
+    def _sanitize_alias(name: str) -> str:
+        """Convert a dataset name to a valid SQL identifier alias."""
+        import re as _re
+        sanitized = _re.sub(r"[^A-Za-z0-9_]", "_", name.strip()).lower()
+        sanitized = _re.sub(r"_+", "_", sanitized).strip("_")
+        if not sanitized or sanitized[0].isdigit():
+            sanitized = "ds_" + sanitized
+        return sanitized or "dataset_extra"
 
     @staticmethod
     def _resolve_binding_dataset_id(binding: Any, runtime_parameters: Dict[str, Any]) -> str:

@@ -425,6 +425,12 @@ export async function deleteDataset(datasetId: string) {
   return response.data;
 }
 
+export async function renameDataset(datasetId: string, name: string) {
+  const response = await api.patch(`/datasets/${datasetId}`, { name });
+  invalidateAnalyticsCache({ datasetId });
+  return response.data;
+}
+
 export async function exportDatasetCsv(datasetId: string, params?: Record<string, unknown>) {
   const response = await api.get(`/datasets/${datasetId}/export`, {
     responseType: "blob",

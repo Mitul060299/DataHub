@@ -32,6 +32,7 @@ interface PipelineContextValue {
   steps: PipelineStep[];
   addStep: (step: PipelineStep) => void;
   removeStep: (stepId: string) => void;
+  renameStep: (stepId: string, newLabel: string) => void;
   keepStepsThrough: (stepId: string) => void;
   clearSteps: () => void;
   runPipeline: () => Promise<void>;
@@ -78,6 +79,16 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     setSteps((current) => current.filter((step) => step.id !== stepId));
   };
 
+  const renameStep = (stepId: string, newLabel: string) => {
+    const trimmed = newLabel.trim();
+    if (!trimmed) return;
+    setSteps((current) =>
+      current.map((step) =>
+        step.id === stepId ? { ...step, description: trimmed } : step
+      )
+    );
+  };
+
   const keepStepsThrough = (stepId: string) => {
     setSteps((current) => {
       const index = current.findIndex((step) => step.id === stepId);
@@ -100,8 +111,8 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, keepStepsThrough, clearSteps, runPipeline, scheduleInfo, setScheduleInfo }),
-    [steps, scheduleInfo],
+    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, runPipeline, scheduleInfo, setScheduleInfo }),
+    [steps, scheduleInfo],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return <PipelineContext.Provider value={value}>{children}</PipelineContext.Provider>;

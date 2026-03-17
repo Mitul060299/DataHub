@@ -41,6 +41,11 @@ class AgentState(TypedDict):
     calculated_columns: list[dict]
     dashboards: list[dict]
 
+    # Optional list of additional dataset IDs to make available for JOIN/UNION
+    secondary_dataset_ids: NotRequired[list[str]]
+    # Schemas loaded for secondary datasets – keyed by dataset name/alias
+    secondary_schemas: NotRequired[dict[str, dict]]
+
     pipeline_steps: list[dict]
 
     intent: str

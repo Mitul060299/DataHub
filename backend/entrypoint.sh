@@ -23,4 +23,9 @@ if [ "${RUN_MIGRATIONS:-}" = "1" ]; then
 fi
 
 echo "[entrypoint] Launching uvicorn"
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT_VALUE}" --workers "${WORKERS_VALUE}"
+export PYTHONUNBUFFERED=1
+exec uvicorn app.main:app \
+  --host 0.0.0.0 \
+  --port "${PORT_VALUE}" \
+  --workers "${WORKERS_VALUE}" \
+  --lifespan on

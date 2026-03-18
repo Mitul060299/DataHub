@@ -19,6 +19,7 @@ from ..models import (
     DatasetQueryResponse,
     CrossDatasetQueryRequest,
     CrossDatasetQueryResponse,
+    DatasetRenameRequest,
     JoinableDataset,
     JoinableResponse,
     StorageTierPolicyOut,
@@ -492,7 +493,7 @@ def dataset_lineage_graph(
 @router.patch("/{dataset_id}")
 def rename_dataset(
     dataset_id: str,
-    payload: dict,
+    payload: DatasetRenameRequest,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -502,7 +503,7 @@ def rename_dataset(
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    name = str(payload.get("name", "")).strip()
+    name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="name is required")
     meta.name = name

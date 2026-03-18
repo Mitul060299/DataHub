@@ -60,6 +60,10 @@ class DatasetQueryResponse(BaseModel):
     cached: bool
 
 
+class DatasetRenameRequest(BaseModel):
+    name: str
+
+
 class CrossDatasetQueryRequest(BaseModel):
     """Run a DuckDB SQL query that spans multiple datasets.
 

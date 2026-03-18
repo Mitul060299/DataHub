@@ -16,7 +16,7 @@ export function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
       <Route path="/" element={<AppShell />}>
-        <Route index element={<Navigate to="/workspace" replace />} />
+        <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<HomePage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
@@ -25,7 +25,7 @@ export function App() {
         <Route path="settings/profile" element={<SettingsPage section="profile" />} />
         <Route path="settings/billing" element={<SettingsPage section="billing" />} />
       </Route>
-      <Route path="*" element={<Navigate to="/workspace" replace />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }

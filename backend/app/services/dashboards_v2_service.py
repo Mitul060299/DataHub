@@ -142,16 +142,6 @@ class DashboardsV2Service:
         chart_type: str,
         query_spec: dict,
         layout: dict,
-    @classmethod
-    def add_tile(
-        cls,
-        user_id: str,
-        dashboard_id: str,
-        dataset_id: str | None,
-        title: str,
-        chart_type: str,
-        query_spec: dict,
-        layout: dict,
         tile_type: str = "chart",
         echarts_config: dict | None = None,
         table_data: dict | None = None,

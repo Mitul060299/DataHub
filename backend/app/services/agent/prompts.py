@@ -1,11 +1,22 @@
 INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the user's message into exactly one of these intents:
 
-- transform   : user wants to clean or modify data (remove duplicates, fill nulls, filter, rename, cast types, etc.)
-- add_column  : user wants to create a new calculated or static column
-- sql_query   : user wants to query or aggregate data without permanently changing it
-- visualise   : user wants a chart, graph, or visual summary
-- join        : user wants to merge or join two datasets
-- converse    : greeting, question about the tool, or anything not data-related
+- clean      : standardise column names, cast types, remove duplicates, trim whitespace, handle nulls
+- validate   : read-only data quality report (null counts, dupes, outliers, type mismatches) — no changes made
+- filter     : subset rows by one or more conditions (equals, >, <, between, contains, is null)
+- transform  : general data modification not covered by a specific intent above
+- add_column : create a new calculated or derived column
+- summarise  : group-by aggregation (sum, count, avg, min, max, count_distinct)
+- pivot      : reshape long to wide format
+- union      : vertically stack two or more tables
+- join       : merge two tables on a key column
+- reconcile  : compare two tables on a key to find variances and missing rows
+- sql_query  : run a read-only SQL query or ad-hoc aggregation
+- visualise  : create a chart, graph, or visual summary
+- export     : save a table as an artifact (CSV / Excel / Parquet) and get a download link
+- converse   : greeting, question about the tool, or anything not data-related
+
+CURRENT SESSION TABLES:
+{table_registry}
 
 Respond with ONLY the intent word, nothing else. No explanation, no punctuation."""
 
@@ -38,6 +49,10 @@ ADDITIONAL DATASETS AVAILABLE FOR JOIN/UNION:
 {secondary_datasets}
 (Each entry provides the SQL alias, columns, and row count. Reference these tables by their alias in SQL. The primary input is always `dataset`.)
 
+SESSION TABLE REGISTRY (all tables/views available in the DuckDB session):
+{table_registry}
+(Use duckdb_name values directly in SQL. Source files are registered as VIEWs; derived tables are materialised TABLEs.)
+
 USER GOAL:
 {user_goal}
 
@@ -53,7 +68,14 @@ RULES:
 9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart" and include parameters: dashboard_id (if known), title, chart_type, query_spec
 10. SQL must reference the current input table as `dataset`. CRITICAL FOR MULTI-STEP PLANS: in step N, `dataset` is the OUTPUT of step N-1 (not the original source table). Each step's SQL must be written against the schema that the PREVIOUS step produces. For example, if step 1 aggregates raw columns into `(sales_rep_id, total_deal_amount)`, then step 2's SQL must only reference `sales_rep_id` and `total_deal_amount` — it must NOT attempt to reference original columns like `deal_amount` that no longer exist in the intermediate result.
 11. PREFER SINGLE-STEP for queries that are one logical operation (e.g. aggregate + sort + limit is a single SQL query — do NOT split it into separate steps). Only use multiple steps when each step genuinely produces an independently meaningful intermediate dataset.
-12. When joining with a secondary dataset, use the alias from ADDITIONAL DATASETS. The binding must be declared in step parameters as: {{"relations": {{"<alias>": "<dataset_id>"}}}}
+13. clean: Use REGEXP_REPLACE for snake_case column renames, TRY_CAST for type coercion, DELETE + subquery for duplicate removal, TRIM for whitespace. Output as CREATE TABLE <name>_clean AS ...
+14. filter: Always output row count before and after. Use CREATE TABLE <name>_filtered AS SELECT * FROM <input> WHERE <conditions>.
+15. summarise: CREATE TABLE <name>_summary AS SELECT <group_cols>, <agg_exprs> FROM <input> GROUP BY <group_cols> ORDER BY 1. Use DuckDB native agg functions.
+16. pivot: Use DuckDB native PIVOT syntax: CREATE TABLE <name>_pivot AS PIVOT <input> ON <pivot_col> USING <agg>(<value_col>) GROUP BY <row_id>.
+17. union: Validate columns across all source tables first. Apply rename sub-steps if needed. CREATE TABLE <name>_union AS SELECT ... UNION ALL SELECT ....
+18. reconcile: CREATE TABLE <name>_recon AS SELECT COALESCE(l.key,r.key) AS key, l.val AS left_value, r.val AS right_value, (r.val-l.val) AS variance, (r.val=l.val) AS reconciled FROM left_table l FULL OUTER JOIN right_table r ON l.key=r.key.
+19. export: Set operation to 'export'. Include parameters: duckdb_name (table to export), format ('csv'|'excel'|'parquet'), display_name.
+20. For union/join/reconcile across session tables, reference tables by duckdb_name from the TABLE REGISTRY above.
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{
@@ -83,6 +105,9 @@ REFLECT_PROMPT = """You are a DuckDB SQL expert. A query failed with an error. R
 DATASET SCHEMA:
 {schema}
 
+SESSION TABLE REGISTRY (all available tables/views):
+{table_registry}
+
 FAILED SQL:
 {failed_sql}
 
@@ -93,7 +118,8 @@ RULES:
 - Return ONLY the corrected SQL query, nothing else
 - No explanation, no markdown, no fences
 - Use DuckDB syntax (not PostgreSQL, not SQLite)
-- The table name is always: dataset"""
+- The primary input table is always: dataset
+- Cross-session tables can be referenced by their duckdb_name from the registry"""
 
 
 RESPONDER_TRANSFORM_PROMPT = """You are a helpful data analyst. Summarise what was accomplished in 2-3 sentences.
@@ -111,3 +137,22 @@ Answer the user's question concisely. If they ask what you can do, mention: clea
 building charts, joining datasets, and building reproducible pipelines.
 
 USER MESSAGE: {message}"""
+
+
+VALIDATE_PROMPT = """You are a data quality analyst. Summarise the validation report below as a concise structured response.
+Highlight the most important issues first. Use bullet points. Be specific with numbers.
+
+VALIDATION REPORT:
+{report}
+
+DATASET NAME: {dataset_name}"""
+
+
+CLEAN_SUMMARY_PROMPT = """You are a data engineer. Summarise what the cleaning step accomplished in 3-5 bullet points.
+Be specific: mention column names that were renamed, types that were cast, rows that were removed, nulls that were handled.
+
+CLEANING SUMMARY:
+{summary}
+
+INPUT TABLE: {input_name}
+OUTPUT TABLE: {output_name}"""

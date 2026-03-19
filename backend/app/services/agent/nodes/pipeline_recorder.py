@@ -19,6 +19,7 @@ async def pipeline_recorder(state: AgentState) -> dict:
             if step_idx < len(plan):
                 plan_step = plan[step_idx]
                 next_dataset_id = result.get("output_dataset_id") or current_dataset_id
+                params = plan_step.get("parameters") if isinstance(plan_step.get("parameters"), dict) else {}
                 saved_steps.append(
                     {
                         "dataset_id": next_dataset_id,
@@ -27,10 +28,14 @@ async def pipeline_recorder(state: AgentState) -> dict:
                         "agent_run_id": None,
                         "step_number": plan_step.get("step_number", result.get("step_number")),
                         "operation": plan_step["operation"],
+                        "intent": state.get("intent") or plan_step["operation"],
                         "description": plan_step["description"],
                         "sql": result.get("sql"),
                         "run_id": result.get("run_id"),
                         "rows_affected": result.get("rows_affected"),
+                        "input_tables": list(params.get("input_tables") or []),
+                        "output_table": params.get("output_table") or params.get("output_name") or None,
+                        "timestamp": datetime.utcnow().isoformat(),
                     }
                 )
                 current_dataset_id = next_dataset_id
@@ -43,10 +48,13 @@ async def pipeline_recorder(state: AgentState) -> dict:
                 {
                     "step_number": step.get("step_number", index + 1),
                     "operation": step.get("operation"),
+                    "intent": step.get("intent") or step.get("operation"),
                     "description": step.get("description"),
                     "sql": step.get("sql"),
                     "rows_affected": step.get("rows_affected"),
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "input_tables": step.get("input_tables") or [],
+                    "output_table": step.get("output_table"),
+                    "timestamp": step.get("timestamp") or datetime.utcnow().isoformat(),
                 }
                 for index, step in enumerate(saved_steps)
             ]

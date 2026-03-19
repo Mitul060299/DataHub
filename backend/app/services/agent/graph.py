@@ -39,7 +39,7 @@ def build_agent_graph():
     graph.add_conditional_edges(
         "intent_classifier",
         route_intent,
-        {"planner": "planner", "responder": "responder"},
+        {"planner": "planner", "execute_step": "execute_step", "responder": "responder"},
     )
     graph.add_conditional_edges(
         "plan_presenter",

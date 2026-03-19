@@ -1,9 +1,20 @@
 from .state import AgentState
 
 
+# Intents that skip the planner and straight to execute_step (read-only / auto)
+_AUTO_EXECUTE = {"validate", "summarise"}
+# All planning intents that need the planner + plan_presenter gate
+_PLANNING_INTENTS = {
+    "clean", "filter", "transform", "add_column", "pivot",
+    "union", "join", "reconcile", "sql_query", "visualise", "export",
+}
+
+
 def route_intent(state: AgentState) -> str:
     intent = state.get("intent", "converse")
-    if intent in ("transform", "add_column", "sql_query", "visualise", "join"):
+    if intent in _AUTO_EXECUTE:
+        return "execute_step"
+    if intent in _PLANNING_INTENTS:
         return "planner"
     return "responder"
 

@@ -1,7 +1,9 @@
-from ..state import AgentState
+from ..state import AgentState, TableRegistryEntry
 from ...duckdb_service import DuckDBService
 from ...calculated_columns_service import CalculatedColumnsService
 from ...dashboards_v2_service import DashboardsV2Service
+from ...duckdb_session import get_connection, register_view, SessionExpiredError
+from ...object_storage import StorageService
 from ....db import SessionLocal
 from ....models_db import ChatTemplateDB, DatasetMetaDB
 import re as _re
@@ -88,6 +90,7 @@ async def context_loader(state: AgentState) -> dict:
                             "dataset_id": sec_id,
                             "columns": list(sec_meta.columns or []),
                             "row_count": int(sec_meta.row_count or 0),
+                            "storage_path": sec_meta.storage_path,
                             "schema": DuckDBService.get_schema(sec_id),
                         }
                     except Exception:
@@ -95,23 +98,36 @@ async def context_loader(state: AgentState) -> dict:
                             "dataset_id": sec_id,
                             "columns": list(sec_meta.columns or []),
                             "row_count": int(sec_meta.row_count or 0),
+                            "storage_path": sec_meta.storage_path,
                             "schema": {},
                         }
         finally:
             sec_db.close()
 
+    # ── DuckDB session: register views & build table_registry ───────────────
+    session_id = state.get("session_id", "")
+    table_registry: dict = dict(state.get("table_registry") or {})
+
+    def _register_dataset_view(ds_id: str, alias: str, storage_path: str | None = None) -> None:
+        """Register one dataset as a named view in the persistent DuckDB session."""
+        if not session_id or not storage_path:
+            return
+        try:
+            file_path = StorageService.get_query_path(storage_path)
+            register_view(session_id, alias, file_path)
+        except Exception:
+            pass  # best-effort; operations will fall back gracefully
+
+    if session_id:
+        try:
+            get_connection(session_id)  # touch session to reset TTL / raise if expired
+        except SessionExpiredError as exc:
+            return {"error": str(exc)}
+
     try:
-        base = {
-            "schema": DuckDBService.get_schema(dataset_id),
-            "stats": DuckDBService.get_column_stats(dataset_id),
-            "sample_rows": DuckDBService.get_sample_rows(dataset_id, limit=10),
-            "available_templates": available_templates,
-            "calculated_columns": calculated_columns,
-            "dashboards": dashboards,
-        }
-        if secondary_schemas:
-            base["secondary_schemas"] = secondary_schemas
-        return base
+        schema = DuckDBService.get_schema(dataset_id)
+        stats = DuckDBService.get_column_stats(dataset_id)
+        sample_rows = DuckDBService.get_sample_rows(dataset_id, limit=10)
     except Exception as exc:
         base_err: dict = {
             "schema": {},
@@ -125,3 +141,65 @@ async def context_loader(state: AgentState) -> dict:
         if secondary_schemas:
             base_err["secondary_schemas"] = secondary_schemas
         return base_err
+
+    # Primary dataset registry entry
+    primary_alias = _sanitize_alias(str(dataset.name if dataset and dataset.name else dataset_id))
+    row_count = 0
+    col_names: list[str] = []
+    if isinstance(schema, dict):
+        cols = schema.get("columns") or []
+        col_names = [c.get("name", "") for c in cols if isinstance(c, dict)]
+    try:
+        row_count = int(dataset.row_count) if dataset and dataset.row_count else 0
+    except Exception:
+        pass
+
+    _register_dataset_view(dataset_id, primary_alias, storage_path=dataset.storage_path if dataset else None)
+
+    primary_entry: TableRegistryEntry = {
+        "duckdb_name": primary_alias,
+        "dataset_id": dataset_id,
+        "display_name": primary_alias,
+        "source_intent": "upload",
+        "parent_tables": [],
+        "row_count": row_count,
+        "column_names": col_names,
+        "pipeline_step_number": 0,
+        "is_artifact": False,
+        "is_view": True,
+    }
+    table_registry[primary_alias] = primary_entry
+
+    # Secondary datasets
+    for alias, info in (secondary_schemas or {}).items():
+        sec_id = info.get("dataset_id", "")
+        sec_cols = info.get("columns") or []
+        sec_row_count = int(info.get("row_count") or 0)
+        _register_dataset_view(sec_id, alias, storage_path=info.get("storage_path"))
+        if alias not in table_registry:
+            sec_entry: TableRegistryEntry = {
+                "duckdb_name": alias,
+                "dataset_id": sec_id,
+                "display_name": alias,
+                "source_intent": "upload",
+                "parent_tables": [],
+                "row_count": sec_row_count,
+                "column_names": [c if isinstance(c, str) else str(c) for c in sec_cols],
+                "pipeline_step_number": 0,
+                "is_artifact": False,
+                "is_view": True,
+            }
+            table_registry[alias] = sec_entry
+
+    base = {
+        "schema": schema,
+        "stats": stats,
+        "sample_rows": sample_rows,
+        "available_templates": available_templates,
+        "calculated_columns": calculated_columns,
+        "dashboards": dashboards,
+        "table_registry": table_registry,
+    }
+    if secondary_schemas:
+        base["secondary_schemas"] = secondary_schemas
+    return base

@@ -3,6 +3,21 @@ from typing import Annotated, NotRequired, Optional, TypedDict
 from langgraph.graph.message import add_messages
 
 
+class TableRegistryEntry(TypedDict):
+    """Tracks every table/view the agent has created or registered this session."""
+    duckdb_name: str          # name usable directly in DuckDB SQL
+    dataset_id: str           # Supabase dataset_meta id (may be ephemeral uuid)
+    display_name: str         # human-readable label
+    source_intent: str        # intent that created this entry
+    parent_tables: list[str]  # duckdb_names of inputs
+    row_count: int
+    column_names: list[str]
+    pipeline_step_number: int
+    is_artifact: bool
+    artifact_url: NotRequired[str]  # signed download URL if exported
+    is_view: bool             # True=lazy VIEW, False=materialised TABLE
+
+
 class PlanStep(TypedDict):
     step_number: int
     operation: str
@@ -45,6 +60,10 @@ class AgentState(TypedDict):
     secondary_dataset_ids: NotRequired[list[str]]
     # Schemas loaded for secondary datasets – keyed by dataset name/alias
     secondary_schemas: NotRequired[dict[str, dict]]
+
+    # Session workspace
+    session_id: NotRequired[str]           # f"{user_id}:{chat_session_id}"
+    table_registry: NotRequired[dict[str, TableRegistryEntry]]  # duckdb_name -> entry
 
     pipeline_steps: list[dict]
 

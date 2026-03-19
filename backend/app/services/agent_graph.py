@@ -18,6 +18,7 @@ class AgentGraphService:
         plan_approved: bool,
         user_id: str,
         workspace_id: str,
+        session_id: str = "",
         secondary_dataset_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         state: dict[str, Any] = {
@@ -26,6 +27,8 @@ class AgentGraphService:
             "dataset_id": dataset_id,
             "user_id": user_id,
             "workspace_id": workspace_id,
+            "session_id": session_id,
+            "table_registry": {},
             "schema": {},
             "stats": {},
             "sample_rows": [],
@@ -92,6 +95,7 @@ class AgentGraphService:
                 plan_approved=plan_approved,
                 user_id=user_id,
                 workspace_id=workspace_id,
+                session_id=session_id,
                 secondary_dataset_ids=secondary_dataset_ids or [],
             )
 

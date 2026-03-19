@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import duckdb
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -168,7 +168,7 @@ async def update_source(
 # Soft delete
 # ---------------------------------------------------------------------------
 
-@router.delete("/{source_id}", status_code=204)
+@router.delete("/{source_id}", status_code=204, response_class=Response)
 async def delete_source(
     source_id: str,
     authorization: str | None = Header(default=None),

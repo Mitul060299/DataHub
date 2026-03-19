@@ -590,41 +590,112 @@ export async function unpublishDashboardV2(dashboardId: string) {
   return response.data as { success: boolean; dashboard_id: string };
 }
 
+export async function fetchDashboardById(dashboardId: string) {
+  const response = await api.get(`/dashboards/${dashboardId}`);
+  return response.data as import("./types").DashboardV2;
+}
+
+export async function updateDashboard(dashboardId: string, payload: {
+  name?: string;
+  description?: string;
+  layout?: Record<string, unknown>;
+  theme?: Record<string, unknown>;
+  is_published?: boolean;
+}) {
+  const response = await api.patch(`/dashboards/${dashboardId}`, payload);
+  return response.data as import("./types").DashboardV2;
+}
+
+export async function deleteDashboardTile(dashboardId: string, tileId: string) {
+  const response = await api.delete(`/dashboards/${dashboardId}/tiles/${tileId}`);
+  return response.data as { success: boolean; tile_id: string };
+}
+
+export async function updateDashboardTile(dashboardId: string, tileId: string, payload: {
+  title?: string;
+  layout?: Record<string, unknown>;
+  echarts_config?: Record<string, unknown> | null;
+}) {
+  const response = await api.patch(`/dashboards/${dashboardId}/tiles/${tileId}`, payload);
+  return response.data as import("./types").DashboardV2Tile;
+}
+
+export async function postDashboardView(dashboardId: string) {
+  const response = await api.post(`/dashboards/${dashboardId}/views`);
+  return response.data;
+}
+
+export async function getDashboardAccessList(dashboardId: string) {
+  const response = await api.get(`/dashboards/${dashboardId}/access`);
+  return response.data as Array<{
+    id: string;
+    dashboard_id: string;
+    granted_to_user_id?: string | null;
+    granted_to_email?: string | null;
+    access_level: string;
+    granted_by: string;
+    expires_at?: string | null;
+    token?: string | null;
+    created_at: string;
+  }>;
+}
+
+export async function inviteDashboardAccess(dashboardId: string, payload: {
+  granted_to_user_id?: string;
+  granted_to_email?: string;
+  access_level?: string;
+  expires_at?: string;
+}) {
+  const response = await api.post(`/dashboards/${dashboardId}/access/invite`, payload);
+  return response.data;
+}
+
+export async function revokeDashboardAccess(dashboardId: string, grantId: string) {
+  const response = await api.delete(`/dashboards/${dashboardId}/access/${grantId}`);
+  return response.data as { success: boolean };
+}
+
+export async function generateShareToken(dashboardId: string) {
+  const response = await api.post(`/dashboards/${dashboardId}/access/share-token`);
+  return response.data as { share_token: string; share_url: string };
+}
+
+export async function deleteShareToken(dashboardId: string) {
+  const response = await api.delete(`/dashboards/${dashboardId}/access/share-token`);
+  return response.data as { success: boolean };
+}
+
+export async function getDashboardViews(dashboardId: string) {
+  const response = await api.get(`/dashboards/${dashboardId}/access/views`);
+  return response.data as Array<{
+    id: string;
+    dashboard_id: string;
+    viewed_by_user_id?: string | null;
+    viewed_by_email?: string | null;
+    viewed_at: string;
+    ip_address?: string | null;
+  }>;
+}
+
 export async function fetchPublicDashboard(publishToken: string) {
   const response = await api.get(`/public/dashboards/${publishToken}`);
-  return response.data as {
-    id: string;
-    workspace_id: string;
-    dataset_id?: string | null;
-    name: string;
-    description?: string | null;
-    layout: Record<string, unknown>;
-    tiles: Array<{
-      id: string;
-      dashboard_id: string;
-      dataset_id?: string | null;
-      title: string;
-      chart_type: string;
-      query_spec: Record<string, unknown>;
-      layout: Record<string, unknown>;
-      created_at: string;
-    }>;
-    created_at: string;
-  };
+  return response.data as import("./types").DashboardV2;
 }
 
 export async function fetchPublicDashboardTiles(publishToken: string) {
   const response = await api.get(`/public/dashboards/${publishToken}/tiles`);
-  return response.data as Array<{
-    id: string;
-    dashboard_id: string;
-    dataset_id?: string | null;
-    title: string;
-    chart_type: string;
-    query_spec: Record<string, unknown>;
-    layout: Record<string, unknown>;
-    created_at: string;
-  }>;
+  return response.data as import("./types").DashboardV2Tile[];
+}
+
+/** Fetch a dashboard shared via the new share_token field (not publish_token). */
+export async function fetchSharedDashboard(shareToken: string) {
+  const response = await api.get(`/public/dashboards/share/${shareToken}`);
+  return response.data as import("./types").DashboardV2;
+}
+
+export async function fetchSharedDashboardTiles(shareToken: string) {
+  const response = await api.get(`/public/dashboards/share/${shareToken}/tiles`);
+  return response.data as import("./types").DashboardV2Tile[];
 }
 
 export async function fetchChartSummary(

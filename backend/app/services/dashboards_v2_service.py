@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from ..db import SessionLocal
 from ..models import DashboardTileOut, DashboardV2Out
-from ..models_db import DashboardPublishDB, DashboardTileDB, DashboardV2DB
+from ..models_db import DashboardAccessDB, DashboardPublishDB, DashboardTileDB, DashboardV2DB, DashboardViewDB
 
 
 class DashboardsV2Service:
@@ -23,6 +24,14 @@ class DashboardsV2Service:
             chart_type=tile.chart_type,
             query_spec=tile.query_spec or {},
             layout=tile.layout or {},
+            tile_type=getattr(tile, "tile_type", "chart") or "chart",
+            echarts_config=getattr(tile, "echarts_config", None),
+            table_data=getattr(tile, "table_data", None),
+            metric_value=getattr(tile, "metric_value", None),
+            metric_label=getattr(tile, "metric_label", None),
+            metric_trend=getattr(tile, "metric_trend", None),
+            metric_threshold=getattr(tile, "metric_threshold", None),
+            snapshot_id=getattr(tile, "snapshot_id", None),
             created_at=cls._to_iso(tile.created_at),
         )
 
@@ -35,8 +44,12 @@ class DashboardsV2Service:
             name=dashboard.name,
             description=dashboard.description,
             layout=dashboard.layout or {},
+            theme=getattr(dashboard, "theme", None) or {},
+            is_published=bool(getattr(dashboard, "is_published", False)),
+            share_token=getattr(dashboard, "share_token", None),
             tiles=[cls._tile_out(tile) for tile in tiles],
             created_at=cls._to_iso(dashboard.created_at),
+            updated_at=cls._to_iso(getattr(dashboard, "updated_at", None) or dashboard.created_at),
         )
 
     @classmethod
@@ -76,6 +89,7 @@ class DashboardsV2Service:
         name: str,
         description: str | None,
         layout: dict,
+        theme: dict | None = None,
     ) -> DashboardV2Out:
         db = SessionLocal()
         try:
@@ -87,6 +101,7 @@ class DashboardsV2Service:
                 name=name.strip(),
                 description=description,
                 layout=layout or {},
+                theme=theme or {},
             )
             db.add(row)
             db.commit()
@@ -127,6 +142,25 @@ class DashboardsV2Service:
         chart_type: str,
         query_spec: dict,
         layout: dict,
+    @classmethod
+    def add_tile(
+        cls,
+        user_id: str,
+        dashboard_id: str,
+        dataset_id: str | None,
+        title: str,
+        chart_type: str,
+        query_spec: dict,
+        layout: dict,
+        tile_type: str = "chart",
+        echarts_config: dict | None = None,
+        table_data: dict | None = None,
+        metric_value: str | None = None,
+        metric_label: str | None = None,
+        metric_trend: str | None = None,
+        metric_threshold: dict | None = None,
+        source_table: str | None = None,
+        snapshot_id: str | None = None,
     ) -> DashboardTileOut:
         db = SessionLocal()
         try:
@@ -139,16 +173,122 @@ class DashboardsV2Service:
             if not dashboard:
                 raise ValueError("Dashboard not found")
 
+            # Store source_table reference in query_spec for snapshot binding
+            qs = dict(query_spec or {})
+            if source_table:
+                qs["source_table"] = source_table
+
             tile = DashboardTileDB(
                 id=str(uuid.uuid4()),
                 dashboard_id=dashboard_id,
                 dataset_id=dataset_id,
                 title=title.strip(),
                 chart_type=chart_type.strip(),
-                query_spec=query_spec or {},
+                query_spec=qs,
                 layout=layout or {},
+                tile_type=tile_type,
+                echarts_config=echarts_config,
+                table_data=table_data,
+                metric_value=metric_value,
+                metric_label=metric_label,
+                metric_trend=metric_trend,
+                metric_threshold=metric_threshold,
+                snapshot_id=snapshot_id,
             )
             db.add(tile)
+            db.commit()
+            db.refresh(tile)
+            return cls._tile_out(tile)
+        finally:
+            db.close()
+
+    @classmethod
+    def update_dashboard(
+        cls,
+        user_id: str,
+        dashboard_id: str,
+        updates: dict[str, Any],
+    ) -> DashboardV2Out | None:
+        db = SessionLocal()
+        try:
+            dashboard = (
+                db.query(DashboardV2DB)
+                .filter(DashboardV2DB.id == dashboard_id)
+                .filter(DashboardV2DB.user_id == user_id)
+                .first()
+            )
+            if not dashboard:
+                return None
+            for key, val in updates.items():
+                if hasattr(dashboard, key) and val is not None:
+                    setattr(dashboard, key, val)
+            db.commit()
+            db.refresh(dashboard)
+            tiles = (
+                db.query(DashboardTileDB)
+                .filter(DashboardTileDB.dashboard_id == dashboard_id)
+                .order_by(DashboardTileDB.created_at.asc())
+                .all()
+            )
+            return cls._dashboard_out(dashboard, tiles)
+        finally:
+            db.close()
+
+    @classmethod
+    def delete_tile(cls, user_id: str, dashboard_id: str, tile_id: str) -> bool:
+        db = SessionLocal()
+        try:
+            dashboard = (
+                db.query(DashboardV2DB)
+                .filter(DashboardV2DB.id == dashboard_id)
+                .filter(DashboardV2DB.user_id == user_id)
+                .first()
+            )
+            if not dashboard:
+                return False
+            tile = (
+                db.query(DashboardTileDB)
+                .filter(DashboardTileDB.id == tile_id)
+                .filter(DashboardTileDB.dashboard_id == dashboard_id)
+                .first()
+            )
+            if not tile:
+                return False
+            db.delete(tile)
+            db.commit()
+            return True
+        finally:
+            db.close()
+
+    @classmethod
+    def update_tile(
+        cls,
+        user_id: str,
+        dashboard_id: str,
+        tile_id: str,
+        updates: dict[str, Any],
+    ) -> DashboardTileOut | None:
+        db = SessionLocal()
+        try:
+            dashboard = (
+                db.query(DashboardV2DB)
+                .filter(DashboardV2DB.id == dashboard_id)
+                .filter(DashboardV2DB.user_id == user_id)
+                .first()
+            )
+            if not dashboard:
+                return None
+            tile = (
+                db.query(DashboardTileDB)
+                .filter(DashboardTileDB.id == tile_id)
+                .filter(DashboardTileDB.dashboard_id == dashboard_id)
+                .first()
+            )
+            if not tile:
+                return None
+            for key, val in updates.items():
+                if hasattr(tile, key) and val is not None:
+                    setattr(tile, key, val)
             db.commit()
             db.refresh(tile)
             return cls._tile_out(tile)
@@ -230,6 +370,24 @@ class DashboardsV2Service:
                 return None
 
             dashboard = db.query(DashboardV2DB).filter(DashboardV2DB.id == publish.dashboard_id).first()
+            if not dashboard:
+                return None
+            tiles = (
+                db.query(DashboardTileDB)
+                .filter(DashboardTileDB.dashboard_id == dashboard.id)
+                .order_by(DashboardTileDB.created_at.asc())
+                .all()
+            )
+            return cls._dashboard_out(dashboard, tiles)
+        finally:
+            db.close()
+
+    @classmethod
+    def get_dashboard_by_share_token(cls, share_token: str) -> DashboardV2Out | None:
+        """Look up a dashboard directly by its share_token field (new access model)."""
+        db = SessionLocal()
+        try:
+            dashboard = db.query(DashboardV2DB).filter(DashboardV2DB.share_token == share_token).first()
             if not dashboard:
                 return None
             tiles = (

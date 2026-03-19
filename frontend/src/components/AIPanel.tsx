@@ -6,6 +6,18 @@ import { usePipeline } from "../hooks/usePipeline";
 import { IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
 import { StepCard } from "./StepCard";
+import { EChartsRenderer } from "./EChartsRenderer";
+import { PinToDashboardModal } from "./PinToDashboardModal";
+
+interface TileCreatedData {
+  id: string;
+  dashboard_id: string;
+  title: string;
+  chart_type: string;
+  echarts_config: Record<string, unknown> | null;
+  source_table?: string;
+  saveable?: boolean;
+}
 
 type Message = ConversationMessage & {
   id: string;
@@ -15,6 +27,7 @@ type Message = ConversationMessage & {
   planPending?: boolean;
   planApproved?: boolean;
   planRejected?: boolean;
+  tileCreated?: TileCreatedData;
 };
 
 interface AIPanelProps {
@@ -33,6 +46,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [pinModal, setPinModal] = useState<TileCreatedData | null>(null);
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
 
@@ -187,12 +201,30 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           onDatasetMutated?.();
         }
 
+        // Extract tile_created with echarts_config from run_steps
+        let tileCreatedData: TileCreatedData | undefined;
+        for (const step of sortedCompletedSteps) {
+          const tc = step.tile_created as Record<string, unknown> | undefined;
+          if (tc && tc.echarts_config && tc.saveable) {
+            tileCreatedData = {
+              id: String(tc.id ?? ""),
+              dashboard_id: String(tc.dashboard_id ?? ""),
+              title: String(tc.title ?? "Chart"),
+              chart_type: String(tc.chart_type ?? "bar"),
+              echarts_config: tc.echarts_config as Record<string, unknown>,
+              source_table: tc.source_table ? String(tc.source_table) : undefined,
+              saveable: true,
+            };
+          }
+        }
+
         setMessages((previous) => [
           ...previous,
           {
             id: crypto.randomUUID(),
             role: "assistant",
             content: responseText,
+            tileCreated: tileCreatedData,
           },
         ]);
         break;
@@ -395,6 +427,30 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                   onReject={rejectPlan}
                 />
               ) : null}
+              {message.tileCreated?.echarts_config ? (
+                <div style={{ marginTop: 8 }}>
+                  <EChartsRenderer
+                    config={message.tileCreated.echarts_config}
+                    height={280}
+                  />
+                  <button
+                    onClick={() => setPinModal(message.tileCreated!)}
+                    style={{
+                      marginTop: 6,
+                      background: "#5B6AF0",
+                      border: "none",
+                      borderRadius: 6,
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "4px 12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    📌 Pin to Dashboard
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         ))}
@@ -424,6 +480,13 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           }}
         />
       </div>
+      {pinModal && (
+        <PinToDashboardModal
+          tileCreated={pinModal}
+          workspaceId={workspaceId}
+          onClose={() => setPinModal(null)}
+        />
+      )}
     </aside>
   );
 }

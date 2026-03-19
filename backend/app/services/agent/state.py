@@ -1,4 +1,4 @@
-from typing import Annotated, NotRequired, Optional, TypedDict
+from typing import Annotated, Any, NotRequired, Optional, TypedDict
 
 from langgraph.graph.message import add_messages
 
@@ -39,7 +39,10 @@ class ExecutionResult(TypedDict):
     sql: Optional[str]
     error: Optional[str]
     column_added: NotRequired[dict]
-    tile_created: NotRequired[dict]
+    tile_created: NotRequired[dict]    # {id, dashboard_id, title, chart_type, echarts_config, saveable}
+    query_results: NotRequired[list]   # rows from summarise / validate
+    artifact_url: NotRequired[str]     # export URL
+    kpi_candidates: NotRequired[list[dict]]  # [{label, value, trend}] from reconcile/summarise
 
 
 class AgentState(TypedDict):
@@ -80,5 +83,6 @@ class AgentState(TypedDict):
     run_steps: list[dict]
 
     final_response: str
-    chart_config: Optional[dict]
+    chart_config: Optional[dict]   # legacy; prefer execution_results[].tile_created
     query_results: Optional[list]
+    kpi_candidates: NotRequired[list[dict]]  # [{label, value, trend}] offered to user

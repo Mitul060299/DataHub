@@ -70,6 +70,13 @@ export interface DashboardV2Tile {
   dataset_id?: string | null;
   title: string;
   chart_type: string;
+  tile_type?: string | null;
+  echarts_config?: Record<string, unknown> | null;
+  table_data?: Record<string, unknown> | null;
+  metric_value?: string | null;
+  metric_label?: string | null;
+  metric_trend?: string | null;
+  metric_threshold?: Record<string, unknown> | null;
   query_spec: Record<string, unknown>;
   layout: Record<string, unknown>;
   created_at: string;
@@ -82,8 +89,12 @@ export interface DashboardV2 {
   name: string;
   description?: string | null;
   layout: Record<string, unknown>;
+  theme?: Record<string, unknown> | null;
+  is_published?: boolean;
+  share_token?: string | null;
   tiles: DashboardV2Tile[];
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface BusinessRule {

@@ -13,6 +13,7 @@ from ...duckdb_session import (
     SessionExpiredError,
 )
 from ...export_service import ExportService
+from ...echarts_builder import build_echarts_config, infer_chart_type
 
 
 async def execute_step(state: AgentState) -> dict:
@@ -83,6 +84,11 @@ async def execute_step(state: AgentState) -> dict:
             chart_type = str(parameters.get("chart_type") or "bar").strip().lower()
             query_spec = parameters.get("query_spec") if isinstance(parameters.get("query_spec"), dict) else {}
             layout = parameters.get("layout") if isinstance(parameters.get("layout"), dict) else {}
+            subtitle = str(parameters.get("subtitle") or "").strip() or None
+            x_col = str(parameters.get("x_axis") or parameters.get("x_col") or "").strip()
+            y_col_raw = parameters.get("y_axis") or parameters.get("y_col") or ""
+            y_col: str | list[str] = y_col_raw if isinstance(y_col_raw, list) else str(y_col_raw).strip()
+            group_by = str(parameters.get("group_by") or "").strip() or None
 
             if not query_spec and step_sql:
                 query_spec = {
@@ -92,6 +98,62 @@ async def execute_step(state: AgentState) -> dict:
 
             user_id = state.get("user_id") or dataset.user_id or "agent"
             workspace_id = state.get("workspace_id") or dataset.workspace_id or "default"
+
+            # ── Pull rows from session DuckDB ──────────────────────────────
+            session_id = state.get("session_id") or ""
+            table_registry: dict = dict(state.get("table_registry") or {})
+            source_table = str(parameters.get("source_table") or "").strip()
+
+            rows: list[dict] = []
+            col_types: dict[str, str] = {}
+
+            if session_id and source_table and source_table in table_registry:
+                try:
+                    rows = execute_in_session(session_id, f"SELECT * FROM {source_table} LIMIT 500")
+                    # Get column types from DuckDB describe
+                    try:
+                        desc = execute_in_session(session_id, f"DESCRIBE {source_table}")
+                        col_types = {r.get("column_name", r.get("name", "")): r.get("column_type", r.get("type", "")) for r in desc}
+                    except Exception:
+                        pass
+                except Exception:
+                    rows = []
+            elif session_id and step_sql:
+                try:
+                    rows = execute_in_session(session_id, step_sql) if session_id else []
+                except Exception:
+                    rows = []
+
+            # ── Auto-select chart type if not explicit ────────────────────
+            col_names = list(col_types.keys()) or (list(rows[0].keys()) if rows else [])
+            if chart_type in ("", "auto", "bar") and rows:
+                inferred_type, _alternatives = infer_chart_type(
+                    col_names, col_types, len(rows), str(state.get("intent") or "")
+                )
+                if chart_type in ("", "auto"):
+                    chart_type = inferred_type
+
+            # ── Auto-select x/y if not provided ──────────────────────────
+            if not x_col and col_names:
+                x_col = col_names[0]
+            if not y_col and len(col_names) > 1:
+                y_col = col_names[1]
+
+            # ── Build ECharts config ──────────────────────────────────────
+            echarts_config: dict | None = None
+            if rows or chart_type == "table":
+                try:
+                    echarts_config = build_echarts_config(
+                        chart_type=chart_type,
+                        rows=rows,
+                        x_col=x_col or (col_names[0] if col_names else "x"),
+                        y_col=y_col or (col_names[1] if len(col_names) > 1 else "y"),
+                        group_by=group_by,
+                        title=title,
+                        subtitle=subtitle,
+                    )
+                except Exception:
+                    echarts_config = None
 
             if not dashboard_id:
                 existing = DashboardsV2Service.list_dashboards(user_id=user_id, workspace_id=workspace_id)
@@ -105,6 +167,7 @@ async def execute_step(state: AgentState) -> dict:
                         name="AI Dashboard",
                         description="Auto-created by agent",
                         layout={},
+                        theme={},
                     )
                     dashboard_id = created_dashboard.id
 
@@ -116,22 +179,27 @@ async def execute_step(state: AgentState) -> dict:
                 chart_type=chart_type,
                 query_spec=query_spec,
                 layout=layout,
+                tile_type="chart",
+                echarts_config=echarts_config,
+                source_table=source_table or None,
             )
 
             execution_result = {
                 "step_number": step["step_number"],
                 "operation": "create_chart",
                 "success": True,
-                "rows_affected": None,
+                "rows_affected": len(rows) if rows else None,
                 "run_id": None,
                 "output_dataset_id": state.get("dataset_id"),
-                "sql": None,
+                "sql": step_sql or None,
                 "error": None,
                 "tile_created": {
                     "id": tile.id,
                     "dashboard_id": tile.dashboard_id,
                     "title": tile.title,
                     "chart_type": tile.chart_type,
+                    "echarts_config": echarts_config,
+                    "saveable": True,
                 },
             }
             return {

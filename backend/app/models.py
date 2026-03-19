@@ -121,9 +121,19 @@ class CalculatedColumnDB(BaseModel):
 class DashboardTileCreate(BaseModel):
     dataset_id: str | None = None
     title: str
-    chart_type: str
+    chart_type: str = "bar"
     query_spec: dict[str, Any] = Field(default_factory=dict)
     layout: dict[str, Any] = Field(default_factory=dict)
+    # Viz engine fields
+    tile_type: str = "chart"           # chart | table | text | metric
+    echarts_config: dict[str, Any] | None = None
+    table_data: dict[str, Any] | None = None
+    metric_value: str | None = None
+    metric_label: str | None = None
+    metric_trend: str | None = None    # up | down | neutral
+    metric_threshold: dict[str, Any] | None = None
+    source_table: str | None = None    # session table logical name
+    saveable: bool = True
 
 
 class DashboardTileOut(BaseModel):
@@ -134,6 +144,15 @@ class DashboardTileOut(BaseModel):
     chart_type: str
     query_spec: dict[str, Any] = Field(default_factory=dict)
     layout: dict[str, Any] = Field(default_factory=dict)
+    # Viz engine fields
+    tile_type: str = "chart"
+    echarts_config: dict[str, Any] | None = None
+    table_data: dict[str, Any] | None = None
+    metric_value: str | None = None
+    metric_label: str | None = None
+    metric_trend: str | None = None
+    metric_threshold: dict[str, Any] | None = None
+    snapshot_id: str | None = None
     created_at: str
 
 
@@ -143,6 +162,15 @@ class DashboardV2Create(BaseModel):
     name: str
     description: str | None = None
     layout: dict[str, Any] = Field(default_factory=dict)
+    theme: dict[str, Any] = Field(default_factory=dict)
+
+
+class DashboardV2Update(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    layout: dict[str, Any] | None = None
+    theme: dict[str, Any] | None = None
+    is_published: bool | None = None
 
 
 class DashboardV2Out(BaseModel):
@@ -152,8 +180,55 @@ class DashboardV2Out(BaseModel):
     name: str
     description: str | None = None
     layout: dict[str, Any] = Field(default_factory=dict)
+    theme: dict[str, Any] = Field(default_factory=dict)
+    is_published: bool = False
+    share_token: str | None = None
     tiles: list[DashboardTileOut] = Field(default_factory=list)
     created_at: str
+    updated_at: str | None = None
+
+
+class DashboardTheme(BaseModel):
+    primary_color: str = "#5B6AF0"
+    background: str = "transparent"
+    logo_url: str | None = None
+    font: str = "Inter"
+    show_branding: bool = True
+
+
+class DashboardAccessCreate(BaseModel):
+    granted_to_user_id: str | None = None
+    granted_to_email: str | None = None
+    access_level: str = "view"         # view | comment | edit
+    expires_at: str | None = None      # ISO timestamp
+
+
+class DashboardAccessOut(BaseModel):
+    id: str
+    dashboard_id: str
+    granted_to_user_id: str | None = None
+    granted_to_email: str | None = None
+    access_level: str
+    granted_by: str
+    expires_at: str | None = None
+    token: str | None = None
+    created_at: str
+
+
+class KpiCandidate(BaseModel):
+    label: str
+    value: str
+    trend: str | None = None           # up | down | neutral
+
+
+class DashboardTileUpdate(BaseModel):
+    title: str | None = None
+    position: dict[str, Any] | None = None
+    echarts_config: dict[str, Any] | None = None
+    metric_value: str | None = None
+    metric_label: str | None = None
+    metric_trend: str | None = None
+    metric_threshold: dict[str, Any] | None = None
 
 
 class ChartSeriesPoint(BaseModel):

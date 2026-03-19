@@ -13,7 +13,7 @@ export default defineConfig({
           const isReactDom = id.includes("/node_modules/react-dom/") || id.includes("\\node_modules\\react-dom\\");
           if (isReact || isReactDom) return "react";
           if (id.includes("antd") || id.includes("@ant-design")) return "antd";
-          if (id.includes("recharts")) return "charts";
+          if (id.includes("echarts")) return "charts";
           if (id.includes("reactflow")) return "flow";
           if (id.includes("react-grid-layout") || id.includes("react-resizable")) return "grid";
           if (id.includes("zod")) return "zod";

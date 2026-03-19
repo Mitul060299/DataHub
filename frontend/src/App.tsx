@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./AppShell";
+import { DashboardPage } from "./pages/DashboardPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketplacePage } from "./pages/MarketplacePage";
@@ -16,6 +17,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
+      <Route path="/dashboard/share/:token" element={<PublicDashboardPage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<HomePage />} />
@@ -26,6 +28,7 @@ export function App() {
         <Route path="settings/profile" element={<SettingsPage section="profile" />} />
         <Route path="settings/billing" element={<SettingsPage section="billing" />} />
         <Route path="sources" element={<SourcesPage />} />
+        <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

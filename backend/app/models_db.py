@@ -349,6 +349,10 @@ class DashboardV2DB(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     layout = Column(JSONB, nullable=False, default=dict)
+    # Viz extension columns
+    theme = Column(JSONB, nullable=True, default=dict)
+    is_published = Column(Boolean, nullable=False, default=False)
+    share_token = Column(Text, nullable=True, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -371,12 +375,57 @@ class DashboardTileDB(Base):
     # Snapshot binding — set by pipeline_runner after a successful pipeline run
     snapshot_id = Column(String, ForeignKey("table_snapshots.id", ondelete="SET NULL"), nullable=True)
     refresh_config = Column(JSONB, nullable=False, default=dict)
+    # Viz extension columns
+    tile_type = Column(Text, nullable=False, default="chart")  # chart | table | text | metric
+    echarts_config = Column(JSONB, nullable=True)               # complete ECharts option object
+    table_data = Column(JSONB, nullable=True)                   # static snapshot for table tiles
+    metric_value = Column(Text, nullable=True)
+    metric_label = Column(Text, nullable=True)
+    metric_trend = Column(Text, nullable=True)                  # up | down | neutral
+    metric_threshold = Column(JSONB, nullable=True)             # {value, color}
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
         Index("idx_dashboard_tiles_dashboard", "dashboard_id"),
         Index("idx_dashboard_tiles_snapshot", "snapshot_id"),
+    )
+
+
+class DashboardAccessDB(Base):
+    """Per-grant access control rows for dashboard_access table."""
+    __tablename__ = "dashboard_access"
+
+    id = Column(String, primary_key=True)
+    dashboard_id = Column(String, ForeignKey("dashboards_v2.id", ondelete="CASCADE"), nullable=False)
+    granted_to_user_id = Column(String, nullable=True)   # internal DataHub user
+    granted_to_email = Column(String, nullable=True)     # external client viewer
+    access_level = Column(String, nullable=False, default="view")  # view | comment | edit
+    granted_by = Column(String, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    token = Column(String, nullable=True, unique=True)   # per-grant link token
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_dashboard_access_dashboard", "dashboard_id"),
+        Index("idx_dashboard_access_user", "granted_to_user_id"),
+    )
+
+
+class DashboardViewDB(Base):
+    """Access audit log for dashboard views."""
+    __tablename__ = "dashboard_views"
+
+    id = Column(String, primary_key=True)
+    dashboard_id = Column(String, ForeignKey("dashboards_v2.id", ondelete="CASCADE"), nullable=False)
+    viewed_by_user_id = Column(String, nullable=True)
+    viewed_by_email = Column(String, nullable=True)
+    viewed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ip_address = Column(String, nullable=True)
+
+    __table_args__ = (
+        Index("idx_dashboard_views_dashboard", "dashboard_id"),
+        Index("idx_dashboard_views_user", "viewed_by_user_id"),
     )
 
 

@@ -6,6 +6,7 @@ from langchain_groq import ChatGroq
 
 from ..prompts import PLANNER_SYSTEM_PROMPT
 from ..state import AgentState, PlanStep
+from ...echarts_builder import infer_chart_type
 
 _llm = ChatGroq(
     model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
@@ -75,6 +76,30 @@ async def planner(state: AgentState) -> dict:
             )
     except json.JSONDecodeError:
         plan = []
+
+    # ── Chart type auto-selection (post-processing) ───────────────────────
+    table_registry: dict = dict(state.get("table_registry") or {})
+    intent: str = str(state.get("intent") or "")
+    for step in plan:
+        op = str(step.get("operation") or "")
+        if op not in ("create_chart", "visualise"):
+            continue
+        params: dict = step.get("parameters") if isinstance(step.get("parameters"), dict) else {}
+        ct = str(params.get("chart_type") or "").strip().lower()
+        if ct in ("", "auto"):
+            # Try to pick source table from plan params or most-recent registry entry
+            src_table = str(params.get("source_table") or "").strip()
+            if not src_table and table_registry:
+                last_entry = list(table_registry.values())[-1]
+                src_table = str(last_entry.get("duckdb_name") or "")
+                col_names: list[str] = list(last_entry.get("column_names") or [])
+                row_count: int = int(last_entry.get("row_count") or 0)
+                col_types: dict[str, str] = {}  # dtype not always in registry; leave empty
+                inferred, _ = infer_chart_type(col_names, col_types, row_count, intent)
+                params["chart_type"] = inferred
+                if not params.get("source_table"):
+                    params["source_table"] = src_table
+                step["parameters"] = params
 
     return {
         "plan": plan,

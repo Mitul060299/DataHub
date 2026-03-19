@@ -42,14 +42,59 @@ async def responder(state: AgentState) -> dict:
                 final += f"\n\n⚠️ {len(failed)} step(s) could not be completed after retrying."
 
     elif intent == "visualise":
-        chart = state.get("chart_config")
-        if chart:
+        results = state.get("execution_results", [])
+        # Find the first successful visualise step with tile_created
+        tile_info = None
+        for result in results:
+            tc = result.get("tile_created") if isinstance(result, dict) else None
+            if tc:
+                tile_info = tc
+                break
+
+        if tile_info:
+            chart_type = tile_info.get("chart_type", "")
+            title = tile_info.get("title", "chart")
+            dash_id = tile_info.get("dashboard_id", "")
             final = (
-                "Here's your chart. I've generated a "
-                f"{chart.get('type', 'bar')} chart showing {chart.get('title', 'your data')}."
+                f"Here's your **{chart_type}** chart: **{title}**. "
+                f"You can pin it to any dashboard using the 📌 button below."
             )
+            if dash_id:
+                final += f" It's also been auto-saved to your default dashboard."
         else:
-            final = "I've prepared the chart configuration based on your data."
+            chart = state.get("chart_config")
+            if chart:
+                final = (
+                    "Here's your chart. I've generated a "
+                    f"{chart.get('type', 'bar')} chart showing {chart.get('title', 'your data')}."
+                )
+            else:
+                final = "I've prepared the chart configuration based on your data."
+
+        # Append KPI offer if there are KPI candidates
+        kpi_candidates = state.get("kpi_candidates", [])
+        if kpi_candidates:
+            labels = ", ".join(c.get("label", "") for c in kpi_candidates[:3])
+            final += f"\n\n💡 I also found key metrics: **{labels}**. Would you like me to add them as metric tiles?"
+
+    elif intent in ("reconcile", "summarise"):
+        results = state.get("execution_results", [])
+        successful = [r for r in results if isinstance(r, dict) and r.get("success")]
+        if successful:
+            prompt = RESPONDER_TRANSFORM_PROMPT.format(
+                results=json.dumps(successful, indent=2),
+                goal=user_goal,
+            )
+            response = await _llm.ainvoke([HumanMessage(content=prompt)])
+            final = str(response.content)
+        else:
+            final = "Done."
+
+        # Scan for KPI candidates across reconcile/summarise steps
+        kpi_candidates = state.get("kpi_candidates", [])
+        if kpi_candidates:
+            labels = ", ".join(c.get("label", "") for c in kpi_candidates[:3])
+            final += f"\n\n💡 Key metrics found: **{labels}**. Pin them as metric tiles?"
 
     else:
         final = "Done."

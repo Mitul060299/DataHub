@@ -1,0 +1,40 @@
+name: Pipeline Scheduler
+
+# Calls the DataHub cron endpoint every 5 minutes.
+# GitHub Actions minimum is ~5 min in practice. The server uses next_run_at
+# comparison so sub-5-min cron expressions simply run on the next window.
+#
+# Required GitHub repo configuration:
+#   Variables  → DATAHUB_API_URL  (e.g. https://datahub-0dbp.onrender.com)
+#   Secrets    → CRON_SECRET      (must match CRON_SECRET env var on Render)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:          # manual trigger from Actions UI
+
+jobs:
+  trigger-scheduled-pipelines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Trigger scheduled pipelines
+        env:
+          API_URL: ${{ vars.DATAHUB_API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -e
+          echo "Calling $API_URL/api/cron/run-scheduled-pipelines"
+
+          RESPONSE=$(curl --silent --show-error --fail \
+            --max-time 30 \
+            -X GET \
+            "$API_URL/api/cron/run-scheduled-pipelines" \
+            -H "X-Cron-Secret: $CRON_SECRET")
+
+          echo "Response: $RESPONSE"
+
+          TRIGGERED=$(echo "$RESPONSE" | python3 -c \
+            "import sys,json; d=json.load(sys.stdin); print(d.get('triggered_count',0))")
+          echo "Pipelines triggered: $TRIGGERED"

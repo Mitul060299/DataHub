@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from typing import Dict
 import time
@@ -35,7 +35,8 @@ from ..services.query_cache import QueryCacheService
 from ..services.object_storage import StorageService
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
-from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB
+from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB
+from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -146,6 +147,7 @@ async def upload_dataset(
     dataset_name: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ) -> DatasetPreview:
     role = get_current_role(authorization)
@@ -205,6 +207,44 @@ async def upload_dataset(
         parent_id=None,
     )
     emit_event("dataset.uploaded", preview.model_dump())
+
+    # ── Auto-refresh trigger: find pipelines with auto_refresh_on_upload ──────
+    try:
+        uploaded_filename = file.filename or resolved_name
+        matching_sources = (
+            db.query(DataSourceDB)
+            .filter(
+                DataSourceDB.user_id == (user_id or ""),
+                DataSourceDB.source_type == "manual_upload",
+                DataSourceDB.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+        for src in matching_sources:
+            cfg = src.config or {}
+            # Match by filename pattern stored in config["match_filename"]
+            pattern = str(cfg.get("match_filename", "")).strip()
+            if pattern and pattern not in uploaded_filename:
+                continue
+            # Find schedules for pipelines that reference this source
+            schedules = (
+                db.query(PipelineScheduleDB)
+                .filter(
+                    PipelineScheduleDB.is_active == True,  # noqa: E712
+                    PipelineScheduleDB.auto_refresh_on_upload == True,  # noqa: E712
+                )
+                .all()
+            )
+            for sched in schedules:
+                background_tasks.add_task(
+                    _run_pipeline,
+                    sched.pipeline_id,
+                    "upload",
+                    {"source_id": src.id, "storage_path": None},
+                )
+    except Exception:
+        pass  # never let the trigger logic break the upload response
+
     return preview
 
 

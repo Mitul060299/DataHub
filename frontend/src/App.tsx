@@ -7,6 +7,7 @@ import { PricingPage } from "./pages/PricingPage";
 import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignupPage } from "./pages/SignupPage";
+import { SourcesPage } from "./pages/SourcesPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
 export function App() {
@@ -24,6 +25,7 @@ export function App() {
         <Route path="settings" element={<SettingsPage section="settings" />} />
         <Route path="settings/profile" element={<SettingsPage section="profile" />} />
         <Route path="settings/billing" element={<SettingsPage section="billing" />} />
+        <Route path="sources" element={<SourcesPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

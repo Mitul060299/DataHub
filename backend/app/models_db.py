@@ -368,11 +368,15 @@ class DashboardTileDB(Base):
     chart_type = Column(String, nullable=False)
     query_spec = Column(JSONB, nullable=False, default=dict)
     layout = Column(JSONB, nullable=False, default=dict)
+    # Snapshot binding — set by pipeline_runner after a successful pipeline run
+    snapshot_id = Column(String, ForeignKey("table_snapshots.id", ondelete="SET NULL"), nullable=True)
+    refresh_config = Column(JSONB, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
         Index("idx_dashboard_tiles_dashboard", "dashboard_id"),
+        Index("idx_dashboard_tiles_snapshot", "snapshot_id"),
     )
 
 
@@ -389,6 +393,67 @@ class DashboardPublishDB(Base):
 
     __table_args__ = (
         Index("idx_dashboard_publishes_dashboard", "dashboard_id"),
+    )
+
+
+# ==================== LIVE DATA PLATFORM MODELS ====================
+
+
+class DataSourceDB(Base):
+    """Registered data sources used as inputs to pipelines (manual upload, S3, Sheets, SFTP, URL)."""
+    __tablename__ = "data_sources"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    source_type = Column(String(50), nullable=False)   # manual_upload | s3_folder | google_sheets | sftp | url
+    config = Column(JSONB, nullable=False, default=dict)  # connection details (encrypted at rest in Supabase)
+    last_tested_at = Column(DateTime(timezone=True), nullable=True)
+    last_pulled_at = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_data_sources_user", "user_id"),
+    )
+
+
+class PipelineScheduleDB(Base):
+    """Schedule configuration for a pipeline_v2 — drives Render Cron Job refresh."""
+    __tablename__ = "pipeline_schedules"
+
+    id = Column(String, primary_key=True)
+    pipeline_id = Column(String, ForeignKey("pipelines_v2.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String, nullable=False)
+    cron_expression = Column(String, nullable=False, default="0 9 * * 1")
+    timezone = Column(String, nullable=False, default="Asia/Kolkata")
+    is_active = Column(Boolean, nullable=False, default=False)
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    auto_refresh_on_upload = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_pipeline_schedules_pipeline", "pipeline_id"),
+        Index("idx_pipeline_schedules_next_run", "next_run_at"),
+    )
+
+
+class TableSnapshotDB(Base):
+    """A Parquet snapshot produced by a pipeline run — referenced by dashboard tiles."""
+    __tablename__ = "table_snapshots"
+
+    id = Column(String, primary_key=True)
+    pipeline_run_id = Column(String, ForeignKey("pipeline_runs_v2.id", ondelete="CASCADE"), nullable=False)
+    table_name = Column(String, nullable=False)   # logical name e.g. reconciliation_final
+    snapshot_url = Column(Text, nullable=False)    # S3 storage_path
+    row_count = Column(Integer, nullable=True)
+    schema = Column(JSONB, nullable=False, default=dict)  # {column_name: dtype, ...}
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_table_snapshots_run", "pipeline_run_id"),
+        Index("idx_table_snapshots_table_name", "table_name"),
     )
 
 
@@ -479,6 +544,7 @@ class PipelineRunV2DB(Base):
     
     input_dataset_id = Column(String, nullable=True)
     output_dataset_id = Column(String, nullable=True)
+    output_snapshot_url = Column(Text, nullable=True)  # primary S3 snapshot from this run
     
     metrics = Column(JSONB, nullable=False, server_default='{}')
     execution_log = Column(JSONB, nullable=False, server_default='[]')

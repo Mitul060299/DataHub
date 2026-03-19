@@ -138,6 +138,8 @@ class Settings(BaseModel):
         "partners": os.getenv("SHARE_SCOPE_POLICY_PARTNERS", "editor"),
         "internal": os.getenv("SHARE_SCOPE_POLICY_INTERNAL", "viewer"),
     }
+    cron_secret: str = os.getenv("CRON_SECRET", "change-me-in-production")
+    supabase_realtime_url: str = os.getenv("SUPABASE_REALTIME_URL", "")
 
 
 settings = Settings()

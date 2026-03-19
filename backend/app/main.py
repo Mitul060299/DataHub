@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing
 from .routers import ml_routes, full_auto_routes
+from .routers import pipeline_refresh, cron, data_sources
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine
 from . import models_db
@@ -128,3 +129,6 @@ app.include_router(chat_sessions.router)
 app.include_router(pipeline_workflows.router)
 app.include_router(feedback.router)
 app.include_router(billing.router)
+app.include_router(pipeline_refresh.router)
+app.include_router(cron.router)
+app.include_router(data_sources.router)

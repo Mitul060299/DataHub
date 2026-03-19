@@ -557,3 +557,80 @@ class ChatResponse(BaseModel):
     dataset_id: str
     reply: str
     notes: List[str] = Field(default_factory=list)
+
+
+# ==================== LIVE DATA PLATFORM MODELS ====================
+
+class DataSourceCreate(BaseModel):
+    name: str
+    source_type: str  # manual_upload | s3_folder | google_sheets | sftp | url
+    config: dict = Field(default_factory=dict)
+
+
+class DataSourceResponse(BaseModel):
+    id: str
+    name: str
+    user_id: str
+    source_type: str
+    config: dict
+    last_tested_at: Optional[str] = None
+    last_pulled_at: Optional[str] = None
+    is_active: bool
+    created_at: str
+    pipeline_count: int = 0
+
+
+class DataSourceTest(BaseModel):
+    preview: List[dict] = Field(default_factory=list)
+    ok: bool
+    message: str = ""
+
+
+class PipelineScheduleCreate(BaseModel):
+    pipeline_id: str
+    cron_expression: str = "0 9 * * 1"
+    timezone: str = "Asia/Kolkata"
+    is_active: bool = False
+    auto_refresh_on_upload: bool = False
+
+
+class PipelineScheduleResponse(BaseModel):
+    id: str
+    pipeline_id: str
+    user_id: str
+    cron_expression: str
+    timezone: str
+    is_active: bool
+    last_run_at: Optional[str] = None
+    next_run_at: Optional[str] = None
+    auto_refresh_on_upload: bool
+    created_at: str
+
+
+class PipelineRunStatus(BaseModel):
+    run_id: str
+    pipeline_id: str
+    status: str
+    triggered_by: str
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    error_message: Optional[str] = None
+    steps_completed: int = 0
+    total_steps: int = 0
+    output_snapshot_url: Optional[str] = None
+
+
+class TableSnapshotResponse(BaseModel):
+    id: str
+    pipeline_run_id: str
+    table_name: str
+    snapshot_url: str
+    row_count: Optional[int] = None
+    schema: dict
+    created_at: str
+
+
+class PipelineRunOut(BaseModel):
+    run_id: str
+    message: str = "Pipeline run triggered"
+

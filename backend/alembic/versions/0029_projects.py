@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect as sa_inspect
 
 revision = "0029_projects"
 down_revision = "0028_user_onboarding"
@@ -20,56 +21,84 @@ branch_labels = None
 depends_on = None
 
 
+def _has_table(bind, name: str) -> bool:
+    return sa_inspect(bind).has_table(name)
+
+
+def _has_column(bind, table: str, column: str) -> bool:
+    cols = [c["name"] for c in sa_inspect(bind).get_columns(table)]
+    return column in cols
+
+
+def _has_index(bind, table: str, index: str) -> bool:
+    indexes = [i["name"] for i in sa_inspect(bind).get_indexes(table)]
+    return index in indexes
+
+
+def _has_fk(bind, table: str, fk_name: str) -> bool:
+    fks = [fk["name"] for fk in sa_inspect(bind).get_foreign_keys(table)]
+    return fk_name in fks
+
+
 def upgrade() -> None:
+    bind = op.get_bind()
+
     # ── 1. Create projects table ──────────────────────────────────────────────
-    op.create_table(
-        "projects",
-        sa.Column("id", sa.Text, primary_key=True),
-        sa.Column("user_id", sa.Text, nullable=False),
-        sa.Column("workspace_id", sa.Text, nullable=False, server_default="default"),
-        sa.Column("name", sa.Text, nullable=False),
-        sa.Column("description", sa.Text, nullable=True),
-        sa.Column("colour", sa.Text, nullable=False, server_default="#5B6AF0"),
-        sa.Column("icon", sa.Text, nullable=False, server_default="📁"),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-    )
-    op.create_index("idx_projects_user_id", "projects", ["user_id"])
-    op.create_index("idx_projects_workspace_id", "projects", ["workspace_id"])
+    if not _has_table(bind, "projects"):
+        op.create_table(
+            "projects",
+            sa.Column("id", sa.Text, primary_key=True),
+            sa.Column("user_id", sa.Text, nullable=False),
+            sa.Column("workspace_id", sa.Text, nullable=False, server_default="default"),
+            sa.Column("name", sa.Text, nullable=False),
+            sa.Column("description", sa.Text, nullable=True),
+            sa.Column("colour", sa.Text, nullable=False, server_default="#5B6AF0"),
+            sa.Column("icon", sa.Text, nullable=False, server_default="📁"),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+        )
+
+    if not _has_index(bind, "projects", "idx_projects_user_id"):
+        op.create_index("idx_projects_user_id", "projects", ["user_id"])
+    if not _has_index(bind, "projects", "idx_projects_workspace_id"):
+        op.create_index("idx_projects_workspace_id", "projects", ["workspace_id"])
 
     # ── 2. Add project_id FK columns (nullable, SET NULL on delete) ───────────
-    op.add_column("pipelines_v2", sa.Column("project_id", sa.Text, nullable=True))
-    op.add_column("dashboards_v2", sa.Column("project_id", sa.Text, nullable=True))
-    op.add_column("data_sources",  sa.Column("project_id", sa.Text, nullable=True))
+    for table in ("pipelines_v2", "dashboards_v2", "data_sources"):
+        if not _has_column(bind, table, "project_id"):
+            op.add_column(table, sa.Column("project_id", sa.Text, nullable=True))
 
-    op.create_foreign_key(
-        "fk_pipelines_v2_project",
-        "pipelines_v2", "projects",
-        ["project_id"], ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_dashboards_v2_project",
-        "dashboards_v2", "projects",
-        ["project_id"], ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_data_sources_project",
-        "data_sources", "projects",
-        ["project_id"], ["id"],
-        ondelete="SET NULL",
-    )
+    if not _has_fk(bind, "pipelines_v2", "fk_pipelines_v2_project"):
+        op.create_foreign_key(
+            "fk_pipelines_v2_project",
+            "pipelines_v2", "projects",
+            ["project_id"], ["id"],
+            ondelete="SET NULL",
+        )
+    if not _has_fk(bind, "dashboards_v2", "fk_dashboards_v2_project"):
+        op.create_foreign_key(
+            "fk_dashboards_v2_project",
+            "dashboards_v2", "projects",
+            ["project_id"], ["id"],
+            ondelete="SET NULL",
+        )
+    if not _has_fk(bind, "data_sources", "fk_data_sources_project"):
+        op.create_foreign_key(
+            "fk_data_sources_project",
+            "data_sources", "projects",
+            ["project_id"], ["id"],
+            ondelete="SET NULL",
+        )
 
     # ── 3. Data migration: create "Default Project" per user and assign rows ──
     op.execute(sa.text("""
@@ -101,6 +130,7 @@ def upgrade() -> None:
         WHERE p.user_id = pv.user_id
           AND p.workspace_id = pv.workspace_id
           AND p.name = 'Default Project'
+          AND pv.project_id IS NULL
     """))
 
     op.execute(sa.text("""
@@ -110,6 +140,7 @@ def upgrade() -> None:
         WHERE p.user_id = dv.user_id
           AND p.workspace_id = dv.workspace_id
           AND p.name = 'Default Project'
+          AND dv.project_id IS NULL
     """))
 
     op.execute(sa.text("""
@@ -118,6 +149,7 @@ def upgrade() -> None:
         FROM projects p
         WHERE p.user_id = ds.user_id
           AND p.name = 'Default Project'
+          AND ds.project_id IS NULL
     """))
 
 

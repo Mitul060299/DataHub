@@ -57,7 +57,7 @@ export function TopBar() {
   };
 
   return (
-    <header style={{ height: "var(--th)", borderBottom: "1px solid #22222a", background: "#111115", display: "grid", gridTemplateColumns: "280px 1fr 280px", alignItems: "center", padding: "0 14px", gap: 12, flexShrink: 0 }}>
+    <header className="topbar" style={{ height: "var(--th)", borderBottom: "1px solid #22222a", background: "#111115", display: "grid", gridTemplateColumns: "280px 1fr 280px", alignItems: "center", padding: "0 14px", gap: 12, flexShrink: 0 }}>
       <button
         type="button"
         onClick={() => navigate("/home")}
@@ -82,7 +82,7 @@ export function TopBar() {
         </span>
       </button>
 
-      <div style={{ display: "flex", justifyContent: "center" }}>
+      <div className="topbar__nav" style={{ display: "flex", justifyContent: "center" }}>
         <nav style={{ display: "inline-flex", alignItems: "center", gap: 22 }}>
           {tabs.map((tab) => (
             <button

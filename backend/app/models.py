@@ -461,6 +461,8 @@ class UserProfileOut(BaseModel):
     role: UserRole
     plan: UserPlan
     usage: UserUsage
+    has_completed_onboarding: bool = False
+    has_uploaded_first_file: bool = False
 
 
 class WorkspaceCreate(BaseModel):

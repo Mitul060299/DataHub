@@ -4,10 +4,14 @@ import { AIPanel } from "../components/AIPanel";
 import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
+import { WelcomeModal } from "../components/WelcomeModal";
+import { OnboardingProgress } from "../components/OnboardingProgress";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
+import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
 import { usePipeline } from "../hooks/usePipeline";
+import { capture } from "../lib/posthog";
 
 const workspaceId = "default";
 
@@ -16,12 +20,36 @@ export function WorkspacePage() {
   const { runPipeline, steps } = usePipelineContext();
   const { exportPipeline } = usePipeline();
   const { data, loading, refetch } = useDataset(activeDataset?.id);
+  const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
   const [explorerSearchFocusNonce, setExplorerSearchFocusNonce] = useState(0);
   const [explorerWidth, setExplorerWidth] = useState(280);
   const [resizingExplorer, setResizingExplorer] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
+
+  // Show welcome modal on first visit
+  useEffect(() => {
+    if (!hasCompletedOnboarding) {
+      const shown = sessionStorage.getItem("datahub_welcome_shown");
+      if (!shown) {
+        setWelcomeOpen(true);
+        sessionStorage.setItem("datahub_welcome_shown", "1");
+        capture("onboarding_modal_shown");
+      }
+    }
+  }, [hasCompletedOnboarding]);
+
+  // Mark onboarding complete when all steps done
+  useEffect(() => {
+    if (hasUploadedFirstFile && hasAskedFirstQuestion && !hasCompletedOnboarding) {
+      markOnboardingComplete();
+      capture("onboarding_completed");
+    }
+  }, [hasUploadedFirstFile, hasAskedFirstQuestion, hasCompletedOnboarding, markOnboardingComplete]);
 
   useEffect(() => {
     if (!resizingExplorer) return;
@@ -113,6 +141,28 @@ export function WorkspacePage() {
         }}
       />
       <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />
+      {welcomeOpen && (
+        <WelcomeModal
+          onClose={() => { setWelcomeOpen(false); }}
+          onUploadSample={(_url) => {
+            setWelcomeOpen(false);
+            setImportOpen(true);
+          }}
+        />
+      )}
+      {!onboardingDismissed && (
+        <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 900, width: 260 }}>
+          <OnboardingProgress
+            hasUploadedFirstFile={hasUploadedFirstFile}
+            hasCompletedOnboarding={hasCompletedOnboarding}
+            hasAskedFirstQuestion={hasAskedFirstQuestion}
+            onDismiss={() => {
+              setOnboardingDismissed(true);
+              capture("onboarding_progress_dismissed");
+            }}
+          />
+        </div>
+      )}
     </main>
   );
 }

@@ -210,12 +210,24 @@ export async function fetchCurrentUser(workspaceId?: string) {
     username: string;
     role: string;
     plan: "Free" | "Professional" | "Team" | "Business" | "Enterprise";
+    has_completed_onboarding: boolean;
+    has_uploaded_first_file: boolean;
     usage: {
       datasetsUsed: number;
       storageUsed: number;
       aiMessagesUsed: number;
     };
   };
+}
+
+export async function updateOnboardingState(opts: {
+  completed?: boolean;
+  uploadedFirstFile?: boolean;
+}): Promise<void> {
+  await api.patch("/users/me/onboarding", {
+    completed: opts.completed,
+    uploaded_first_file: opts.uploadedFirstFile,
+  });
 }
 
 export async function chatWithAgent(

@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { ReactNode } from "react";
-import { fetchCurrentUser } from "../api";
+import { fetchCurrentUser, updateOnboardingState } from "../api";
 import { useAuth } from "./AuthContext";
 
 type UserPlan = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
@@ -44,6 +44,10 @@ type UserContextType = {
     username: string;
     role: string;
   } | null;
+  hasCompletedOnboarding: boolean;
+  hasUploadedFirstFile: boolean;
+  markOnboardingComplete: () => void;
+  markFirstUpload: () => void;
 };
 
 const planLimits: Record<UserPlan, PlanLimits> = {
@@ -170,6 +174,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   });
   const [workspaceId, setWorkspaceId] = useState("default");
   const [user, setUser] = useState<UserContextType["user"]>(null);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [hasUploadedFirstFile, setHasUploadedFirstFile] = useState(false);
   const { session, loading } = useAuth();
 
   useEffect(() => {
@@ -181,6 +187,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setPlan("Free");
         setUsage({ datasetsUsed: 0, storageUsed: 0, aiMessagesUsed: 0 });
         setUser(null);
+        setHasCompletedOnboarding(false);
+        setHasUploadedFirstFile(false);
         return;
       }
       try {
@@ -193,6 +201,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           username: profile.username,
           role: profile.role,
         });
+        setHasCompletedOnboarding(profile.has_completed_onboarding ?? false);
+        setHasUploadedFirstFile(profile.has_uploaded_first_file ?? false);
       } catch {
         if (!mounted) return;
         setUser(null);
@@ -204,11 +214,33 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [workspaceId, session, loading]);
 
+  const markOnboardingComplete = useCallback(() => {
+    setHasCompletedOnboarding(true);
+    updateOnboardingState({ completed: true }).catch(() => {});
+  }, []);
+
+  const markFirstUpload = useCallback(() => {
+    setHasUploadedFirstFile(true);
+    updateOnboardingState({ uploadedFirstFile: true }).catch(() => {});
+  }, []);
+
   const limits = planLimits[plan];
 
   return (
     <UserContext.Provider
-      value={{ plan, setPlan, limits, usage, workspaceId, setWorkspaceId, user }}
+      value={{
+        plan,
+        setPlan,
+        limits,
+        usage,
+        workspaceId,
+        setWorkspaceId,
+        user,
+        hasCompletedOnboarding,
+        hasUploadedFirstFile,
+        markOnboardingComplete,
+        markFirstUpload,
+      }}
     >
       {children}
     </UserContext.Provider>

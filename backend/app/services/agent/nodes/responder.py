@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -7,11 +8,28 @@ from langchain_groq import ChatGroq
 from ..prompts import RESPONDER_CONVERSE_PROMPT, RESPONDER_TRANSFORM_PROMPT
 from ..state import AgentState
 
+logger = logging.getLogger(__name__)
+
 _llm = ChatGroq(
     model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
     temperature=0.3,
     groq_api_key=os.getenv("GROQ_API_KEY"),
 )
+
+_LLM_TIMEOUT_MSG = (
+    "I'm taking longer than usual — this sometimes happens with complex requests. "
+    "Please try again in a moment."
+)
+
+
+async def _invoke_llm(messages: list) -> str:
+    """Invoke the LLM with a friendly fallback on timeout or API error."""
+    try:
+        response = await _llm.ainvoke(messages)
+        return str(response.content)
+    except Exception as exc:
+        logger.warning("LLM invocation failed: %s", exc)
+        return _LLM_TIMEOUT_MSG
 
 
 async def responder(state: AgentState) -> dict:
@@ -21,8 +39,7 @@ async def responder(state: AgentState) -> dict:
 
     if intent == "converse":
         prompt = RESPONDER_CONVERSE_PROMPT.format(message=user_goal)
-        response = await _llm.ainvoke([HumanMessage(content=prompt)])
-        final = str(response.content)
+        final = await _invoke_llm([HumanMessage(content=prompt)])
 
     elif intent in ("transform", "sql_query", "join"):
         results = state.get("execution_results", [])
@@ -36,8 +53,7 @@ async def responder(state: AgentState) -> dict:
                 results=json.dumps(successful, indent=2),
                 goal=user_goal,
             )
-            response = await _llm.ainvoke([HumanMessage(content=prompt)])
-            final = str(response.content)
+            final = await _invoke_llm([HumanMessage(content=prompt)])
             if failed:
                 final += f"\n\n⚠️ {len(failed)} step(s) could not be completed after retrying."
 
@@ -85,8 +101,7 @@ async def responder(state: AgentState) -> dict:
                 results=json.dumps(successful, indent=2),
                 goal=user_goal,
             )
-            response = await _llm.ainvoke([HumanMessage(content=prompt)])
-            final = str(response.content)
+            final = await _invoke_llm([HumanMessage(content=prompt)])
         else:
             final = "Done."
 

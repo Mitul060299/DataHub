@@ -1,0 +1,501 @@
+date,account_number,account_name,description,debit,credit,preparer_id,posted,currency
+24/11/2025,1002,Accounts Receivable,Payment received from client,370904.47,,P001,Y,INR
+13/12/2025,5003,Rent Expense,Intercompany transfer,,272910.58,P001,Y,INR
+22/04/2025,1010,Prepaid Expenses,Revenue recognition,301208.36,,P004,N,INR
+29/10/2025,2001,Accounts Payable,Tax provision entry,434715.51,,P003,N,INR
+21/03/2025,1010,Prepaid Expenses,Tax provision entry,168628.98,,P003,N,INR
+26/06/2025,5001,Cost of Goods Sold,Utility bill settlement,,403660.57,P001,Y,USD
+10/10/2025,2001,Accounts Payable,Reversing entry,,314505.58,P001,Y,INR
+05/12/2025,1010,Prepaid Expenses,Tax provision entry,145049.29,,P004,Y,INR
+23/05/2025,4001,Revenue from Services,Advance payment to supplier,417138.16,,P002,Y,INR
+10/12/2025,2001,Accounts Payable,Bank charges,468358.97,,P002,Y,INR
+25/08/2025,3001,Share Capital,Utility bill settlement,494766.91,,P002,Y,INR
+17/01/2025,5004,Utilities Expense,Vendor payment,200881.81,,P002,Y,INR
+02/12/2025,4001,Revenue from Services,Loan repayment,,442399.24,P002,Y,INR
+07/05/2025,5003,Rent Expense,Revenue recognition,,269719.16,P002,N,INR
+12/03/2025,4002,Product Sales,Depreciation entry,45909.25,,P002,Y,INR
+15/12/2025,3001,Share Capital,Petty cash reimbursement,,32232.09,P005,N,INR
+06/01/2025,5002,Salaries and Wages,Bank charges,,57718.6,P003,Y,INR
+11/08/2025,1003,Inventory,Depreciation entry,,2121.04,P003,Y,INR
+24/11/2025,4002,Product Sales,Petty cash reimbursement,,99856.1,P005,Y,INR
+15/06/2025,4001,Revenue from Services,Payment received from client,,56377.93,P001,Y,INR
+04/05/2025,5006,Miscellaneous Expense,Petty cash reimbursement,473501.25,,P005,N,INR
+06/03/2025,1003,Inventory,Advance payment to supplier,237903.55,,P002,Y,USD
+04/10/2025,5004,Utilities Expense,Bank charges,,345088.88,P004,N,INR
+22/09/2025,4001,Revenue from Services,Invoice raised for services,124328.85,,P005,Y,INR
+11/10/2025,1010,Prepaid Expenses,Petty cash reimbursement,110498.58,,P001,Y,INR
+17/01/2025,5005,Depreciation,Vendor payment,35893.25,,P002,Y,USD
+04/10/2025,1003,Inventory,Bank charges,,467789.36,P004,Y,USD
+08/04/2025,1002,Accounts Receivable,Invoice raised for services,,329661.88,P004,N,USD
+28/01/2025,5002,Salaries and Wages,Advance payment to supplier,492090.52,,P003,Y,USD
+25/02/2025,1010,Prepaid Expenses,Office rent payment,,95509.35,P002,Y,USD
+23/05/2025,4001,Revenue from Services,Office rent payment,437305.73,,P001,N,INR
+30/11/2025,4002,Product Sales,Reversing entry,7871.55,,P004,Y,INR
+06/09/2025,4001,Revenue from Services,Office rent payment,432392.87,,P001,Y,USD
+19/07/2025,2001,Accounts Payable,Intercompany transfer,,392143.27,P005,Y,USD
+05/12/2025,5003,Rent Expense,Depreciation entry,,77821.01,P005,Y,INR
+05/10/2025,1001,Cash and Cash Equivalents,Bank charges,157145.6,,P001,N,INR
+18/09/2025,1002,Accounts Receivable,Reversing entry,93319.57,,P001,Y,USD
+19/10/2025,1010,Prepaid Expenses,Petty cash reimbursement,297462.32,,P003,N,INR
+15/04/2025,5002,Salaries and Wages,Bank charges,,157434.84,P003,N,INR
+23/08/2025,2002,Short-term Loans,Intercompany transfer,376056.31,,P005,Y,USD
+16/10/2025,1002,Accounts Receivable,Invoice raised for services,,269048.38,P001,Y,INR
+06/05/2025,2002,Short-term Loans,Utility bill settlement,,79294.54,P001,Y,INR
+10/03/2025,2001,Accounts Payable,Invoice raised for services,444911.5,,P005,Y,INR
+18/04/2025,5003,Rent Expense,Vendor payment,,102196.86,P001,N,INR
+17/02/2025,5002,Salaries and Wages,Loan repayment,414759.37,,P002,Y,INR
+23/11/2025,2001,Accounts Payable,Salary disbursement,,370744.84,P001,Y,INR
+20/12/2025,5006,Miscellaneous Expense,Salary disbursement,,273022.35,P002,Y,USD
+22/01/2025,2001,Accounts Payable,Vendor payment,449541.25,,P002,Y,INR
+08/12/2025,1002,Accounts Receivable,Vendor payment,,390168.06,P002,Y,INR
+01/04/2025,5006,Miscellaneous Expense,Loan repayment,,12880.79,P003,N,INR
+23/03/2025,5004,Utilities Expense,Bank charges,54493.77,,P002,N,INR
+24/08/2025,2002,Short-term Loans,Utility bill settlement,410357.92,,P002,Y,INR
+24/07/2025,2002,Short-term Loans,Utility bill settlement,,432244.29,P005,Y,USD
+19/06/2025,1001,Cash and Cash Equivalents,Invoice raised for services,,438580.69,P001,Y,INR
+25/02/2025,5001,Cost of Goods Sold,Loan repayment,,173170.71,P004,N,INR
+23/10/2025,1010,Prepaid Expenses,Utility bill settlement,,22671.07,P003,Y,INR
+09/08/2025,1002,Accounts Receivable,Advance payment to supplier,,460425.04,P005,Y,INR
+08/06/2025,5002,Salaries and Wages,Loan repayment,,163428.36,P004,Y,INR
+07/12/2025,3001,Share Capital,Advance payment to supplier,374193.21,,P005,Y,USD
+01/01/2025,2001,Accounts Payable,Utility bill settlement,,105486.25,P004,N,USD
+12/12/2025,1010,Prepaid Expenses,Revenue recognition,236856.5,,P005,Y,INR
+06/12/2025,5002,Salaries and Wages,Petty cash reimbursement,167926.53,,P002,Y,INR
+17/03/2025,1001,Cash and Cash Equivalents,Payment received from client,,122798.85,P004,Y,USD
+19/11/2025,5001,Cost of Goods Sold,Office rent payment,,359313.78,P002,N,USD
+17/03/2025,5002,Salaries and Wages,Bank charges,3269.64,,P002,N,INR
+23/12/2025,4002,Product Sales,Depreciation entry,25584.08,,P002,Y,USD
+26/08/2025,5002,Salaries and Wages,Revenue recognition,,493952.28,P005,N,USD
+17/08/2025,5006,Miscellaneous Expense,Salary disbursement,,371955.89,P002,N,INR
+23/11/2025,2001,Accounts Payable,Tax provision entry,,388948.58,P004,Y,INR
+09/02/2025,5003,Rent Expense,Utility bill settlement,,117629.54,P002,Y,INR
+19/03/2025,1010,Prepaid Expenses,Loan repayment,347127.93,,P004,Y,USD
+19/06/2025,4002,Product Sales,Depreciation entry,208179.23,,P005,N,USD
+23/12/2025,1001,Cash and Cash Equivalents,Reversing entry,,440388.01,P003,N,INR
+02/06/2025,5004,Utilities Expense,Loan repayment,,426797.25,P002,Y,USD
+20/05/2025,3001,Share Capital,Depreciation entry,,14997.9,P004,N,INR
+07/03/2025,5001,Cost of Goods Sold,Revenue recognition,,13969.74,P004,Y,INR
+11/03/2025,5005,Depreciation,Depreciation entry,,91273.65,P002,N,INR
+21/08/2025,2002,Short-term Loans,Vendor payment,,380734.24,P003,Y,USD
+11/02/2025,4001,Revenue from Services,Payment received from client,374637.62,,P001,Y,INR
+30/11/2025,1001,Cash and Cash Equivalents,Tax provision entry,15999.48,,P005,Y,INR
+20/03/2025,1010,Prepaid Expenses,Salary disbursement,237043.75,,P003,Y,USD
+08/07/2025,1003,Inventory,Petty cash reimbursement,303820.12,,P001,Y,INR
+24/10/2025,1001,Cash and Cash Equivalents,Intercompany transfer,,156322.64,P001,N,INR
+31/10/2025,5003,Rent Expense,Reversing entry,313807.58,,P005,Y,INR
+22/01/2025,2002,Short-term Loans,Revenue recognition,,214474.82,P001,Y,INR
+04/08/2025,5005,Depreciation,Depreciation entry,,53216.67,P004,N,INR
+01/04/2025,5003,Rent Expense,Revenue recognition,,482754.13,P004,N,USD
+31/10/2025,2001,Accounts Payable,Vendor payment,425930.72,,P002,Y,USD
+26/08/2025,5001,Cost of Goods Sold,Petty cash reimbursement,,334260.14,P003,Y,USD
+04/04/2025,4001,Revenue from Services,Office rent payment,,177735.07,P005,Y,INR
+26/12/2025,5006,Miscellaneous Expense,Utility bill settlement,278117.62,,P004,Y,INR
+08/09/2025,4002,Product Sales,Tax provision entry,,120541.81,P001,N,USD
+17/02/2025,2001,Accounts Payable,Office rent payment,202498.36,,P004,Y,INR
+11/10/2025,4002,Product Sales,Vendor payment,,213039.15,P003,Y,USD
+06/06/2025,2001,Accounts Payable,Office rent payment,60767.61,,P005,Y,INR
+20/12/2025,1003,Inventory,Office rent payment,,108584.13,P001,Y,INR
+10/04/2025,2001,Accounts Payable,Office rent payment,,180760.09,P003,Y,INR
+24/01/2025,1001,Cash and Cash Equivalents,Revenue recognition,146422.25,,P001,N,INR
+21/10/2025,2001,Accounts Payable,Depreciation entry,,239617.75,P003,Y,INR
+02/09/2025,1002,Accounts Receivable,Reversing entry,,33139.05,P002,Y,INR
+18/03/2025,5004,Utilities Expense,Petty cash reimbursement,474588.26,,P005,Y,INR
+02/08/2025,5001,Cost of Goods Sold,Petty cash reimbursement,395475.04,,P004,N,USD
+02/06/2025,5005,Depreciation,Petty cash reimbursement,,495020.61,P002,Y,INR
+17/11/2025,1010,Prepaid Expenses,Utility bill settlement,330383.85,,P005,Y,INR
+08/02/2025,1003,Inventory,Payment received from client,,204554.53,P002,Y,INR
+28/05/2025,5003,Rent Expense,Utility bill settlement,,351642.29,P003,Y,INR
+17/11/2025,5001,Cost of Goods Sold,Advance payment to supplier,402050.89,,P005,N,INR
+26/04/2025,5002,Salaries and Wages,Salary disbursement,454251.52,,P002,Y,INR
+07/06/2025,5001,Cost of Goods Sold,Bank charges,,412208.03,P004,N,INR
+19/12/2025,2001,Accounts Payable,Bank charges,,201553.01,P001,N,USD
+03/11/2025,1001,Cash and Cash Equivalents,Intercompany transfer,,216298.32,P001,Y,INR
+28/04/2025,5002,Salaries and Wages,Reversing entry,430328.18,,P002,Y,INR
+29/08/2025,4002,Product Sales,Advance payment to supplier,,221393.59,P004,Y,USD
+16/02/2025,4001,Revenue from Services,Vendor payment,,204469.87,P003,Y,INR
+30/07/2025,5003,Rent Expense,Depreciation entry,,144464.79,P001,Y,USD
+11/06/2025,2001,Accounts Payable,Vendor payment,,58402.84,P004,Y,USD
+28/01/2025,1010,Prepaid Expenses,Revenue recognition,,181208.79,P002,N,INR
+17/05/2025,4002,Product Sales,Salary disbursement,,463872.54,P001,N,INR
+19/11/2025,5001,Cost of Goods Sold,Tax provision entry,120029.08,,P005,Y,INR
+28/07/2025,1002,Accounts Receivable,Office rent payment,496132.44,,P002,N,INR
+13/09/2025,5006,Miscellaneous Expense,Bank charges,,146284.85,P004,N,USD
+05/05/2025,4001,Revenue from Services,Revenue recognition,72748.66,,P003,Y,INR
+01/08/2025,2002,Short-term Loans,Intercompany transfer,,393964.84,P003,Y,INR
+28/10/2025,5001,Cost of Goods Sold,Advance payment to supplier,245075.35,,P003,N,USD
+20/06/2025,4002,Product Sales,Tax provision entry,,271943.32,P002,Y,INR
+20/10/2025,3001,Share Capital,Office rent payment,,428078.48,P004,Y,INR
+28/12/2025,5006,Miscellaneous Expense,Tax provision entry,190924.96,,P002,N,INR
+15/09/2025,5001,Cost of Goods Sold,Vendor payment,,434915.31,P001,Y,USD
+15/03/2025,3001,Share Capital,Reversing entry,327563.27,,P003,Y,USD
+23/06/2025,5001,Cost of Goods Sold,Bank charges,199042.92,,P003,Y,USD
+17/11/2025,5003,Rent Expense,Intercompany transfer,379821.2,,P003,Y,INR
+27/04/2025,5003,Rent Expense,Invoice raised for services,217268.75,,P002,Y,USD
+22/12/2025,2001,Accounts Payable,Intercompany transfer,,14959.15,P003,Y,INR
+11/07/2025,3001,Share Capital,Salary disbursement,,122476.62,P002,Y,INR
+10/02/2025,5001,Cost of Goods Sold,Reversing entry,191580.88,,P002,N,INR
+25/08/2025,5002,Salaries and Wages,Utility bill settlement,230055.46,,P005,N,INR
+22/03/2025,1002,Accounts Receivable,Depreciation entry,,472645.2,P004,N,INR
+04/06/2025,1010,Prepaid Expenses,Loan repayment,426741.06,,P005,Y,USD
+03/07/2025,5001,Cost of Goods Sold,Utility bill settlement,,496349.68,P003,Y,USD
+05/01/2025,5001,Cost of Goods Sold,Reversing entry,343056.85,,P002,N,INR
+07/11/2025,5004,Utilities Expense,Vendor payment,109892.77,,P001,Y,INR
+18/11/2025,5002,Salaries and Wages,Payment received from client,,154811.98,P002,Y,INR
+16/02/2025,5006,Miscellaneous Expense,Utility bill settlement,,163696.2,P002,Y,INR
+04/10/2025,5006,Miscellaneous Expense,Vendor payment,,265660.76,P004,Y,INR
+01/06/2025,5003,Rent Expense,Reversing entry,169688.27,,P002,N,INR
+26/04/2025,5005,Depreciation,Advance payment to supplier,,362246.25,P004,Y,INR
+08/01/2025,2001,Accounts Payable,Revenue recognition,,62232.57,P003,Y,USD
+25/02/2025,5002,Salaries and Wages,Office rent payment,,236002.7,P004,Y,INR
+25/12/2025,2001,Accounts Payable,Advance payment to supplier,204443.78,,P003,Y,INR
+10/09/2025,1002,Accounts Receivable,Invoice raised for services,117782.62,,P003,N,USD
+10/12/2025,5003,Rent Expense,Bank charges,,473014.06,P001,Y,USD
+08/09/2025,5001,Cost of Goods Sold,Loan repayment,,469557.01,P002,Y,INR
+16/08/2025,4001,Revenue from Services,Office rent payment,427797.37,,P001,Y,INR
+23/07/2025,2001,Accounts Payable,Office rent payment,,484119.33,P005,Y,INR
+11/01/2025,1001,Cash and Cash Equivalents,Tax provision entry,167087.82,,P005,Y,INR
+17/04/2025,5001,Cost of Goods Sold,Office rent payment,406619.96,,P005,Y,INR
+02/01/2025,2001,Accounts Payable,Reversing entry,492022.05,,P001,Y,INR
+05/12/2025,5005,Depreciation,Payment received from client,,66335.71,P001,Y,INR
+31/03/2025,2001,Accounts Payable,Payment received from client,,63815.89,P004,Y,INR
+18/08/2025,5004,Utilities Expense,Vendor payment,256862.36,,P005,N,INR
+23/01/2025,5003,Rent Expense,Tax provision entry,,454421.47,P001,N,INR
+03/09/2025,5005,Depreciation,Loan repayment,213423.67,,P001,N,USD
+11/02/2025,2002,Short-term Loans,Petty cash reimbursement,74592.75,,P004,Y,INR
+02/11/2025,4002,Product Sales,Utility bill settlement,,227130.85,P005,Y,INR
+21/04/2025,3001,Share Capital,Depreciation entry,,444101.47,P004,Y,USD
+01/08/2025,5003,Rent Expense,Invoice raised for services,,156617.9,P002,Y,INR
+18/12/2025,5006,Miscellaneous Expense,Depreciation entry,34033.09,,P001,Y,USD
+10/07/2025,5004,Utilities Expense,Salary disbursement,,278407.18,P003,Y,USD
+07/12/2025,5004,Utilities Expense,Loan repayment,434112.03,,P003,Y,INR
+23/02/2025,5001,Cost of Goods Sold,Revenue recognition,,106763.03,P003,Y,INR
+12/10/2025,2002,Short-term Loans,Invoice raised for services,381421.51,,P005,N,INR
+03/12/2025,5005,Depreciation,Bank charges,134090.14,,P003,Y,INR
+29/06/2025,1001,Cash and Cash Equivalents,Salary disbursement,,434996.42,P001,Y,INR
+16/02/2025,5003,Rent Expense,Revenue recognition,,107958.87,P002,N,INR
+09/07/2025,2001,Accounts Payable,Bank charges,162529.25,,P002,Y,INR
+13/11/2025,1001,Cash and Cash Equivalents,Advance payment to supplier,,41249.97,P005,N,USD
+15/08/2025,3001,Share Capital,Utility bill settlement,108176.7,,P001,Y,USD
+26/05/2025,5002,Salaries and Wages,Advance payment to supplier,,296770.56,P004,Y,INR
+03/11/2025,1001,Cash and Cash Equivalents,Payment received from client,102609.35,,P003,Y,INR
+17/06/2025,1002,Accounts Receivable,Payment received from client,,248943.97,P004,Y,INR
+30/09/2025,5003,Rent Expense,Office rent payment,,250381.04,P001,Y,USD
+12/08/2025,1001,Cash and Cash Equivalents,Depreciation entry,,460620.64,P004,N,USD
+29/05/2025,1002,Accounts Receivable,Loan repayment,,10917.85,P003,Y,USD
+15/02/2025,3001,Share Capital,Reversing entry,,53378.64,P004,N,INR
+08/06/2025,5003,Rent Expense,Vendor payment,111175.24,,P005,Y,INR
+19/09/2025,1010,Prepaid Expenses,Intercompany transfer,,388226.0,P001,Y,INR
+16/03/2025,2001,Accounts Payable,Office rent payment,87162.76,,P004,Y,INR
+26/08/2025,5004,Utilities Expense,Petty cash reimbursement,,380058.64,P002,Y,INR
+14/08/2025,1002,Accounts Receivable,Depreciation entry,,221382.93,P003,Y,INR
+17/09/2025,1002,Accounts Receivable,Utility bill settlement,231140.37,,P003,Y,INR
+09/02/2025,5002,Salaries and Wages,Reversing entry,488695.58,,P005,N,USD
+11/10/2025,5004,Utilities Expense,Bank charges,,447990.44,P005,Y,INR
+01/09/2025,4002,Product Sales,Salary disbursement,,478882.32,P001,Y,INR
+16/09/2025,5002,Salaries and Wages,Salary disbursement,,20051.49,P003,N,INR
+10/07/2025,5006,Miscellaneous Expense,Utility bill settlement,,194014.57,P001,Y,INR
+18/06/2025,1002,Accounts Receivable,Revenue recognition,,339350.48,P003,Y,INR
+11/02/2025,5001,Cost of Goods Sold,Advance payment to supplier,,71143.48,P002,Y,USD
+01/11/2025,5003,Rent Expense,Invoice raised for services,,155136.15,P005,Y,INR
+17/02/2025,5002,Salaries and Wages,Advance payment to supplier,,211991.48,P003,Y,INR
+03/04/2025,1010,Prepaid Expenses,Vendor payment,,473860.3,P002,Y,INR
+21/03/2025,1002,Accounts Receivable,Utility bill settlement,422291.98,,P005,Y,INR
+09/03/2025,5001,Cost of Goods Sold,Loan repayment,77549.25,,P001,Y,USD
+30/07/2025,2002,Short-term Loans,Advance payment to supplier,,359933.04,P002,Y,USD
+01/10/2025,1010,Prepaid Expenses,Utility bill settlement,,482815.52,P005,Y,INR
+14/08/2025,4001,Revenue from Services,Tax provision entry,,141244.98,P002,N,INR
+06/11/2025,1003,Inventory,Reversing entry,,125376.6,P005,Y,INR
+05/03/2025,2001,Accounts Payable,Invoice raised for services,,381676.86,P004,N,INR
+16/02/2025,5006,Miscellaneous Expense,Office rent payment,,408443.28,P001,Y,USD
+22/07/2025,4002,Product Sales,Vendor payment,118271.15,,P001,Y,INR
+13/06/2025,5006,Miscellaneous Expense,Invoice raised for services,,419668.56,P001,Y,INR
+27/05/2025,5006,Miscellaneous Expense,Reversing entry,236491.24,,P005,N,USD
+03/01/2025,5006,Miscellaneous Expense,Invoice raised for services,9992.44,,P001,Y,USD
+28/05/2025,1010,Prepaid Expenses,Utility bill settlement,61363.25,,P001,N,USD
+26/02/2025,5005,Depreciation,Intercompany transfer,250164.7,,P003,Y,INR
+08/08/2025,1001,Cash and Cash Equivalents,Petty cash reimbursement,,176731.61,P005,Y,INR
+04/07/2025,1002,Accounts Receivable,Revenue recognition,272268.94,,P001,N,USD
+22/11/2025,3001,Share Capital,Vendor payment,127198.31,,P003,Y,INR
+04/05/2025,5003,Rent Expense,Advance payment to supplier,,314314.35,P003,Y,INR
+07/10/2025,2002,Short-term Loans,Reversing entry,,321576.41,P002,N,INR
+02/02/2025,5003,Rent Expense,Tax provision entry,471830.77,,P001,Y,INR
+13/04/2025,5006,Miscellaneous Expense,Payment received from client,,158140.11,P003,N,USD
+19/01/2025,5004,Utilities Expense,Advance payment to supplier,,95956.16,P003,Y,INR
+05/03/2025,5004,Utilities Expense,Vendor payment,,218757.22,P003,N,USD
+06/04/2025,4001,Revenue from Services,Bank charges,,249012.93,P001,Y,USD
+09/08/2025,5001,Cost of Goods Sold,Reversing entry,,90638.01,P001,Y,INR
+17/06/2025,5002,Salaries and Wages,Utility bill settlement,,153594.68,P003,Y,USD
+17/08/2025,1001,Cash and Cash Equivalents,Bank charges,,435083.57,P001,N,INR
+08/02/2025,5002,Salaries and Wages,Advance payment to supplier,203402.01,,P005,Y,INR
+14/12/2025,5004,Utilities Expense,Depreciation entry,17882.08,,P003,Y,INR
+16/07/2025,5001,Cost of Goods Sold,Payment received from client,,302744.87,P004,Y,INR
+09/02/2025,5001,Cost of Goods Sold,Salary disbursement,,264965.21,P002,Y,INR
+28/02/2025,1001,Cash and Cash Equivalents,Bank charges,,93431.0,P003,Y,INR
+27/12/2025,4001,Revenue from Services,Office rent payment,,498184.37,P001,N,INR
+11/03/2025,5005,Depreciation,Invoice raised for services,,226295.32,P003,Y,INR
+30/12/2025,1002,Accounts Receivable,Revenue recognition,,271314.59,P003,Y,INR
+18/09/2025,1010,Prepaid Expenses,Invoice raised for services,492573.71,,P001,Y,USD
+04/07/2025,4002,Product Sales,Petty cash reimbursement,184771.13,,P003,Y,INR
+23/07/2025,5003,Rent Expense,Bank charges,,239593.22,P002,N,INR
+12/06/2025,5002,Salaries and Wages,Invoice raised for services,,225262.26,P002,Y,INR
+10/08/2025,4002,Product Sales,Intercompany transfer,434171.71,,P002,Y,INR
+24/03/2025,2002,Short-term Loans,Intercompany transfer,,354811.4,P003,Y,INR
+11/04/2025,5002,Salaries and Wages,Revenue recognition,,137588.29,P005,Y,INR
+25/10/2025,1003,Inventory,Salary disbursement,,329537.07,P001,Y,INR
+24/01/2025,5002,Salaries and Wages,Tax provision entry,288597.23,,P004,N,INR
+18/11/2025,4002,Product Sales,Utility bill settlement,,321132.69,P004,N,INR
+02/06/2025,4001,Revenue from Services,Invoice raised for services,344462.48,,P004,N,USD
+26/08/2025,1010,Prepaid Expenses,Vendor payment,,303526.8,P004,Y,INR
+08/03/2025,5004,Utilities Expense,Vendor payment,257732.58,,P004,Y,INR
+04/03/2025,2001,Accounts Payable,Depreciation entry,124335.48,,P004,Y,INR
+12/11/2025,3001,Share Capital,Office rent payment,481361.58,,P002,Y,INR
+23/03/2025,4001,Revenue from Services,Revenue recognition,,233674.15,P001,N,INR
+21/07/2025,4002,Product Sales,Depreciation entry,483359.97,,P001,Y,INR
+25/05/2025,4001,Revenue from Services,Petty cash reimbursement,,441228.57,P001,Y,INR
+09/08/2025,1003,Inventory,Intercompany transfer,,132604.21,P001,N,INR
+25/07/2025,1001,Cash and Cash Equivalents,Petty cash reimbursement,,281127.52,P004,Y,INR
+16/09/2025,4001,Revenue from Services,Tax provision entry,275153.62,,P004,Y,INR
+11/07/2025,5004,Utilities Expense,Vendor payment,,279137.0,P005,Y,INR
+18/09/2025,3001,Share Capital,Revenue recognition,20607.33,,P004,Y,INR
+23/09/2025,4001,Revenue from Services,Salary disbursement,303327.13,,P002,Y,INR
+21/07/2025,5001,Cost of Goods Sold,Bank charges,,421379.66,P004,N,INR
+09/01/2025,2002,Short-term Loans,Vendor payment,,337066.29,P005,Y,INR
+31/08/2025,2001,Accounts Payable,Advance payment to supplier,391560.54,,P002,Y,USD
+26/09/2025,5002,Salaries and Wages,Bank charges,,310058.03,P001,Y,INR
+21/10/2025,5003,Rent Expense,Invoice raised for services,,95796.77,P002,Y,USD
+31/07/2025,5003,Rent Expense,Office rent payment,,205483.52,P005,Y,INR
+17/04/2025,4002,Product Sales,Vendor payment,,499062.37,P002,N,INR
+24/08/2025,5006,Miscellaneous Expense,Revenue recognition,,171492.35,P002,Y,USD
+07/05/2025,2001,Accounts Payable,Revenue recognition,,149600.33,P004,Y,INR
+12/06/2025,4001,Revenue from Services,Vendor payment,,280463.55,P005,Y,INR
+13/12/2025,4002,Product Sales,Loan repayment,,447932.35,P003,Y,INR
+22/01/2025,2001,Accounts Payable,Bank charges,,39975.2,P002,Y,USD
+14/04/2025,5005,Depreciation,Revenue recognition,,135930.79,P005,Y,INR
+28/10/2025,1010,Prepaid Expenses,Office rent payment,25857.33,,P001,Y,INR
+31/07/2025,2002,Short-term Loans,Bank charges,236465.75,,P004,Y,INR
+01/12/2025,5006,Miscellaneous Expense,Intercompany transfer,,439260.61,P003,Y,INR
+27/05/2025,5002,Salaries and Wages,Payment received from client,454014.51,,P002,Y,INR
+02/08/2025,5006,Miscellaneous Expense,Reversing entry,88306.46,,P002,N,USD
+29/05/2025,5006,Miscellaneous Expense,Payment received from client,5128.95,,P004,Y,INR
+25/11/2025,4002,Product Sales,Revenue recognition,247209.25,,P002,N,INR
+27/02/2025,2002,Short-term Loans,Salary disbursement,,365694.06,P003,Y,INR
+01/06/2025,5001,Cost of Goods Sold,Advance payment to supplier,378762.73,,P005,N,USD
+17/06/2025,1002,Accounts Receivable,Loan repayment,334793.3,,P003,Y,USD
+08/05/2025,1001,Cash and Cash Equivalents,Utility bill settlement,,192095.41,P003,Y,INR
+26/10/2025,5003,Rent Expense,Petty cash reimbursement,,6212.15,P001,Y,INR
+27/08/2025,2001,Accounts Payable,Salary disbursement,,203005.6,P003,Y,INR
+11/11/2025,1010,Prepaid Expenses,Office rent payment,,478701.59,P005,Y,USD
+11/07/2025,3001,Share Capital,Bank charges,,274842.64,P005,Y,INR
+11/02/2025,4002,Product Sales,Depreciation entry,,264322.48,P001,Y,INR
+08/10/2025,5006,Miscellaneous Expense,Revenue recognition,101477.31,,P005,Y,INR
+15/08/2025,1002,Accounts Receivable,Advance payment to supplier,,103098.04,P001,Y,USD
+21/08/2025,1003,Inventory,Revenue recognition,208004.57,,P001,N,INR
+22/07/2025,2001,Accounts Payable,Reversing entry,2006.23,,P004,Y,INR
+26/06/2025,5003,Rent Expense,Invoice raised for services,270811.17,,P001,Y,USD
+27/05/2025,3001,Share Capital,Salary disbursement,,384601.55,P004,Y,USD
+13/07/2025,3001,Share Capital,Invoice raised for services,341523.81,,P002,Y,INR
+03/10/2025,3001,Share Capital,Revenue recognition,64109.87,,P003,Y,INR
+26/08/2025,5002,Salaries and Wages,Bank charges,,272450.45,P004,Y,INR
+27/06/2025,1003,Inventory,Utility bill settlement,94645.99,,P005,Y,USD
+09/01/2025,1010,Prepaid Expenses,Office rent payment,34111.81,,P002,N,INR
+23/01/2025,3001,Share Capital,Depreciation entry,117552.47,,P005,Y,INR
+29/05/2025,1010,Prepaid Expenses,Reversing entry,,458240.32,P003,Y,INR
+15/03/2025,5002,Salaries and Wages,Revenue recognition,,110910.85,P005,Y,INR
+30/10/2025,5006,Miscellaneous Expense,Bank charges,,455833.04,P003,N,INR
+26/11/2025,5002,Salaries and Wages,Loan repayment,,393009.4,P002,N,USD
+03/06/2025,3001,Share Capital,Salary disbursement,,377330.84,P003,Y,INR
+29/12/2025,1003,Inventory,Tax provision entry,231781.07,,P005,N,USD
+29/09/2025,1003,Inventory,Loan repayment,121807.83,,P004,Y,INR
+09/07/2025,1002,Accounts Receivable,Revenue recognition,362430.06,,P004,Y,INR
+11/12/2025,5001,Cost of Goods Sold,Petty cash reimbursement,20254.0,,P004,Y,INR
+17/04/2025,5005,Depreciation,Intercompany transfer,166815.67,,P001,Y,INR
+03/09/2025,5006,Miscellaneous Expense,Office rent payment,347965.33,,P005,N,INR
+14/06/2025,5004,Utilities Expense,Utility bill settlement,,190640.54,P003,Y,INR
+20/09/2025,5006,Miscellaneous Expense,Depreciation entry,,233269.03,P003,Y,INR
+10/06/2025,3001,Share Capital,Payment received from client,281481.1,,P003,Y,INR
+11/10/2025,5006,Miscellaneous Expense,Petty cash reimbursement,,289781.89,P002,Y,INR
+18/06/2025,1010,Prepaid Expenses,Loan repayment,285109.86,,P003,N,INR
+08/09/2025,5003,Rent Expense,Advance payment to supplier,,369927.25,P002,Y,INR
+13/03/2025,5003,Rent Expense,Revenue recognition,244414.0,,P001,Y,INR
+04/01/2025,3001,Share Capital,Salary disbursement,421351.09,,P001,Y,INR
+22/04/2025,4002,Product Sales,Depreciation entry,,186913.75,P001,N,INR
+30/09/2025,4002,Product Sales,Loan repayment,,6419.56,P005,Y,INR
+24/12/2025,5002,Salaries and Wages,Loan repayment,403180.77,,P005,Y,INR
+18/03/2025,1010,Prepaid Expenses,Office rent payment,,310080.53,P004,Y,INR
+10/02/2025,2002,Short-term Loans,Loan repayment,229769.37,,P001,Y,INR
+01/12/2025,5005,Depreciation,Advance payment to supplier,379913.13,,P004,N,USD
+10/10/2025,4001,Revenue from Services,Payment received from client,318555.66,,P004,Y,USD
+27/11/2025,5004,Utilities Expense,Vendor payment,283145.39,,P002,Y,INR
+21/12/2025,5006,Miscellaneous Expense,Petty cash reimbursement,238012.39,,P005,Y,INR
+16/10/2025,5002,Salaries and Wages,Payment received from client,,90087.57,P005,Y,INR
+15/03/2025,5004,Utilities Expense,Reversing entry,,356499.34,P002,Y,INR
+16/10/2025,1010,Prepaid Expenses,Petty cash reimbursement,,417407.95,P002,Y,USD
+19/12/2025,5003,Rent Expense,Invoice raised for services,,250646.03,P004,Y,INR
+29/04/2025,5005,Depreciation,Invoice raised for services,,170626.08,P003,Y,INR
+19/08/2025,4001,Revenue from Services,Office rent payment,,178227.69,P005,N,INR
+05/12/2025,3001,Share Capital,Invoice raised for services,,386197.62,P001,Y,INR
+18/05/2025,1003,Inventory,Loan repayment,355982.74,,P003,N,INR
+24/02/2025,1002,Accounts Receivable,Payment received from client,,471508.63,P001,Y,INR
+09/03/2025,1002,Accounts Receivable,Salary disbursement,,215774.27,P001,Y,INR
+01/07/2025,4002,Product Sales,Invoice raised for services,,298663.82,P003,N,INR
+31/07/2025,3001,Share Capital,Tax provision entry,42807.41,,P002,Y,USD
+13/03/2025,2001,Accounts Payable,Utility bill settlement,134569.2,,P004,Y,INR
+22/05/2025,3001,Share Capital,Utility bill settlement,242373.54,,P002,Y,INR
+17/11/2025,4001,Revenue from Services,Petty cash reimbursement,,308526.06,P003,Y,INR
+04/01/2025,3001,Share Capital,Vendor payment,,420885.89,P003,Y,USD
+09/08/2025,5005,Depreciation,Reversing entry,429824.48,,P005,Y,INR
+22/12/2025,1010,Prepaid Expenses,Depreciation entry,,157434.55,P004,Y,INR
+22/10/2025,5004,Utilities Expense,Office rent payment,,163280.18,P001,N,INR
+16/10/2025,1010,Prepaid Expenses,Petty cash reimbursement,498633.83,,P002,Y,USD
+13/08/2025,5004,Utilities Expense,Utility bill settlement,415725.26,,P002,N,USD
+21/11/2025,2001,Accounts Payable,Office rent payment,126714.5,,P001,N,USD
+18/08/2025,5001,Cost of Goods Sold,Depreciation entry,,291330.89,P005,Y,INR
+01/11/2025,5002,Salaries and Wages,Intercompany transfer,42948.48,,P005,Y,INR
+23/01/2025,5001,Cost of Goods Sold,Advance payment to supplier,,338897.21,P001,Y,USD
+06/01/2025,1002,Accounts Receivable,Utility bill settlement,111389.54,,P004,N,INR
+26/08/2025,5004,Utilities Expense,Advance payment to supplier,294500.68,,P004,Y,INR
+23/02/2025,2001,Accounts Payable,Loan repayment,460313.5,,P003,Y,INR
+09/06/2025,2002,Short-term Loans,Depreciation entry,,392242.86,P001,Y,USD
+13/08/2025,5003,Rent Expense,Bank charges,226497.37,,P001,Y,INR
+12/01/2025,5005,Depreciation,Vendor payment,324160.97,,P005,Y,INR
+23/03/2025,2002,Short-term Loans,Revenue recognition,,213471.51,P002,Y,USD
+06/04/2025,5002,Salaries and Wages,Advance payment to supplier,216351.16,,P005,Y,USD
+08/08/2025,3001,Share Capital,Payment received from client,352515.44,,P005,Y,INR
+22/02/2025,5004,Utilities Expense,Reversing entry,,268676.06,P004,Y,INR
+28/02/2025,2001,Accounts Payable,Advance payment to supplier,,431386.96,P005,N,USD
+28/02/2025,2002,Short-term Loans,Vendor payment,422836.14,,P002,Y,INR
+10/06/2025,1002,Accounts Receivable,Office rent payment,153037.31,,P005,Y,INR
+18/07/2025,3001,Share Capital,Petty cash reimbursement,,69364.72,P004,N,INR
+22/11/2025,4002,Product Sales,Bank charges,459620.92,,P003,Y,USD
+13/03/2025,1003,Inventory,Vendor payment,421071.61,,P004,Y,INR
+11/03/2025,1010,Prepaid Expenses,Reversing entry,,192280.12,P004,N,USD
+30/12/2025,5005,Depreciation,Depreciation entry,244605.41,,P003,Y,INR
+17/01/2025,2001,Accounts Payable,Office rent payment,269035.5,,P005,N,USD
+19/09/2025,1002,Accounts Receivable,Petty cash reimbursement,,57546.22,P005,Y,USD
+22/04/2025,3001,Share Capital,Invoice raised for services,368126.35,,P004,Y,INR
+15/05/2025,2002,Short-term Loans,Reversing entry,,408455.93,P002,Y,INR
+29/10/2025,5003,Rent Expense,Vendor payment,,430593.82,P002,Y,INR
+16/04/2025,5004,Utilities Expense,Payment received from client,,285252.14,P003,Y,INR
+29/05/2025,5001,Cost of Goods Sold,Utility bill settlement,476222.47,,P001,Y,USD
+22/05/2025,5005,Depreciation,Advance payment to supplier,63880.64,,P003,Y,INR
+07/05/2025,5004,Utilities Expense,Reversing entry,,338279.16,P004,Y,INR
+12/07/2025,4001,Revenue from Services,Invoice raised for services,316997.07,,P003,N,INR
+21/08/2025,4001,Revenue from Services,Vendor payment,291186.79,,P001,N,INR
+01/10/2025,3001,Share Capital,Office rent payment,484080.23,,P003,N,INR
+26/05/2025,2002,Short-term Loans,Revenue recognition,,289177.85,P001,Y,INR
+20/02/2025,5002,Salaries and Wages,Tax provision entry,418432.74,,P004,Y,INR
+22/08/2025,1001,Cash and Cash Equivalents,Loan repayment,101557.94,,P003,Y,INR
+17/02/2025,5002,Salaries and Wages,Vendor payment,,125569.44,P004,Y,INR
+17/11/2025,2001,Accounts Payable,Bank charges,349870.97,,P001,N,INR
+01/01/2025,1010,Prepaid Expenses,Depreciation entry,39430.39,,P001,N,INR
+23/12/2025,2002,Short-term Loans,Reversing entry,,60736.6,P001,Y,USD
+28/04/2025,3001,Share Capital,Invoice raised for services,365516.31,,P003,Y,INR
+03/06/2025,1003,Inventory,Loan repayment,386843.51,,P005,Y,INR
+16/10/2025,1001,Cash and Cash Equivalents,Petty cash reimbursement,,325185.1,P002,Y,INR
+30/07/2025,5001,Cost of Goods Sold,Advance payment to supplier,221470.74,,P002,Y,INR
+05/03/2025,5001,Cost of Goods Sold,Bank charges,,192323.94,P002,Y,INR
+22/05/2025,5002,Salaries and Wages,Invoice raised for services,,124459.43,P002,Y,INR
+23/09/2025,5001,Cost of Goods Sold,Revenue recognition,,94728.94,P002,Y,INR
+11/09/2025,3001,Share Capital,Invoice raised for services,120920.34,,P003,Y,INR
+09/03/2025,3001,Share Capital,Reversing entry,,419567.16,P004,Y,INR
+07/02/2025,1001,Cash and Cash Equivalents,Petty cash reimbursement,,34232.52,P001,Y,INR
+23/07/2025,4002,Product Sales,Utility bill settlement,,314471.06,P001,N,USD
+24/11/2025,4002,Product Sales,Revenue recognition,,308215.5,P001,Y,INR
+19/09/2025,5006,Miscellaneous Expense,Office rent payment,487169.54,,P005,Y,USD
+21/11/2025,5004,Utilities Expense,Reversing entry,325094.85,,P002,Y,USD
+30/01/2025,1010,Prepaid Expenses,Invoice raised for services,462351.56,,P003,N,INR
+08/12/2025,5003,Rent Expense,Advance payment to supplier,370458.76,,P001,Y,INR
+25/03/2025,4001,Revenue from Services,Vendor payment,,261741.18,P002,Y,INR
+18/05/2025,5003,Rent Expense,Intercompany transfer,59469.33,,P003,Y,USD
+26/09/2025,1002,Accounts Receivable,Utility bill settlement,356305.46,,P005,N,USD
+04/07/2025,1001,Cash and Cash Equivalents,Depreciation entry,429750.21,,P003,Y,INR
+22/02/2025,5006,Miscellaneous Expense,Petty cash reimbursement,337223.16,,P001,Y,INR
+07/01/2025,1010,Prepaid Expenses,Payment received from client,,236146.41,P001,Y,INR
+11/10/2025,5004,Utilities Expense,Intercompany transfer,,357153.39,P002,Y,INR
+02/08/2025,5006,Miscellaneous Expense,Bank charges,160307.6,,P005,Y,INR
+11/12/2025,5006,Miscellaneous Expense,Payment received from client,90082.5,,P004,N,INR
+25/05/2025,5004,Utilities Expense,Reversing entry,155693.54,,P003,N,INR
+13/04/2025,2001,Accounts Payable,Petty cash reimbursement,392361.36,,P005,N,INR
+10/09/2025,5004,Utilities Expense,Tax provision entry,98113.5,,P004,Y,INR
+13/01/2025,1010,Prepaid Expenses,Revenue recognition,173538.64,,P004,Y,INR
+07/06/2025,1002,Accounts Receivable,Office rent payment,265142.34,,P001,N,USD
+14/03/2025,5003,Rent Expense,Utility bill settlement,46966.81,,P004,N,INR
+13/02/2025,5001,Cost of Goods Sold,Invoice raised for services,,252961.17,P004,Y,INR
+06/12/2025,1003,Inventory,Office rent payment,,146192.17,P003,N,INR
+20/08/2025,2001,Accounts Payable,Office rent payment,37806.37,,P002,Y,INR
+24/02/2025,1003,Inventory,Depreciation entry,,233294.53,P002,Y,INR
+20/08/2025,2001,Accounts Payable,Depreciation entry,132871.46,,P003,Y,INR
+27/12/2025,5003,Rent Expense,Petty cash reimbursement,,20644.74,P002,Y,INR
+02/07/2025,3001,Share Capital,Revenue recognition,,24950.83,P001,Y,INR
+27/07/2025,5005,Depreciation,Depreciation entry,278198.9,,P001,Y,USD
+13/03/2025,1002,Accounts Receivable,Payment received from client,31303.76,,P004,Y,INR
+10/07/2025,5002,Salaries and Wages,Advance payment to supplier,468818.66,,P001,Y,INR
+03/02/2025,1010,Prepaid Expenses,Intercompany transfer,323170.45,,P001,Y,INR
+22/01/2025,4001,Revenue from Services,Payment received from client,,84410.61,P001,N,USD
+15/07/2025,5002,Salaries and Wages,Loan repayment,86817.2,,P003,Y,INR
+17/08/2025,5006,Miscellaneous Expense,Salary disbursement,17807.4,,P004,Y,USD
+09/10/2025,4001,Revenue from Services,Payment received from client,,44316.91,P002,Y,USD
+26/11/2025,5006,Miscellaneous Expense,Tax provision entry,263144.12,,P004,N,INR
+06/10/2025,5004,Utilities Expense,Depreciation entry,,172345.04,P002,N,INR
+14/01/2025,2002,Short-term Loans,Petty cash reimbursement,,109900.58,P005,Y,USD
+03/07/2025,5004,Utilities Expense,Petty cash reimbursement,499803.07,,P002,Y,INR
+17/05/2025,4002,Product Sales,Reversing entry,395722.99,,P003,Y,USD
+30/03/2025,1003,Inventory,Office rent payment,,296463.49,P005,Y,INR
+16/10/2025,1003,Inventory,Petty cash reimbursement,,474210.07,P004,Y,INR
+20/01/2025,1002,Accounts Receivable,Payment received from client,116695.37,,P001,Y,USD
+19/06/2025,5006,Miscellaneous Expense,Petty cash reimbursement,101131.46,,P003,Y,INR
+31/01/2025,1001,Cash and Cash Equivalents,Salary disbursement,293511.28,,P001,Y,INR
+11/07/2025,5003,Rent Expense,Advance payment to supplier,198099.98,,P003,Y,INR
+11/03/2025,1003,Inventory,Bank charges,,474372.42,P005,Y,INR
+22/12/2025,5006,Miscellaneous Expense,Intercompany transfer,,307047.64,P004,Y,INR
+07/06/2025,5003,Rent Expense,Bank charges,147611.37,,P005,Y,USD
+17/01/2025,1003,Inventory,Petty cash reimbursement,159449.35,,P002,Y,USD
+19/06/2025,5003,Rent Expense,Invoice raised for services,,119378.96,P003,Y,INR
+17/08/2025,1001,Cash and Cash Equivalents,Utility bill settlement,105237.3,,P001,Y,INR
+01/01/2025,1001,Cash and Cash Equivalents,Loan repayment,,219390.96,P004,Y,USD
+13/07/2025,2002,Short-term Loans,Revenue recognition,,187986.11,P004,Y,INR
+07/02/2025,5004,Utilities Expense,Reversing entry,17189.69,,P001,Y,INR
+07/02/2025,2002,Short-term Loans,Salary disbursement,444021.67,,P003,Y,INR
+01/11/2025,5001,Cost of Goods Sold,Intercompany transfer,241627.02,,P005,N,INR
+11/08/2025,1003,Inventory,Payment received from client,51078.28,,P005,Y,USD
+04/10/2025,2001,Accounts Payable,Advance payment to supplier,141120.78,,P004,Y,INR
+20/10/2025,4002,Product Sales,Reversing entry,245728.66,,P004,Y,INR
+14/02/2025,2001,Accounts Payable,Reversing entry,,331179.1,P001,Y,INR
+16/04/2025,1003,Inventory,Advance payment to supplier,146259.83,,P003,N,INR
+23/07/2025,4001,Revenue from Services,Depreciation entry,,447491.3,P002,Y,USD
+09/07/2025,5006,Miscellaneous Expense,Loan repayment,,185016.13,P004,Y,INR
+27/08/2025,2001,Accounts Payable,Office rent payment,418620.84,,P001,Y,INR
+09/12/2025,2002,Short-term Loans,Tax provision entry,270953.78,,P005,Y,USD
+03/08/2025,4002,Product Sales,Advance payment to supplier,,433513.56,P003,Y,USD
+10/02/2025,3001,Share Capital,Intercompany transfer,427042.94,,P004,Y,INR
+30/03/2025,1003,Inventory,Office rent payment,404326.13,,P001,Y,USD
+16/12/2025,3001,Share Capital,Office rent payment,498635.98,,P001,Y,INR
+14/02/2025,3001,Share Capital,Revenue recognition,,198978.82,P001,Y,USD
+25/12/2025,5001,Cost of Goods Sold,Petty cash reimbursement,,261519.72,P002,Y,USD
+17/03/2025,5001,Cost of Goods Sold,Petty cash reimbursement,291547.2,,P003,Y,INR
+02/10/2025,5006,Miscellaneous Expense,Vendor payment,,439007.83,P005,N,USD
+08/11/2025,4001,Revenue from Services,Payment received from client,,86513.76,P001,Y,USD
+22/07/2025,5006,Miscellaneous Expense,Intercompany transfer,166081.29,,P003,Y,USD
+10/07/2025,1001,Cash and Cash Equivalents,Vendor payment,,408784.27,P004,Y,INR
+23/12/2025,5002,Salaries and Wages,Invoice raised for services,486262.07,,P004,Y,INR
+14/06/2025,2001,Accounts Payable,Bank charges,208677.98,,P002,Y,USD
+28/07/2025,5003,Rent Expense,Depreciation entry,,379866.9,P001,Y,INR
+09/06/2025,5003,Rent Expense,Revenue recognition,201990.88,,P002,Y,INR
+30/01/2025,1010,Prepaid Expenses,Payment received from client,,228496.11,P003,Y,INR
+26/08/2025,4002,Product Sales,Loan repayment,317887.2,,P003,Y,INR
+08/09/2025,5001,Cost of Goods Sold,Depreciation entry,,89203.06,P002,Y,INR
+13/05/2025,5003,Rent Expense,Reversing entry,,344580.84,P001,Y,USD
+25/03/2025,5005,Depreciation,Petty cash reimbursement,390025.15,,P002,Y,INR
+18/05/2025,5002,Salaries and Wages,Loan repayment,256883.98,,P002,N,INR
+04/11/2025,5004,Utilities Expense,Payment received from client,,112273.13,P004,Y,USD
+28/06/2025,4001,Revenue from Services,Utility bill settlement,,109495.42,P001,N,INR
+19/09/2025,5002,Salaries and Wages,Reversing entry,,419769.52,P004,Y,INR
+02/02/2025,2002,Short-term Loans,Utility bill settlement,,320477.08,P002,Y,INR
+18/03/2025,4002,Product Sales,Tax provision entry,120530.89,,P002,N,INR
+14/01/2025,5002,Salaries and Wages,Depreciation entry,,498735.82,P004,N,USD
+19/01/2025,5001,Cost of Goods Sold,Bank charges,497379.49,,P005,Y,INR
+23/11/2025,5004,Utilities Expense,Depreciation entry,,453309.99,P005,Y,INR
+03/04/2025,2001,Accounts Payable,Invoice raised for services,,235655.05,P001,Y,INR
+24/04/2025,2002,Short-term Loans,Office rent payment,,372232.86,P003,N,INR
+14/05/2025,5001,Cost of Goods Sold,Utility bill settlement,232148.43,,P005,N,INR
+25/10/2025,5001,Cost of Goods Sold,Invoice raised for services,236373.73,,P005,Y,USD

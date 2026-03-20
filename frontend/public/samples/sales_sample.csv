@@ -1,0 +1,301 @@
+date,region,product,quantity,unit_price,revenue,salesperson,deal_stage
+02/06/2025,South,Training Workshop,2,5749.41,11498.82,Deepa Iyer,In Progress
+19/10/2025,South,Training Workshop,5,8900.5,44502.5,Priya Nair,In Progress
+20/06/2025,North,Custom Integration,6,8522.24,51133.44,Kavya Menon,Closed Lost
+18/04/2025,North,DataHub Team License,19,6186.08,117535.52,Rohit Verma,In Progress
+21/11/2025,West,Training Workshop,13,16395.98,213147.74,Ankit Sharma,Closed Won
+01/10/2025,Central,DataHub Team License,12,3557.65,42691.8,Sneha Kulkarni,Closed Won
+13/12/2025,East,DataHub Pro License,8,6438.93,51511.44,Vikram Mehta,Closed Won
+22/02/2025,North,Training Workshop,17,24030.58,408519.86,Ankit Sharma,Closed Lost
+29/05/2025,West,Training Workshop,17,25120.59,427050.03,Rohit Verma,Closed Lost
+08/09/2025,West,Implementation Services,7,6754.53,47281.71,Ankit Sharma,Closed Won
+25/04/2025,Central,Custom Integration,5,6489.21,32446.05,Rohit Verma,Closed Won
+07/07/2025,East,Custom Integration,2,16129.63,32259.26,Ankit Sharma,Closed Won
+05/12/2025,West,DataHub Pro License,1,3424.2,3424.2,Kavya Menon,In Progress
+05/03/2025,South,Annual Support Contract,9,15605.6,140450.4,Ankit Sharma,Closed Lost
+04/08/2025,Central,Custom Integration,4,50203.09,200812.36,Rohit Verma,In Progress
+23/02/2025,North,Annual Support Contract,20,3155.63,63112.6,Kavya Menon,Closed Won
+08/11/2025,East,DataHub Team License,9,27365.6,246290.4,Arjun Reddy,Closed Lost
+24/03/2025,West,DataHub Pro License,18,16231.07,292159.26,Deepa Iyer,Closed Won
+02/01/2025,West,DataHub Pro License,3,3520.19,10560.57,Rohit Verma,Closed Won
+19/09/2025,West,DataHub Pro License,4,8538.57,34154.28,Vikram Mehta,Closed Lost
+26/08/2025,East,DataHub Pro License,4,6662.86,26651.44,Deepa Iyer,Closed Lost
+07/08/2025,North,Custom Integration,4,3530.75,14123.0,Ankit Sharma,Closed Won
+06/12/2025,West,Custom Integration,6,8062.52,48375.12,Vikram Mehta,Closed Won
+10/07/2025,West,Implementation Services,6,3233.53,19401.18,Vikram Mehta,In Progress
+20/12/2025,South,Training Workshop,14,53861.24,754057.36,Priya Nair,Closed Won
+23/12/2025,Central,Custom Integration,2,5707.68,11415.36,Kavya Menon,In Progress
+03/04/2025,South,Annual Support Contract,13,8483.83,110289.79,Kavya Menon,In Progress
+27/02/2025,East,Training Workshop,15,3010.89,45163.35,Ankit Sharma,Closed Won
+09/12/2025,Central,Implementation Services,17,25941.21,441000.57,Priya Nair,In Progress
+05/12/2025,West,Custom Integration,8,14537.25,116298.0,Rohit Verma,Closed Won
+06/01/2025,West,Custom Integration,6,26744.23,160465.38,Rohit Verma,Closed Won
+09/09/2025,North,Implementation Services,8,9079.35,72634.8,Sneha Kulkarni,In Progress
+26/07/2025,Central,DataHub Team License,3,14832.57,44497.71,Kavya Menon,Closed Won
+13/09/2025,North,Training Workshop,11,3616.15,39777.65,Priya Nair,In Progress
+31/07/2025,North,DataHub Pro License,18,22500.85,405015.3,Vikram Mehta,Closed Won
+02/12/2025,North,Custom Integration,15,8072.18,121082.7,Sneha Kulkarni,In Progress
+19/06/2025,East,Annual Support Contract,20,24865.67,497313.4,Kavya Menon,Closed Won
+19/02/2025,East,Custom Integration,8,3194.33,25554.64,Deepa Iyer,Closed Won
+24/01/2025,West,DataHub Team License,16,6598.02,105568.32,Priya Nair,Closed Lost
+09/11/2025,West,DataHub Team License,7,3582.86,25080.02,Sneha Kulkarni,In Progress
+08/04/2025,North,Custom Integration,11,3468.67,38155.37,Priya Nair,In Progress
+23/08/2025,West,Custom Integration,19,23173.18,440290.42,Ankit Sharma,Closed Won
+11/10/2025,South,Training Workshop,19,16273.11,309189.09,Rohit Verma,Closed Won
+23/02/2025,Central,Training Workshop,20,26913.48,538269.6,Arjun Reddy,In Progress
+08/11/2025,East,Custom Integration,8,8129.48,65035.84,Vikram Mehta,In Progress
+10/03/2025,Central,DataHub Team License,14,26000.07,364000.98,Vikram Mehta,Closed Lost
+31/12/2025,South,Custom Integration,18,47173.43,849121.74,Vikram Mehta,Closed Lost
+11/12/2025,East,DataHub Team License,6,25212.46,151274.76,Priya Nair,Closed Lost
+15/10/2025,West,Training Workshop,19,27213.37,517054.03,Vikram Mehta,In Progress
+07/01/2025,North,Annual Support Contract,4,3220.4,12881.6,Ankit Sharma,Closed Won
+17/05/2025,North,DataHub Team License,10,47505.61,475056.1,Vikram Mehta,Closed Won
+05/10/2025,Central,DataHub Pro License,12,13807.44,165689.28,Sneha Kulkarni,In Progress
+02/05/2025,West,Annual Support Contract,10,51644.94,516449.4,Arjun Reddy,In Progress
+17/12/2025,East,Implementation Services,18,2977.65,53597.7,Sneha Kulkarni,In Progress
+26/04/2025,Central,Custom Integration,12,25233.08,302796.96,Sneha Kulkarni,Closed Won
+31/05/2025,South,Training Workshop,6,45744.69,274468.14,Priya Nair,In Progress
+21/01/2025,South,Training Workshop,9,23821.2,214390.8,Vikram Mehta,Closed Won
+19/06/2025,East,Training Workshop,5,3070.51,15352.55,Ankit Sharma,Closed Lost
+09/09/2025,East,Annual Support Contract,18,7590.07,136621.26,Sneha Kulkarni,Closed Won
+24/09/2025,Central,DataHub Pro License,17,6094.77,103611.09,Arjun Reddy,Closed Won
+28/06/2025,East,DataHub Team License,7,48318.84,338231.88,Vikram Mehta,Closed Won
+13/11/2025,North,Annual Support Contract,16,26618.44,425895.04,Priya Nair,Closed Lost
+17/08/2025,North,DataHub Team License,20,23719.14,474382.8,Deepa Iyer,In Progress
+28/02/2025,North,Training Workshop,9,26119.88,235078.92,Deepa Iyer,In Progress
+07/09/2025,Central,DataHub Pro License,10,46925.12,469251.2,Priya Nair,Closed Won
+27/03/2025,South,Annual Support Contract,18,3382.75,60889.5,Sneha Kulkarni,In Progress
+23/02/2025,West,DataHub Team License,18,53786.37,968154.66,Priya Nair,Closed Won
+13/01/2025,North,Training Workshop,11,3026.85,33295.35,Rohit Verma,Closed Lost
+13/10/2025,West,DataHub Pro License,19,6708.54,127462.26,Arjun Reddy,In Progress
+19/11/2025,North,Training Workshop,14,7497.14,104959.96,Ankit Sharma,Closed Won
+27/10/2025,North,DataHub Pro License,3,9009.47,27028.41,Vikram Mehta,Closed Lost
+07/11/2025,North,DataHub Pro License,10,14644.24,146442.4,Kavya Menon,Closed Won
+01/10/2025,Central,DataHub Team License,5,48909.93,244549.65,Vikram Mehta,Closed Won
+02/06/2025,Central,Custom Integration,12,3334.32,40011.84,Rohit Verma,Closed Won
+22/01/2025,Central,DataHub Pro License,19,24470.41,464937.79,Priya Nair,Closed Lost
+18/04/2025,Central,Custom Integration,12,6090.71,73088.52,Rohit Verma,Closed Won
+05/04/2025,South,DataHub Team License,20,7791.64,155832.8,Ankit Sharma,In Progress
+27/11/2025,East,Annual Support Contract,3,8583.96,25751.88,Priya Nair,Closed Won
+25/10/2025,South,Training Workshop,11,7681.91,84501.01,Priya Nair,Closed Lost
+14/11/2025,East,DataHub Pro License,7,8275.53,57928.71,Vikram Mehta,Closed Won
+17/10/2025,South,Annual Support Contract,12,9060.28,108723.36,Ankit Sharma,Closed Lost
+07/05/2025,South,DataHub Team License,14,8863.51,124089.14,Deepa Iyer,In Progress
+25/08/2025,North,Training Workshop,12,8277.38,99328.56,Rohit Verma,Closed Won
+24/05/2025,North,DataHub Team License,18,5905.46,106298.28,Priya Nair,Closed Won
+17/09/2025,Central,Custom Integration,1,25394.5,25394.5,Sneha Kulkarni,Closed Won
+10/10/2025,South,Implementation Services,18,24860.52,447489.36,Deepa Iyer,In Progress
+25/04/2025,Central,Annual Support Contract,10,6155.24,61552.4,Priya Nair,In Progress
+06/07/2025,Central,Annual Support Contract,1,47388.81,47388.81,Rohit Verma,Closed Won
+17/08/2025,South,DataHub Team License,6,27243.56,163461.36,Kavya Menon,Closed Lost
+21/01/2025,East,DataHub Team License,16,5657.04,90512.64,Sneha Kulkarni,Closed Won
+09/12/2025,West,DataHub Team License,17,8113.26,137925.42,Ankit Sharma,Closed Won
+29/11/2025,East,Implementation Services,4,54684.41,218737.64,Vikram Mehta,Closed Won
+12/07/2025,North,Custom Integration,13,8444.53,109778.89,Vikram Mehta,In Progress
+25/04/2025,East,Annual Support Contract,13,8825.55,114732.15,Kavya Menon,In Progress
+06/11/2025,South,DataHub Pro License,17,6124.49,104116.33,Priya Nair,Closed Lost
+19/04/2025,North,DataHub Team License,6,6028.18,36169.08,Sneha Kulkarni,In Progress
+19/06/2025,West,Custom Integration,4,15525.69,62102.76,Sneha Kulkarni,Closed Won
+28/11/2025,Central,Training Workshop,1,5632.59,5632.59,Rohit Verma,Closed Won
+19/11/2025,South,Annual Support Contract,2,23234.33,46468.66,Vikram Mehta,Closed Won
+22/09/2025,East,Training Workshop,20,25688.11,513762.2,Priya Nair,Closed Won
+18/08/2025,West,Annual Support Contract,16,14011.7,224187.2,Rohit Verma,Closed Won
+16/11/2025,East,Custom Integration,17,7747.48,131707.16,Kavya Menon,Closed Won
+28/04/2025,South,Training Workshop,13,5713.71,74278.23,Arjun Reddy,Closed Won
+07/11/2025,Central,DataHub Pro License,6,16204.82,97228.92,Ankit Sharma,Closed Won
+17/02/2025,North,Training Workshop,5,25196.43,125982.15,Arjun Reddy,In Progress
+09/07/2025,West,DataHub Pro License,17,14188.46,241203.82,Arjun Reddy,Closed Lost
+29/10/2025,East,Custom Integration,19,3249.84,61746.96,Kavya Menon,Closed Won
+12/02/2025,South,Implementation Services,20,24543.23,490864.6,Ankit Sharma,Closed Won
+23/10/2025,South,Annual Support Contract,4,22535.97,90143.88,Deepa Iyer,In Progress
+05/07/2025,East,DataHub Pro License,5,15454.73,77273.65,Vikram Mehta,In Progress
+17/10/2025,West,Implementation Services,20,9115.29,182305.8,Sneha Kulkarni,In Progress
+10/10/2025,Central,Annual Support Contract,16,6038.09,96609.44,Kavya Menon,Closed Lost
+07/06/2025,South,Annual Support Contract,12,48981.3,587775.6,Priya Nair,Closed Won
+17/08/2025,West,Custom Integration,6,3110.6,18663.6,Deepa Iyer,Closed Won
+24/03/2025,West,Training Workshop,1,3512.28,3512.28,Arjun Reddy,Closed Won
+02/02/2025,North,Implementation Services,8,7601.95,60815.6,Arjun Reddy,In Progress
+11/11/2025,Central,Custom Integration,17,8650.22,147053.74,Ankit Sharma,Closed Won
+24/11/2025,Central,Training Workshop,15,3102.19,46532.85,Vikram Mehta,Closed Won
+18/01/2025,Central,Annual Support Contract,17,25992.25,441868.25,Rohit Verma,Closed Won
+04/07/2025,East,DataHub Team License,1,5686.77,5686.77,Arjun Reddy,Closed Lost
+09/12/2025,North,Training Workshop,13,23501.55,305520.15,Priya Nair,Closed Won
+09/10/2025,East,Implementation Services,18,24240.48,436328.64,Sneha Kulkarni,Closed Won
+21/08/2025,West,Training Workshop,19,3141.38,59686.22,Priya Nair,Closed Won
+15/09/2025,East,Implementation Services,11,3498.88,38487.68,Vikram Mehta,In Progress
+13/07/2025,West,Annual Support Contract,16,6518.22,104291.52,Kavya Menon,Closed Won
+04/09/2025,South,DataHub Pro License,9,3221.59,28994.31,Sneha Kulkarni,Closed Lost
+31/07/2025,East,Implementation Services,17,22548.62,383326.54,Sneha Kulkarni,Closed Lost
+17/02/2025,South,Training Workshop,11,3334.99,36684.89,Kavya Menon,Closed Lost
+01/07/2025,South,DataHub Team License,19,7772.49,147677.31,Kavya Menon,Closed Won
+01/05/2025,South,Custom Integration,8,7812.31,62498.48,Sneha Kulkarni,Closed Lost
+21/03/2025,West,DataHub Pro License,4,3415.0,13660.0,Ankit Sharma,Closed Won
+04/09/2025,Central,Implementation Services,20,8286.29,165725.8,Vikram Mehta,In Progress
+04/04/2025,Central,Annual Support Contract,9,14166.28,127496.52,Rohit Verma,Closed Won
+27/09/2025,East,Training Workshop,16,22662.81,362604.96,Arjun Reddy,Closed Won
+23/08/2025,North,DataHub Pro License,17,14446.95,245598.15,Ankit Sharma,Closed Won
+14/07/2025,East,Annual Support Contract,4,8069.29,32277.16,Rohit Verma,Closed Lost
+02/05/2025,South,Implementation Services,16,24215.48,387447.68,Kavya Menon,In Progress
+18/04/2025,East,Training Workshop,12,8887.11,106645.32,Kavya Menon,Closed Won
+20/10/2025,North,DataHub Team License,19,47285.67,898427.73,Vikram Mehta,Closed Won
+12/10/2025,South,Training Workshop,13,5759.92,74878.96,Kavya Menon,Closed Won
+01/04/2025,Central,Training Workshop,16,6813.4,109014.4,Deepa Iyer,In Progress
+03/06/2025,North,Implementation Services,18,22738.55,409293.9,Rohit Verma,Closed Won
+21/04/2025,East,Implementation Services,16,45963.02,735408.32,Vikram Mehta,Closed Lost
+04/07/2025,West,Annual Support Contract,18,8040.3,144725.4,Priya Nair,Closed Lost
+14/12/2025,Central,Annual Support Contract,7,25379.47,177656.29,Rohit Verma,Closed Lost
+01/07/2025,West,Implementation Services,17,15824.23,269011.91,Priya Nair,In Progress
+11/11/2025,South,Implementation Services,15,54565.94,818489.1,Deepa Iyer,In Progress
+20/11/2025,North,Annual Support Contract,19,16046.7,304887.3,Priya Nair,Closed Won
+25/06/2025,East,DataHub Team License,11,8552.97,94082.67,Arjun Reddy,Closed Lost
+16/08/2025,West,Implementation Services,19,27327.63,519224.97,Rohit Verma,Closed Won
+12/01/2025,North,DataHub Team License,8,47516.47,380131.76,Sneha Kulkarni,Closed Won
+23/07/2025,West,DataHub Pro License,4,3587.2,14348.8,Ankit Sharma,Closed Won
+23/07/2025,South,Annual Support Contract,3,3142.27,9426.81,Priya Nair,In Progress
+08/06/2025,South,DataHub Team License,8,47841.75,382734.0,Rohit Verma,Closed Won
+15/01/2025,West,DataHub Pro License,12,8903.57,106842.84,Vikram Mehta,In Progress
+11/03/2025,West,Custom Integration,18,6311.61,113608.98,Arjun Reddy,Closed Lost
+27/06/2025,West,Training Workshop,18,6576.78,118382.04,Vikram Mehta,Closed Lost
+31/07/2025,Central,Implementation Services,5,7486.62,37433.1,Rohit Verma,Closed Lost
+27/05/2025,West,Training Workshop,18,3422.89,61612.02,Kavya Menon,Closed Lost
+05/01/2025,North,Training Workshop,10,23656.08,236560.8,Deepa Iyer,Closed Won
+30/07/2025,West,Annual Support Contract,14,14249.69,199495.66,Arjun Reddy,Closed Won
+15/05/2025,Central,DataHub Pro License,14,47395.62,663538.68,Vikram Mehta,Closed Lost
+29/11/2025,North,Custom Integration,18,8154.44,146779.92,Rohit Verma,Closed Won
+29/05/2025,Central,DataHub Pro License,15,24763.84,371457.6,Kavya Menon,Closed Won
+14/06/2025,North,DataHub Pro License,5,3608.92,18044.6,Rohit Verma,Closed Won
+25/05/2025,North,Implementation Services,5,49384.17,246920.85,Sneha Kulkarni,Closed Won
+19/03/2025,East,DataHub Pro License,16,6003.0,96048.0,Kavya Menon,Closed Lost
+26/08/2025,South,Custom Integration,2,7602.25,15204.5,Ankit Sharma,Closed Lost
+20/07/2025,East,DataHub Pro License,18,14044.81,252806.58,Arjun Reddy,Closed Won
+04/03/2025,West,Custom Integration,8,15813.68,126509.44,Sneha Kulkarni,Closed Won
+12/04/2025,South,Training Workshop,4,25830.04,103320.16,Kavya Menon,In Progress
+15/12/2025,North,Implementation Services,11,6359.14,69950.54,Priya Nair,Closed Lost
+04/09/2025,North,Custom Integration,10,6025.96,60259.6,Sneha Kulkarni,Closed Won
+01/05/2025,East,Custom Integration,14,7494.11,104917.54,Priya Nair,In Progress
+05/05/2025,West,DataHub Pro License,2,26417.38,52834.76,Rohit Verma,Closed Lost
+15/02/2025,Central,DataHub Team License,6,13774.2,82645.2,Deepa Iyer,Closed Won
+31/01/2025,North,Implementation Services,5,50363.53,251817.65,Rohit Verma,In Progress
+30/04/2025,West,Implementation Services,18,52566.98,946205.64,Sneha Kulkarni,Closed Won
+19/12/2025,North,Training Workshop,12,46347.32,556167.84,Kavya Menon,In Progress
+14/10/2025,Central,Implementation Services,18,49900.92,898216.56,Rohit Verma,Closed Lost
+15/06/2025,Central,Custom Integration,15,8909.25,133638.75,Rohit Verma,Closed Won
+29/09/2025,Central,DataHub Team License,15,8829.17,132437.55,Deepa Iyer,In Progress
+01/01/2025,North,Custom Integration,17,15700.97,266916.49,Deepa Iyer,Closed Won
+14/06/2025,West,Custom Integration,3,54671.63,164014.89,Sneha Kulkarni,In Progress
+10/10/2025,East,DataHub Team License,20,8004.55,160091.0,Priya Nair,Closed Won
+25/09/2025,South,Custom Integration,3,3520.16,10560.48,Rohit Verma,Closed Won
+14/04/2025,Central,DataHub Pro License,16,5701.53,91224.48,Arjun Reddy,In Progress
+27/09/2025,South,Annual Support Contract,19,7550.57,143460.83,Priya Nair,Closed Won
+17/04/2025,North,Custom Integration,16,3277.93,52446.88,Deepa Iyer,In Progress
+08/07/2025,North,Custom Integration,2,23829.08,47658.16,Priya Nair,Closed Lost
+09/02/2025,South,DataHub Team License,17,3035.89,51610.13,Arjun Reddy,Closed Won
+09/04/2025,South,Annual Support Contract,8,25626.63,205013.04,Arjun Reddy,Closed Won
+23/11/2025,West,Annual Support Contract,12,49587.21,595046.52,Priya Nair,Closed Won
+03/04/2025,South,Annual Support Contract,13,24187.56,314438.28,Kavya Menon,Closed Lost
+11/06/2025,West,Annual Support Contract,11,8153.51,89688.61,Deepa Iyer,Closed Won
+16/10/2025,East,Annual Support Contract,7,15797.12,110579.84,Deepa Iyer,In Progress
+18/08/2025,East,Training Workshop,1,45346.63,45346.63,Ankit Sharma,Closed Won
+04/06/2025,East,DataHub Pro License,10,5845.44,58454.4,Ankit Sharma,Closed Lost
+11/10/2025,South,Annual Support Contract,18,27129.61,488332.98,Priya Nair,Closed Won
+24/08/2025,Central,Implementation Services,5,5907.63,29538.15,Sneha Kulkarni,Closed Won
+12/05/2025,South,Implementation Services,3,24498.99,73496.97,Priya Nair,Closed Lost
+05/09/2025,North,DataHub Team License,16,52028.48,832455.68,Vikram Mehta,Closed Won
+23/10/2025,East,Training Workshop,3,3577.35,10732.05,Deepa Iyer,In Progress
+02/08/2025,Central,DataHub Pro License,8,51527.79,412222.32,Ankit Sharma,In Progress
+28/01/2025,Central,Implementation Services,17,3179.79,54056.43,Rohit Verma,Closed Lost
+15/09/2025,West,Custom Integration,8,5641.73,45133.84,Kavya Menon,Closed Won
+24/04/2025,East,Training Workshop,10,13944.04,139440.4,Priya Nair,In Progress
+20/10/2025,North,Custom Integration,2,24495.96,48991.92,Arjun Reddy,In Progress
+24/12/2025,West,DataHub Team License,5,15177.89,75889.45,Arjun Reddy,Closed Won
+15/10/2025,East,Annual Support Contract,17,5879.52,99951.84,Arjun Reddy,Closed Lost
+17/12/2025,West,Annual Support Contract,3,3412.32,10236.96,Deepa Iyer,Closed Lost
+08/04/2025,East,Implementation Services,12,25777.05,309324.6,Rohit Verma,Closed Lost
+12/11/2025,South,Training Workshop,20,6125.19,122503.8,Sneha Kulkarni,Closed Lost
+21/03/2025,South,Custom Integration,3,3457.08,10371.24,Rohit Verma,Closed Lost
+08/01/2025,North,Implementation Services,4,8216.11,32864.44,Deepa Iyer,Closed Won
+03/10/2025,East,DataHub Team License,7,25116.33,175814.31,Kavya Menon,Closed Won
+22/12/2025,Central,Custom Integration,1,15249.01,15249.01,Ankit Sharma,Closed Lost
+29/03/2025,Central,DataHub Pro License,10,6557.54,65575.4,Vikram Mehta,Closed Won
+27/08/2025,East,Custom Integration,1,3225.53,3225.53,Deepa Iyer,Closed Won
+10/01/2025,Central,Implementation Services,13,6793.85,88320.05,Priya Nair,Closed Lost
+06/09/2025,Central,Annual Support Contract,18,3092.1,55657.8,Kavya Menon,Closed Won
+21/01/2025,West,DataHub Team License,17,8022.76,136386.92,Rohit Verma,Closed Won
+27/06/2025,South,Custom Integration,12,8506.86,102082.32,Vikram Mehta,Closed Won
+17/11/2025,East,Implementation Services,13,3592.04,46696.52,Sneha Kulkarni,Closed Won
+24/06/2025,Central,Training Workshop,5,3450.68,17253.4,Sneha Kulkarni,In Progress
+04/05/2025,Central,Annual Support Contract,5,16411.61,82058.05,Deepa Iyer,In Progress
+05/10/2025,Central,DataHub Team License,7,46385.77,324700.39,Sneha Kulkarni,Closed Won
+08/06/2025,South,Custom Integration,17,6112.29,103908.93,Rohit Verma,Closed Lost
+04/02/2025,East,Annual Support Contract,18,46183.87,831309.66,Rohit Verma,Closed Won
+13/06/2025,East,Training Workshop,14,8204.4,114861.6,Rohit Verma,Closed Won
+24/02/2025,Central,DataHub Team License,6,3472.16,20832.96,Vikram Mehta,Closed Won
+02/11/2025,North,DataHub Team License,8,45260.84,362086.72,Kavya Menon,Closed Won
+15/09/2025,South,Annual Support Contract,16,51495.69,823931.04,Arjun Reddy,In Progress
+31/08/2025,West,DataHub Team License,6,5859.63,35157.78,Ankit Sharma,Closed Lost
+31/07/2025,West,DataHub Team License,7,5661.1,39627.7,Kavya Menon,Closed Lost
+23/08/2025,Central,DataHub Team License,14,15828.64,221600.96,Arjun Reddy,Closed Lost
+21/07/2025,North,Annual Support Contract,19,25180.8,478435.2,Priya Nair,In Progress
+22/08/2025,North,DataHub Pro License,8,25189.35,201514.8,Arjun Reddy,Closed Won
+08/04/2025,East,Implementation Services,15,16153.19,242297.85,Kavya Menon,Closed Won
+05/08/2025,South,Implementation Services,20,3424.33,68486.6,Kavya Menon,In Progress
+16/02/2025,Central,Custom Integration,17,3087.71,52491.07,Rohit Verma,In Progress
+31/07/2025,Central,Implementation Services,15,3087.12,46306.8,Sneha Kulkarni,In Progress
+16/02/2025,South,Implementation Services,11,51485.76,566343.36,Priya Nair,Closed Won
+28/02/2025,Central,Custom Integration,15,48629.43,729441.45,Arjun Reddy,Closed Won
+13/07/2025,East,Annual Support Contract,13,3476.0,45188.0,Rohit Verma,Closed Won
+16/03/2025,West,DataHub Team License,2,14424.19,28848.38,Vikram Mehta,Closed Won
+02/03/2025,East,DataHub Team License,7,3379.87,23659.09,Ankit Sharma,In Progress
+12/09/2025,West,Training Workshop,18,3370.25,60664.5,Sneha Kulkarni,Closed Won
+29/10/2025,North,Custom Integration,16,14730.45,235687.2,Ankit Sharma,Closed Won
+08/10/2025,South,Implementation Services,20,50575.49,1011509.8,Ankit Sharma,Closed Won
+17/03/2025,North,DataHub Pro License,12,3065.02,36780.24,Vikram Mehta,Closed Lost
+14/02/2025,South,DataHub Pro License,4,16481.21,65924.84,Vikram Mehta,Closed Won
+22/08/2025,North,Custom Integration,19,9015.17,171288.23,Vikram Mehta,Closed Lost
+08/07/2025,North,Training Workshop,3,16029.93,48089.79,Vikram Mehta,In Progress
+10/03/2025,Central,DataHub Pro License,9,8343.9,75095.1,Sneha Kulkarni,Closed Won
+10/11/2025,Central,DataHub Pro License,4,26148.64,104594.56,Priya Nair,In Progress
+19/12/2025,East,Annual Support Contract,10,15326.53,153265.3,Vikram Mehta,Closed Lost
+08/03/2025,West,Annual Support Contract,19,15059.12,286123.28,Kavya Menon,Closed Won
+09/11/2025,North,DataHub Team License,10,5581.06,55810.6,Kavya Menon,Closed Won
+17/04/2025,East,Annual Support Contract,14,13636.48,190910.72,Sneha Kulkarni,Closed Won
+24/11/2025,East,DataHub Team License,10,8780.67,87806.7,Vikram Mehta,Closed Lost
+04/01/2025,Central,DataHub Pro License,11,8126.46,89391.06,Ankit Sharma,Closed Won
+10/04/2025,West,Implementation Services,11,49791.08,547701.88,Ankit Sharma,Closed Won
+04/09/2025,West,DataHub Team License,15,26979.64,404694.6,Arjun Reddy,Closed Won
+24/09/2025,Central,Implementation Services,19,51781.98,983857.62,Ankit Sharma,Closed Won
+23/10/2025,South,Custom Integration,11,7579.0,83369.0,Vikram Mehta,Closed Won
+23/06/2025,West,Training Workshop,18,6287.0,113166.0,Rohit Verma,Closed Won
+07/06/2025,West,Custom Integration,11,45316.28,498479.08,Priya Nair,In Progress
+02/05/2025,East,Implementation Services,15,7827.85,117417.75,Rohit Verma,Closed Won
+11/07/2025,North,DataHub Pro License,7,3261.9,22833.3,Kavya Menon,Closed Won
+08/04/2025,East,Implementation Services,16,53738.79,859820.64,Deepa Iyer,Closed Won
+20/02/2025,West,Annual Support Contract,5,6477.42,32387.1,Arjun Reddy,Closed Won
+03/01/2025,North,Implementation Services,2,53481.24,106962.48,Deepa Iyer,In Progress
+24/01/2025,North,DataHub Pro License,17,52455.55,891744.35,Vikram Mehta,Closed Won
+14/06/2025,East,DataHub Team License,7,7928.28,55497.96,Kavya Menon,Closed Won
+20/05/2025,Central,DataHub Team License,6,7659.08,45954.48,Priya Nair,Closed Won
+05/10/2025,East,Implementation Services,18,7918.99,142541.82,Sneha Kulkarni,Closed Won
+06/02/2025,North,Implementation Services,20,8366.35,167327.0,Rohit Verma,Closed Won
+30/08/2025,North,Custom Integration,2,3222.2,6444.4,Arjun Reddy,In Progress
+02/04/2025,West,Custom Integration,20,25647.35,512947.0,Deepa Iyer,Closed Lost
+20/06/2025,West,DataHub Team License,18,3611.54,65007.72,Rohit Verma,Closed Won
+24/12/2025,West,Training Workshop,4,14431.18,57724.72,Kavya Menon,Closed Won
+25/04/2025,West,DataHub Team License,20,8984.27,179685.4,Rohit Verma,Closed Lost
+16/06/2025,North,Training Workshop,16,3012.23,48195.68,Deepa Iyer,In Progress
+25/08/2025,South,DataHub Team License,10,8472.35,84723.5,Priya Nair,In Progress
+24/02/2025,East,Implementation Services,18,45709.24,822766.32,Kavya Menon,In Progress
+30/10/2025,South,Training Workshop,8,23718.46,189747.68,Kavya Menon,In Progress
+03/02/2025,West,Implementation Services,7,50909.7,356367.9,Deepa Iyer,Closed Won
+30/03/2025,Central,Custom Integration,3,54308.63,162925.89,Kavya Menon,Closed Won
+31/10/2025,West,Annual Support Contract,15,8390.43,125856.45,Rohit Verma,Closed Lost
+27/07/2025,Central,DataHub Pro License,20,3421.4,68428.0,Arjun Reddy,Closed Lost
+11/09/2025,South,Custom Integration,2,3112.68,6225.36,Ankit Sharma,Closed Won
+05/12/2025,Central,DataHub Team License,15,23957.52,359362.8,Kavya Menon,Closed Won
+16/04/2025,East,Custom Integration,11,8415.64,92572.04,Arjun Reddy,Closed Lost
+15/02/2025,West,Annual Support Contract,1,27432.11,27432.11,Rohit Verma,Closed Lost
+01/02/2025,Central,Implementation Services,18,2969.66,53453.88,Deepa Iyer,Closed Won
+25/05/2025,West,DataHub Pro License,8,15606.67,124853.36,Deepa Iyer,In Progress
+27/07/2025,South,Training Workshop,14,23556.08,329785.12,Kavya Menon,Closed Won
+07/04/2025,South,Annual Support Contract,13,8863.27,115222.51,Vikram Mehta,Closed Won
+10/03/2025,West,DataHub Pro License,3,45157.08,135471.24,Arjun Reddy,Closed Won

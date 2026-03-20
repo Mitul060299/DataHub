@@ -28,6 +28,7 @@ import pyarrow.parquet as pq
 
 from ..config import settings
 from ..db import SessionLocal
+from .analytics import track
 from ..models_db import (
     DashboardTileDB,
     DashboardV2DB,
@@ -421,6 +422,7 @@ async def run_pipeline(
                 },
             )
 
+        track(str(user_id), "pipeline_run_completed", {"pipeline_id": pipeline_id, "run_id": run_id, "steps_total": len(steps), "snapshots_created": len(snapshot_records)})
         return run_id
 
     except Exception as top_exc:
@@ -434,6 +436,7 @@ async def run_pipeline(
                 db.commit()
         except Exception:
             pass
+        track(str(user_id), "pipeline_run_failed", {"pipeline_id": pipeline_id, "run_id": run_id, "error": str(top_exc)[:200]})
         return run_id
     finally:
         db.close()

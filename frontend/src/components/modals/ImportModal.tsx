@@ -1,5 +1,7 @@
 import { useState, useRef } from "react";
 import { api } from "../../api";
+import { capture } from "../../lib/posthog";
+import { useUser } from "../../contexts/UserContext";
 
 interface ImportModalProps {
   open: boolean;
@@ -19,6 +21,7 @@ const sourceCards: Array<{ key: SourceType; label: string; description: string }
 
 export function ImportModal({ open, workspaceId, onClose, onImported }: ImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const { markFirstUpload } = useUser();
   const [isUploading, setIsUploading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -88,6 +91,8 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
         },
         timeout: 300000,
       });
+      capture("file_uploaded", { type: selectedFile.type, size: selectedFile.size, workspace_id: workspaceId });
+      markFirstUpload();
       onImported();
       onClose();
     } catch (error: unknown) {

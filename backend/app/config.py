@@ -73,6 +73,7 @@ class Settings(BaseModel):
     razorpay_key_id: str = os.getenv("RAZORPAY_KEY_ID", "")
     razorpay_key_secret: str = os.getenv("RAZORPAY_KEY_SECRET", "")
     razorpay_webhook_secret: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+    posthog_api_key: str = os.getenv("POSTHOG_API_KEY", "")
     dataset_cache_max: int = int(os.getenv("DATASET_CACHE_MAX", "20"))
     dataset_cache_ttl_seconds: int = int(os.getenv("DATASET_CACHE_TTL", "1800"))
     profile_cache_ttl_seconds: int = int(os.getenv("PROFILE_CACHE_TTL", "300"))

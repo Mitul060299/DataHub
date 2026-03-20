@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { clearAuthToken, setAuthToken } from "../utils/auth";
+import { identify, reset } from "../lib/posthog";
 
 type AuthContextValue = {
   session: Session | null;
@@ -51,8 +52,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(nextSession);
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
+        if (nextSession.user) {
+          identify(nextSession.user.id, { email: nextSession.user.email });
+        }
       } else {
         clearAuthToken();
+        reset();
       }
       setLoading(false);
     });

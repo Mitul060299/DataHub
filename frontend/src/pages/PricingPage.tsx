@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../contexts/UserContext";
 import { billingEnabled } from "../utils/featureFlags";
+import { capture } from "../lib/posthog";
 
 type PlanKey = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
 
@@ -15,25 +16,25 @@ type PlanCard = {
 const planCards: PlanCard[] = [
   {
     key: "Free",
-    price: "$0",
+    price: "₹0",
     description: "Students, evaluation, and hobby workflows",
     highlights: ["100 MB storage", "50 AI messages/month", "CSV + Excel only", "No DB connectors"],
   },
   {
     key: "Professional",
-    price: "$79 / user / month",
+    price: "₹3,299 / user / month",
     description: "Solo consultants and analysts",
     highlights: ["10 GB storage", "500 AI messages/month", "PostgreSQL/MySQL/MongoDB/MSSQL", "JSON + Parquet support"],
   },
   {
     key: "Team",
-    price: "$149 / user / month",
+    price: "₹6,199 / user / month",
     description: "Small analytics and consulting teams",
     highlights: ["100 GB shared storage", "Unlimited workspaces", "Snowflake/BigQuery/Redshift", "Team collaboration + RBAC"],
   },
   {
     key: "Business",
-    price: "$249 / user / month",
+    price: "₹8,299 / user / month",
     description: "Governance-first mid-size enterprises",
     highlights: ["500 GB–1 TB shared storage", "SSO/SAML", "Advanced audit + lineage", "Webhooks + enterprise controls"],
   },
@@ -54,6 +55,7 @@ export function PricingPage() {
 
   const upgrade = async (target: PlanKey) => {
     setMessage(null);
+    capture("upgrade_clicked", { target_plan: target, current_plan: plan });
     if (target === "Enterprise") {
       setMessage("Enterprise onboarding is sales-assisted. Contact sales@datahub.org.in.");
       return;

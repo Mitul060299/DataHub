@@ -1,0 +1,201 @@
+employee_id,name,department,join_date,salary,manager_id,status,city
+EMP1000,Arjun Gupta,Marketing,11/02/2023,3811000,M004,On Leave,Bengaluru
+EMP1001,Rahul Singh,Marketing,11/03/2024,3546000,M003,Active,Bengaluru
+EMP1002,Priya Agarwal,Customer Success,27/08/2020,2401000,M004,On Leave,Pune
+EMP1003,Ananya Bhat,Customer Success,18/02/2022,410000,M001,Active,Chennai
+EMP1004,Rahul Singh,Product,14/11/2023,1578000,M004,Resigned,Delhi
+EMP1005,Usha Verma,Operations,16/11/2024,448000,M005,Active,Ahmedabad
+EMP1006,Rahul Singh,Customer Success,08/06/2024,2279000,M003,Active,Chennai
+EMP1007,Gaurav Bhat,Operations,27/04/2024,695000,M004,On Leave,Bengaluru
+EMP1008,Sneha Bhat,Operations,22/04/2018,796000,M002,On Leave,Delhi
+EMP1009,Meera Kumar,Finance,27/11/2024,746000,M003,Active,Delhi
+EMP1010,Sonia Iyer,Finance,04/01/2023,874000,M003,Resigned,Hyderabad
+EMP1011,Rajesh Iyer,Engineering,05/11/2021,456000,M005,Active,Ahmedabad
+EMP1012,Priya Patel,Sales,08/12/2022,2499000,M002,On Leave,Pune
+EMP1013,Ananya Kumar,Product,04/08/2018,594000,M004,Active,Ahmedabad
+EMP1014,Vivek Verma,Sales,05/04/2022,2548000,M004,Active,Bengaluru
+EMP1015,Riya Rao,Engineering,28/03/2021,3545000,M003,On Leave,Mumbai
+EMP1016,Deepa Verma,HR,04/11/2022,2026000,M003,Active,Chennai
+EMP1017,Meera Desai,Operations,20/07/2024,1186000,M002,Resigned,Hyderabad
+EMP1018,Riya Mishra,Finance,07/07/2021,1536000,M001,Active,Mumbai
+EMP1019,Priya Desai,Product,01/01/2023,733000,M003,Active,Hyderabad
+EMP1020,Ananya Agarwal,Product,21/08/2018,1885000,M002,On Leave,Delhi
+EMP1021,Vikram Desai,Product,12/10/2024,578000,M005,Active,Delhi
+EMP1022,Vikram Iyer,Operations,21/04/2021,1258000,M001,Resigned,Ahmedabad
+EMP1023,Meera Rao,HR,20/11/2020,651000,M003,Active,Kolkata
+EMP1024,Pooja Mishra,Engineering,23/11/2020,3346000,M004,Active,Ahmedabad
+EMP1025,Kavya Patel,Finance,09/07/2023,357000,M004,Active,Delhi
+EMP1026,Rahul Kumar,Product,23/05/2018,348000,M003,Active,Mumbai
+EMP1027,Rajesh Gupta,Engineering,04/06/2018,2321000,M002,Resigned,Pune
+EMP1028,Pooja Agarwal,Customer Success,13/05/2023,1165000,M001,On Leave,Hyderabad
+EMP1029,Aarav Patel,Customer Success,12/05/2019,1819000,M003,Active,Chennai
+EMP1030,Pooja Bhat,Product,05/02/2022,1991000,M003,Active,Ahmedabad
+EMP1031,Mohit Joshi,Finance,21/03/2024,456000,M002,Active,Kolkata
+EMP1032,Deepa Nair,Customer Success,14/12/2018,2355000,M002,Active,Mumbai
+EMP1033,Kavya Agarwal,Sales,27/06/2023,1043000,M005,Resigned,Chennai
+EMP1034,Rajesh Verma,Customer Success,09/03/2018,381000,M003,Resigned,Mumbai
+EMP1035,Pooja Desai,Sales,13/11/2023,1358000,M005,Active,Hyderabad
+EMP1036,Arjun Bhat,Finance,26/06/2023,2054000,M005,Active,Hyderabad
+EMP1037,Vikram Gupta,Engineering,07/12/2019,2076000,M003,Active,Ahmedabad
+EMP1038,Sonia Iyer,Product,12/03/2019,400000,M005,Active,Delhi
+EMP1039,Kavya Rao,HR,05/07/2022,709000,M005,On Leave,Bengaluru
+EMP1040,Neha Joshi,Engineering,26/08/2024,570000,M001,Active,Bengaluru
+EMP1041,Priya Iyer,HR,16/03/2024,589000,M005,Active,Bengaluru
+EMP1042,Deepa Patel,Finance,06/03/2018,1049000,M001,Active,Delhi
+EMP1043,Vikram Mehta,Marketing,04/05/2023,2131000,M002,Resigned,Chennai
+EMP1044,Riya Reddy,Marketing,06/09/2020,620000,M001,On Leave,Bengaluru
+EMP1045,Vikram Sharma,Product,18/05/2021,781000,M005,Active,Hyderabad
+EMP1046,Deepa Singh,Product,10/12/2024,887000,M005,On Leave,Hyderabad
+EMP1047,Rahul Joshi,Operations,06/08/2018,530000,M002,Resigned,Ahmedabad
+EMP1048,Rajesh Iyer,Finance,26/06/2018,417000,M003,Active,Kolkata
+EMP1049,Meera Mishra,Customer Success,27/06/2018,429000,M005,Active,Bengaluru
+EMP1050,Aarav Sharma,Product,18/10/2018,640000,M005,On Leave,Pune
+EMP1051,Priya Joshi,HR,31/07/2020,3179000,M002,Active,Hyderabad
+EMP1052,Vivek Rao,Sales,19/03/2022,523000,M005,Active,Mumbai
+EMP1053,Priya Gupta,Sales,01/11/2024,1084000,M003,Active,Ahmedabad
+EMP1054,Vivek Joshi,HR,09/01/2021,570000,M001,Resigned,Mumbai
+EMP1055,Meera Gupta,Product,22/03/2023,1171000,M003,Active,Chennai
+EMP1056,Sonia Iyer,Finance,25/06/2024,1992000,M001,Active,Ahmedabad
+EMP1057,Kavya Sharma,Customer Success,17/02/2021,428000,M002,Active,Pune
+EMP1058,Priya Kapoor,Finance,07/06/2024,390000,M001,Active,Ahmedabad
+EMP1059,Vivek Singh,Engineering,10/10/2022,1743000,M001,Active,Ahmedabad
+EMP1060,Kiran Chaudhary,Engineering,24/07/2022,534000,M003,Active,Delhi
+EMP1061,Aarav Sharma,Operations,25/10/2019,2371000,M005,Resigned,Mumbai
+EMP1062,Rahul Reddy,Finance,19/07/2022,652000,M003,Resigned,Ahmedabad
+EMP1063,Vikram Agarwal,Product,26/04/2022,2280000,M001,Active,Kolkata
+EMP1064,Meera Verma,Sales,28/11/2018,2006000,M001,On Leave,Pune
+EMP1065,Ananya Desai,Marketing,06/02/2022,1243000,M003,Active,Bengaluru
+EMP1066,Suresh Verma,Product,15/04/2024,2597000,M002,Active,Hyderabad
+EMP1067,Rohit Desai,Customer Success,04/07/2024,4096000,M002,Resigned,Hyderabad
+EMP1068,Neha Nair,Operations,25/08/2023,2345000,M001,Active,Pune
+EMP1069,Nikhil Reddy,Customer Success,16/08/2023,1978000,M004,Resigned,Chennai
+EMP1070,Rahul Nair,Product,11/02/2020,1051000,M004,Active,Chennai
+EMP1071,Arjun Desai,Finance,04/02/2021,424000,M004,Active,Hyderabad
+EMP1072,Riya Agarwal,Operations,03/09/2022,2430000,M002,Active,Pune
+EMP1073,Priya Reddy,Engineering,09/04/2021,521000,M002,On Leave,Pune
+EMP1074,Priya Mishra,HR,15/06/2023,1890000,M005,On Leave,Ahmedabad
+EMP1075,Rahul Mehta,Finance,09/06/2021,652000,M002,Active,Pune
+EMP1076,Mohit Bhat,Finance,17/12/2021,789000,M002,On Leave,Bengaluru
+EMP1077,Vikram Verma,Operations,17/01/2020,661000,M002,Active,Hyderabad
+EMP1078,Deepa Bhat,HR,11/06/2024,589000,M003,Active,Hyderabad
+EMP1079,Rohit Bhat,HR,09/11/2021,577000,M005,Active,Chennai
+EMP1080,Deepa Agarwal,Marketing,08/08/2023,3217000,M004,Active,Bengaluru
+EMP1081,Aarav Verma,HR,25/04/2021,1343000,M005,Resigned,Bengaluru
+EMP1082,Sneha Reddy,HR,06/04/2019,2385000,M001,Active,Delhi
+EMP1083,Mohit Agarwal,Marketing,04/12/2024,3298000,M003,Active,Pune
+EMP1084,Ananya Joshi,Sales,12/02/2021,514000,M005,Active,Delhi
+EMP1085,Riya Patel,Sales,02/07/2023,825000,M005,Active,Pune
+EMP1086,Pooja Gupta,Marketing,23/02/2022,1154000,M003,Active,Pune
+EMP1087,Mohit Reddy,Product,02/06/2020,2679000,M004,Active,Chennai
+EMP1088,Gaurav Rao,Marketing,26/07/2019,3694000,M001,Active,Hyderabad
+EMP1089,Mohit Sharma,HR,28/09/2018,1938000,M001,Active,Kolkata
+EMP1090,Suresh Kumar,Marketing,18/12/2019,1780000,M005,Active,Hyderabad
+EMP1091,Gaurav Patel,Operations,18/03/2024,1035000,M003,On Leave,Chennai
+EMP1092,Rajesh Verma,Customer Success,08/07/2020,435000,M002,Active,Chennai
+EMP1093,Suresh Sharma,Product,24/03/2021,1085000,M002,Active,Delhi
+EMP1094,Meera Sharma,Product,19/09/2024,2300000,M004,On Leave,Kolkata
+EMP1095,Meera Sharma,Product,09/03/2022,1926000,M001,Active,Bengaluru
+EMP1096,Sneha Bhat,Finance,02/08/2021,1336000,M002,Active,Bengaluru
+EMP1097,Ananya Kumar,HR,15/09/2022,2697000,M003,Active,Chennai
+EMP1098,Mohit Singh,Product,06/10/2023,648000,M002,Active,Bengaluru
+EMP1099,Rohit Mishra,HR,18/05/2021,845000,M003,Active,Pune
+EMP1100,Divya Agarwal,Finance,24/10/2023,770000,M004,Active,Pune
+EMP1101,Gaurav Desai,Sales,26/09/2019,1649000,M002,On Leave,Delhi
+EMP1102,Priya Reddy,Product,23/04/2019,3202000,M001,Active,Pune
+EMP1103,Mohit Nair,Finance,16/12/2022,1812000,M003,Active,Chennai
+EMP1104,Aarav Desai,Sales,12/06/2019,3810000,M002,Active,Bengaluru
+EMP1105,Kavya Gupta,Product,07/10/2022,2589000,M001,Active,Mumbai
+EMP1106,Rajesh Rao,Engineering,15/03/2020,344000,M005,On Leave,Mumbai
+EMP1107,Rajesh Desai,Operations,27/06/2018,376000,M001,Active,Delhi
+EMP1108,Sonia Joshi,Sales,27/01/2020,2293000,M001,Active,Chennai
+EMP1109,Sneha Nair,HR,20/10/2019,3601000,M005,Active,Delhi
+EMP1110,Deepa Agarwal,Sales,24/02/2020,721000,M005,Active,Delhi
+EMP1111,Kavya Singh,Customer Success,10/02/2022,2464000,M004,Resigned,Delhi
+EMP1112,Gaurav Nair,Marketing,04/10/2022,603000,M004,Active,Pune
+EMP1113,Deepa Reddy,Product,30/10/2023,599000,M003,Resigned,Chennai
+EMP1114,Rohit Bhat,Product,05/09/2021,1062000,M003,Active,Chennai
+EMP1115,Usha Reddy,Sales,18/03/2024,1125000,M004,Active,Delhi
+EMP1116,Rajesh Nair,Finance,22/02/2018,2394000,M001,Active,Ahmedabad
+EMP1117,Riya Chaudhary,Product,11/08/2019,1164000,M005,Active,Bengaluru
+EMP1118,Arjun Nair,Sales,19/10/2021,617000,M004,Active,Hyderabad
+EMP1119,Priya Sharma,Operations,11/07/2024,1677000,M004,Active,Ahmedabad
+EMP1120,Usha Patel,Customer Success,26/09/2023,715000,M004,Active,Delhi
+EMP1121,Meera Sharma,Customer Success,03/08/2020,2719000,M001,Active,Mumbai
+EMP1122,Arjun Sharma,Engineering,04/01/2020,1238000,M003,Active,Chennai
+EMP1123,Sonia Desai,Product,31/10/2023,3592000,M004,Active,Chennai
+EMP1124,Usha Sharma,Customer Success,30/08/2023,810000,M005,On Leave,Mumbai
+EMP1125,Ananya Rao,Product,21/04/2022,1133000,M004,Active,Ahmedabad
+EMP1126,Ananya Bhat,Finance,30/03/2024,2659000,M003,Resigned,Bengaluru
+EMP1127,Rajesh Rao,Finance,03/07/2021,2320000,M001,On Leave,Ahmedabad
+EMP1128,Usha Verma,Customer Success,04/05/2023,1991000,M005,Active,Kolkata
+EMP1129,Meera Sharma,Marketing,01/12/2024,2294000,M003,Active,Mumbai
+EMP1130,Aarav Bhat,Finance,09/02/2022,874000,M005,Active,Pune
+EMP1131,Pooja Desai,Marketing,14/11/2021,779000,M001,Resigned,Hyderabad
+EMP1132,Kiran Kapoor,Operations,24/08/2024,449000,M001,Active,Delhi
+EMP1133,Neha Iyer,Engineering,15/01/2024,689000,M004,On Leave,Kolkata
+EMP1134,Meera Agarwal,Customer Success,05/08/2024,458000,M004,On Leave,Kolkata
+EMP1135,Neha Desai,Customer Success,14/02/2019,2526000,M003,Active,Pune
+EMP1136,Gaurav Mehta,HR,21/11/2022,599000,M001,On Leave,Hyderabad
+EMP1137,Mohit Kumar,Engineering,02/05/2021,1747000,M002,On Leave,Delhi
+EMP1138,Vikram Desai,HR,24/01/2021,408000,M005,Active,Kolkata
+EMP1139,Kavya Nair,Product,21/05/2021,1964000,M004,Resigned,Pune
+EMP1140,Kavya Rao,Marketing,26/10/2020,1808000,M005,Active,Mumbai
+EMP1141,Suresh Singh,Finance,20/06/2024,1097000,M004,Active,Kolkata
+EMP1142,Sneha Bhat,Sales,01/02/2022,1073000,M002,Resigned,Chennai
+EMP1143,Priya Rao,HR,21/09/2018,2187000,M004,Active,Chennai
+EMP1144,Suresh Iyer,Operations,28/09/2024,583000,M001,Active,Hyderabad
+EMP1145,Aarav Kapoor,Operations,17/03/2023,1222000,M004,Active,Mumbai
+EMP1146,Kavya Iyer,Operations,13/07/2019,371000,M003,Resigned,Bengaluru
+EMP1147,Suresh Bhat,Customer Success,23/03/2018,443000,M001,Active,Chennai
+EMP1148,Arjun Rao,HR,05/01/2019,1360000,M002,Active,Delhi
+EMP1149,Sneha Singh,Product,08/11/2023,2637000,M005,Active,Ahmedabad
+EMP1150,Arjun Kapoor,Product,07/07/2021,880000,M004,Resigned,Hyderabad
+EMP1151,Priya Joshi,Finance,14/03/2019,549000,M003,Active,Kolkata
+EMP1152,Meera Bhat,Customer Success,26/12/2023,848000,M001,Active,Kolkata
+EMP1153,Rajesh Kapoor,Operations,17/08/2019,794000,M003,Active,Mumbai
+EMP1154,Suresh Bhat,Engineering,08/09/2020,813000,M003,Resigned,Pune
+EMP1155,Usha Desai,Sales,18/12/2022,1023000,M004,Active,Chennai
+EMP1156,Arjun Kapoor,Operations,11/05/2020,4021000,M004,Resigned,Pune
+EMP1157,Suresh Rao,Engineering,27/01/2021,3147000,M004,Active,Kolkata
+EMP1158,Neha Rao,Product,19/10/2019,2228000,M001,Active,Kolkata
+EMP1159,Sonia Verma,HR,31/01/2023,2060000,M001,Resigned,Bengaluru
+EMP1160,Suresh Reddy,Finance,13/01/2018,1092000,M003,Active,Delhi
+EMP1161,Deepa Iyer,Sales,17/10/2023,2738000,M002,On Leave,Kolkata
+EMP1162,Neha Reddy,Customer Success,01/07/2019,722000,M005,Active,Chennai
+EMP1163,Kavya Chaudhary,Marketing,14/02/2022,581000,M004,On Leave,Hyderabad
+EMP1164,Aarav Agarwal,Sales,31/12/2018,1091000,M002,Active,Kolkata
+EMP1165,Sonia Rao,Operations,04/09/2019,455000,M002,On Leave,Delhi
+EMP1166,Aarav Singh,Marketing,02/02/2023,3787000,M001,Active,Hyderabad
+EMP1167,Kavya Kumar,Operations,18/07/2023,1067000,M002,On Leave,Hyderabad
+EMP1168,Mohit Joshi,Marketing,09/01/2020,1305000,M001,Active,Chennai
+EMP1169,Kiran Reddy,Sales,23/02/2022,1900000,M004,Active,Mumbai
+EMP1170,Rajesh Gupta,HR,17/06/2022,2193000,M004,Resigned,Kolkata
+EMP1171,Vivek Kumar,Product,26/01/2019,1562000,M003,Active,Ahmedabad
+EMP1172,Nikhil Bhat,Engineering,04/11/2020,1865000,M003,Active,Pune
+EMP1173,Divya Verma,Engineering,05/07/2024,557000,M005,Active,Pune
+EMP1174,Rahul Gupta,Product,23/07/2021,2422000,M002,Active,Delhi
+EMP1175,Neha Bhat,Finance,07/08/2023,4111000,M003,Resigned,Pune
+EMP1176,Priya Mehta,Operations,15/11/2024,3882000,M003,On Leave,Pune
+EMP1177,Priya Iyer,HR,06/07/2023,4086000,M005,Resigned,Ahmedabad
+EMP1178,Ananya Joshi,Finance,12/08/2018,543000,M004,Active,Bengaluru
+EMP1179,Vikram Reddy,Marketing,21/04/2019,1035000,M003,Resigned,Ahmedabad
+EMP1180,Rahul Sharma,Product,30/08/2019,382000,M002,Active,Bengaluru
+EMP1181,Gaurav Singh,Operations,26/04/2024,2462000,M005,Active,Bengaluru
+EMP1182,Priya Chaudhary,Sales,03/08/2023,2108000,M003,Active,Chennai
+EMP1183,Usha Desai,Marketing,11/03/2022,2032000,M001,Active,Bengaluru
+EMP1184,Aarav Chaudhary,Customer Success,20/05/2023,1246000,M003,On Leave,Mumbai
+EMP1185,Neha Bhat,Customer Success,23/08/2021,2760000,M005,Active,Hyderabad
+EMP1186,Ananya Mehta,HR,16/08/2018,2091000,M005,Active,Delhi
+EMP1187,Pooja Kumar,Finance,10/09/2020,3995000,M001,Active,Hyderabad
+EMP1188,Gaurav Patel,Marketing,13/03/2021,2582000,M002,Active,Chennai
+EMP1189,Rajesh Rao,Operations,07/10/2024,575000,M001,Active,Hyderabad
+EMP1190,Rajesh Reddy,Marketing,06/05/2023,815000,M004,Active,Kolkata
+EMP1191,Nikhil Iyer,Marketing,11/10/2022,345000,M003,Active,Hyderabad
+EMP1192,Suresh Gupta,Customer Success,30/11/2023,2506000,M001,Active,Ahmedabad
+EMP1193,Priya Chaudhary,Customer Success,15/05/2021,687000,M003,Active,Kolkata
+EMP1194,Mohit Bhat,Product,04/07/2018,1588000,M004,Active,Delhi
+EMP1195,Rahul Kumar,HR,09/11/2020,1574000,M005,Active,Delhi
+EMP1196,Vivek Reddy,Finance,17/01/2020,3484000,M001,Active,Chennai
+EMP1197,Neha Reddy,Customer Success,30/12/2024,3346000,M002,Active,Bengaluru
+EMP1198,Arjun Kumar,Product,12/11/2022,1540000,M004,Active,Mumbai
+EMP1199,Gaurav Sharma,Customer Success,18/07/2022,3770000,M005,Resigned,Ahmedabad

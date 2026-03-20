@@ -8,6 +8,10 @@ import PlanCard from "./PlanCard";
 import { StepCard } from "./StepCard";
 import { EChartsRenderer } from "./EChartsRenderer";
 import { PinToDashboardModal } from "./PinToDashboardModal";
+import { ErrorBubble } from "./ErrorBubble";
+import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
+import { capture } from "../lib/posthog";
+import { humaniseError, isRetryableError } from "../utils/errorMessages";
 
 interface TileCreatedData {
   id: string;
@@ -231,12 +235,13 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
       }
       case "agent.error": {
         const errorText = typeof event.error === "string" ? event.error : "Unknown error";
+        capture("ai_error", { error_type: "agent.error", message: errorText.slice(0, 200) });
         setMessages((previous) => [
           ...previous,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `Error: ${errorText}`,
+            content: `Error: ${humaniseError(errorText)}`,
           },
         ]);
         break;
@@ -264,6 +269,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         ...previous,
         { id: crypto.randomUUID(), role: "user", content },
       ]);
+      capture("ai_message_sent", { dataset_id: dataset.id, workspace_id: workspaceId });
     }
     setInput("");
 
@@ -284,14 +290,11 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         onEvent: handleAgentEvent,
       });
     } catch (error: unknown) {
-      const maybeError = error as { response?: { data?: { detail?: string } }; message?: string };
-      const rawMessage = maybeError.response?.data?.detail ?? maybeError.message ?? "Chat request failed.";
-      const message = rawMessage.toLowerCase().includes("network error")
-        ? "Network Error: Backend API is unreachable. Ensure /api routes are configured (Vercel rewrite or Vite proxy) and backend is reachable on Render."
-        : rawMessage;
+      const humanised = humaniseError(error);
+      capture("ai_error", { error_type: "send_failed", retryable: isRetryableError(error) });
       setMessages((previous) => [
         ...previous,
-        { id: crypto.randomUUID(), role: "assistant", content: `Error: ${message}` },
+        { id: crypto.randomUUID(), role: "assistant", content: `Error: ${humanised}` },
       ]);
     }
   };
@@ -392,18 +395,31 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
         {!dataset ? (
-          <div style={{ color: "var(--tx1)", display: "grid", gap: 8 }}>
-            <p>No dataset loaded. Try:</p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span className="btn" style={{ height: 24 }}>Remove duplicates</span>
-              <span className="btn" style={{ height: 24 }}>Fill nulls</span>
-              <span className="btn" style={{ height: 24 }}>Normalize dates</span>
-            </div>
-          </div>
+          <EmptyStateChatPanel
+            hasDataset={false}
+            onSuggestionSelect={(s) => { setInput(s); }}
+            onUploadClick={() => {}}
+          />
+        ) : messages.length === 0 ? (
+          <EmptyStateChatPanel
+            hasDataset
+            datasetName={dataset.name}
+            onSuggestionSelect={(s) => { setInput(s); void handleSend(s); }}
+            onUploadClick={() => {}}
+          />
         ) : null}
 
         {messages.map((message) => (
           <div key={message.id} style={{ justifySelf: message.role === "user" ? "end" : "start", maxWidth: "90%" }}>
+            {message.role === "assistant" && message.content.startsWith("Error:") ? (
+              <ErrorBubble
+                message={message.content.replace(/^Error:\s*/, "")}
+                onRetry={isRetryableError(message.content) ? () => {
+                  const last = [...messages].reverse().find((m) => m.role === "user");
+                  if (last) void handleSend(last.content);
+                } : undefined}
+              />
+            ) : (
             <div style={{ border: "1px solid var(--bd2)", background: message.role === "user" ? "var(--acg)" : "var(--bg2)", borderRadius: "var(--r8)", padding: 8 }}>
               <p>{message.content}</p>
               {message.transformation ? (
@@ -452,6 +468,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                 </div>
               ) : null}
             </div>
+            )}
           </div>
         ))}
         {sending ? (

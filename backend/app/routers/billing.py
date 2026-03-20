@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.dependencies import CurrentUser, get_current_user
 from app.services import billing_repository, billing_service
+from app.services.analytics import track
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -221,6 +222,13 @@ async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
     payment = _payment_entity(entities)
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
+    plan = notes.get("plan") or ""
+    amount = payment.get("amount")
+    track(
+        str(user_id) if user_id else "unknown",
+        "payment_completed",
+        {"plan": plan, "amount_inr": (amount / 100) if isinstance(amount, (int, float)) else None, "subscription_id": str(sub.get("id") or "")},
+    )
     await _log(
         str(user_id) if user_id else None,
         str(sub.get("id") or "") or None,
@@ -228,7 +236,7 @@ async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
         payload,
         payment_id=str(payment.get("id") or "") or None,
         invoice_id=str(payment.get("invoice_id") or "") or None,
-        amount=payment.get("amount"),
+        amount=amount,
         status="captured",
     )
 

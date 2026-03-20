@@ -11,6 +11,8 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     role = Column(String, nullable=False, default="viewer")
     plan = Column(String, nullable=False, default="Free")
+    has_completed_onboarding = Column(Boolean, nullable=False, default=False)
+    has_uploaded_first_file = Column(Boolean, nullable=False, default=False)
 
 
 class Workspace(Base):

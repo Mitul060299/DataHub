@@ -269,10 +269,32 @@ def get_me(
         role=user.role,
         plan=effective_plan,
         usage=usage,
+        has_completed_onboarding=getattr(user, "has_completed_onboarding", False) or False,
+        has_uploaded_first_file=getattr(user, "has_uploaded_first_file", False) or False,
     )
 
 
-@router.post("/me/plan")
+@router.patch("/me/onboarding")
+def update_onboarding(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = db.query(User).filter(User.username == subject).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if "completed" in payload:
+        user.has_completed_onboarding = bool(payload["completed"])
+    if "uploaded_first_file" in payload:
+        user.has_uploaded_first_file = bool(payload["uploaded_first_file"])
+    db.commit()
+    return {
+        "has_completed_onboarding": user.has_completed_onboarding,
+        "has_uploaded_first_file": user.has_uploaded_first_file,
+    }
 def update_my_plan(
     payload: dict,
     authorization: str | None = Header(default=None),

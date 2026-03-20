@@ -168,12 +168,12 @@ async def update_source(
 # Soft delete
 # ---------------------------------------------------------------------------
 
-@router.delete("/{source_id}", status_code=204, response_class=Response)
+@router.delete("/{source_id}")
 async def delete_source(
     source_id: str,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization) or ""
@@ -181,6 +181,7 @@ async def delete_source(
     src = _get_owned(db, source_id, user_id)
     src.is_active = False
     db.commit()
+    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------

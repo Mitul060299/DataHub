@@ -6,7 +6,7 @@ import { PipelineProvider } from "./contexts/PipelineContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import { billingEnabled } from "./utils/featureFlags";
 
-const PUBLIC_PATHS = ["/", "/home", "/marketplace", "/pricing"];
+const PUBLIC_PATHS = ["/home", "/marketplace", "/pricing"];
 
 export function AppShell() {
   const { session, loading } = useAuth();
@@ -25,7 +25,7 @@ export function AppShell() {
     };
   }, []);
 
-  const isPublic = PUBLIC_PATHS.some((p) => location.pathname.startsWith(p));
+  const isPublic = location.pathname === "/" || PUBLIC_PATHS.some((p) => location.pathname.startsWith(p));
 
   if (loading) {
     return <div style={{ height: "100%", display: "grid", placeItems: "center" }}>Loading...</div>;

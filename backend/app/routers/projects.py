@@ -264,12 +264,12 @@ def update_project(
     return _project_out(project, db)
 
 
-@router.delete("/{project_id}", status_code=204, response_class=Response)
+@router.delete("/{project_id}")
 def delete_project(
     project_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     project = _get_project_or_404(project_id, current_user.id, db)
 
     # Null out FKs before deleting so child rows survive
@@ -279,6 +279,7 @@ def delete_project(
 
     db.delete(project)
     db.commit()
+    return Response(status_code=204)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

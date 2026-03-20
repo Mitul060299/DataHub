@@ -26,6 +26,14 @@ export interface PipelineStep {
     rowCount: number;
     parentId?: string | null;
   };
+  // Extended fields populated by execute_step / pipeline_recorder
+  input_tables?: string[];
+  output_table?: string;
+  row_count_before?: number | null;
+  row_count_after?: number | null;
+  execution_time_ms?: number | null;
+  status?: "completed" | "failed" | "pending";
+  error_message?: string | null;
 }
 
 interface PipelineContextValue {

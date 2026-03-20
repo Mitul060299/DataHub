@@ -637,6 +637,64 @@ class PipelineRunV2DB(Base):
     )
 
 
+class ArtifactDB(Base):
+    """S3-persisted Parquet snapshots produced by pipeline write-ops."""
+    __tablename__ = "artifacts"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
+    pipeline_run_id = Column(String, ForeignKey("pipeline_runs_v2.id", ondelete="SET NULL"), nullable=True)
+    # step_id is nullable TEXT (FK populated after PipelineStepDB insert)
+    step_id = Column(String, nullable=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    s3_key = Column(Text, nullable=False)
+    row_count = Column(Integer, nullable=True)
+    column_schema = Column(JSONB, nullable=True, default=list)
+    type = Column(String, nullable=False, default="auto")   # 'auto' | 'export'
+    format = Column(String, nullable=False, default="parquet")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_artifacts_user_id", "user_id"),
+        Index("idx_artifacts_session_id", "session_id"),
+        Index("idx_artifacts_pipeline_run_id", "pipeline_run_id"),
+    )
+
+
+class PipelineStepDB(Base):
+    """Per-step record for every pipeline write-op; links to ArtifactDB."""
+    __tablename__ = "pipeline_steps"
+
+    id = Column(String, primary_key=True)
+    pipeline_run_id = Column(String, ForeignKey("pipeline_runs_v2.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
+    step_number = Column(Integer, nullable=False)
+    intent = Column(String, nullable=True)
+    operation = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    input_tables = Column(JSONB, nullable=False, default=list)
+    input_table = Column(String, nullable=True)   # legacy column — stop writing new values
+    output_table = Column(String, nullable=True)
+    duckdb_sql = Column(Text, nullable=True)
+    parameters = Column(JSONB, nullable=True)
+    status = Column(String, nullable=False, default="completed")
+    error_message = Column(Text, nullable=True)
+    execution_time_ms = Column(Integer, nullable=True)
+    row_count_before = Column(Integer, nullable=True)
+    row_count_after = Column(Integer, nullable=True)
+    artifact_id = Column(String, ForeignKey("artifacts.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_pipeline_steps_run_id", "pipeline_run_id"),
+        Index("idx_pipeline_steps_user_id", "user_id"),
+        Index("idx_pipeline_steps_session_id", "session_id"),
+    )
+
+
 class TransformationStepDB(Base):
     """Individual transformation steps within a session - for visualization in UI"""
     __tablename__ = "transformation_steps"

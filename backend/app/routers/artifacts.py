@@ -1,0 +1,241 @@
+"""
+artifacts.py
+============
+CRUD + download + session-load endpoints for persisted pipeline artifacts.
+
+All endpoints are user-scoped (filter by user_id from JWT).
+Presigned URLs are generated fresh on every response — never stored.
+"""
+from __future__ import annotations
+
+import io
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from ..db import get_db
+from ..dependencies import CurrentUser, get_current_user
+from ..models_db import ArtifactDB
+from ..services.object_storage import StorageService
+from ..services.duckdb_session import register_table_from_sql
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/artifacts", tags=["artifacts"])
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _get_artifact_or_404(artifact_id: str, user_id: str, db: Session) -> ArtifactDB:
+    row = (
+        db.query(ArtifactDB)
+        .filter(ArtifactDB.id == artifact_id, ArtifactDB.user_id == user_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    return row
+
+
+def _serialize(artifact: ArtifactDB, download_url: Optional[str] = None) -> dict:
+    return {
+        "id": artifact.id,
+        "name": artifact.name,
+        "description": artifact.description,
+        "type": artifact.type,
+        "format": artifact.format,
+        "row_count": artifact.row_count,
+        "column_schema": artifact.column_schema or [],
+        "pipeline_run_id": artifact.pipeline_run_id,
+        "step_id": artifact.step_id,
+        "session_id": artifact.session_id,
+        "created_at": artifact.created_at.isoformat() if artifact.created_at else None,
+        "download_url": download_url,
+    }
+
+
+# ── 1. List artifacts ─────────────────────────────────────────────────────────
+
+@router.get("")
+def list_artifacts(
+    session_id: Optional[str] = Query(None),
+    pipeline_run_id: Optional[str] = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = db.query(ArtifactDB).filter(ArtifactDB.user_id == current_user.id)
+    if session_id:
+        q = q.filter(ArtifactDB.session_id == session_id)
+    if pipeline_run_id:
+        q = q.filter(ArtifactDB.pipeline_run_id == pipeline_run_id)
+
+    artifacts = q.order_by(ArtifactDB.created_at.desc()).all()
+
+    result = []
+    for art in artifacts:
+        download_url: Optional[str] = None
+        try:
+            download_url = StorageService.get_signed_url(art.s3_key, expires_in=3600)
+        except Exception as exc:
+            logger.warning("Could not generate signed URL for artifact %s: %s", art.id, exc)
+        result.append(_serialize(art, download_url))
+
+    return result
+
+
+# ── 2. Rename artifact ────────────────────────────────────────────────────────
+
+@router.patch("/{artifact_id}")
+def rename_artifact(
+    artifact_id: str,
+    body: dict,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    artifact = _get_artifact_or_404(artifact_id, current_user.id, db)
+    if "name" in body:
+        artifact.name = str(body["name"]).strip() or artifact.name
+    if "description" in body:
+        artifact.description = body["description"]
+    db.commit()
+    db.refresh(artifact)
+    return _serialize(artifact)
+
+
+# ── 3. Download artifact (csv / xlsx / parquet) ───────────────────────────────
+
+@router.get("/{artifact_id}/download")
+def download_artifact(
+    artifact_id: str,
+    fmt: str = Query("parquet", description="Output format: csv | xlsx | parquet"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    artifact = _get_artifact_or_404(artifact_id, current_user.id, db)
+    s3_key = artifact.s3_key
+    safe_name = (artifact.name or "artifact").replace(" ", "_")
+
+    if fmt == "parquet":
+        # Return a redirect to a fresh presigned URL
+        try:
+            url = StorageService.get_signed_url(s3_key, expires_in=3600)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Could not generate download URL: {exc}")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=url)
+
+    # Download parquet bytes from storage and convert
+    try:
+        raw_bytes = _fetch_bytes(s3_key)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch artifact from storage: {exc}")
+
+    import pyarrow.parquet as _pq
+    _tbl = _pq.read_table(io.BytesIO(raw_bytes))
+    df = _tbl.to_pandas()
+
+    if fmt == "csv":
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        content = buf.getvalue().encode("utf-8")
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
+        )
+
+    if fmt in ("xlsx", "excel"):
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+        wb = Workbook()
+        ws = wb.active
+        ws.title = safe_name[:31]
+        header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        cols = list(df.columns)
+        for ci, col in enumerate(cols, 1):
+            cell = ws.cell(row=1, column=ci, value=col)
+            cell.fill = header_fill
+            cell.font = header_font
+        for ri, row_data in enumerate(df.itertuples(index=False), 2):
+            for ci, val in enumerate(row_data, 1):
+                ws.cell(row=ri, column=ci, value=val)
+        buf = io.BytesIO()
+        wb.save(buf)
+        content = buf.getvalue()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.xlsx"'},
+        )
+
+    raise HTTPException(status_code=400, detail=f"Unsupported format '{fmt}'. Use csv, xlsx, or parquet.")
+
+
+def _fetch_bytes(s3_key: str) -> bytes:
+    """Download raw bytes from storage given an s3_key (storage path)."""
+    import tempfile, os
+    url = StorageService.get_signed_url(s3_key, expires_in=3600)
+    import urllib.request
+    with urllib.request.urlopen(url, timeout=60) as resp:  # type: ignore
+        return resp.read()
+
+
+# ── 4. Load artifact into a DuckDB session ────────────────────────────────────
+
+@router.post("/{artifact_id}/load")
+def load_artifact_into_session(
+    artifact_id: str,
+    body: dict,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Register the artifact Parquet file as a named view in an existing DuckDB session.
+    Body: { "session_id": "...", "table_name": "optional_alias" }
+    """
+    artifact = _get_artifact_or_404(artifact_id, current_user.id, db)
+    session_id = str(body.get("session_id") or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=422, detail="session_id is required")
+
+    table_name = str(body.get("table_name") or artifact.name or f"artifact_{artifact_id[:8]}").strip()
+    table_name = table_name.replace(" ", "_")
+
+    try:
+        signed_url = StorageService.get_signed_url(artifact.s3_key, expires_in=3600)
+        load_sql = f"SELECT * FROM read_parquet('{signed_url}')"
+        register_table_from_sql(session_id, table_name, load_sql)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load artifact into session: {exc}")
+
+    return {
+        "session_id": session_id,
+        "table_name": table_name,
+        "row_count": artifact.row_count,
+        "message": f"Artifact loaded as '{table_name}' in session {session_id}",
+    }
+
+
+# ── 5. Delete artifact ────────────────────────────────────────────────────────
+
+@router.delete("/{artifact_id}")
+def delete_artifact(
+    artifact_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    artifact = _get_artifact_or_404(artifact_id, current_user.id, db)
+
+    # Remove from S3 (best-effort)
+    try:
+        StorageService.delete(artifact.s3_key)
+    except Exception as exc:
+        logger.warning("S3 delete failed for artifact %s: %s", artifact_id, exc)
+
+    db.delete(artifact)
+    db.commit()
+    return Response(status_code=204)

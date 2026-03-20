@@ -44,6 +44,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
 
   const [runCtaHovered, setRunCtaHovered] = useState(false);
   const [resultsHovered, setResultsHovered] = useState(false);
+  const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set());
 
   const [availableDatasets, setAvailableDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [bindingAlias, setBindingAlias] = useState("ref_data");
@@ -463,13 +464,22 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
 
             {steps.map((step, index) => {
               const isActiveStep = index === steps.length - 1;
-              const stepStatus: "completed" | "active" | "pending" = isActiveStep
+              const stepStatus: "completed" | "active" | "pending" = step.status === "failed"
+                ? "pending"
+                : isActiveStep
                 ? "active"
                 : (index < steps.length - 1 ? "completed" : "pending");
-              const statusColor = stepStatus === "completed"
+              const statusColor = step.status === "failed"
+                ? "#ef4444"
+                : stepStatus === "completed"
                 ? "#22c55e"
                 : (stepStatus === "active" ? "#5B6AF0" : "#3f3f46");
               const stepVisual = getStepVisual(step.operation);
+              const isSqlExpanded = expandedStepIds.has(step.id);
+              const rowDelta =
+                step.row_count_after != null && step.row_count_before != null
+                  ? step.row_count_after - step.row_count_before
+                  : null;
 
               return (
                 <div
@@ -477,134 +487,218 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                   onMouseEnter={() => setHoveredStepId(step.id)}
                   onMouseLeave={() => setHoveredStepId((current) => (current === step.id ? null : current))}
                   style={{
-                    minHeight: 30,
-                    display: "grid",
-                    gridTemplateColumns: "18px 1fr auto auto",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "0 6px",
+                    padding: "6px 8px",
                     borderBottom: index === steps.length - 1 ? "none" : "1px solid var(--bd)",
                     background: isActiveStep ? "#1c1c3a" : "transparent",
                     borderLeft: `2px solid ${isActiveStep ? "#5B6AF0" : "transparent"}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
                   }}
                 >
-                  <div
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 4,
-                      background: stepVisual.background,
-                      color: stepVisual.color,
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}
-                    title={getStepLabel(step)}
-                  >
-                    {formatStepLabel(step.operation).charAt(0)}
-                  </div>
-
-                  {editingStepId === step.id ? (
-                    <input
-                      autoFocus
-                      value={editingStepName}
-                      onChange={(e) => setEditingStepName(e.target.value)}
-                      onBlur={() => {
-                        renameStep(step.id, editingStepName);
-                        setEditingStepId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          renameStep(step.id, editingStepName);
-                          setEditingStepId(null);
-                        } else if (e.key === "Escape") {
-                          setEditingStepId(null);
-                        }
-                      }}
+                  {/* Row 1: icon + label + status dot + action buttons */}
+                  <div style={{ display: "grid", gridTemplateColumns: "18px 1fr auto auto", alignItems: "center", gap: 6 }}>
+                    <div
                       style={{
-                        flex: 1,
-                        minWidth: 0,
-                        height: 22,
-                        fontSize: 12,
-                        background: "var(--bg3)",
-                        border: "1px solid var(--ac)",
+                        width: 18,
+                        height: 18,
                         borderRadius: 4,
-                        color: "var(--tx0)",
-                        padding: "0 6px",
-                      }}
-                    />
-                  ) : (
-                    <button
-                      onClick={() => void handleUndoFromStep(step.id)}
-                      disabled={undoing}
-                      style={{
-                        textAlign: "left",
-                        minWidth: 0,
-                        color: "var(--tx0)",
-                        fontSize: 12,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        background: stepVisual.background,
+                        color: stepVisual.color,
+                        display: "grid",
+                        placeItems: "center",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        flexShrink: 0,
                       }}
                       title={getStepLabel(step)}
                     >
-                      {getStepLabel(step).length > 26
-                        ? getStepLabel(step).slice(0, 24) + "\u2026"
-                        : getStepLabel(step)}
-                    </button>
-                  )}
+                      {formatStepLabel(step.operation).charAt(0)}
+                    </div>
 
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      opacity: hoveredStepId === step.id && editingStepId !== step.id ? 1 : 0,
-                      pointerEvents: hoveredStepId === step.id && editingStepId !== step.id ? "auto" : "none",
-                      transition: "opacity 120ms ease",
-                    }}
-                  >
-                    <button
-                      className="btn"
-                      style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
-                      title="Rename step"
-                      onClick={() => {
-                        setEditingStepName(getStepLabel(step));
-                        setEditingStepId(step.id);
+                    {editingStepId === step.id ? (
+                      <input
+                        autoFocus
+                        value={editingStepName}
+                        onChange={(e) => setEditingStepName(e.target.value)}
+                        onBlur={() => {
+                          renameStep(step.id, editingStepName);
+                          setEditingStepId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            renameStep(step.id, editingStepName);
+                            setEditingStepId(null);
+                          } else if (e.key === "Escape") {
+                            setEditingStepId(null);
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          height: 22,
+                          fontSize: 12,
+                          background: "var(--bg3)",
+                          border: "1px solid var(--ac)",
+                          borderRadius: 4,
+                          color: "var(--tx0)",
+                          padding: "0 6px",
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          minWidth: 0,
+                          color: "var(--tx0)",
+                          fontSize: 12,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontWeight: isActiveStep ? 600 : 400,
+                        }}
+                        title={getStepLabel(step)}
+                      >
+                        {getStepLabel(step).length > 28
+                          ? getStepLabel(step).slice(0, 26) + "\u2026"
+                          : getStepLabel(step)}
+                      </span>
+                    )}
+
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        opacity: hoveredStepId === step.id && editingStepId !== step.id ? 1 : 0,
+                        pointerEvents: hoveredStepId === step.id && editingStepId !== step.id ? "auto" : "none",
+                        transition: "opacity 120ms ease",
                       }}
                     >
-                      ✏
-                    </button>
-                    <button
-                      className="btn"
-                      style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
-                      title="Undo from this step"
-                      onClick={() => void handleUndoFromStep(step.id)}
-                      disabled={undoing}
-                    >
-                      ↺
-                    </button>
-                    <button
-                      className="btn"
-                      style={{ height: 20, width: 20, padding: 0 }}
-                      title="Remove step"
-                      onClick={() => removeStep(step.id)}
-                      disabled={undoing}
-                    >
-                      <IconX size={12} />
-                    </button>
+                      <button
+                        className="btn"
+                        style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                        title="Rename step"
+                        onClick={() => {
+                          setEditingStepName(getStepLabel(step));
+                          setEditingStepId(step.id);
+                        }}
+                      >
+                        ✏
+                      </button>
+                      <button
+                        className="btn"
+                        style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                        title="Undo from this step"
+                        onClick={() => void handleUndoFromStep(step.id)}
+                        disabled={undoing}
+                      >
+                        ↺
+                      </button>
+                      <button
+                        className="btn"
+                        style={{ height: 20, width: 20, padding: 0 }}
+                        title="Remove step"
+                        onClick={() => removeStep(step.id)}
+                        disabled={undoing}
+                      >
+                        <IconX size={12} />
+                      </button>
+                    </div>
+
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 999,
+                        background: statusColor,
+                        flexShrink: 0,
+                        boxShadow: stepStatus === "active" ? "0 0 8px rgba(91,106,240,0.45)" : "none",
+                      }}
+                    />
                   </div>
 
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 999,
-                      background: statusColor,
-                      boxShadow: stepStatus === "active" ? "0 0 8px rgba(91,106,240,0.45)" : "none",
-                    }}
-                  />
+                  {/* Row 2: input → output table flow */}
+                  {(step.input_tables?.length || step.output_table) ? (
+                    <div style={{ paddingLeft: 24, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      {step.input_tables?.map((t) => (
+                        <span key={t} className="mono" style={{ fontSize: 10, color: "#a1a1aa", background: "#18181b", borderRadius: 3, padding: "1px 4px", border: "1px solid #27272a" }}>
+                          {t}
+                        </span>
+                      ))}
+                      {step.input_tables?.length && step.output_table ? (
+                        <span style={{ fontSize: 10, color: "#52525b" }}>→</span>
+                      ) : null}
+                      {step.output_table ? (
+                        <span className="mono" style={{ fontSize: 10, color: "#818cf8", background: "#1e1b4b", borderRadius: 3, padding: "1px 4px", border: "1px solid #312e81" }}>
+                          {step.output_table}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {/* Row 3: row count delta + execution time */}
+                  {(rowDelta !== null || step.row_count_after != null || step.execution_time_ms != null) ? (
+                    <div style={{ paddingLeft: 24, display: "flex", alignItems: "center", gap: 8, color: "var(--tx2)", fontSize: 10 }}>
+                      {step.row_count_after != null ? (
+                        <span>
+                          <span style={{ color: "#71717a" }}>{step.row_count_after.toLocaleString()} rows</span>
+                          {rowDelta !== null ? (
+                            <span style={{ marginLeft: 4, color: rowDelta >= 0 ? "#22c55e" : "#f87171" }}>
+                              ({rowDelta >= 0 ? "+" : ""}{rowDelta.toLocaleString()})
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {step.execution_time_ms != null ? (
+                        <span style={{ color: "#52525b" }}>{step.execution_time_ms}ms</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {/* Row 4: error message */}
+                  {step.error_message ? (
+                    <div style={{ paddingLeft: 24, fontSize: 10, color: "#f87171", wordBreak: "break-word" }}>
+                      {step.error_message}
+                    </div>
+                  ) : null}
+
+                  {/* Row 5: SQL toggle */}
+                  {step.sql ? (
+                    <div style={{ paddingLeft: 24 }}>
+                      <button
+                        onClick={() =>
+                          setExpandedStepIds((prev) => {
+                            const next = new Set(prev);
+                            isSqlExpanded ? next.delete(step.id) : next.add(step.id);
+                            return next;
+                          })
+                        }
+                        style={{ fontSize: 10, color: "#52525b", textDecoration: "underline", cursor: "pointer" }}
+                      >
+                        {isSqlExpanded ? "hide SQL" : "show SQL"}
+                      </button>
+                      {isSqlExpanded ? (
+                        <pre
+                          className="mono"
+                          style={{
+                            marginTop: 4,
+                            fontSize: 10,
+                            color: "#a1a1aa",
+                            background: "#09090b",
+                            borderRadius: 4,
+                            padding: "6px 8px",
+                            overflowX: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-all",
+                            maxHeight: 120,
+                            overflowY: "auto",
+                          }}
+                        >
+                          {step.sql}
+                        </pre>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from ....db import SessionLocal
-from ....models_db import PipelineRunV2DB
+from ....models_db import ArtifactDB, PipelineRunV2DB, PipelineStepDB
 from ..state import AgentState
 
 
@@ -86,6 +86,63 @@ async def pipeline_recorder(state: AgentState) -> dict:
                 step["agent_run_id"] = run_id
                 if not step.get("run_id"):
                     step["run_id"] = run_id
+
+            # ── Write per-step rows ──────────────────────────────────────────
+            # Build a lookup of execution_result by step_number for extra fields
+            result_by_step: dict[int, dict] = {
+                r["step_number"]: r for r in results
+            }
+            for step in saved_steps:
+                snum = step.get("step_number", 0)
+                result = result_by_step.get(snum, {})
+
+                artifact_id: str | None = None
+                artifact_s3_key = result.get("artifact_s3_key")
+                if artifact_s3_key:
+                    artifact_id = str(uuid.uuid4())
+                    artifact_row = ArtifactDB(
+                        id=artifact_id,
+                        user_id=str(state.get("user_id") or "agent"),
+                        session_id=state.get("session_id"),
+                        pipeline_run_id=run_id,
+                        step_id=None,   # will be patched below
+                        name=str(result.get("output_table") or step.get("output_table") or f"artifact_{snum}"),
+                        description=step.get("description"),
+                        s3_key=artifact_s3_key,
+                        row_count=result.get("row_count_after") or result.get("rows_affected"),
+                        column_schema=result.get("column_schema") or [],
+                        type="auto",
+                        format="parquet",
+                    )
+                    db.add(artifact_row)
+
+                step_id = str(uuid.uuid4())
+                step_row = PipelineStepDB(
+                    id=step_id,
+                    pipeline_run_id=run_id,
+                    user_id=str(state.get("user_id") or "agent"),
+                    session_id=state.get("session_id"),
+                    step_number=snum,
+                    intent=step.get("intent") or step.get("operation"),
+                    operation=step.get("operation", "transform"),
+                    description=step.get("description"),
+                    input_tables=step.get("input_tables") or result.get("input_tables") or [],
+                    output_table=step.get("output_table") or result.get("output_table"),
+                    duckdb_sql=step.get("sql"),
+                    status="completed" if result.get("success", True) else "failed",
+                    error_message=result.get("error"),
+                    execution_time_ms=result.get("execution_time_ms"),
+                    row_count_before=result.get("row_count_before"),
+                    row_count_after=result.get("row_count_after") or result.get("rows_affected"),
+                    artifact_id=artifact_id,
+                )
+                db.add(step_row)
+
+                # Patch artifact.step_id now that we have step_id
+                if artifact_id and artifact_s3_key:
+                    artifact_row.step_id = step_id
+
+            db.commit()
         finally:
             db.close()
 

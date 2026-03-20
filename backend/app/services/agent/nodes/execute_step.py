@@ -14,6 +14,7 @@ from ...duckdb_session import (
 )
 from ...export_service import ExportService
 from ...echarts_builder import build_echarts_config, infer_chart_type
+from ...object_storage import StorageService
 
 
 async def execute_step(state: AgentState) -> dict:
@@ -293,6 +294,11 @@ async def execute_step(state: AgentState) -> dict:
                     if not step_sql:
                         raise ValueError(f"No SQL provided for {intent_key} step")
 
+                    artifact_s3_key: str | None = None
+                    column_schema: list = []
+                    row_count_before: int | None = None
+                    _step_start_ts = datetime.now(timezone.utc)
+
                     if session_id:
                         register_table_from_sql(session_id, output_table, step_sql)
                         # Try to get row count from new table
@@ -302,15 +308,51 @@ async def execute_step(state: AgentState) -> dict:
                         except Exception:
                             rows_out = None
 
-                        # Try to get column names
+                        # Try to get column schema via DESCRIBE
                         try:
-                            sample = execute_in_session(session_id, f"SELECT * FROM {output_table} LIMIT 1")
-                            out_cols = list(sample[0].keys()) if sample else []
+                            desc_rows = execute_in_session(session_id, f"DESCRIBE {output_table}")
+                            out_cols = [r["column_name"] for r in desc_rows] if desc_rows else []
+                            column_schema = [
+                                {"name": r.get("column_name"), "type": r.get("column_type")}
+                                for r in (desc_rows or [])
+                            ]
                         except Exception:
-                            out_cols = []
+                            try:
+                                sample = execute_in_session(session_id, f"SELECT * FROM {output_table} LIMIT 1")
+                                out_cols = list(sample[0].keys()) if sample else []
+                            except Exception:
+                                out_cols = []
+
+                        # Upload Parquet snapshot to S3 (best-effort)
+                        try:
+                            import io as _io
+                            import pyarrow as _pa
+                            import pyarrow.parquet as _pq
+                            _rows = execute_in_session(session_id, f"SELECT * FROM {output_table}")
+                            if _rows:
+                                _table = _pa.Table.from_pylist(_rows)
+                                _parquet_buf = _io.BytesIO()
+                                _pq.write_table(_table, _parquet_buf)
+                                _parquet_bytes = _parquet_buf.getvalue()
+                                _artifact_name = f"{output_table}.parquet"
+                                artifact_s3_key = StorageService.upload(
+                                    user_id=str(state.get("user_id") or "agent"),
+                                    dataset_id=f"artifacts/{session_id or 'nosession'}",
+                                    buffer=_parquet_bytes,
+                                    file_name=_artifact_name,
+                                )
+                        except Exception as _upload_exc:
+                            import logging as _logging
+                            _logging.getLogger(__name__).warning(
+                                "artifact S3 upload failed for %s: %s", output_table, _upload_exc
+                            )
                     else:
                         rows_out = None
                         out_cols = []
+
+                    _exec_time_ms = int(
+                        (datetime.now(timezone.utc) - _step_start_ts).total_seconds() * 1000
+                    )
 
                     # Update table_registry
                     input_tables = list(parameters.get("input_tables") or [])
@@ -346,6 +388,13 @@ async def execute_step(state: AgentState) -> dict:
                         "output_dataset_id": state.get("dataset_id"),
                         "sql": step_sql,
                         "error": None,
+                        "output_table": output_table,
+                        "input_tables": input_tables,
+                        "row_count_before": row_count_before,
+                        "row_count_after": rows_out,
+                        "execution_time_ms": _exec_time_ms,
+                        "column_schema": column_schema,
+                        "artifact_s3_key": artifact_s3_key,
                     }
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],

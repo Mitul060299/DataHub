@@ -256,6 +256,29 @@ async def run_pipeline(
                     execution_log.append({**log_entry, "status": "skipped", "note": "no SQL"})
                     continue
 
+                # ── Validate input_tables are present in the DuckDB connection ─
+                required_tables: list[str] = []
+                _raw_it = step.get("input_tables") or (step.get("parameters") or {}).get("input_tables") or []
+                if isinstance(_raw_it, list):
+                    required_tables = [str(t) for t in _raw_it if t]
+                _missing = None
+                for _tbl in required_tables:
+                    try:
+                        con.execute(f"SELECT * FROM {_tbl} LIMIT 0")
+                    except Exception:
+                        _missing = _tbl
+                        break
+                if _missing:
+                    error_msg = (
+                        f"Step {step_num} requires table '{_missing}' which was not found in the "
+                        f"replay context. Ensure all source files are uploaded before running "
+                        f"this pipeline."
+                    )
+                    log_entry.update({"status": "failed", "error": error_msg})
+                    execution_log.append(log_entry)
+                    failed = True
+                    break
+
                 try:
                     con.execute(sql)
                     step_end = datetime.now(timezone.utc)

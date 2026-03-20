@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -264,7 +264,7 @@ def update_project(
     return _project_out(project, db)
 
 
-@router.delete("/{project_id}", status_code=204)
+@router.delete("/{project_id}", status_code=204, response_class=Response)
 def delete_project(
     project_id: str,
     current_user: CurrentUser = Depends(get_current_user),

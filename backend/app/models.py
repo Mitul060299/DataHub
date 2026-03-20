@@ -711,3 +711,95 @@ class PipelineRunOut(BaseModel):
     run_id: str
     message: str = "Pipeline run triggered"
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Projects
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProjectCreate(BaseModel):
+    name: str = Field(..., max_length=50)
+    description: Optional[str] = Field(default=None, max_length=200)
+    colour: str = Field(default="#5B6AF0")
+    icon: str = Field(default="📁")
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=50)
+    description: Optional[str] = Field(default=None, max_length=200)
+    colour: Optional[str] = None
+    icon: Optional[str] = None
+
+
+class ProjectOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    colour: str
+    icon: str
+    workspace_id: str
+    pipeline_count: int = 0
+    dashboard_count: int = 0
+    source_count: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class RecentPipelineRow(BaseModel):
+    id: str
+    name: str
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+    last_run_at: Optional[str] = None
+    status: str = "draft"
+    step_count: int = 0
+
+
+class RecentDashboardRow(BaseModel):
+    id: str
+    name: str
+    project_id: Optional[str] = None
+    tile_count: int = 0
+    is_published: bool = False
+    updated_at: Optional[str] = None
+
+
+class WorkspaceRecentOut(BaseModel):
+    recent_projects: List[ProjectOut] = Field(default_factory=list)
+    recent_pipelines: List[RecentPipelineRow] = Field(default_factory=list)
+    recent_dashboards: List[RecentDashboardRow] = Field(default_factory=list)
+
+
+class ProjectPipelineOut(BaseModel):
+    id: str
+    name: str
+    status: str
+    step_count: int = 0
+    last_run_at: Optional[str] = None
+    last_run_status: Optional[str] = None
+    cron_expression: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ProjectDashboardOut(BaseModel):
+    id: str
+    name: str
+    tile_count: int = 0
+    is_published: bool = False
+    share_token: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ProjectSourceOut(BaseModel):
+    id: str
+    name: str
+    source_type: str
+    is_active: bool
+    last_pulled_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class ProjectDetailOut(BaseModel):
+    project: ProjectOut
+    pipelines: List[ProjectPipelineOut] = Field(default_factory=list)
+    dashboards: List[ProjectDashboardOut] = Field(default_factory=list)
+    sources: List[ProjectSourceOut] = Field(default_factory=list)

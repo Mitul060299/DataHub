@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { api } from "../../api";
+import { useState } from "react";
 import type { Project } from "../../contexts/WorkspaceContext";
+import { useWorkspaceContext } from "../../contexts/WorkspaceContext";
+import { NewProjectModal } from "./NewProjectModal";
 
 interface ProjectModalProps {
   open: boolean;
@@ -9,103 +10,47 @@ interface ProjectModalProps {
   onClose: () => void;
 }
 
-type ApiProject = {
-  id: string;
-  name: string;
-  member_count?: number;
-  description?: string;
-  color?: string;
-};
-
-export function ProjectModal({ open, workspaceId, onSelect, onClose }: ProjectModalProps) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    const load = async () => {
-      try {
-        const response = await api.get<ApiProject[]>(`/workspaces/${workspaceId}/projects`);
-        const mapped = response.data.map((project) => ({
-          id: project.id,
-          name: project.name,
-          color: project.color ?? "#5b6af0",
-          initial: project.name.slice(0, 1).toUpperCase(),
-          workspaceId,
-          memberCount: project.member_count ?? 0,
-          description: project.description,
-        }));
-        setProjects(mapped);
-      } catch {
-        setProjects([]);
-      }
-    };
-    void load();
-  }, [open, workspaceId]);
+export function ProjectModal({ open, onSelect, onClose }: ProjectModalProps) {
+  const { projects, projectsLoading } = useWorkspaceContext();
+  const [newOpen, setNewOpen] = useState(false);
 
   if (!open) return null;
 
-  const createProject = async () => {
-    if (!name.trim()) return;
-    try {
-      const response = await api.post(`/workspaces/${workspaceId}/projects`, { name, description });
-      const created = response.data as ApiProject;
-      setProjects([
-        ...projects,
-        {
-          id: created.id ?? crypto.randomUUID(),
-          name,
-          color: created.color ?? "#5b6af0",
-          initial: name.slice(0, 1).toUpperCase(),
-          workspaceId,
-          memberCount: created.member_count ?? 0,
-          description,
-        },
-      ]);
-    } catch {
-      setProjects([
-        ...projects,
-        {
-          id: crypto.randomUUID(),
-          name,
-          color: "#5b6af0",
-          initial: name.slice(0, 1).toUpperCase(),
-          workspaceId,
-          memberCount: 1,
-          description,
-        },
-      ]);
-    }
-    setName("");
-    setDescription("");
-  };
-
   return (
-    <div style={overlay}>
-      <div style={modal}>
-        <h3 style={{ marginBottom: 10 }}>Projects</h3>
-        <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto" }}>
-          {projects.map((project) => (
-            <button key={project.id} className="btn" style={{ justifyContent: "space-between", display: "flex", height: 36 }} onClick={() => { onSelect(project); onClose(); }}>
-              <span>{project.name}</span>
-              <span style={{ color: "var(--tx1)", fontSize: 12 }}>{project.memberCount ?? 0} members</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ marginTop: 12, borderTop: "1px solid var(--bd)", paddingTop: 12 }}>
-          <p style={{ marginBottom: 8 }}>+ New project</p>
-          <div style={{ display: "grid", gap: 8 }}>
-            <input className="auth-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Project name" />
-            <input className="auth-input" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Description" />
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <button className="btn" onClick={onClose}>Close</button>
-              <button className="btn btn-primary" onClick={() => void createProject()}>Create</button>
-            </div>
+    <>
+      <div style={overlay}>
+        <div style={modal}>
+          <h3 style={{ marginBottom: 10, fontSize: 15, fontWeight: 600, color: "var(--tx0)" }}>Select Project</h3>
+          <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto" }}>
+            {projectsLoading && <p style={{ fontSize: 13, color: "var(--tx1)" }}>Loading…</p>}
+            {!projectsLoading && projects.length === 0 && (
+              <p style={{ fontSize: 13, color: "var(--tx1)" }}>No projects yet.</p>
+            )}
+            {projects.map((project) => (
+              <button
+                key={project.id}
+                className="btn"
+                style={{ justifyContent: "flex-start", display: "flex", height: 36, gap: 8 }}
+                onClick={() => { onSelect(project); onClose(); }}
+              >
+                <span>{project.icon}</span>
+                <span>{project.name}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ marginTop: 12, borderTop: "1px solid var(--bd)", paddingTop: 12, display: "flex", justifyContent: "space-between" }}>
+            <button className="btn" onClick={onClose}>Close</button>
+            <button className="btn btn-primary" onClick={() => setNewOpen(true)}>+ New Project</button>
           </div>
         </div>
       </div>
-    </div>
+
+      <NewProjectModal
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        onCreated={(project) => { onSelect(project); onClose(); }}
+      />
+    </>
   );
 }
 
@@ -119,9 +64,10 @@ const overlay: React.CSSProperties = {
 };
 
 const modal: React.CSSProperties = {
-  width: "min(560px, 92vw)",
-  background: "var(--bg1)",
+  background: "var(--bg2)",
   border: "1px solid var(--bd2)",
-  borderRadius: "var(--r12)",
-  padding: 14,
+  borderRadius: 12,
+  padding: "24px 24px 20px",
+  width: 360,
+  boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
 };

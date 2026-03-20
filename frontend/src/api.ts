@@ -994,3 +994,117 @@ export async function rejectRequest(requestId: string) {
   const response = await api.post(`/approvals/${requestId}/reject`);
   return response.data;
 }
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export interface ProjectOut {
+  id: string;
+  name: string;
+  description?: string | null;
+  colour: string;
+  icon: string;
+  workspace_id: string;
+  pipeline_count: number;
+  dashboard_count: number;
+  source_count: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface RecentPipelineRow {
+  id: string;
+  name: string;
+  project_id?: string | null;
+  project_name?: string | null;
+  last_run_at?: string | null;
+  status?: string | null;
+  step_count: number;
+}
+
+export interface RecentDashboardRow {
+  id: string;
+  name: string;
+  project_id?: string | null;
+  tile_count: number;
+  is_published: boolean;
+  updated_at?: string | null;
+}
+
+export interface WorkspaceRecentOut {
+  recent_projects: ProjectOut[];
+  recent_pipelines: RecentPipelineRow[];
+  recent_dashboards: RecentDashboardRow[];
+}
+
+export interface ProjectPipelineOut {
+  id: string;
+  name: string;
+  status?: string | null;
+  step_count: number;
+  last_run_at?: string | null;
+  last_run_status?: string | null;
+  cron_expression?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ProjectDashboardOut {
+  id: string;
+  name: string;
+  tile_count: number;
+  is_published: boolean;
+  share_token?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ProjectSourceOut {
+  id: string;
+  name: string;
+  source_type?: string | null;
+  is_active: boolean;
+  last_pulled_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface ProjectDetailOut {
+  project: ProjectOut;
+  pipelines: ProjectPipelineOut[];
+  dashboards: ProjectDashboardOut[];
+  sources: ProjectSourceOut[];
+}
+
+export async function fetchProjects(): Promise<ProjectOut[]> {
+  const response = await api.get("/projects");
+  return response.data;
+}
+
+export async function createProject(payload: {
+  name: string;
+  description?: string;
+  colour?: string;
+  icon?: string;
+}): Promise<ProjectOut> {
+  const response = await api.post("/projects", payload);
+  return response.data;
+}
+
+export async function updateProject(
+  id: string,
+  payload: { name?: string; description?: string; colour?: string; icon?: string },
+): Promise<ProjectOut> {
+  const response = await api.patch(`/projects/${id}`, payload);
+  return response.data;
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await api.delete(`/projects/${id}`);
+}
+
+export async function fetchProjectDetail(id: string): Promise<ProjectDetailOut> {
+  const response = await api.get(`/projects/${id}`);
+  return response.data;
+}
+
+export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
+  const response = await api.get("/workspace/recent");
+  return response.data;
+}

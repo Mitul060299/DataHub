@@ -15,6 +15,26 @@ class User(Base):
     has_uploaded_first_file = Column(Boolean, nullable=False, default=False)
 
 
+class ProjectDB(Base):
+    """User-scoped project that groups pipelines, dashboards and data sources."""
+    __tablename__ = "projects"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    colour = Column(String, nullable=False, default="#5B6AF0")
+    icon = Column(String, nullable=False, default="📁")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_projects_user_id", "user_id"),
+        Index("idx_projects_workspace_id", "workspace_id"),
+    )
+
+
 class Workspace(Base):
     __tablename__ = "workspaces"
     id = Column(String, primary_key=True)
@@ -348,6 +368,7 @@ class DashboardV2DB(Base):
     user_id = Column(String, nullable=False)
     workspace_id = Column(String, nullable=False, default="default")
     dataset_id = Column(String, nullable=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     layout = Column(JSONB, nullable=False, default=dict)
@@ -456,6 +477,7 @@ class DataSourceDB(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     name = Column(String, nullable=False)
     source_type = Column(String(50), nullable=False)   # manual_upload | s3_folder | google_sheets | sftp | url
     config = Column(JSONB, nullable=False, default=dict)  # connection details (encrypted at rest in Supabase)
@@ -555,7 +577,8 @@ class PipelineV2DB(Base):
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
     workspace_id = Column(String, nullable=False)
-    
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+
     name = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     type = Column(String(50), nullable=False, default='manual')

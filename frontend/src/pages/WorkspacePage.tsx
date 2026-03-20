@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { ActivityBar } from "../components/ActivityBar";
+import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
 import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
@@ -16,7 +18,13 @@ import { capture } from "../lib/posthog";
 const workspaceId = "default";
 
 export function WorkspacePage() {
-  const { activeProject, activeDataset } = useWorkspaceContext();
+  const { projectId } = useParams<{ projectId?: string }>();
+  const { activeProject, activeDataset, projects } = useWorkspaceContext();
+
+  // Resolve project from URL param or fall back to activeProject
+  const resolvedProject = projectId
+    ? (projects.find((p) => p.id === projectId) ?? activeProject)
+    : activeProject;
   const { runPipeline, steps } = usePipelineContext();
   const { exportPipeline } = usePipeline();
   const { data, loading, refetch } = useDataset(activeDataset?.id);
@@ -73,8 +81,18 @@ export function WorkspacePage() {
     };
   }, [resizingExplorer]);
 
+  const breadcrumbSegments = [
+    { label: "Workspace", href: "/workspace" },
+    ...(resolvedProject
+      ? [{ label: resolvedProject.name, href: `/workspace/project/${resolvedProject.id}` }]
+      : []),
+    { label: "Pipeline Editor" },
+  ];
+
   return (
-    <main style={{ height: "calc(100% - var(--th))", display: "flex", minWidth: 0, minHeight: 0 }}>
+    <>
+      <Breadcrumb segments={breadcrumbSegments} />
+      <main style={{ height: "calc(100% - var(--th) - 36px)", display: "flex", minWidth: 0, minHeight: 0 }}>
       <ActivityBar
         explorerOpen={explorerOpen}
         onToggleExplorer={() => setExplorerOpen((value) => !value)}
@@ -126,7 +144,7 @@ export function WorkspacePage() {
       <AIPanel
         dataset={activeDataset}
         workspaceId={workspaceId}
-        projectId={activeProject?.id ?? "default"}
+        projectId={resolvedProject?.id ?? "default"}
         onStepApplied={() => {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();
@@ -164,5 +182,6 @@ export function WorkspacePage() {
         </div>
       )}
     </main>
+    </>
   );
 }

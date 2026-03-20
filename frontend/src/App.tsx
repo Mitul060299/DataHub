@@ -5,10 +5,12 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketplacePage } from "./pages/MarketplacePage";
 import { PricingPage } from "./pages/PricingPage";
+import { ProjectHomePage } from "./pages/ProjectHomePage";
 import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignupPage } from "./pages/SignupPage";
 import { SourcesPage } from "./pages/SourcesPage";
+import { WorkspaceHomePage } from "./pages/WorkspaceHomePage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
 export function App() {
@@ -21,7 +23,9 @@ export function App() {
       <Route path="/" element={<AppShell />}>
         <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<HomePage />} />
-        <Route path="workspace" element={<WorkspacePage />} />
+        <Route path="workspace" element={<WorkspaceHomePage />} />
+        <Route path="workspace/project/:projectId" element={<ProjectHomePage />} />
+        <Route path="workspace/project/:projectId/pipeline/:pipelineId" element={<WorkspacePage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="pricing" element={<PricingPage />} />
         <Route path="settings" element={<SettingsPage section="settings" />} />

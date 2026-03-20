@@ -7,6 +7,7 @@ from .routers import health, datasets, profiling, transformations, auth, plugins
 from .routers import ml_routes, full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
 from .routers import dashboard_access
+from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine
 from . import models_db
@@ -134,3 +135,5 @@ app.include_router(billing.router)
 app.include_router(pipeline_refresh.router)
 app.include_router(cron.router)
 app.include_router(data_sources.router)
+app.include_router(projects_router)
+app.include_router(workspace_recent_router)

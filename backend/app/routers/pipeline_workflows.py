@@ -59,6 +59,90 @@ class ClonePipelineRequest(BaseModel):
     workspace_id: Optional[str] = None
 
 
+class CreateFromTemplateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    workspace_id: str = "default"
+
+
+# ── Template endpoints ────────────────────────────────────────────────────────
+
+@router.get("/templates")
+async def list_pipeline_templates(
+    category: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+):
+    """Return available built-in pipeline templates."""
+    from app.services.pipeline_template_service import list_templates
+    templates = list_templates(category=category, tag=tag)
+    # Lightweight response — omit full steps list for the listing
+    return {
+        "templates": [
+            {
+                "id": t["id"],
+                "name": t["name"],
+                "description": t["description"],
+                "category": t["category"],
+                "tags": t["tags"],
+                "steps_count": len(t["steps"]),
+            }
+            for t in templates
+        ]
+    }
+
+
+@router.get("/templates/{template_id}")
+async def get_pipeline_template(
+    template_id: str,
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+):
+    """Return full template definition including steps."""
+    from app.services.pipeline_template_service import get_template
+    template = get_template(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"template": template}
+
+
+@router.post("/templates/{template_id}/instantiate")
+async def instantiate_pipeline_template(
+    template_id: str,
+    payload: CreateFromTemplateRequest,
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+):
+    """Create a new pipeline pre-populated with a template's steps."""
+    from app.services.pipeline_template_service import get_template
+    template = get_template(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    engine = _resolve_pipeline_engine(db, current_user_id, authorization)
+    pipeline = engine.create_pipeline(
+        name=payload.name or template["name"],
+        steps=template["steps"],
+        description=payload.description or template["description"],
+        workspace_id=payload.workspace_id,
+        execution_config={},
+        is_public=False,
+    )
+    return {
+        "success": True,
+        "data": {
+            "id": str(pipeline.id),
+            "name": pipeline.name,
+            "status": pipeline.status,
+            "version": pipeline.version,
+            "steps_count": len(pipeline.steps),
+            "template_id": template_id,
+        },
+    }
+
+
 @router.post("")
 async def create_pipeline(
     payload: CreatePipelineRequest,

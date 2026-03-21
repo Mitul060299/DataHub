@@ -4,6 +4,7 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
 import { api } from "../api";
+import { TemplatePickerModal } from "./modals/TemplatePickerModal";
 
 interface PipelineSectionProps {
   onSchedule: () => void;
@@ -54,6 +55,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [artifactRunId, setArtifactRunId] = useState("");
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactData, setArtifactData] = useState<PipelineRunArtifact | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -709,7 +711,16 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       {open && (steps.length || activeDataset?.id) ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8, display: "grid", gap: 8 }}>
-            <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>WORKFLOW TEMPLATE</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>WORKFLOW TEMPLATE</div>
+              <button
+                className="btn"
+                style={{ fontSize: 11, padding: "3px 8px" }}
+                onClick={() => setTemplatePickerOpen(true)}
+              >
+                Browse Templates
+              </button>
+            </div>
             <select
               value={selectedTemplateId}
               onChange={(event) => setSelectedTemplateId(event.target.value)}
@@ -945,6 +956,17 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           ) : null}
         </footer>
       ) : null}
+
+      <TemplatePickerModal
+        open={templatePickerOpen}
+        workspaceId={activeProject?.workspaceId ?? "default"}
+        onClose={() => setTemplatePickerOpen(false)}
+        onCreated={(pipelineId, _pipelineName) => {
+          setSelectedTemplateId(pipelineId);
+          setPipelineWorkflowId(pipelineId);
+          setWorkflowMessage(`Pipeline created from template. Ready to run.`);
+        }}
+      />
     </section>
   );
 }

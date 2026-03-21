@@ -15,6 +15,8 @@ from app.security import get_current_subject
 from app.services.plan_guard import resolve_user_plan
 from app.services.pipeline_engine import PipelineEngine
 from app.services.rate_limiter import limiter
+from app.services.audit import audit_store
+from app.models import AuditEntry
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipeline-workflows"])
 
@@ -355,6 +357,16 @@ async def execute_pipeline(
     user_plan = resolve_user_plan(db, authorization)
     enforce_usage_limit(current_user_id, user_plan, "pipeline_runs", db)
     _inc_usage(current_user_id, "pipeline_runs", db)
+    # Audit trail
+    try:
+        audit_store.add(AuditEntry(
+            action="pipeline.run",
+            actor=current_user_id,
+            target=f"pipeline:{pipeline_id}",
+            metadata={"input_dataset_id": payload.input_dataset_id, "triggered_by": payload.triggered_by},
+        ))
+    except Exception:
+        pass
 
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 

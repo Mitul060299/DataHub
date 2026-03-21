@@ -37,6 +37,8 @@ from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.usage_service import enforce_usage_limit, increment_usage
+from ..services.audit import audit_store
+from ..models import AuditEntry
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB
 from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
@@ -240,6 +242,16 @@ async def upload_dataset(
     db.commit()
     # Track monthly dataset upload usage
     increment_usage(user_id, "datasets_uploaded", db)
+    # Audit trail
+    try:
+        audit_store.add(AuditEntry(
+            action="dataset.upload",
+            actor=user_id or "anonymous",
+            target=f"dataset:{dataset_id}",
+            metadata={"name": resolved_name, "rows": int(df.shape[0]), "columns": list(df.columns)},
+        ))
+    except Exception:
+        pass
     preview = DatasetPreview(
         dataset_id=dataset_id,
         name=resolved_name,
@@ -793,6 +805,7 @@ def clear_dataset_cache(
 def delete_dataset(dataset_id: str, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
     if dataset_id in _DATASETS:
         _DATASETS.pop(dataset_id, None)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
@@ -807,6 +820,16 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
     db.commit()
     invalidate_profile_cache(dataset_id)
     emit_event("dataset.deleted", {"dataset_id": dataset_id})
+    # Audit trail
+    try:
+        audit_store.add(AuditEntry(
+            action="dataset.delete",
+            actor=user_id or "anonymous",
+            target=f"dataset:{dataset_id}",
+            metadata={},
+        ))
+    except Exception:
+        pass
     return {"status": "deleted", "dataset_id": dataset_id}
 
 

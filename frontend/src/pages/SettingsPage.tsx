@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { formatFileSize, useUser } from "../contexts/UserContext";
 import { billingEnabled } from "../utils/featureFlags";
 
-type SettingsSection = "profile" | "settings" | "billing" | "usage";
+type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit";
 
 interface SettingsPageProps {
   section: SettingsSection;
@@ -120,6 +120,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
             )
           ) : null}
           {section === "usage" ? <UsagePanel /> : null}
+          {section === "audit" ? <AuditPanel /> : null}
         </div>
       </div>
     </div>
@@ -170,6 +171,17 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 3v18h18" />
           <path d="M7 16l4-4 4 4 4-6" />
+        </svg>
+      ),
+    },
+    {
+      key: "audit",
+      label: "Audit Log",
+      path: "/settings/audit",
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6M8 13h8M8 17h5" />
         </svg>
       ),
     },
@@ -510,6 +522,251 @@ function UsagePanel() {
           Upgrade Plan
         </button>
       </div>
+    </div>
+  );
+}
+// ── Audit Log Panel ────────────────────────────────────────────────────────────
+
+type AuditFilterAction = "" | "auth.login" | "dataset.upload" | "dataset.delete" | "pipeline.run";
+
+interface AuditEntry {
+  id: string;
+  action: string;
+  actor: string;
+  target: string;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+}
+
+interface AuditLogResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  entries: AuditEntry[];
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  "auth.login": "Login",
+  "dataset.upload": "Upload",
+  "dataset.delete": "Delete",
+  "pipeline.run": "Pipeline Run",
+};
+
+const ACTION_COLORS: Record<string, string> = {
+  "auth.login": "#5B6AF0",
+  "dataset.upload": "#22b573",
+  "dataset.delete": "#c94040",
+  "pipeline.run": "#e8a020",
+};
+
+function AuditBadge({ action }: { action: string }) {
+  const color = ACTION_COLORS[action] ?? "#8888a0";
+  const label = ACTION_LABELS[action] ?? action;
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "2px 8px",
+        borderRadius: 4,
+        background: color + "22",
+        color,
+        border: `1px solid ${color}55`,
+        letterSpacing: "0.04em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function AuditPanel() {
+  const [filterAction, setFilterAction] = useState<AuditFilterAction>("");
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const PAGE = 20;
+
+  const load = (off: number, action: AuditFilterAction) => {
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({ limit: String(PAGE), offset: String(off) });
+    if (action) params.set("action", action);
+    api
+      .get<AuditLogResponse>(`/users/me/audit-log?${params.toString()}`)
+      .then((r) => {
+        setEntries(r.data.entries);
+        setTotal(r.data.total);
+        setOffset(off);
+      })
+      .catch(() => setError("Failed to load audit log."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load(0, filterAction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterAction]);
+
+  const formatDate = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE));
+  const currentPage = Math.floor(offset / PAGE) + 1;
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h2 style={{ fontSize: 18, color: "#e8e8f0", margin: 0 }}>Audit Log</h2>
+          <p style={{ color: "#8888a0", fontSize: 12, margin: "4px 0 0" }}>
+            A record of key actions performed in your account.
+          </p>
+        </div>
+        <select
+          value={filterAction}
+          onChange={(e) => setFilterAction(e.target.value as AuditFilterAction)}
+          style={{
+            background: "#18181e",
+            border: "1px solid #2a2a38",
+            color: "#e8e8f0",
+            borderRadius: 7,
+            padding: "6px 10px",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          <option value="">All actions</option>
+          <option value="auth.login">Login</option>
+          <option value="dataset.upload">Dataset Upload</option>
+          <option value="dataset.delete">Dataset Delete</option>
+          <option value="pipeline.run">Pipeline Run</option>
+        </select>
+      </div>
+
+      {loading && <p style={{ color: "#8888a0", fontSize: 13 }}>Loading…</p>}
+      {error && <p style={{ color: "#c94040", fontSize: 13 }}>{error}</p>}
+
+      {!loading && !error && entries.length === 0 && (
+        <p style={{ color: "#8888a0", fontSize: 13 }}>No audit events found.</p>
+      )}
+
+      {!loading && entries.length > 0 && (
+        <div
+          style={{
+            border: "1px solid #22222a",
+            borderRadius: 8,
+            overflow: "hidden",
+          }}
+        >
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#18181e" }}>
+                {["Action", "Resource", "Timestamp"].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "9px 14px",
+                      textAlign: "left",
+                      color: "#8888a0",
+                      fontWeight: 600,
+                      fontSize: 11,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      borderBottom: "1px solid #22222a",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e, idx) => (
+                <tr
+                  key={e.id}
+                  style={{
+                    borderBottom: idx < entries.length - 1 ? "1px solid #1a1a22" : "none",
+                    background: idx % 2 === 0 ? "transparent" : "#111115",
+                  }}
+                >
+                  <td style={{ padding: "9px 14px" }}>
+                    <AuditBadge action={e.action} />
+                  </td>
+                  <td
+                    style={{
+                      padding: "9px 14px",
+                      color: "#c8c8d8",
+                      fontFamily: "monospace",
+                      fontSize: 11,
+                      maxWidth: 240,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={e.target}
+                  >
+                    {e.target}
+                  </td>
+                  <td style={{ padding: "9px 14px", color: "#8888a0" }}>
+                    {formatDate(e.created_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!loading && total > PAGE && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end" }}>
+          <button
+            disabled={currentPage <= 1}
+            onClick={() => load(offset - PAGE, filterAction)}
+            style={{
+              background: "transparent",
+              border: "1px solid #2a2a38",
+              color: currentPage <= 1 ? "#44445a" : "#e8e8f0",
+              borderRadius: 6,
+              padding: "5px 12px",
+              fontSize: 12,
+              cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+            }}
+          >
+            ← Prev
+          </button>
+          <span style={{ color: "#8888a0", fontSize: 12 }}>
+            Page {currentPage} / {totalPages}
+          </span>
+          <button
+            disabled={currentPage >= totalPages}
+            onClick={() => load(offset + PAGE, filterAction)}
+            style={{
+              background: "transparent",
+              border: "1px solid #2a2a38",
+              color: currentPage >= totalPages ? "#44445a" : "#e8e8f0",
+              borderRadius: 6,
+              padding: "5px 12px",
+              fontSize: 12,
+              cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
+            }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.oidc import build_auth_url, exchange_code, fetch_userinfo, verify_id_token
 from ..config import settings
-from ..models import AuthToken
+from ..models import AuthToken, AuditEntry
+from ..services.audit import audit_store
 from ..services.rate_limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -16,6 +17,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @limiter.limit("10/minute")
 def login(request: Request, username: str) -> AuthToken:
     token_data = create_access_token(username, role="viewer")
+    try:
+        audit_store.add(AuditEntry(
+            action="auth.login",
+            actor=username,
+            target=f"auth:{username}",
+            metadata={"ip": request.client.host if request.client else "unknown"},
+        ))
+    except Exception:
+        pass
     return AuthToken(**token_data)
 
 

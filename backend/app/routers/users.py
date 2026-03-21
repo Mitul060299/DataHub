@@ -341,3 +341,53 @@ def get_my_usage_stats(
             "storage_bytes": limits["storage_bytes"],
         },
     }
+
+
+@router.get("/me/audit-log")
+def get_my_audit_log(
+    action: str | None = None,
+    resource_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return paginated audit log entries for the current user, optionally
+    filtered by action (e.g. 'dataset.upload') or resource_type ('dataset',
+    'pipeline', 'auth')."""
+    from ..models_db import AuditLogDB
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    query = db.query(AuditLogDB).filter(AuditLogDB.actor == subject)
+    if action:
+        query = query.filter(AuditLogDB.action == action)
+    if resource_type:
+        query = query.filter(AuditLogDB.target.like(f"{resource_type}:%"))
+
+    total = query.count()
+    rows = (
+        query
+        .order_by(AuditLogDB.created_at.desc())
+        .offset(offset)
+        .limit(min(limit, 200))
+        .all()
+    )
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "entries": [
+            {
+                "id": r.id,
+                "action": r.action,
+                "actor": r.actor,
+                "target": r.target,
+                "metadata": r.metadata_,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+    }

@@ -784,3 +784,15 @@ class ChatSessionSnapshotDB(Base):
     
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
+
+class DashboardCommentDB(Base):
+    """User comments on a dashboard (threaded or flat)."""
+    __tablename__ = "dashboard_comments"
+
+    id = Column(String, primary_key=True)
+    dashboard_id = Column(String, nullable=False, index=True)
+    user_id = Column(String, nullable=False)
+    author_name = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

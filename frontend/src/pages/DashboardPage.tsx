@@ -11,6 +11,7 @@ import type { DashboardV2, DashboardV2Tile } from "../types";
 import { EChartsRenderer } from "../components/EChartsRenderer";
 import { MetricTile } from "../components/MetricTile";
 import { SharePanel } from "../components/SharePanel";
+import { DashboardComments } from "../components/DashboardComments";
 
 // ---------- helpers ----------
 
@@ -459,6 +460,9 @@ export function DashboardPage() {
             </footer>
           )}
         </div>
+
+        {/* Comments thread */}
+        <DashboardComments dashboardId={id} />
       </main>
 
       {showSettings && (

@@ -111,6 +111,17 @@ def create_tables() -> None:
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS version_number INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS version_note TEXT",
         "CREATE INDEX IF NOT EXISTS idx_datasets_parent_id ON dataset_meta (parent_id)",
+        # 0035 — dashboard comments
+        """CREATE TABLE IF NOT EXISTS dashboard_comments (
+            id          TEXT PRIMARY KEY,
+            dashboard_id TEXT NOT NULL,
+            user_id     TEXT NOT NULL,
+            author_name TEXT NOT NULL,
+            body        TEXT NOT NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_comments_dashboard_id ON dashboard_comments (dashboard_id)",
     ]
     try:
         from sqlalchemy import text as _text

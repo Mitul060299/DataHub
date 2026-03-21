@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..models import DashboardTileCreate, DashboardTileOut, DashboardTileUpdate, DashboardV2Create, DashboardV2Out, DashboardV2Update
@@ -12,7 +15,7 @@ from ..security import get_current_role, get_current_subject, require_role
 from ..services.dashboards_v2_service import DashboardsV2Service
 from ..services.rate_limit import FixedWindowRateLimiter
 from ..db import get_db
-from ..models_db import DashboardViewDB
+from ..models_db import DashboardViewDB, DashboardCommentDB
 from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards-v2"])
@@ -287,3 +290,116 @@ def get_shared_dashboard_tiles(
     if dashboard is None:
         raise HTTPException(status_code=404, detail="Shared dashboard not found")
     return dashboard.tiles
+
+
+# ── Dashboard Comments ─────────────────────────────────────────────────────────
+
+class DashboardCommentIn(BaseModel):
+    body: str
+    author_name: Optional[str] = None
+
+
+class DashboardCommentOut(BaseModel):
+    id: str
+    dashboard_id: str
+    user_id: str
+    author_name: str
+    body: str
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/{dashboard_id}/comments", response_model=List[DashboardCommentOut])
+def list_comments(
+    dashboard_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> List[DashboardCommentOut]:
+    """Return all comments for a dashboard, oldest first."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    rows = (
+        db.query(DashboardCommentDB)
+        .filter(DashboardCommentDB.dashboard_id == dashboard_id)
+        .order_by(DashboardCommentDB.created_at.asc())
+        .all()
+    )
+    return [
+        DashboardCommentOut(
+            id=r.id,
+            dashboard_id=r.dashboard_id,
+            user_id=r.user_id,
+            author_name=r.author_name,
+            body=r.body,
+            created_at=r.created_at.isoformat() if r.created_at else "",
+            updated_at=r.updated_at.isoformat() if r.updated_at else "",
+        )
+        for r in rows
+    ]
+
+
+@router.post("/{dashboard_id}/comments", response_model=DashboardCommentOut, status_code=201)
+def create_comment(
+    dashboard_id: str,
+    payload: DashboardCommentIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DashboardCommentOut:
+    """Post a new comment on a dashboard."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_subject(authorization)
+
+    if not payload.body.strip():
+        raise HTTPException(status_code=422, detail="Comment body cannot be empty")
+
+    author = (payload.author_name or "").strip() or user_id or "User"
+    comment = DashboardCommentDB(
+        id=str(uuid.uuid4()),
+        dashboard_id=dashboard_id,
+        user_id=user_id or "anonymous",
+        author_name=author,
+        body=payload.body.strip(),
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return DashboardCommentOut(
+        id=comment.id,
+        dashboard_id=comment.dashboard_id,
+        user_id=comment.user_id,
+        author_name=comment.author_name,
+        body=comment.body,
+        created_at=comment.created_at.isoformat() if comment.created_at else "",
+        updated_at=comment.updated_at.isoformat() if comment.updated_at else "",
+    )
+
+
+@router.delete("/{dashboard_id}/comments/{comment_id}", status_code=204)
+def delete_comment(
+    dashboard_id: str,
+    comment_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete a comment. Only the comment author can delete their own comment."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_subject(authorization)
+
+    comment = (
+        db.query(DashboardCommentDB)
+        .filter(
+            DashboardCommentDB.id == comment_id,
+            DashboardCommentDB.dashboard_id == dashboard_id,
+        )
+        .first()
+    )
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.user_id != user_id:
+        raise HTTPException(status_code=403, detail="You can only delete your own comments")
+    db.delete(comment)
+    db.commit()

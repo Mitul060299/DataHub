@@ -377,13 +377,13 @@ def create_comment(
     )
 
 
-@router.delete("/{dashboard_id}/comments/{comment_id}", status_code=204, response_class=Response)
+@router.delete("/{dashboard_id}/comments/{comment_id}")
 def delete_comment(
     dashboard_id: str,
     comment_id: str,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     """Delete a comment. Only the comment author can delete their own comment."""
     role = get_current_role(authorization)
     require_role("viewer", role)
@@ -403,3 +403,4 @@ def delete_comment(
         raise HTTPException(status_code=403, detail="You can only delete your own comments")
     db.delete(comment)
     db.commit()
+    return Response(status_code=204)

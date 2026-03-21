@@ -93,6 +93,20 @@ def create_tables() -> None:
         "ALTER TABLE pipelines_v2 ADD COLUMN IF NOT EXISTS project_id TEXT",
         "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS project_id TEXT",
         "ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS project_id TEXT",
+        # 0033 — monthly usage tracking
+        """CREATE TABLE IF NOT EXISTS user_usage (
+            id                  SERIAL PRIMARY KEY,
+            user_id             TEXT        NOT NULL,
+            period              TEXT        NOT NULL,
+            api_calls           INTEGER     NOT NULL DEFAULT 0,
+            pipeline_runs       INTEGER     NOT NULL DEFAULT 0,
+            datasets_uploaded   INTEGER     NOT NULL DEFAULT 0,
+            storage_bytes_used  BIGINT      NOT NULL DEFAULT 0,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (user_id, period)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_user_usage_user_period ON user_usage (user_id, period)",
     ]
     try:
         from sqlalchemy import text as _text

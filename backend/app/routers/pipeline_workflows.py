@@ -267,6 +267,10 @@ async def execute_pipeline(
     db: DBSession = Depends(get_db),
 ):
     """Execute a pipeline with SSE streaming"""
+    from app.services.usage_service import enforce_usage_limit, increment_usage as _inc_usage
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_usage_limit(current_user_id, user_plan, "pipeline_runs", db)
+    _inc_usage(current_user_id, "pipeline_runs", db)
 
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 

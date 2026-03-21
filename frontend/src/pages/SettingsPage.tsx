@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../api";
 import { BillingSettings } from "../components/BillingSettings";
 import { useAuth } from "../contexts/AuthContext";
 import { formatFileSize, useUser } from "../contexts/UserContext";
 import { billingEnabled } from "../utils/featureFlags";
 
-type SettingsSection = "profile" | "settings" | "billing";
+type SettingsSection = "profile" | "settings" | "billing" | "usage";
 
 interface SettingsPageProps {
   section: SettingsSection;
@@ -118,6 +119,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
               </section>
             )
           ) : null}
+          {section === "usage" ? <UsagePanel /> : null}
         </div>
       </div>
     </div>
@@ -157,6 +159,17 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="2" y="5" width="20" height="14" rx="2" />
           <path d="M2 10h20" />
+        </svg>
+      ),
+    },
+    {
+      key: "usage",
+      label: "Usage",
+      path: "/settings/usage",
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 3v18h18" />
+          <path d="M7 16l4-4 4 4 4-6" />
         </svg>
       ),
     },
@@ -387,6 +400,116 @@ function UsageRow({ label, value, percent }: { label: string; value: string; per
           <div style={{ width: `${percent}%`, height: "100%", background: percent >= 90 ? "var(--rd)" : "var(--ac)" }} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Usage Panel ────────────────────────────────────────────────────────────────
+
+interface UsageStats {
+  plan: string;
+  period: string;
+  usage: {
+    api_calls: number;
+    pipeline_runs: number;
+    datasets_uploaded: number;
+    storage_bytes_used: number;
+  };
+  limits: {
+    api_calls_per_month: number;
+    pipeline_runs_per_month: number;
+    datasets_per_month: number;
+    storage_bytes: number;
+  };
+}
+
+function UsagePanel() {
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<UsageStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<UsageStats>("/users/me/usage-stats")
+      .then((r) => setStats(r.data))
+      .catch(() => setError("Failed to load usage data."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p style={{ color: "#8888a0", fontSize: 13 }}>Loading usage…</p>;
+  if (error || !stats)
+    return <p style={{ color: "#c94040", fontSize: 13 }}>{error ?? "No data."}</p>;
+
+  const { usage, limits } = stats;
+
+  const rows: Array<{ label: string; used: number; cap: number; kind: "count" | "bytes" }> = [
+    { label: "AI Chat Calls", used: usage.api_calls, cap: limits.api_calls_per_month, kind: "count" },
+    { label: "Pipeline Runs", used: usage.pipeline_runs, cap: limits.pipeline_runs_per_month, kind: "count" },
+    { label: "Dataset Uploads", used: usage.datasets_uploaded, cap: limits.datasets_per_month, kind: "count" },
+    { label: "Storage Used", used: usage.storage_bytes_used, cap: limits.storage_bytes, kind: "bytes" },
+  ];
+
+  return (
+    <div style={{ display: "grid", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h2 style={{ fontSize: 18, color: "#e8e8f0", margin: 0 }}>Monthly Usage</h2>
+          <p style={{ color: "#8888a0", fontSize: 12, margin: "4px 0 0" }}>
+            Resets on the 1st of each month · Period: {stats.period}
+          </p>
+        </div>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            background: "#1e1e2a",
+            border: "1px solid #5B6AF0",
+            color: "#5B6AF0",
+            padding: "4px 10px",
+            borderRadius: 6,
+          }}
+        >
+          {stats.plan}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gap: 16 }}>
+        {rows.map((row) => {
+          const pct = row.cap === -1 ? null : Math.min(100, Math.round((row.used / row.cap) * 100));
+          const usedLabel =
+            row.kind === "bytes" ? formatFileSize(row.used) : String(row.used);
+          const capLabel = row.cap === -1 ? "Unlimited" : row.kind === "bytes" ? formatFileSize(row.cap) : String(row.cap);
+          return (
+            <UsageRow
+              key={row.label}
+              label={row.label}
+              value={`${usedLabel} / ${capLabel}`}
+              percent={pct}
+            />
+          );
+        })}
+      </div>
+
+      <div>
+        <button
+          onClick={() => navigate("/pricing")}
+          style={{
+            background: "#5B6AF0",
+            color: "#fff",
+            border: "none",
+            padding: "8px 18px",
+            borderRadius: 7,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Upgrade Plan
+        </button>
+      </div>
     </div>
   );
 }

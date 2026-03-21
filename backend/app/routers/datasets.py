@@ -36,6 +36,7 @@ from ..services.object_storage import StorageService
 from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
+from ..services.usage_service import enforce_usage_limit, increment_usage
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB
 from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
@@ -190,6 +191,9 @@ async def upload_dataset(
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
     _ensure_dataset_meta_schema(db)
+    # Usage limit check
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_usage_limit(user_id, user_plan, "datasets_uploaded", db)
     content = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(content))
     df = df.astype(object).where(pd.notnull(df), None)
@@ -234,6 +238,8 @@ async def upload_dataset(
             )
         )
     db.commit()
+    # Track monthly dataset upload usage
+    increment_usage(user_id, "datasets_uploaded", db)
     preview = DatasetPreview(
         dataset_id=dataset_id,
         name=resolved_name,

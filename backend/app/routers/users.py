@@ -307,3 +307,37 @@ def update_my_plan(
         status_code=403,
         detail="Direct plan updates are disabled. Use billing checkout to change plans.",
     )
+
+
+@router.get("/me/usage-stats")
+def get_my_usage_stats(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return monthly usage counters + plan caps for the current user."""
+    from ..services.usage_service import get_usage
+    from ..config.plan_limits import get_limits
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = get_current_user_id(authorization)
+    plan = resolve_user_plan(db, authorization)
+    usage = get_usage(user_id, db)
+    limits = get_limits(plan)
+    return {
+        "plan": plan,
+        "period": usage["period"],
+        "usage": {
+            "api_calls": usage["api_calls"],
+            "pipeline_runs": usage["pipeline_runs"],
+            "datasets_uploaded": usage["datasets_uploaded"],
+            "storage_bytes_used": usage["storage_bytes_used"],
+        },
+        "limits": {
+            "api_calls_per_month": limits["api_calls_per_month"],
+            "pipeline_runs_per_month": limits["pipeline_runs_per_month"],
+            "datasets_per_month": limits["datasets_per_month"],
+            "storage_bytes": limits["storage_bytes"],
+        },
+    }

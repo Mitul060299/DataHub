@@ -45,6 +45,7 @@ export function App() {
         <Route path="settings" element={<SettingsPage section="settings" />} />
         <Route path="settings/profile" element={<SettingsPage section="profile" />} />
         <Route path="settings/billing" element={<SettingsPage section="billing" />} />
+        <Route path="settings/usage" element={<SettingsPage section="usage" />} />
         <Route path="sources" element={<SourcesPage />} />
         <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>

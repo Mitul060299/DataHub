@@ -15,6 +15,24 @@ class User(Base):
     has_uploaded_first_file = Column(Boolean, nullable=False, default=False)
 
 
+class UserUsageDB(Base):
+    """Monthly per-user usage counters, keyed by (user_id, period='YYYY-MM')."""
+    __tablename__ = "user_usage"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, index=True)
+    period = Column(String, nullable=False)  # YYYY-MM
+    api_calls = Column(Integer, nullable=False, default=0)
+    pipeline_runs = Column(Integer, nullable=False, default=0)
+    datasets_uploaded = Column(Integer, nullable=False, default=0)
+    storage_bytes_used = Column(BigInteger, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_user_usage_user_period", "user_id", "period", unique=True),
+    )
+
+
 class ProjectDB(Base):
     """User-scoped project that groups pipelines, dashboards and data sources."""
     __tablename__ = "projects"

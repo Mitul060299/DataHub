@@ -46,27 +46,41 @@ def create_tables() -> None:
     if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
         Base.metadata.create_all(bind=engine)
 
-    # Unconditionally ensure onboarding columns exist using native PostgreSQL
-    # ADD COLUMN IF NOT EXISTS — no-op if already present, runs every startup.
-    # Safety net for environments where alembic state diverged from actual DB
-    # (e.g. after a timed-out deploy on Render free tier).
+    # Schema safety-net: ADD COLUMN / CREATE TABLE IF NOT EXISTS for all columns
+    # added by recent migrations. No-op if already present. Bypasses alembic
+    # stamp state (safety net for timed-out Render free-tier deploys).
+    _schema_ddl = [
+        # 0028 — user onboarding flags
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN NOT NULL DEFAULT false",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_uploaded_first_file BOOLEAN NOT NULL DEFAULT false",
+        # 0029 — projects table
+        """CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL DEFAULT 'default',
+            name TEXT NOT NULL,
+            description TEXT,
+            colour TEXT NOT NULL DEFAULT '#5B6AF0',
+            icon TEXT NOT NULL DEFAULT '📁',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_projects_workspace_id ON projects (workspace_id)",
+        # 0029 — project_id FK columns on existing tables
+        "ALTER TABLE pipelines_v2 ADD COLUMN IF NOT EXISTS project_id TEXT",
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS project_id TEXT",
+        "ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS project_id TEXT",
+    ]
     try:
         from sqlalchemy import text as _text
         with engine.connect() as _conn:
-            _conn.execute(_text(
-                "ALTER TABLE users "
-                "ADD COLUMN IF NOT EXISTS has_completed_onboarding "
-                "BOOLEAN NOT NULL DEFAULT false"
-            ))
-            _conn.execute(_text(
-                "ALTER TABLE users "
-                "ADD COLUMN IF NOT EXISTS has_uploaded_first_file "
-                "BOOLEAN NOT NULL DEFAULT false"
-            ))
+            for _stmt in _schema_ddl:
+                _conn.execute(_text(_stmt))
             _conn.commit()
-        logger.warning("startup: user onboarding columns ensured")
+        logger.warning("startup: schema safety-net DDL applied successfully")
     except Exception as _exc:
-        logger.error("startup: failed to ensure user onboarding columns: %s", _exc)
+        logger.error("startup: schema safety-net DDL failed: %s", _exc)
 
     try:
         start_scheduler()

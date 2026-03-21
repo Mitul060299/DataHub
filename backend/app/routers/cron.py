@@ -80,6 +80,27 @@ async def run_scheduled_pipelines(
     }
 
 
+@router.post("/weekly-digest")
+async def send_weekly_digest(
+    background_tasks: BackgroundTasks,
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Triggered once a week (e.g. Monday 09:00 UTC via Render Cron Job).
+    Sends a per-user activity digest email to all opted-in users."""
+    if not x_cron_secret or x_cron_secret != settings.cron_secret:
+        raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+    from ..services.weekly_digest_service import send_weekly_digests
+
+    def _run():
+        result = send_weekly_digests(db)
+        logger.info("weekly-digest: %s", result)
+
+    background_tasks.add_task(_run)
+    return {"ok": True, "message": "Weekly digest enqueued"}
+
+
 def _compute_next_run(cron_expression: str, tz_name: str) -> datetime | None:
     try:
         import pytz

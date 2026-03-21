@@ -374,11 +374,13 @@ function GeneralSettingsPanel({
 interface NotifPrefs {
   pipeline_complete: boolean;
   usage_warning: boolean;
+  weekly_digest: boolean;
 }
 
 const NOTIF_LABELS: Record<keyof NotifPrefs, string> = {
   pipeline_complete: "Email me when a pipeline run completes",
   usage_warning: "Email me when I reach 80% of my monthly usage limit",
+  weekly_digest: "Send me a weekly activity digest every Monday",
 };
 
 function NotificationPrefsPanel() {
@@ -389,7 +391,7 @@ function NotificationPrefsPanel() {
     api
       .get<NotifPrefs>("/users/me/notification-preferences")
       .then((r) => setPrefs(r.data))
-      .catch(() => setPrefs({ pipeline_complete: true, usage_warning: true }));
+      .catch(() => setPrefs({ pipeline_complete: true, usage_warning: true, weekly_digest: true }));
   }, []);
 
   const toggle = async (key: keyof NotifPrefs) => {

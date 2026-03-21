@@ -398,6 +398,7 @@ def get_my_audit_log(
 _DEFAULT_PREFS = {
     "pipeline_complete": True,
     "usage_warning": True,
+    "weekly_digest": True,
 }
 
 

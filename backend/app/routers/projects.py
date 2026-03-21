@@ -40,8 +40,8 @@ from ..models_db import (
     ProjectDB,
 )
 
-router = APIRouter(prefix="/api/projects", tags=["projects"])
-recent_router = APIRouter(prefix="/api/workspace", tags=["workspace"])
+router = APIRouter(prefix="/projects", tags=["projects"])
+recent_router = APIRouter(prefix="/workspace", tags=["workspace"])
 
 
 # ──────────────────────────────────────────────────────────────────────────────

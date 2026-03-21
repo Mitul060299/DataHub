@@ -29,6 +29,7 @@ export default defineConfig({
         target: "https://datahub-0dbp.onrender.com",
         changeOrigin: true,
         secure: true,
+        rewrite: (path: string) => path.replace(/^\/api/, ""),
       }
     }
   }

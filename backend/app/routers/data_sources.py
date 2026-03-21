@@ -26,7 +26,7 @@ from ..models import DataSourceCreate, DataSourceResponse, DataSourceTest
 from ..models_db import DataSourceDB, PipelineScheduleDB, PipelineV2DB
 from ..security import get_current_user_id, get_current_role, require_role
 
-router = APIRouter(prefix="/api/sources", tags=["data_sources"])
+router = APIRouter(prefix="/sources", tags=["data_sources"])
 
 
 # ---------------------------------------------------------------------------

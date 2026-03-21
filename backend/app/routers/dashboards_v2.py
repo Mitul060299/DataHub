@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -377,7 +377,7 @@ def create_comment(
     )
 
 
-@router.delete("/{dashboard_id}/comments/{comment_id}", status_code=204)
+@router.delete("/{dashboard_id}/comments/{comment_id}", status_code=204, response_class=Response)
 def delete_comment(
     dashboard_id: str,
     comment_id: str,

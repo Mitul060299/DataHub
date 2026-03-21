@@ -56,6 +56,9 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactData, setArtifactData] = useState<PipelineRunArtifact | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [nlPrompt, setNlPrompt] = useState("");
+  const [nlApplying, setNlApplying] = useState(false);
+  const [nlFeedback, setNlFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -257,6 +260,26 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       }
     }
     return null;
+  };
+
+  const handleNlEdit = async () => {
+    if (!pipelineWorkflowId.trim() || !nlPrompt.trim() || nlApplying) return;
+    setNlApplying(true);
+    setNlFeedback(null);
+    try {
+      const res = await api.post<{ change_summary: string }>(
+        `/api/pipelines/${pipelineWorkflowId}/nl-edit`,
+        { prompt: nlPrompt.trim() },
+      );
+      setNlFeedback({ ok: true, msg: res.data.change_summary ?? "Applied." });
+      setNlPrompt("");
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+      setNlFeedback({ ok: false, msg: detail ?? "Failed to apply edit." });
+    } finally {
+      setNlApplying(false);
+    }
   };
 
   const handleRunWorkflowPipeline = async () => {
@@ -739,7 +762,58 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                 <option key={template.id} value={template.id}>{template.name}</option>
               ))}
             </select>
-
+            {pipelineWorkflowId.trim() ? (
+              <div style={{ display: "grid", gap: 6, borderTop: "1px solid #1e1e24", paddingTop: 8, marginTop: 2 }}>
+                <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>EDIT WITH AI</div>
+                <textarea
+                  value={nlPrompt}
+                  onChange={(e) => setNlPrompt(e.target.value)}
+                  placeholder='E.g. "Add a step to remove duplicates by email column"'
+                  rows={2}
+                  style={{
+                    width: "100%",
+                    background: "#111113",
+                    border: "1px solid #27272a",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    color: "#d4d4d8",
+                    fontSize: 12,
+                    resize: "vertical",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    fontFamily: "inherit",
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleNlEdit();
+                    }
+                  }}
+                />
+                {nlFeedback && (
+                  <div style={{ fontSize: 12, color: nlFeedback.ok ? "#22b573" : "#c94040", padding: "2px 0" }}>
+                    {nlFeedback.ok ? "✓ " : "✗ "}{nlFeedback.msg}
+                  </div>
+                )}
+                <button
+                  onClick={() => void handleNlEdit()}
+                  disabled={!nlPrompt.trim() || nlApplying}
+                  style={{
+                    background: nlApplying ? "#3f3f46" : "#18181e",
+                    border: "1px solid #27272a",
+                    borderRadius: 6,
+                    color: !nlPrompt.trim() || nlApplying ? "#52525b" : "#5B6AF0",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "6px 12px",
+                    cursor: !nlPrompt.trim() || nlApplying ? "not-allowed" : "pointer",
+                    transition: "all 120ms",
+                  }}
+                >
+                  {nlApplying ? "Applying…" : "Apply Edit"}
+                </button>
+              </div>
+            ) : null}
             {runStatusSummary ? (
               <div
                 style={{

@@ -17,6 +17,7 @@ from app.services.pipeline_engine import PipelineEngine
 from app.services.rate_limiter import limiter
 from app.services.audit import audit_store
 from app.models import AuditEntry
+from app.models_db import PipelineV2DB
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipeline-workflows"])
 
@@ -519,3 +520,74 @@ async def get_run_artifact(
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ── Natural-Language Pipeline Editing ─────────────────────────────────────────
+
+class NLEditRequest(BaseModel):
+    prompt: str = Field(..., min_length=4, max_length=1000,
+                        description="Plain-English instruction to modify the pipeline")
+
+
+@router.post("/{pipeline_id}/nl-edit")
+@limiter.limit("15/minute")
+async def nl_edit_pipeline_endpoint(
+    request: Request,
+    pipeline_id: str,
+    payload: NLEditRequest,
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+) -> dict:
+    """Apply a plain-English edit instruction to the pipeline steps via LLM.
+
+    The pipeline steps are updated in-place and the pipeline version is bumped.
+    Returns the updated pipeline object together with a change summary.
+    """
+    from app.services.nl_pipeline_service import nl_edit_pipeline
+    from datetime import datetime
+
+    pipeline = (
+        db.query(PipelineV2DB)
+        .filter(PipelineV2DB.id == pipeline_id, PipelineV2DB.user_id == current_user_id)
+        .first()
+    )
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    current_steps: list = list(pipeline.steps or [])
+    result = nl_edit_pipeline(current_steps, payload.prompt)
+
+    if result.get("steps") is None:
+        raise HTTPException(
+            status_code=422,
+            detail=result.get("error", "LLM did not return updated steps"),
+        )
+
+    new_steps = result["steps"]
+    change_summary = result.get("change_summary", "Pipeline updated.")
+
+    # Persist the new steps and bump version
+    pipeline.steps = new_steps
+    pipeline.version = (pipeline.version or 1) + 1
+    pipeline.updated_at = datetime.utcnow()
+    db.commit()
+
+    # Audit
+    try:
+        audit_store.add(AuditEntry(
+            action="pipeline.nl_edit",
+            actor=current_user_id,
+            target=f"pipeline:{pipeline_id}",
+            metadata={"prompt": payload.prompt[:120], "change_summary": change_summary},
+        ))
+    except Exception:
+        pass
+
+    return {
+        "pipeline_id": pipeline_id,
+        "name": pipeline.name,
+        "version": pipeline.version,
+        "steps": new_steps,
+        "change_summary": change_summary,
+    }

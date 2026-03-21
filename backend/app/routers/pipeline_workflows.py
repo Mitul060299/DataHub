@@ -370,16 +370,53 @@ async def execute_pipeline(
 
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
+    # Fetch pipeline name for post-run notification (best-effort)
+    _pipeline_name = pipeline_id
+    try:
+        _pl = engine.get_pipeline(pipeline_id)
+        if _pl:
+            _pipeline_name = getattr(_pl, "name", pipeline_id)
+    except Exception:
+        pass
+
     async def event_generator():
-        async for event in engine.execute_pipeline(
-            pipeline_id=pipeline_id,
-            input_dataset_id=payload.input_dataset_id,
-            session_id=payload.session_id,
-            runtime_parameters=payload.runtime_parameters,
-            triggered_by=payload.triggered_by,
-            extra_input_dataset_ids=payload.extra_input_dataset_ids,
-        ):
-            yield event.to_sse()
+        final_status = "completed"
+        try:
+            async for event in engine.execute_pipeline(
+                pipeline_id=pipeline_id,
+                input_dataset_id=payload.input_dataset_id,
+                session_id=payload.session_id,
+                runtime_parameters=payload.runtime_parameters,
+                triggered_by=payload.triggered_by,
+                extra_input_dataset_ids=payload.extra_input_dataset_ids,
+            ):
+                data = event.to_sse()
+                if "error" in data.lower():
+                    final_status = "failed"
+                yield data
+        except Exception:
+            final_status = "failed"
+            raise
+        finally:
+            # Send pipeline complete email (fire-and-forget)
+            try:
+                from app.services.email_service import send_pipeline_complete
+                from app.models_db import User as UserDB
+                from app.db import SessionLocal
+                _db2 = SessionLocal()
+                try:
+                    u = _db2.query(UserDB).filter(UserDB.id == current_user_id).first()
+                    to_email = (u.username if u else None) or current_user_id
+                finally:
+                    _db2.close()
+                send_pipeline_complete(
+                    to=to_email,
+                    pipeline_name=_pipeline_name,
+                    pipeline_id=pipeline_id,
+                    status=final_status,
+                )
+            except Exception:
+                pass
 
     return StreamingResponse(
         event_generator(),

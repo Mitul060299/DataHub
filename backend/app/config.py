@@ -141,6 +141,8 @@ class Settings(BaseModel):
     }
     cron_secret: str = os.getenv("CRON_SECRET", "change-me-in-production")
     supabase_realtime_url: str = os.getenv("SUPABASE_REALTIME_URL", "")
+    resend_api_key: str = os.getenv("RESEND_API_KEY", "")
+    email_from_address: str = os.getenv("EMAIL_FROM_ADDRESS", "DataHub <noreply@datahub.org.in>")
 
 
 settings = Settings()

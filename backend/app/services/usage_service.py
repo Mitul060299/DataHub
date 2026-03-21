@@ -112,6 +112,24 @@ def enforce_usage_limit(
     usage = get_usage(user_id, db)
     current: int = usage.get(field, 0)  # type: ignore[arg-type]
 
+    # Fire a 80% usage warning email (best-effort, non-blocking)
+    if cap > 0 and current >= int(cap * 0.80) and current < cap:
+        try:
+            from ..services.email_service import send_usage_warning
+            from ..models_db import User as UserDB
+            user_row = db.query(UserDB).filter(UserDB.id == user_id).first()
+            to_email = (user_row.username if user_row else None) or user_id
+            send_usage_warning(
+                to=to_email,
+                username=to_email,
+                field=field,
+                used=current,
+                cap=cap,
+                plan=plan,
+            )
+        except Exception as exc:
+            logger.debug("Usage warning email skipped: %s", exc)
+
     if current >= cap:
         label = USAGE_FIELD_LABELS.get(limit_key, field)
         raise HTTPException(

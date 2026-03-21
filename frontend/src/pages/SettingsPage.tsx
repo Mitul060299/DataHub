@@ -344,10 +344,7 @@ function GeneralSettingsPanel({
       </div>
 
       <div style={sectionHeaderStyle}>Notifications</div>
-      <div style={{ display: "grid", gap: 10 }}>
-        <NotificationRow label="Email notifications on pipeline completion" />
-        <NotificationRow label="Email notifications on failed runs" />
-      </div>
+      <NotificationPrefsPanel />
 
       <div style={sectionHeaderStyle}>Danger Zone</div>
       <div style={{ border: "1px solid rgba(239,68,68,0.35)", borderRadius: 10, padding: 14, display: "grid", gap: 8 }}>
@@ -374,14 +371,91 @@ function GeneralSettingsPanel({
   );
 }
 
-function NotificationRow({ label }: { label: string }) {
+interface NotifPrefs {
+  pipeline_complete: boolean;
+  usage_warning: boolean;
+}
+
+const NOTIF_LABELS: Record<keyof NotifPrefs, string> = {
+  pipeline_complete: "Email me when a pipeline run completes",
+  usage_warning: "Email me when I reach 80% of my monthly usage limit",
+};
+
+function NotificationPrefsPanel() {
+  const [prefs, setPrefs] = useState<NotifPrefs | null>(null);
+  const [saving, setSaving] = useState<keyof NotifPrefs | null>(null);
+
+  useEffect(() => {
+    api
+      .get<NotifPrefs>("/users/me/notification-preferences")
+      .then((r) => setPrefs(r.data))
+      .catch(() => setPrefs({ pipeline_complete: true, usage_warning: true }));
+  }, []);
+
+  const toggle = async (key: keyof NotifPrefs) => {
+    if (!prefs || saving) return;
+    const updated = { ...prefs, [key]: !prefs[key] };
+    setPrefs(updated);
+    setSaving(key);
+    try {
+      const r = await api.put<NotifPrefs>("/users/me/notification-preferences", { [key]: updated[key] });
+      setPrefs(r.data);
+    } catch {
+      setPrefs(prefs); // revert on error
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  if (!prefs) return <p style={{ color: "#8888a0", fontSize: 13 }}>Loading…</p>;
+
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #22222a", borderRadius: 8, padding: "10px 12px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <input type="checkbox" checked={false} readOnly disabled />
-        <span style={{ color: "#c7c7d6", fontSize: 13 }}>{label}</span>
-      </div>
-      <span style={{ border: "1px solid #2f2f42", color: "#9aa0c8", borderRadius: 999, fontSize: 11, padding: "2px 8px" }}>Coming soon</span>
+    <div style={{ display: "grid", gap: 8 }}>
+      {(Object.keys(NOTIF_LABELS) as Array<keyof NotifPrefs>).map((key) => (
+        <div
+          key={key}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            border: "1px solid #22222a",
+            borderRadius: 8,
+            padding: "10px 12px",
+            opacity: saving === key ? 0.7 : 1,
+            transition: "opacity 0.15s",
+          }}
+        >
+          <span style={{ color: "#c7c7d6", fontSize: 13 }}>{NOTIF_LABELS[key]}</span>
+          <button
+            onClick={() => toggle(key)}
+            style={{
+              width: 36,
+              height: 20,
+              borderRadius: 10,
+              border: "none",
+              background: prefs[key] ? "#5B6AF0" : "#2a2a38",
+              position: "relative",
+              cursor: "pointer",
+              transition: "background 0.2s",
+              flexShrink: 0,
+            }}
+            aria-label={prefs[key] ? "Disable" : "Enable"}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                left: prefs[key] ? 18 : 2,
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 0.2s",
+              }}
+            />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

@@ -122,6 +122,8 @@ def create_tables() -> None:
             updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_dashboard_comments_dashboard_id ON dashboard_comments (dashboard_id)",
+        # notification prefs column on users
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB",
     ]
     try:
         from sqlalchemy import text as _text

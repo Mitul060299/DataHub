@@ -391,3 +391,55 @@ def get_my_audit_log(
             for r in rows
         ],
     }
+
+
+# ── Notification Preferences ──────────────────────────────────────────────────
+
+_DEFAULT_PREFS = {
+    "pipeline_complete": True,
+    "usage_warning": True,
+}
+
+
+@router.get("/me/notification-preferences")
+def get_notification_preferences(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the current user's email notification preferences."""
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = db.query(User).filter(User.id == get_current_user_id(authorization)).first()
+    stored: dict = (user.notification_prefs or {}) if user else {}
+    return {**_DEFAULT_PREFS, **stored}
+
+
+@router.put("/me/notification-preferences")
+def update_notification_preferences(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Update email notification preferences.
+
+    Accepts any subset of keys; unknown keys are ignored.
+    Example body: {"pipeline_complete": false, "usage_warning": true}
+    """
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = get_current_user_id(authorization)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    allowed_keys = set(_DEFAULT_PREFS.keys())
+    current: dict = dict(user.notification_prefs or {})
+    for key in allowed_keys:
+        if key in payload:
+            current[key] = bool(payload[key])
+
+    user.notification_prefs = current
+    db.commit()
+    return {**_DEFAULT_PREFS, **current}

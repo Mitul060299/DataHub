@@ -13,6 +13,7 @@ class User(Base):
     plan = Column(String, nullable=False, default="Free")
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_uploaded_first_file = Column(Boolean, nullable=False, default=False)
+    notification_prefs = Column(JSONB, nullable=True, default=dict)
 
 
 class UserUsageDB(Base):

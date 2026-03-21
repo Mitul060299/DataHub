@@ -118,15 +118,17 @@ def enforce_usage_limit(
             from ..services.email_service import send_usage_warning
             from ..models_db import User as UserDB
             user_row = db.query(UserDB).filter(UserDB.id == user_id).first()
-            to_email = (user_row.username if user_row else None) or user_id
-            send_usage_warning(
-                to=to_email,
-                username=to_email,
-                field=field,
-                used=current,
-                cap=cap,
-                plan=plan,
-            )
+            prefs: dict = dict(user_row.notification_prefs or {}) if user_row else {}
+            if prefs.get("usage_warning", True):  # default ON
+                to_email = (user_row.username if user_row else None) or user_id
+                send_usage_warning(
+                    to=to_email,
+                    username=to_email,
+                    field=field,
+                    used=current,
+                    cap=cap,
+                    plan=plan,
+                )
         except Exception as exc:
             logger.debug("Usage warning email skipped: %s", exc)
 

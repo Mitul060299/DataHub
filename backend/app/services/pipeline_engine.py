@@ -419,7 +419,35 @@ class PipelineEngine:
                 }
             
             self.db.commit()
-            
+
+            # — Email notification (best-effort) ──────────────────────────────
+            try:
+                from ..services.email_service import send_pipeline_complete
+                from ..models_db import User as UserDB
+                user_row = self.db.query(UserDB).filter(UserDB.id == self.user_id).first()
+                prefs: dict = dict(user_row.notification_prefs or {}) if user_row else {}
+                if prefs.get("pipeline_complete", True):  # default ON
+                    to_email = (user_row.username if user_row else None) or self.user_id
+                    if to_email and "@" in to_email:
+                        output_rows: int | None = None
+                        if current_dataset_id:
+                            from ..models_db import DatasetMetaDB
+                            ds = self.db.query(DatasetMetaDB).filter(
+                                DatasetMetaDB.id == current_dataset_id
+                            ).first()
+                            if ds:
+                                output_rows = ds.row_count
+                        send_pipeline_complete(
+                            to=to_email,
+                            pipeline_name=pipeline.name,
+                            pipeline_id=pipeline_id,
+                            status="completed",
+                            output_rows=output_rows,
+                        )
+            except Exception:
+                pass
+            # ──────────────────────────────────────────────────────────────────
+
         except Exception as e:
             run.status = 'failed'
             run.error_message = str(e)

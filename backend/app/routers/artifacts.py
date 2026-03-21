@@ -12,7 +12,7 @@ import io
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from ..dependencies import CurrentUser, get_current_user
 from ..models_db import ArtifactDB
 from ..services.object_storage import StorageService
 from ..services.duckdb_session import register_table_from_sql
+from ..services.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,9 @@ def rename_artifact(
 # ── 3. Download artifact (csv / xlsx / parquet) ───────────────────────────────
 
 @router.get("/{artifact_id}/download")
+@limiter.limit("30/hour")
 def download_artifact(
+    request: Request,
     artifact_id: str,
     fmt: str = Query("parquet", description="Output format: csv | xlsx | parquet"),
     current_user: CurrentUser = Depends(get_current_user),

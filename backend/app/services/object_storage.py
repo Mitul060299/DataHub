@@ -21,7 +21,7 @@ class StorageService:
     def _s3_client():
         return boto3.client(
             "s3",
-            region_name=settings.s3_region or "us-east-1",
+            region_name=settings.s3_region or "ap-south-1",
             aws_access_key_id=settings.s3_access_key_id or None,
             aws_secret_access_key=settings.s3_secret_access_key or None,
         )

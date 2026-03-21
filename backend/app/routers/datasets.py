@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from typing import Dict
 import time
@@ -33,6 +33,7 @@ from ..services.cache import invalidate_profile_cache
 from ..services.duckdb_service import DuckDBService
 from ..services.query_cache import QueryCacheService
 from ..services.object_storage import StorageService
+from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB
@@ -141,8 +142,43 @@ def _ensure_dataset_meta_schema(db: Session) -> None:
     _DATASET_META_SCHEMA_CHECKED = True
 
 
+# ── File validation endpoint ──────────────────────────────────────────────────
+
+@router.post("/validate")
+@limiter.limit("30/minute")
+async def validate_file(
+    request: Request,
+    file: UploadFile = File(...),
+    _role: str = Depends(get_current_role),
+):
+    """Validate an uploaded file before commit — returns preview metadata."""
+    from ..services.file_validator import validate_upload
+
+    file_bytes = await file.read()
+    result = validate_upload(file_bytes, file.filename or "")
+
+    if not result.valid:
+        raise HTTPException(status_code=422, detail={
+            "error": "file_validation_failed",
+            "message": result.error or "File validation failed.",
+        })
+
+    return {
+        "valid": True,
+        "filename": file.filename,
+        "file_size_mb": result.file_size_mb,
+        "row_count": result.row_count,
+        "column_count": result.column_count,
+        "columns": [{"name": c.name, "type": c.type} for c in result.columns],
+        "encoding_converted": result.encoding_converted,
+        "warnings": result.warnings,
+    }
+
+
 @router.post("/upload", response_model=DatasetPreview)
+@limiter.limit("20/hour")
 async def upload_dataset(
+    request: Request,
     file: UploadFile = File(...),
     dataset_name: str | None = Form(default=None),
     authorization: str | None = Header(default=None),

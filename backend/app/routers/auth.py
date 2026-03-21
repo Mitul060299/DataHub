@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
 import uuid
 from ..security import create_access_token
 from ..db import get_db
@@ -7,12 +7,14 @@ from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.oidc import build_auth_url, exchange_code, fetch_userinfo, verify_id_token
 from ..config import settings
 from ..models import AuthToken
+from ..services.rate_limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=AuthToken)
-def login(username: str) -> AuthToken:
+@limiter.limit("10/minute")
+def login(request: Request, username: str) -> AuthToken:
     token_data = create_access_token(username, role="viewer")
     return AuthToken(**token_data)
 

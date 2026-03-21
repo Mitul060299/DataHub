@@ -5,7 +5,7 @@ Path: /api/pipelines/*
 
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DBSession
@@ -14,6 +14,7 @@ from app.db import get_db
 from app.security import get_current_subject
 from app.services.plan_guard import resolve_user_plan
 from app.services.pipeline_engine import PipelineEngine
+from app.services.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipeline-workflows"])
 
@@ -256,7 +257,9 @@ async def clone_pipeline(
 
 
 @router.post("/{pipeline_id}/run")
+@limiter.limit("5/minute")
 async def execute_pipeline(
+    request: Request,
     pipeline_id: str,
     payload: RunPipelineRequest,
     authorization: str | None = Header(default=None),

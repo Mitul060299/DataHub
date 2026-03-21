@@ -133,12 +133,39 @@ api.interceptors.response.use(
         },
       }));
     }
+
+    if (status === 429 && typeof window !== "undefined") {
+      const retryAfter =
+        (error?.response?.data as { retry_after_seconds?: number })?.retry_after_seconds ?? 60;
+      window.dispatchEvent(
+        new CustomEvent("datahub:rate-limited", { detail: { retryAfter } })
+      );
+    }
+
     return Promise.reject(error);
   }
 );
 
 // Export the api instance for direct use in components
 export { api };
+
+export async function validateFile(file: File): Promise<{
+  valid: boolean;
+  filename: string;
+  file_size_mb: number;
+  row_count: number;
+  column_count: number;
+  columns: { name: string; type: string }[];
+  encoding_converted: boolean;
+  warnings: string[];
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post("/datasets/validate", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
 
 export async function uploadDataset(file: File, datasetName?: string) {
   const formData = new FormData();

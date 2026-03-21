@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
 import uuid
 from ..models import AgentSuggestion, ChatRequest, ChatResponse, AgentFeedbackIn, AgentFeedbackOut
@@ -8,6 +8,7 @@ from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
 from ..models_db import AgentFeedbackDB
 from ..security import get_current_role, require_role
+from ..services.rate_limiter import limiter
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -36,7 +37,9 @@ def suggest(
 
 
 @router.post("/chat/{dataset_id}", response_model=ChatResponse)
+@limiter.limit("10/minute")
 def chat(
+    request: Request,
     dataset_id: str,
     payload: ChatRequest,
     workspace_id: str | None = None,

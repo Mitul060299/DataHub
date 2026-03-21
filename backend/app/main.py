@@ -3,6 +3,23 @@ import os
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler  # noqa: F401 (kept for reference)
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from .services.rate_limiter import limiter
+
+
+def _json_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    retry_after = int(getattr(exc, "retry_after", 60) or 60)
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "rate_limit_exceeded",
+            "message": "Too many requests. Please wait before trying again.",
+            "retry_after_seconds": retry_after,
+        },
+        headers={"Retry-After": str(retry_after)},
+    )
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing
 from .routers import ml_routes, full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
@@ -20,6 +37,11 @@ from .services.pipelines import start_scheduler
 
 app = FastAPI(title="DataHub API", version="0.1.0")
 logger = logging.getLogger(__name__)
+
+# ── Rate limiting (slowapi + Redis) ──────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _json_rate_limit_handler)  # type: ignore[arg-type]
+app.add_middleware(SlowAPIMiddleware)
 
 ALLOWED_CORS_ORIGINS = [
     "https://datahub.org.in",

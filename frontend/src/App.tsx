@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -14,8 +15,21 @@ import { WorkspaceHomePage } from "./pages/WorkspaceHomePage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
 export function App() {
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const secs = (e as CustomEvent<{ retryAfter: number }>).detail?.retryAfter ?? 60;
+      setRateLimitMsg(`Too many requests — please wait ${secs}s before trying again.`);
+      setTimeout(() => setRateLimitMsg(null), 5000);
+    };
+    window.addEventListener("datahub:rate-limited", handler);
+    return () => window.removeEventListener("datahub:rate-limited", handler);
+  }, []);
+
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
@@ -35,6 +49,28 @@ export function App() {
         <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
-    </Routes>
+      </Routes>
+      {rateLimitMsg && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1e2030",
+            border: "1px solid #5B6AF0",
+            color: "#fff",
+            padding: "10px 20px",
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 9999,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {rateLimitMsg}
+        </div>
+      )}
+    </>
   );
 }

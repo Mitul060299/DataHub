@@ -45,6 +45,29 @@ def create_tables() -> None:
     logger.warning("APP ENV: %s", settings.app_env)
     if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
         Base.metadata.create_all(bind=engine)
+
+    # Unconditionally ensure onboarding columns exist using native PostgreSQL
+    # ADD COLUMN IF NOT EXISTS — no-op if already present, runs every startup.
+    # Safety net for environments where alembic state diverged from actual DB
+    # (e.g. after a timed-out deploy on Render free tier).
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as _conn:
+            _conn.execute(_text(
+                "ALTER TABLE users "
+                "ADD COLUMN IF NOT EXISTS has_completed_onboarding "
+                "BOOLEAN NOT NULL DEFAULT false"
+            ))
+            _conn.execute(_text(
+                "ALTER TABLE users "
+                "ADD COLUMN IF NOT EXISTS has_uploaded_first_file "
+                "BOOLEAN NOT NULL DEFAULT false"
+            ))
+            _conn.commit()
+        logger.warning("startup: user onboarding columns ensured")
+    except Exception as _exc:
+        logger.error("startup: failed to ensure user onboarding columns: %s", _exc)
+
     try:
         start_scheduler()
     except Exception:

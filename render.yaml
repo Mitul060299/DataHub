@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: datahub-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    preDeployCommand: "alembic upgrade head"
+    envVars:
+      - key: RUN_MIGRATIONS
+        value: "0"
+    healthCheckPath: /api/health

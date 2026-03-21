@@ -4,7 +4,6 @@ import re
 import time
 from typing import Any
 
-import duckdb
 import pandas as pd
 from sqlalchemy.orm import Session
 
@@ -22,6 +21,7 @@ class DuckDBService:
     @classmethod
     def _ensure_db(cls) -> duckdb.DuckDBPyConnection:
         if cls._db is None:
+            import duckdb  # noqa: PLC0415 — lazy to avoid native-ext load at startup
             cls._db = duckdb.connect(database=":memory:")
             try:
                 cls._db.execute("INSTALL httpfs;")

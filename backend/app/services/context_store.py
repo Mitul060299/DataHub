@@ -1,7 +1,7 @@
+from __future__ import annotations
+
 from typing import Dict
 import json
-from chromadb import HttpClient
-from chromadb.config import Settings as ChromaSettings
 
 from ..config import settings
 from ..models import ContextPayload
@@ -16,6 +16,10 @@ class ContextStore:
         }
         self._client = None
         try:
+            # Lazy import: chromadb pulls in onnxruntime which probes for GPU
+            # devices at module init — deferring avoids 20-30s startup penalty.
+            from chromadb import HttpClient  # noqa: PLC0415
+            from chromadb.config import Settings as ChromaSettings  # noqa: PLC0415
             self._client = HttpClient(
                 host=settings.chroma_url.replace("http://", "").replace("https://", "").split(":")[0],
                 port=int(settings.chroma_url.split(":")[-1]),

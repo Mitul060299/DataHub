@@ -495,6 +495,137 @@ def list_datasets(
     return datasets
 
 
+# ── Version History endpoints ─────────────────────────────────────────────────
+
+@router.get("/{dataset_id}/versions")
+def list_dataset_versions(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the full version chain for a dataset (walk parent_id links)."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+
+    # Walk backwards through parent chain to find the root
+    chain = []
+    current_id: str | None = dataset_id
+    visited: set[str] = set()
+    while current_id and current_id not in visited:
+        visited.add(current_id)
+        row = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_id).first()
+        if not row:
+            break
+        chain.append(row)
+        current_id = row.parent_id
+
+    # Walk forward from the root to collect all descendants of the root
+    if chain:
+        root = chain[-1]
+        all_versions = (
+            db.query(DatasetMetaDB)
+            .filter(DatasetMetaDB.id == root.id)
+            .all()
+        )
+        # Collect descendants using a BFS
+        to_visit = [root.id]
+        expanded: list[DatasetMetaDB] = []
+        visited_forward: set[str] = set()
+        while to_visit:
+            cur = to_visit.pop(0)
+            if cur in visited_forward:
+                continue
+            visited_forward.add(cur)
+            rows = db.query(DatasetMetaDB).filter(DatasetMetaDB.parent_id == cur).all()
+            for r in rows:
+                expanded.append(r)
+                to_visit.append(r.id)
+        all_versions = [root] + expanded
+    else:
+        all_versions = []
+
+    return {
+        "dataset_id": dataset_id,
+        "versions": [
+            {
+                "id": v.id,
+                "name": v.name,
+                "version_number": getattr(v, "version_number", 1),
+                "version_note": getattr(v, "version_note", None),
+                "row_count": v.row_count,
+                "columns": v.columns,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+                "parent_id": v.parent_id,
+                "is_current": v.id == dataset_id,
+            }
+            for v in sorted(all_versions, key=lambda x: getattr(x, "version_number", 1))
+        ],
+    }
+
+
+@router.post("/{dataset_id}/upload-version")
+@limiter.limit("20/hour")
+async def upload_new_version(
+    request: Request,
+    dataset_id: str,
+    file: UploadFile = File(...),
+    version_note: str | None = Form(default=None),
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Upload a new version of an existing dataset. Returns the new dataset id."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+
+    parent = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Validate
+    from ..services.file_validator import validate_upload
+    file_bytes = await file.read()
+    validation = validate_upload(file_bytes, file.filename or "")
+    if not validation.valid:
+        raise HTTPException(status_code=422, detail={
+            "error": "file_validation_failed",
+            "message": validation.error or "File validation failed.",
+        })
+
+    df = pd.read_csv(pd.io.common.BytesIO(file_bytes))
+    df = df.astype(object).where(pd.notnull(df), None)
+    new_id = str(uuid.uuid4())
+    next_version = (getattr(parent, "version_number", 1) or 1) + 1
+
+    db.add(
+        DatasetMetaDB(
+            id=new_id,
+            user_id=user_id,
+            workspace_id=workspace_id or parent.workspace_id or "default",
+            name=parent.name,
+            columns=list(df.columns),
+            row_count=int(df.shape[0]),
+            access_tier=parent.access_tier or "hot",
+            parent_id=dataset_id,
+            version_number=next_version,
+            version_note=version_note or None,
+        )
+    )
+    rows = df.to_dict(orient="records")
+    if rows:
+        db.add(DatasetDataDB(id=new_id, rows=rows))
+    db.commit()
+    increment_usage(user_id, "datasets_uploaded", db)
+
+    return {
+        "new_dataset_id": new_id,
+        "version_number": next_version,
+        "parent_id": dataset_id,
+        "row_count": int(df.shape[0]),
+    }
+
+
 @router.get("/{dataset_id}/lineage", response_model=list[DatasetMeta])
 def dataset_lineage(
     dataset_id: str,

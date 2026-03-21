@@ -107,6 +107,10 @@ def create_tables() -> None:
             UNIQUE (user_id, period)
         )""",
         "CREATE INDEX IF NOT EXISTS idx_user_usage_user_period ON user_usage (user_id, period)",
+        # 0034 — dataset version columns
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS version_number INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS version_note TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_datasets_parent_id ON dataset_meta (parent_id)",
     ]
     try:
         from sqlalchemy import text as _text

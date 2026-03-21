@@ -5,6 +5,7 @@ import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext"
 import { IconChevronDown, IconTeam } from "./Icons";
 import { ArtifactsSection, type ArtifactItem } from "./ArtifactsSection";
 import { DataSection } from "./DataSection";
+import { DataVersionHistory } from "./DataVersionHistory";
 import { PipelineSection } from "./PipelineSection";
 import { MembersModal } from "./modals/MembersModal";
 import { ProjectModal } from "./modals/ProjectModal";
@@ -273,6 +274,24 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             void loadDatasets();
           }}
         />
+        {activeDataset?.id ? (
+          <div
+            style={{
+              borderTop: "1px solid var(--bd)",
+              paddingTop: 12,
+              marginTop: 8,
+              padding: "12px 12px 0",
+            }}
+          >
+            <DataVersionHistory
+              datasetId={activeDataset.id}
+              onSwitchVersion={(vid) => {
+                const found = sourceDatasets.find((d) => d.id === vid);
+                if (found) setActiveDataset(found);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
 
       <MembersModal open={membersModalOpen} workspaceId={workspaceId} onClose={() => setMembersModalOpen(false)} />

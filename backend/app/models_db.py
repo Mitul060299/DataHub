@@ -116,6 +116,8 @@ class DatasetMetaDB(Base):
     query_count = Column(Integer, nullable=False, default=0)
     access_tier = Column(String, nullable=False, default="hot")
     parent_id = Column(String, nullable=True)
+    version_number = Column(Integer, nullable=False, default=1)
+    version_note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

@@ -87,8 +87,9 @@ export function ProjectHomePage() {
   }, [projectId]);
 
   const handleDeleteProject = async () => {
-    if (!projectId || !detail) return;
-    if (!window.confirm(`Delete project "${detail.project.name}"? Pipelines and dashboards will not be deleted, but they will be unlinked.`)) return;
+    if (!projectId) return;
+    const name = detail?.project.name ?? "this project";
+    if (!window.confirm(`Delete project "${name}"? Pipelines and dashboards will not be deleted, but they will be unlinked.`)) return;
     setDeleting(true);
     try {
       await deleteProject(projectId);
@@ -115,9 +116,20 @@ export function ProjectHomePage() {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "var(--bg0)", color: "var(--tx1)" }}>
         <p style={{ fontSize: 16, margin: 0 }}>{error ?? "Project not found."}</p>
-        <button onClick={() => navigate("/workspace")} style={{ padding: "8px 18px", borderRadius: 8, background: "var(--ac)", border: "none", color: "#fff", cursor: "pointer" }}>
-          Back to Workspace
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => navigate("/workspace")} style={{ padding: "8px 18px", borderRadius: 8, background: "var(--ac)", border: "none", color: "#fff", cursor: "pointer" }}>
+            Back to Workspace
+          </button>
+          {projectId && (
+            <button
+              onClick={() => void handleDeleteProject()}
+              disabled={deleting}
+              style={{ padding: "8px 18px", borderRadius: 8, background: "#c0392b", border: "none", color: "#fff", cursor: "pointer", opacity: deleting ? 0.6 : 1 }}
+            >
+              {deleting ? "Deleting…" : "Delete Project"}
+            </button>
+          )}
+        </div>
       </div>
     );
   }

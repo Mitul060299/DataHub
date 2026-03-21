@@ -159,13 +159,17 @@ def get_project(
 ) -> ProjectDetailOut:
     project = _get_project_or_404(project_id, current_user.id, db)
 
-    # Pipelines
-    pipelines_db = (
-        db.query(PipelineV2DB)
-        .filter(PipelineV2DB.project_id == project_id)
-        .order_by(PipelineV2DB.updated_at.desc())
-        .all()
-    )
+    # Pipelines — guarded: project_id column may not yet exist in older DBs
+    try:
+        pipelines_db = (
+            db.query(PipelineV2DB)
+            .filter(PipelineV2DB.project_id == project_id)
+            .order_by(PipelineV2DB.updated_at.desc())
+            .all()
+        )
+    except Exception:
+        db.rollback()
+        pipelines_db = []
     pipeline_rows: list[ProjectPipelineOut] = []
     for p in pipelines_db:
         last_run = (
@@ -190,13 +194,17 @@ def get_project(
             updated_at=_fmt(p.updated_at),
         ))
 
-    # Dashboards
-    dashboards_db = (
-        db.query(DashboardV2DB)
-        .filter(DashboardV2DB.project_id == project_id)
-        .order_by(DashboardV2DB.updated_at.desc())
-        .all()
-    )
+    # Dashboards — guarded
+    try:
+        dashboards_db = (
+            db.query(DashboardV2DB)
+            .filter(DashboardV2DB.project_id == project_id)
+            .order_by(DashboardV2DB.updated_at.desc())
+            .all()
+        )
+    except Exception:
+        db.rollback()
+        dashboards_db = []
     dashboard_rows: list[ProjectDashboardOut] = []
     for d in dashboards_db:
         tile_count = (
@@ -213,13 +221,17 @@ def get_project(
             updated_at=_fmt(d.updated_at),
         ))
 
-    # Sources
-    sources_db = (
-        db.query(DataSourceDB)
-        .filter(DataSourceDB.project_id == project_id)
-        .order_by(DataSourceDB.created_at.desc())
-        .all()
-    )
+    # Sources — guarded
+    try:
+        sources_db = (
+            db.query(DataSourceDB)
+            .filter(DataSourceDB.project_id == project_id)
+            .order_by(DataSourceDB.created_at.desc())
+            .all()
+        )
+    except Exception:
+        db.rollback()
+        sources_db = []
     source_rows = [
         ProjectSourceOut(
             id=s.id,

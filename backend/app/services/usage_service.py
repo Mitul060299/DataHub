@@ -17,7 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from ..config.plan_limits import get_limits, USAGE_FIELD_LABELS
+from .plan_limits import get_limits, USAGE_FIELD_LABELS
 
 logger = logging.getLogger(__name__)
 

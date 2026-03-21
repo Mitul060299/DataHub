@@ -316,7 +316,7 @@ def get_my_usage_stats(
 ) -> dict:
     """Return monthly usage counters + plan caps for the current user."""
     from ..services.usage_service import get_usage
-    from ..config.plan_limits import get_limits
+    from ..services.plan_limits import get_limits
 
     subject = get_current_subject(authorization)
     if not subject:

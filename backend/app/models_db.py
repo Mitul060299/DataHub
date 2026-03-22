@@ -221,6 +221,18 @@ class FeedbackDB(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class ReviewDB(Base):
+    __tablename__ = "reviews"
+
+    id = Column(String, primary_key=True, server_default=text("gen_random_uuid()::text"))
+    name = Column(Text, nullable=False)
+    role = Column(Text, nullable=True)
+    rating = Column(Integer, nullable=False)
+    body = Column(Text, nullable=False)
+    approved = Column(Boolean, nullable=False, server_default=text("false"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class ApprovalRequestDB(Base):
     __tablename__ = "approval_requests"
     id = Column(String, primary_key=True)

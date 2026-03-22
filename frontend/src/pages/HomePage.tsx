@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useState } from "react";
+import { type CSSProperties, type FormEvent, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   IconBrain,
@@ -14,7 +14,7 @@ import {
   IconUpload,
 } from "../components/Icons";
 import { useAuth } from "../contexts/AuthContext";
-import { submitFeedbackForm } from "../api";
+import { submitFeedbackForm, submitReview, getApprovedReviews, type ReviewOut } from "../api";
 import "./HomePage.css";
 
 const howSteps = [
@@ -185,6 +185,22 @@ export function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successName, setSuccessName] = useState<string | null>(null);
 
+  // Reviews state
+  const [approvedReviews, setApprovedReviews] = useState<ReviewOut[]>([]);
+  const [reviewerName, setReviewerName] = useState("");
+  const [reviewerRole, setReviewerRole] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewBody, setReviewBody] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getApprovedReviews()
+      .then(setApprovedReviews)
+      .catch(() => {});
+  }, []);
+
   const handleGetStarted = () => {
     navigate(session ? "/workspace" : "/signup");
   };
@@ -235,6 +251,35 @@ export function HomePage() {
       setRequestError("Something went wrong. Email us directly at hello@datahub.org.in");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleReviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setReviewError(null);
+    const trimmedName = reviewerName.trim();
+    const trimmedBody = reviewBody.trim();
+    if (!trimmedName || !trimmedBody) {
+      setReviewError("Please enter your name and review.");
+      return;
+    }
+    setReviewSubmitting(true);
+    try {
+      await submitReview({
+        name: trimmedName,
+        role: reviewerRole.trim() || undefined,
+        rating: reviewRating,
+        body: trimmedBody,
+      });
+      setReviewSuccess(true);
+      setReviewerName("");
+      setReviewerRole("");
+      setReviewRating(5);
+      setReviewBody("");
+    } catch {
+      setReviewError("Something went wrong. Please try again.");
+    } finally {
+      setReviewSubmitting(false);
     }
   };
 
@@ -567,6 +612,93 @@ export function HomePage() {
                 </article>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Reviews ─────────────────────────────────────────────────────── */}
+      <section className="home-section" id="reviews">
+        <div className="home-inner">
+          <div className="reviews-layout">
+            {/* Left — display cards */}
+            <div>
+              <p className="section-label">User reviews</p>
+              <h2 className="reviews-heading">What our users say</h2>
+              <p className="reviews-subheading">
+                Real feedback from teams using DataHub every day.
+              </p>
+              {approvedReviews.length === 0 ? (
+                <p className="reviews-empty">No reviews yet — be the first!</p>
+              ) : (
+                <div className="reviews-cards">
+                  {approvedReviews.map((r) => (
+                    <div key={r.id} className="review-card">
+                      <div className="review-stars">
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <span key={i} className={i < r.rating ? "star-filled" : "star-empty"}>★</span>
+                        ))}
+                      </div>
+                      <p className="review-body">&ldquo;{r.body}&rdquo;</p>
+                      <p className="review-author">
+                        <strong>{r.name}</strong>
+                        {r.role ? <span className="review-role"> · {r.role}</span> : null}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right — submit form */}
+            <div className="review-form-wrap">
+              <h3 className="review-form-title">Leave a review</h3>
+              <p className="review-form-sub">Your review is published after a quick check.</p>
+              {reviewSuccess ? (
+                <div className="feedback-success">Thanks! Your review will appear once approved. 🙏</div>
+              ) : (
+                <form className="feedback-form" onSubmit={(e) => void handleReviewSubmit(e)}>
+                  <div className="feedback-row-two">
+                    <input
+                      className="feedback-input"
+                      placeholder="Your name"
+                      value={reviewerName}
+                      onChange={(e) => setReviewerName(e.target.value)}
+                    />
+                    <input
+                      className="feedback-input"
+                      placeholder="Role / Company (optional)"
+                      value={reviewerRole}
+                      onChange={(e) => setReviewerRole(e.target.value)}
+                    />
+                  </div>
+                  <div className="review-star-picker">
+                    <span className="review-star-label">Rating</span>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`review-star-btn${s <= reviewRating ? " review-star-active" : ""}`}
+                        onClick={() => setReviewRating(s)}
+                        aria-label={`${s} star`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    className="feedback-textarea"
+                    placeholder="Share your experience with DataHub..."
+                    value={reviewBody}
+                    onChange={(e) => setReviewBody(e.target.value)}
+                  />
+                  {reviewError ? <p className="feedback-error">{reviewError}</p> : null}
+                  <button type="submit" className="feedback-submit" disabled={reviewSubmitting}>
+                    <IconSend size={14} />
+                    {reviewSubmitting ? "Submitting..." : "Submit review"}
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       </section>

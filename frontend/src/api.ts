@@ -1135,3 +1135,28 @@ export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
   const response = await api.get("/workspace/recent");
   return response.data;
 }
+
+// ── Reviews ─────────────────────────────────────────────────────────────────
+
+export interface ReviewOut {
+  id: string;
+  name: string;
+  role: string | null;
+  rating: number;
+  body: string;
+}
+
+export async function submitReview(payload: {
+  name: string;
+  role?: string;
+  rating: number;
+  body: string;
+}): Promise<{ ok: boolean; id: string }> {
+  const response = await api.post("/reviews", payload);
+  return response.data;
+}
+
+export async function getApprovedReviews(): Promise<ReviewOut[]> {
+  const response = await api.get("/reviews");
+  return response.data;
+}

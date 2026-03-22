@@ -20,7 +20,7 @@ def _json_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
         },
         headers={"Retry-After": str(retry_after)},
     )
-from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing
+from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
 from .routers import ml_routes, full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
 from .routers import dashboard_access
@@ -124,6 +124,17 @@ def create_tables() -> None:
         "CREATE INDEX IF NOT EXISTS idx_dashboard_comments_dashboard_id ON dashboard_comments (dashboard_id)",
         # notification prefs column on users
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB",
+        # 0036 — user reviews
+        """CREATE TABLE IF NOT EXISTS reviews (
+            id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            name        TEXT NOT NULL,
+            role        TEXT,
+            rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+            body        TEXT NOT NULL,
+            approved    BOOLEAN NOT NULL DEFAULT false,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_reviews_approved ON reviews (approved)",
     ]
     try:
         from sqlalchemy import text as _text
@@ -222,6 +233,7 @@ app.include_router(full_auto_routes.router)
 app.include_router(chat_sessions.router)
 app.include_router(pipeline_workflows.router)
 app.include_router(feedback.router)
+app.include_router(reviews.router)
 app.include_router(billing.router)
 app.include_router(pipeline_refresh.router)
 app.include_router(cron.router)

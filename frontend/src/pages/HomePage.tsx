@@ -363,7 +363,7 @@ export function HomePage() {
                 </span>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", height: "260px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "148px 1fr 200px", height: "260px" }}>
                 <div
                   style={{
                     background: "#0d0d11",
@@ -392,6 +392,48 @@ export function HomePage() {
                   </div>
                   <div style={{ padding: "5px 12px", color: "#2e2e3a", display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "8px" }}>④</span> Export
+                  </div>
+                </div>
+
+                {/* ── Data Table Panel ── */}
+                <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid #22222a", overflow: "hidden" }}>
+                  {/* Table toolbar */}
+                  <div style={{ height: "28px", background: "#18181e", borderBottom: "1px solid #22222a", display: "flex", alignItems: "center", padding: "0 10px", gap: "6px", flexShrink: 0 }}>
+                    <span style={{ fontSize: "9px", fontWeight: 600, color: "#818cf8" }}>sales_q4.csv</span>
+                    <span style={{ marginLeft: "auto", fontSize: "8px", color: "#34d399" }}>844 rows</span>
+                  </div>
+                  {/* Column headers */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 52px 44px", background: "#0d0d11", borderBottom: "1px solid #22222a", flexShrink: 0 }}>
+                    {["Region", "Revenue", "Date", "Status"].map((h) => (
+                      <div key={h} style={{ padding: "3px 6px", fontSize: "8px", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#44445a", borderRight: "1px solid #22222a" }}>{h}</div>
+                    ))}
+                  </div>
+                  {/* Rows */}
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    {[
+                      ["North", "₹1,24,000", "Jan 24", "✓", "#818cf8", "#22c55e", false],
+                      ["South", "₹98,500",  "Jan 24", "✓", "#a0a0bc", "#22c55e", false],
+                      ["South", "₹98,500",  "Jan 24", "dup", "#2e2e3a", "#f87171", true],
+                      ["West",  "—",         "Jan 24", "null", "#2e2e3a", "#f87171", false],
+                      ["East",  "₹2,01,300", "Jan 24", "✓", "#a0a0bc", "#22c55e", false],
+                    ].map(([region, revenue, date, status, regionColor, statusColor, isDup], i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr 52px 44px",
+                          borderBottom: "1px solid #22222a",
+                          opacity: isDup ? 0.3 : 1,
+                          background: isDup ? "rgba(248,113,113,0.04)" : "transparent",
+                          textDecoration: isDup ? "line-through" : "none",
+                        }}
+                      >
+                        <div style={{ padding: "4px 6px", fontSize: "9px", color: regionColor as string, fontFamily: "monospace", borderRight: "1px solid #22222a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{region as string}</div>
+                        <div style={{ padding: "4px 6px", fontSize: "9px", color: "#8888a0", fontFamily: "monospace", borderRight: "1px solid #22222a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{revenue as string}</div>
+                        <div style={{ padding: "4px 6px", fontSize: "9px", color: "#44445a", fontFamily: "monospace", borderRight: "1px solid #22222a" }}>{date as string}</div>
+                        <div style={{ padding: "4px 6px", fontSize: "9px", color: statusColor as string, fontFamily: "monospace" }}>{status as string}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

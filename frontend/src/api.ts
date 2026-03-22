@@ -446,6 +446,61 @@ export async function fetchSyncStatus() {
   return response.data as { status: Array<{ key: string; last_synced_at: string; mode: string; dataset_id?: string | null }> };
 }
 
+// ── DB Connector management ───────────────────────────────────────────────────
+
+export interface SavedConnection {
+  id: string;
+  name: string;
+  type: string;
+  host: string | null;
+  database: string | null;
+  status: string;
+  last_sync_at: string | null;
+  created_at: string;
+}
+
+export interface ConnectionTable {
+  schema: string;
+  table: string;
+  row_count: number;
+}
+
+export async function testConnector(connector: string, config: Record<string, unknown>) {
+  const response = await api.post("/connectors/test", { connector, config });
+  return response.data as { success: boolean; message?: string; error?: string };
+}
+
+export async function saveConnection(name: string, connector: string, config: Record<string, unknown>) {
+  const response = await api.post("/connectors/connections", { name, connector, config });
+  return response.data as SavedConnection;
+}
+
+export async function listConnections() {
+  const response = await api.get("/connectors/connections");
+  return response.data as { connections: SavedConnection[] };
+}
+
+export async function deleteConnection(connectionId: string) {
+  const response = await api.delete(`/connectors/connections/${connectionId}`);
+  return response.data as { ok: boolean };
+}
+
+export async function listConnectionTables(connectionId: string) {
+  const response = await api.get(`/connectors/connections/${connectionId}/tables`);
+  return response.data as { connection_id: string; tables: ConnectionTable[] };
+}
+
+export async function importFromConnection(
+  connectionId: string,
+  connector: string,
+  config: Record<string, unknown>,
+  tableName?: string,
+) {
+  const importConfig = tableName ? { ...config, table: tableName } : config;
+  const response = await api.post("/connectors/import", { connector, config: importConfig });
+  return response.data;
+}
+
 export async function fetchDatasetLineage(datasetId: string) {
   const response = await api.get(`/datasets/${datasetId}/lineage`);
   return response.data;

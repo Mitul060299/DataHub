@@ -11,6 +11,7 @@ import { MembersModal } from "./modals/MembersModal";
 import { ProjectModal } from "./modals/ProjectModal";
 import { ImportModal } from "./modals/ImportModal";
 import { ScheduleModal } from "./modals/ScheduleModal";
+import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
 
 interface ExplorerPanelProps {
@@ -30,6 +31,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   const [membersModalOpen, setMembersModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [datasetLoadError, setDatasetLoadError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -254,6 +256,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           activeDatasetId={activeDataset?.id}
           onSelect={setActiveDataset}
           onImport={() => setImportModalOpen(true)}
+          onAddConnection={() => setConnectorModalOpen(true)}
           onRemove={(dataset) => void removeDataset(dataset)}
           onRename={async (dataset, name) => {
             await renameDataset(dataset.id, name);
@@ -317,6 +320,11 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           setScheduleInfo(payload);
           void schedule("default", payload.cron);
         }}
+      />
+      <ConnectorModal
+        open={connectorModalOpen}
+        onClose={() => setConnectorModalOpen(false)}
+        onImported={() => void loadDatasets()}
       />
     </aside>
   );

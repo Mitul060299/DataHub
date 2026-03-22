@@ -175,6 +175,32 @@ class PostgreSQLConnector:
             logger.error(f"PostgreSQL connection test failed: {e}")
             return {"success": False, "error": str(e)}
 
+    def list_tables(self, config: Dict[str, Any]) -> list:
+        try:
+            host = config.get("host", "localhost")
+            port = config.get("port", 5432)
+            database = config.get("database")
+            username = config.get("username")
+            password = config.get("password")
+            if not all([host, database, username, password]):
+                return []
+            connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
+            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT t.table_schema, t.table_name,
+                        COALESCE(c.reltuples::bigint, 0) AS row_count_approx
+                    FROM information_schema.tables t
+                    LEFT JOIN pg_class c ON c.relname = t.table_name
+                    WHERE t.table_type = 'BASE TABLE'
+                      AND t.table_schema NOT IN ('pg_catalog', 'information_schema')
+                    ORDER BY t.table_schema, t.table_name
+                """))
+                return [{"schema": r[0], "table": r[1], "row_count": r[2]} for r in result.fetchall()]
+        except Exception as e:
+            logger.error(f"PostgreSQL list_tables failed: {e}")
+            return []
+
 
 class SupabaseConnector:
     name = "supabase"
@@ -279,6 +305,29 @@ class MySQLConnector:
         except Exception as e:
             logger.error(f"MySQL connection test failed: {e}")
             return {"success": False, "error": str(e)}
+
+    def list_tables(self, config: Dict[str, Any]) -> list:
+        try:
+            host = config.get("host", "localhost")
+            port = config.get("port", 3306)
+            database = config.get("database")
+            username = config.get("username")
+            password = config.get("password")
+            if not all([host, database, username, password]):
+                return []
+            connection_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
+            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT TABLE_SCHEMA, TABLE_NAME, COALESCE(TABLE_ROWS, 0)
+                    FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = :db
+                    ORDER BY TABLE_NAME
+                """), {"db": database})
+                return [{"schema": r[0], "table": r[1], "row_count": r[2]} for r in result.fetchall()]
+        except Exception as e:
+            logger.error(f"MySQL list_tables failed: {e}")
+            return []
 
 
 class SQLServerConnector:

@@ -26,9 +26,10 @@ interface DataSectionProps {
   onImport: () => void;
   onRemove: (dataset: Dataset) => void;
   onRename?: (dataset: Dataset, newName: string) => void;
+  onAddConnection?: () => void;
 }
 
-export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename }: DataSectionProps) {
+export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename, onAddConnection }: DataSectionProps) {
   const [open, setOpen] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -53,9 +54,14 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
           {open ? "▼" : "▶"} DATA
         </button>
         {open ? (
-          <button className="btn" style={{ width: 26, padding: 0 }} onClick={onImport} aria-label="Import dataset">
-            <IconPlus size={14} />
-          </button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button className="btn" style={{ width: 26, padding: 0 }} onClick={onAddConnection} aria-label="Add DB connection" title="Add DB connection">
+              <IconDatabase size={14} />
+            </button>
+            <button className="btn" style={{ width: 26, padding: 0 }} onClick={onImport} aria-label="Import file">
+              <IconPlus size={14} />
+            </button>
+          </div>
         ) : null}
       </header>
       {open ? (

@@ -1,0 +1,506 @@
+import { useState } from "react";
+import {
+  testConnector,
+  saveConnection,
+  listConnectionTables,
+  importFromConnection,
+  type ConnectionTable,
+} from "../../api";
+
+// ── Connector catalogue ────────────────────────────────────────────────────────
+
+interface ConnectorDef {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+  locked?: boolean;
+  lockedLabel?: string;
+  fields: FieldDef[];
+}
+
+interface FieldDef {
+  key: string;
+  label: string;
+  type: "text" | "number" | "password";
+  placeholder?: string;
+  defaultValue?: string | number;
+  required?: boolean;
+}
+
+const CONNECTORS: ConnectorDef[] = [
+  {
+    id: "google_sheets",
+    label: "Google Sheets",
+    icon: "📊",
+    description: "Import from a public Google Sheet",
+    fields: [
+      { key: "sheet_url", label: "Sheet URL", type: "text", placeholder: "https://docs.google.com/spreadsheets/d/...", required: true },
+      { key: "gid", label: "Sheet tab ID (gid)", type: "number", placeholder: "0 (first tab)", defaultValue: "0" },
+    ],
+  },
+  {
+    id: "postgresql",
+    label: "PostgreSQL",
+    icon: "🐘",
+    description: "Connect to a PostgreSQL database",
+    fields: [
+      { key: "host", label: "Host", type: "text", placeholder: "db.example.com", required: true },
+      { key: "port", label: "Port", type: "number", placeholder: "5432", defaultValue: "5432" },
+      { key: "database", label: "Database", type: "text", placeholder: "my_database", required: true },
+      { key: "username", label: "Username", type: "text", placeholder: "postgres", required: true },
+      { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: true },
+      { key: "schema", label: "Schema (optional)", type: "text", placeholder: "public", defaultValue: "public" },
+    ],
+  },
+  {
+    id: "mysql",
+    label: "MySQL",
+    icon: "🐬",
+    description: "Connect to a MySQL / MariaDB database",
+    fields: [
+      { key: "host", label: "Host", type: "text", placeholder: "db.example.com", required: true },
+      { key: "port", label: "Port", type: "number", placeholder: "3306", defaultValue: "3306" },
+      { key: "database", label: "Database", type: "text", placeholder: "my_database", required: true },
+      { key: "username", label: "Username", type: "text", placeholder: "root", required: true },
+      { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: true },
+    ],
+  },
+  {
+    id: "snowflake",
+    label: "Snowflake",
+    icon: "❄️",
+    description: "Snowflake data warehouse",
+    locked: true,
+    lockedLabel: "coming soon",
+    fields: [],
+  },
+  {
+    id: "bigquery",
+    label: "BigQuery",
+    icon: "☁️",
+    description: "Google BigQuery",
+    locked: true,
+    lockedLabel: "coming soon",
+    fields: [],
+  },
+];
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+interface ConnectorModalProps {
+  open: boolean;
+  onClose: () => void;
+  onImported?: () => void;
+}
+
+type Step = "pick" | "configure" | "browse";
+
+export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProps) {
+  const [step, setStep] = useState<Step>("pick");
+  const [selected, setSelected] = useState<ConnectorDef | null>(null);
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [connName, setConnName] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [tables, setTables] = useState<ConnectionTable[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [importing, setImporting] = useState<string | null>(null);
+  const [importedTables, setImportedTables] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) return null;
+
+  const reset = () => {
+    setStep("pick");
+    setSelected(null);
+    setFields({});
+    setConnName("");
+    setTesting(false);
+    setTestResult(null);
+    setSaving(false);
+    setSavedId(null);
+    setTables([]);
+    setLoadingTables(false);
+    setImporting(null);
+    setImportedTables(new Set());
+    setError(null);
+  };
+
+  const handleClose = () => { reset(); onClose(); };
+
+  const pickConnector = (c: ConnectorDef) => {
+    if (c.locked) return;
+    const defaults: Record<string, string> = {};
+    for (const f of c.fields) {
+      if (f.defaultValue !== undefined) defaults[f.key] = String(f.defaultValue);
+    }
+    setSelected(c);
+    setFields(defaults);
+    setConnName(c.label);
+    setTestResult(null);
+    setError(null);
+    setStep("configure");
+  };
+
+  const buildConfig = (): Record<string, unknown> => {
+    if (!selected) return {};
+    if (selected.id === "google_sheets") {
+      const url = fields["sheet_url"] || "";
+      const match = url.match(/\/spreadsheets\/d\/([^/]+)/);
+      const sheet_id = match ? match[1] : url;
+      return { sheet_id, gid: parseInt(fields["gid"] || "0", 10) };
+    }
+    return { ...fields, port: fields["port"] ? parseInt(fields["port"], 10) : undefined };
+  };
+
+  const handleTest = async () => {
+    if (!selected) return;
+    setTesting(true);
+    setTestResult(null);
+    setError(null);
+    try {
+      const result = await testConnector(selected.id, buildConfig());
+      setTestResult(result);
+    } catch {
+      setTestResult({ success: false, error: "Network error — check the connection details." });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // For Google Sheets: skip save, import directly
+  const handleGoogleSheetsImport = async () => {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await importFromConnection("", selected.id, buildConfig());
+      onImported?.();
+      handleClose();
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Import failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAndBrowse = async () => {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const conn = await saveConnection(connName || selected.label, selected.id, buildConfig());
+      setSavedId(conn.id);
+      setStep("browse");
+      setLoadingTables(true);
+      const { tables: t } = await listConnectionTables(conn.id);
+      setTables(t);
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Failed to save connection.");
+    } finally {
+      setSaving(false);
+      setLoadingTables(false);
+    }
+  };
+
+  const handleImportTable = async (table: string) => {
+    if (!savedId || !selected) return;
+    setImporting(table);
+    setError(null);
+    try {
+      await importFromConnection(savedId, selected.id, buildConfig(), table);
+      setImportedTables((prev) => new Set(prev).add(table));
+      onImported?.();
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Import failed.");
+    } finally {
+      setImporting(null);
+    }
+  };
+
+  const input: React.CSSProperties = {
+    width: "100%",
+    background: "var(--bg3, #18181e)",
+    border: "1px solid var(--bd, #2e2e3a)",
+    borderRadius: 6,
+    color: "var(--tx0, #e8e8f0)",
+    fontSize: 13,
+    padding: "7px 10px",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const label: React.CSSProperties = {
+    fontSize: 11,
+    color: "var(--tx1, #8888a0)",
+    marginBottom: 4,
+    display: "block",
+    fontWeight: 600,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add database connection"
+      style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+    >
+      {/* Backdrop */}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)" }} />
+
+      {/* Panel */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 560,
+          maxHeight: "85vh",
+          background: "var(--bg2, #111115)",
+          border: "1px solid var(--bd, #2e2e3a)",
+          borderRadius: 14,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+          margin: 16,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--bd, #2e2e3a)", flexShrink: 0 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--tx0, #e8e8f0)" }}>
+              {step === "pick" ? "Add connection" : step === "configure" ? `Connect ${selected?.label}` : `${selected?.label} tables`}
+            </p>
+            {step !== "pick" && (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--tx1, #8888a0)", marginTop: 2 }}>
+                {step === "configure" ? "Enter credentials then test or save" : "Select a table to import as a dataset"}
+              </p>
+            )}
+          </div>
+          <button onClick={handleClose} style={{ background: "transparent", border: "none", color: "var(--tx1, #8888a0)", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+
+          {/* ── Step: pick ── */}
+          {step === "pick" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {CONNECTORS.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => pickConnector(c)}
+                  disabled={c.locked}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: 6,
+                    padding: "14px 14px",
+                    background: "var(--bg3, #18181e)",
+                    border: "1px solid var(--bd, #2e2e3a)",
+                    borderRadius: 10,
+                    cursor: c.locked ? "default" : "pointer",
+                    opacity: c.locked ? 0.45 : 1,
+                    textAlign: "left",
+                    transition: "border-color 0.15s",
+                  }}
+                >
+                  <span style={{ fontSize: 22 }}>{c.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tx0, #e8e8f0)" }}>{c.label}</span>
+                  <span style={{ fontSize: 11, color: "var(--tx1, #8888a0)", lineHeight: 1.4 }}>
+                    {c.locked ? c.lockedLabel : c.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── Step: configure ── */}
+          {step === "configure" && selected && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Connection name */}
+              <div>
+                <span style={label}>Connection name</span>
+                <input
+                  value={connName}
+                  onChange={(e) => setConnName(e.target.value)}
+                  placeholder={selected.label}
+                  style={input}
+                />
+              </div>
+
+              {/* Dynamic fields */}
+              {selected.id === "google_sheets" ? (
+                <>
+                  {selected.fields.map((f) => (
+                    <div key={f.key}>
+                      <span style={label}>{f.label}</span>
+                      <input
+                        type={f.type}
+                        value={fields[f.key] ?? ""}
+                        onChange={(e) => setFields((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={f.placeholder}
+                        style={input}
+                      />
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {selected.fields.map((f) => (
+                    <div key={f.key} style={{ gridColumn: ["host", "database"].includes(f.key) ? "1 / -1" : undefined }}>
+                      <span style={label}>{f.label}</span>
+                      <input
+                        type={f.type}
+                        value={fields[f.key] ?? ""}
+                        onChange={(e) => setFields((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={f.placeholder}
+                        style={input}
+                        autoComplete={f.type === "password" ? "current-password" : "off"}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Test result */}
+              {testResult && (
+                <div style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: testResult.success ? "rgba(52,211,153,0.08)" : "rgba(248,113,113,0.08)",
+                  border: `1px solid ${testResult.success ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`,
+                  fontSize: 12,
+                  color: testResult.success ? "#34d399" : "#f87171",
+                }}>
+                  {testResult.success ? `✓ ${testResult.message ?? "Connected successfully"}` : `✗ ${testResult.error}`}
+                </div>
+              )}
+
+              {error && (
+                <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)", fontSize: 12, color: "#f87171" }}>
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Step: browse ── */}
+          {step === "browse" && (
+            <div>
+              {loadingTables && (
+                <p style={{ fontSize: 13, color: "var(--tx1, #8888a0)", textAlign: "center", padding: "24px 0" }}>Loading tables…</p>
+              )}
+              {!loadingTables && tables.length === 0 && (
+                <p style={{ fontSize: 13, color: "var(--tx1, #8888a0)", textAlign: "center", padding: "24px 0" }}>No tables found.</p>
+              )}
+              {!loadingTables && tables.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {tables.map((t) => {
+                    const key = `${t.schema}.${t.table}`;
+                    const done = importedTables.has(t.table);
+                    return (
+                      <div
+                        key={key}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 12px",
+                          background: "var(--bg3, #18181e)",
+                          border: "1px solid var(--bd, #2e2e3a)",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: 13, color: "var(--tx0, #e8e8f0)", fontFamily: "monospace" }}>
+                            {t.schema !== "public" ? `${t.schema}.` : ""}{t.table}
+                          </span>
+                          {t.row_count > 0 && (
+                            <span style={{ fontSize: 11, color: "var(--tx1, #8888a0)", marginLeft: 8 }}>
+                              ~{t.row_count.toLocaleString()} rows
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleImportTable(t.table)}
+                          disabled={done || importing === t.table}
+                          style={{
+                            padding: "4px 12px",
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            border: done ? "1px solid rgba(52,211,153,0.3)" : "1px solid rgba(91,106,240,0.4)",
+                            background: done ? "rgba(52,211,153,0.1)" : "rgba(91,106,240,0.15)",
+                            color: done ? "#34d399" : "#818cf8",
+                            cursor: done ? "default" : "pointer",
+                          }}
+                        >
+                          {done ? "✓ Imported" : importing === t.table ? "Importing…" : "Import"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {error && (
+                <div style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)", fontSize: 12, color: "#f87171" }}>
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {step !== "pick" && (
+          <div style={{ padding: "14px 20px", borderTop: "1px solid var(--bd, #2e2e3a)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <button
+              onClick={() => { setStep("pick"); setTestResult(null); setError(null); }}
+              style={{ fontSize: 13, color: "var(--tx1, #8888a0)", background: "transparent", border: "none", cursor: "pointer" }}
+            >
+              ← Back
+            </button>
+
+            {step === "configure" && selected && (
+              <div style={{ display: "flex", gap: 8 }}>
+                {selected.id !== "google_sheets" && (
+                  <button
+                    onClick={handleTest}
+                    disabled={testing}
+                    style={{ padding: "7px 14px", borderRadius: 7, fontSize: 13, border: "1px solid var(--bd, #2e2e3a)", background: "transparent", color: "var(--tx1, #8888a0)", cursor: "pointer" }}
+                  >
+                    {testing ? "Testing…" : "Test connection"}
+                  </button>
+                )}
+                <button
+                  onClick={selected.id === "google_sheets" ? handleGoogleSheetsImport : handleSaveAndBrowse}
+                  disabled={saving}
+                  style={{ padding: "7px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, border: "1px solid rgba(91,106,240,0.5)", background: "rgba(91,106,240,0.2)", color: "#818cf8", cursor: "pointer" }}
+                >
+                  {saving ? "Connecting…" : selected.id === "google_sheets" ? "Import sheet" : "Save & browse tables"}
+                </button>
+              </div>
+            )}
+
+            {step === "browse" && (
+              <button
+                onClick={handleClose}
+                style={{ padding: "7px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, border: "1px solid rgba(91,106,240,0.5)", background: "rgba(91,106,240,0.2)", color: "#818cf8", cursor: "pointer" }}
+              >
+                Done
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

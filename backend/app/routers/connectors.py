@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 import pandas as pd
+import uuid
 from ..models import ConnectorImportRequest, DatasetPreview
+from ..models_db import ImportConnectionDB
 from ..services.connectors import connector_registry
 from .datasets import save_dataset
 from .datasets import get_dataset, get_dataset_from_db
@@ -137,3 +139,130 @@ def list_sync_status(authorization: str | None = Header(default=None)) -> dict:
             for item in sync_store.list()
         ]
     }
+
+
+# ── Connection management ─────────────────────────────────────────────────────
+
+@router.post("/test")
+def test_connector_connection(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Test a connector config without saving credentials."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    connector_name = payload.get("connector")
+    config = payload.get("config", {})
+    connector = connector_registry.get(connector_name)
+    if not connector:
+        raise HTTPException(status_code=404, detail=f"Connector '{connector_name}' not found")
+    if not hasattr(connector, "test_connection"):
+        raise HTTPException(status_code=400, detail="This connector does not support connection testing")
+    return connector.test_connection(config)
+
+
+@router.post("/connections")
+def save_connection(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Persist a named connection (credentials stored in config JSONB)."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    connector_name = payload.get("connector")
+    enforce_connector_access(user_plan, connector_name)
+    cfg = payload.get("config", {})
+    row = ImportConnectionDB(
+        id=str(uuid.uuid4()),
+        name=payload.get("name") or connector_name,
+        type=connector_name,
+        workspace_id=workspace_id or "default",
+        host=cfg.get("host"),
+        database=cfg.get("database"),
+        status="connected",
+        config=cfg,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {
+        "id": row.id,
+        "name": row.name,
+        "type": row.type,
+        "host": row.host,
+        "database": row.database,
+        "status": row.status,
+        "created_at": row.created_at.isoformat(),
+    }
+
+
+@router.get("/connections")
+def list_connections(
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """List saved connections for the current workspace."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    rows = (
+        db.query(ImportConnectionDB)
+        .filter(ImportConnectionDB.workspace_id == (workspace_id or "default"))
+        .order_by(ImportConnectionDB.created_at.desc())
+        .all()
+    )
+    return {
+        "connections": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "type": r.type,
+                "host": r.host,
+                "database": r.database,
+                "status": r.status,
+                "last_sync_at": r.last_sync_at.isoformat() if r.last_sync_at else None,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.delete("/connections/{connection_id}")
+def delete_connection(
+    connection_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    row = db.query(ImportConnectionDB).filter(ImportConnectionDB.id == connection_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/connections/{connection_id}/tables")
+def list_connection_tables(
+    connection_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Browse tables for a saved connection (schema browser)."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    row = db.query(ImportConnectionDB).filter(ImportConnectionDB.id == connection_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    connector = connector_registry.get(row.type)
+    if not connector:
+        raise HTTPException(status_code=404, detail=f"Connector '{row.type}' not found")
+    if not hasattr(connector, "list_tables"):
+        raise HTTPException(status_code=400, detail="This connector does not support schema browsing")
+    tables = connector.list_tables(row.config)
+    return {"connection_id": connection_id, "tables": tables}

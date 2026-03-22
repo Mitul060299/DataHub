@@ -163,13 +163,6 @@ const plans: PricingPlan[] = [
   },
 ];
 
-const miniRows: Array<[string, string, string, string, string, string]> = [
-  ["North", "₹1,24,000", "Jan 24", "✓", "#22c55e", "#818cf8"],
-  ["South", "₹98,500", "Jan 24", "✓", "#22c55e", "#818cf8"],
-  ["West", "—", "Jan 24", "null", "#f87171", "#f87171"],
-  ["East", "₹2,01,300", "Jan 24", "✓", "#22c55e", "#818cf8"],
-];
-
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
 
 export function HomePage() {
@@ -306,16 +299,8 @@ export function HomePage() {
                 marginBottom: "22px",
               }}
             >
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: "#5B6AF0",
-                  animation: "blink 2s infinite",
-                }}
-              />
-              Now in Beta — Join early access
+              🚀
+              Now Live — Help us improve
             </div>
 
             <h1 className="hero-title">
@@ -387,119 +372,68 @@ export function HomePage() {
                     fontSize: "11px",
                   }}
                 >
-                  <div
-                    style={{
-                      padding: "8px 12px 3px",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: "#44445a",
-                    }}
-                  >
-                    DATA
+                  <div style={{ padding: "8px 12px 3px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#44445a" }}>DATA</div>
+                  <div style={{ padding: "5px 12px", color: "#818cf8", background: "rgba(91,106,240,0.1)", display: "flex", alignItems: "center", gap: "5px" }}>
+                    <span style={{ fontSize: "9px", opacity: 0.5 }}>⊞</span> sales_q4.csv
                   </div>
-                  <div style={{ padding: "6px 12px", color: "#818cf8", background: "rgba(91,106,240,0.12)" }}>sales_q4.csv</div>
-                  <div style={{ padding: "6px 12px", color: "#44445a" }}>customers.csv</div>
-                  <div
-                    style={{
-                      padding: "8px 12px 3px",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: "#44445a",
-                      marginTop: "6px",
-                    }}
-                  >
-                    PIPELINE
+                  <div style={{ padding: "5px 12px", color: "#44445a", display: "flex", alignItems: "center", gap: "5px" }}>
+                    <span style={{ fontSize: "9px" }}>⊞</span> customers.csv
                   </div>
-                  <div style={{ padding: "6px 12px", color: "#44445a" }}>Source</div>
-                  <div
-                    style={{
-                      padding: "6px 12px",
-                      color: "#818cf8",
-                      background: "rgba(91,106,240,0.12)",
-                      borderLeft: "2px solid #5B6AF0",
-                    }}
-                  >
-                    Deduplicate
+                  <div style={{ padding: "8px 12px 3px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#44445a", marginTop: "4px" }}>PIPELINE</div>
+                  <div style={{ padding: "5px 12px", color: "#5B6AF0", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "8px", color: "#44445a" }}>①</span> Source
                   </div>
-                  <div style={{ padding: "6px 12px", color: "#44445a" }}>Group by</div>
+                  <div style={{ padding: "5px 12px", color: "#818cf8", background: "rgba(91,106,240,0.12)", borderLeft: "2px solid #5B6AF0", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "8px" }}>②</span> Deduplicate
+                    <span style={{ marginLeft: "auto", fontSize: "8px", color: "#5B6AF0", animation: "blink 1.5s infinite" }}>●</span>
+                  </div>
+                  <div style={{ padding: "5px 12px", color: "#44445a", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "8px" }}>③</span> Group by region
+                  </div>
+                  <div style={{ padding: "5px 12px", color: "#2e2e3a", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "8px" }}>④</span> Export
+                  </div>
                 </div>
 
-                <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "8px", overflow: "hidden" }}>
-                  <div
-                    style={{
-                      background: "#18181e",
-                      border: "1px solid #22222a",
-                      borderRadius: "6px",
-                      overflow: "hidden",
-                      flex: 1,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(4,1fr)",
-                        background: "#0d0d11",
-                        borderBottom: "1px solid #22222a",
-                      }}
-                    >
-                      {["Region", "Revenue", "Date", "Status"].map((header) => (
-                        <div
-                          key={header}
-                          style={{
-                            padding: "4px 8px",
-                            fontSize: "9px",
-                            fontWeight: 700,
-                            letterSpacing: "0.06em",
-                            textTransform: "uppercase",
-                            color: "#44445a",
-                            borderRight: "1px solid #22222a",
-                          }}
-                        >
-                          {header}
-                        </div>
-                      ))}
-                    </div>
-
-                    {miniRows.map(([region, revenue, date, status, statusColor, regionColor], index) => (
-                      <div key={`${region}-${index}`} style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", borderBottom: "1px solid #22222a" }}>
-                        <div style={{ padding: "5px 8px", fontSize: "10px", color: regionColor, fontFamily: "'Geist Mono', monospace" }}>{region}</div>
-                        <div style={{ padding: "5px 8px", fontSize: "10px", color: "#8888a0", fontFamily: "'Geist Mono', monospace" }}>{revenue}</div>
-                        <div style={{ padding: "5px 8px", fontSize: "10px", color: "#8888a0", fontFamily: "'Geist Mono', monospace" }}>{date}</div>
-                        <div style={{ padding: "5px 8px", fontSize: "10px", color: statusColor, fontFamily: "'Geist Mono', monospace" }}>{status}</div>
-                      </div>
-                    ))}
+                <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }}>
+                  {/* Chat header */}
+                  <div style={{ height: "32px", background: "#18181e", borderBottom: "1px solid #22222a", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", flexShrink: 0 }}>
+                    <span style={{ fontSize: "10px", fontWeight: 600, color: "#818cf8", display: "flex", alignItems: "center", gap: "5px" }}>
+                      <span style={{ color: "#5B6AF0" }}>✦</span> AI Agent
+                    </span>
+                    <span style={{ fontSize: "11px", color: "#44445a", cursor: "default" }}>×</span>
                   </div>
 
-                  <div
-                    style={{
-                      background: "rgba(91,106,240,0.1)",
-                      border: "1px solid rgba(91,106,240,0.2)",
-                      borderRadius: "8px",
-                      padding: "8px 10px",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "7px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#5B6AF0",
-                        marginTop: 4,
-                        flexShrink: 0,
-                        animation: "blink 1.5s infinite",
-                      }}
-                    />
-                    <div style={{ fontSize: "10px", color: "#818cf8", lineHeight: 1.5 }}>
-                      <strong style={{ color: "#e8e8f0" }}>AI Agent:</strong> Found 3 duplicates and 1 null in Revenue. Removed duplicates —
-                      want me to fill the null with the regional average?
+                  {/* Messages */}
+                  <div style={{ flex: 1, padding: "10px", display: "flex", flexDirection: "column", gap: "8px", overflow: "hidden" }}>
+                    {/* User message */}
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <div style={{ maxWidth: "80%", background: "rgba(91,106,240,0.18)", border: "1px solid rgba(91,106,240,0.25)", borderRadius: "10px 10px 2px 10px", padding: "6px 9px", fontSize: "10px", color: "#c7c7e8", lineHeight: 1.45 }}>
+                        Remove duplicates from sales_q4.csv
+                      </div>
                     </div>
+
+                    {/* AI response */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                      <div style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(91,106,240,0.2)", border: "1px solid rgba(91,106,240,0.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "8px", color: "#818cf8", fontWeight: 700 }}>AI</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ background: "#0d0d11", border: "1px solid #22222a", borderRadius: "2px 10px 10px 10px", padding: "6px 9px", fontSize: "10px", color: "#a0a0bc", lineHeight: 1.5 }}>
+                          Found <span style={{ color: "#f87171", fontWeight: 600 }}>3 duplicates</span> in 847 rows. Removed — <span style={{ color: "#34d399", fontWeight: 600 }}>844 rows</span> remain.{" "}
+                          Fill the null in <span style={{ color: "#818cf8" }}>Revenue</span> with the regional average?
+                        </div>
+                        {/* Action chips */}
+                        <div style={{ display: "flex", gap: "5px", marginTop: "5px" }}>
+                          <div style={{ padding: "3px 8px", background: "rgba(91,106,240,0.2)", border: "1px solid rgba(91,106,240,0.4)", borderRadius: "4px", fontSize: "9px", color: "#818cf8", fontWeight: 600, cursor: "default" }}>Yes, fill nulls</div>
+                          <div style={{ padding: "3px 8px", background: "transparent", border: "1px solid #2e2e3a", borderRadius: "4px", fontSize: "9px", color: "#44445a", cursor: "default" }}>Skip</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Input bar */}
+                  <div style={{ height: "34px", background: "#18181e", borderTop: "1px solid #22222a", display: "flex", alignItems: "center", padding: "0 10px", gap: "6px", flexShrink: 0 }}>
+                    <span style={{ flex: 1, fontSize: "10px", color: "#2e2e3a", fontStyle: "italic" }}>Ask anything about your data…</span>
+                    <div style={{ width: 20, height: 20, borderRadius: "4px", background: "rgba(91,106,240,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", color: "#818cf8" }}>↑</div>
                   </div>
                 </div>
               </div>

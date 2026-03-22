@@ -10,10 +10,10 @@ DataHub is priced in **USD** with INR equivalents shown in brackets. All plans a
 
 | Tier | Price | INR Equivalent |
 |---|---|---|
-| Free | $0 | — |
-| Professional | $40 / month | ₹3,299 / month |
-| Team | $75 / month | ₹6,199 / month |
-| Business | $100 / month | ₹8,299 / month |
+| Free | $0 | ₹0 |
+| Professional | $79 / month | ₹3,299 / month |
+| Team | $149 / month | ₹6,199 / month |
+| Business | $399 / month | ₹16,599 / month |
 | Enterprise | Custom | Custom |
 
 ---
@@ -38,7 +38,7 @@ CTA: **Get started**
 
 ---
 
-### Professional — $40 / month (₹3,299)
+### Professional — $79 / month (₹3,299)
 
 | Feature | Value |
 |---|---|
@@ -56,7 +56,7 @@ CTA: **Start free trial**
 
 ---
 
-### Team — $75 / month (₹6,199) ⭐ Popular
+### Team — $149 / month (₹6,199) ⭐ Popular
 
 | Feature | Value |
 |---|---|
@@ -75,7 +75,7 @@ CTA: **Start free trial**
 
 ---
 
-### Business — $100 / month (₹8,299)
+### Business — $399 / month (₹16,599)
 
 | Feature | Value |
 |---|---|

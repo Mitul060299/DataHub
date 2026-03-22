@@ -100,12 +100,14 @@ const features = [
 type PricingPlan = {
   tier: string;
   color: string;
-  price: string;
-  period: string;
+  priceUSD: string;
+  priceINR: string;
+  periodUSD: string;
+  periodINR: string;
   features: string[];
   buttonLabel: string;
   buttonStyle: "ghost" | "blue" | "primary" | "amber" | "dark";
-  action: "trial" | "contact";
+  action: "trial" | "contact" | "waitlist";
   popular?: boolean;
 };
 
@@ -113,8 +115,10 @@ const plans: PricingPlan[] = [
   {
     tier: "Free",
     color: "#71717a",
-    price: "$0",
-    period: "forever",
+    priceUSD: "$0",
+    priceINR: "\u20b90",
+    periodUSD: "forever",
+    periodINR: "forever",
     features: [
       "2 projects",
       "50 AI messages/month",
@@ -124,6 +128,7 @@ const plans: PricingPlan[] = [
       "0 scheduled pipelines",
       "2 dashboards",
       "DB connections: CSV & Excel only",
+      "Community support",
     ],
     buttonLabel: "Get started",
     buttonStyle: "ghost",
@@ -132,8 +137,10 @@ const plans: PricingPlan[] = [
   {
     tier: "Professional",
     color: "#3b82f6",
-    price: "$40",
-    period: "/month (\u20b93,299)",
+    priceUSD: "$79",
+    priceINR: "\u20b93,299",
+    periodUSD: "/month",
+    periodINR: "/month",
     features: [
       "Unlimited projects",
       "500 AI messages/month",
@@ -145,15 +152,17 @@ const plans: PricingPlan[] = [
       "DB connections: CSV, Excel, Google Sheets",
       "Email support",
     ],
-    buttonLabel: "Start free trial",
+    buttonLabel: "Join waitlist",
     buttonStyle: "blue",
-    action: "trial",
+    action: "waitlist",
   },
   {
     tier: "Team",
     color: "#5B6AF0",
-    price: "$75",
-    period: "/month (\u20b96,199)",
+    priceUSD: "$149",
+    priceINR: "\u20b96,199",
+    periodUSD: "/month",
+    periodINR: "/month",
     features: [
       "Unlimited projects",
       "Unlimited AI messages",
@@ -166,16 +175,18 @@ const plans: PricingPlan[] = [
       "Audit log",
       "Priority email support",
     ],
-    buttonLabel: "Start free trial",
+    buttonLabel: "Join waitlist",
     buttonStyle: "primary",
-    action: "trial",
+    action: "waitlist",
     popular: true,
   },
   {
     tier: "Business",
     color: "#eab308",
-    price: "$100",
-    period: "/month (\u20b98,299)",
+    priceUSD: "$399",
+    priceINR: "\u20b916,599",
+    periodUSD: "/month",
+    periodINR: "/month",
     features: [
       "Unlimited projects",
       "Unlimited AI messages",
@@ -189,15 +200,17 @@ const plans: PricingPlan[] = [
       "SSO / SAML (coming soon)",
       "24/7 dedicated support",
     ],
-    buttonLabel: "Start free trial",
+    buttonLabel: "Join waitlist",
     buttonStyle: "amber",
-    action: "trial",
+    action: "waitlist",
   },
   {
     tier: "Enterprise",
     color: "#ef4444",
-    price: "Custom",
-    period: "contact us",
+    priceUSD: "Custom",
+    priceINR: "Custom",
+    periodUSD: "contact us",
+    periodINR: "contact us",
     features: [
       "Unlimited everything",
       "Custom storage",
@@ -245,6 +258,22 @@ export function HomePage() {
       .then(setApprovedReviews)
       .catch(() => {});
   }, []);
+
+  // Geo-based currency (display only — no payment logic)
+  const [currency, setCurrency] = useState<"USD" | "INR">("USD");
+  const [showWaitlistToast, setShowWaitlistToast] = useState(false);
+
+  useEffect(() => {
+    fetch("https://ipapi.co/json/")
+      .then((r) => r.json())
+      .then((d) => { if (d?.country_code === "IN") setCurrency("INR"); })
+      .catch(() => {});
+  }, []);
+
+  const handleWaitlist = () => {
+    setShowWaitlistToast(true);
+    setTimeout(() => setShowWaitlistToast(false), 4000);
+  };
 
   const handleGetStarted = () => {
     navigate(session ? "/workspace" : "/signup");
@@ -619,8 +648,8 @@ export function HomePage() {
                 >
                   {plan.popular ? <span className="pricing-popular">Popular</span> : null}
                   <p className="pricing-tier">{plan.tier}</p>
-                  <p className="pricing-price">{plan.price}</p>
-                  <p className="pricing-period">{plan.period}</p>
+                  <p className="pricing-price">{currency === "INR" ? plan.priceINR : plan.priceUSD}</p>
+                  <p className="pricing-period">{currency === "INR" ? plan.periodINR : plan.periodUSD}</p>
 
                   <ul className="pricing-features">
                     {plan.features.map((item) => (
@@ -632,6 +661,10 @@ export function HomePage() {
                     <a className={buttonClass} href="mailto:hello@datahub.org.in">
                       {plan.buttonLabel}
                     </a>
+                  ) : plan.action === "waitlist" ? (
+                    <button type="button" className={buttonClass} onClick={handleWaitlist}>
+                      {plan.buttonLabel}
+                    </button>
                   ) : (
                     <button type="button" className={buttonClass} onClick={() => handlePlanCta("trial")}>
                       {plan.buttonLabel}
@@ -799,6 +832,36 @@ export function HomePage() {
           </div>
         </div>
       </section>
+
+      {showWaitlistToast ? (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "28px",
+            right: "28px",
+            background: "#18181e",
+            border: "1px solid rgba(91,106,240,0.4)",
+            borderRadius: "12px",
+            padding: "14px 18px",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "10px",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.55)",
+            zIndex: 9999,
+            maxWidth: "340px",
+          }}
+        >
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#34d399", marginTop: 5, flexShrink: 0 }} />
+          <div>
+            <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "#e8e8f0", lineHeight: 1.4 }}>
+              You’re on the waitlist!
+            </p>
+            <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#8888a0", lineHeight: 1.4 }}>
+              We’ll notify you when this plan is available.
+            </p>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

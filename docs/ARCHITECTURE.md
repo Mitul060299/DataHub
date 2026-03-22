@@ -3,59 +3,91 @@
 ## Overview
 DataHub is a modular analytics platform with a React frontend and FastAPI backend.
 
-Current production-oriented stack:
-- Frontend: React + Vite, deployed on Vercel
-- Backend API: FastAPI, deployed on Render
-- Identity + primary relational DB: Supabase Auth + Supabase Postgres
-- Cache: Redis (Upstash in managed deployments via REDIS_URL)
-- SQL analytics engine: in-process DuckDB
-- Object storage: Amazon S3 (default storage provider)
-- Optional context memory: Chroma (when configured)
+Current production stack:
+- **Frontend:** React + Vite, deployed on Vercel
+- **Backend API:** FastAPI (Python 3.11), deployed on Render
+- **Identity + primary relational DB:** Supabase Auth + Supabase Postgres
+- **Cache:** Redis (Upstash in managed deployments via `REDIS_URL`)
+- **SQL analytics engine:** in-process DuckDB
+- **Object storage:** Amazon S3 (default storage provider)
+- **LLM provider:** Groq (`llama-3.3-70b-versatile`) via httpx — AI agent, NL pipeline editing
+- **Transactional email:** Resend — pipeline complete, usage warnings, weekly digest, feedback notifications
+- **Rate limiting:** slowapi (Redis-backed) — per-IP, per-endpoint limits
+- **Billing:** Razorpay — subscription plans, HMAC-verified webhooks
+- **Optional context memory:** Chroma
 
 ## Core Services
-- Frontend (Vercel)
-	- Handles auth UX, dataset/workspace UI, dashboards, and API orchestration.
-	- Uses Supabase client SDK for session lifecycle and token refresh.
-- Backend (Render)
-	- FastAPI service for ingestion, profiling, transformations, dashboards, sharing, governance, and billing-related APIs.
-	- Validates JWTs and enforces role-based access.
-- Supabase
-	- Auth provider (email/password + OAuth providers in app flow).
-	- Postgres for users, workspaces, datasets metadata, dashboards, contexts, audit logs, caches, and workflow state.
-- Upstash Redis (Redis-compatible)
-	- Query/result caching and transient job/cache acceleration.
-- DuckDB (embedded in backend)
-	- Executes analytical SQL against dataset parquet files.
-	- Uses `httpfs` and storage credentials to query object storage-backed data.
-- S3 object storage
-	- Stores uploaded dataset parquet artifacts and serves signed URLs for query/read operations.
+
+### Frontend (Vercel)
+- Handles auth UX, dataset/workspace UI, dashboards, pipeline builder, settings, and API orchestration.
+- Uses Supabase client SDK for session lifecycle and token refresh.
+- Key pages: workspace explorer, pipeline editor (with AI edit panel), dashboard builder, settings (notification prefs, audit log, usage meter, billing).
+
+### Backend (Render)
+- FastAPI service for ingestion, profiling, transformations, dashboards, sharing, governance, billing, and email.
+- Validates Supabase JWTs and enforces role-based access (viewer / editor / admin).
+- Startup safety-net DDL in `main.py` applies `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for every migration, bypassing stalled Alembic runs on Render free-tier.
+
+### Supabase
+- Auth provider (email/password + OIDC).
+- Postgres for all transactional data: users, workspaces, projects, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback.
+
+### Upstash Redis
+- Rate limit counters (slowapi).
+- Query/result caching and transient job acceleration.
+
+### DuckDB (embedded in backend)
+- Executes analytical SQL against dataset Parquet files.
+- Uses `httpfs` and storage credentials to query S3-backed data.
+
+### S3 Object Storage
+- Stores uploaded dataset Parquet artifacts.
+- Serves signed URLs for query/read operations.
+
+### Groq LLM (via httpx)
+- Powers the AI chat agent (`POST /agents/chat/{dataset_id}`).
+- Powers NL pipeline editing (`POST /api/pipelines/{id}/nl-edit`): accepts a plain-English prompt and returns rewritten pipeline steps (JSON-mode, rate-limited 15/min).
+- Model: `llama-3.3-70b-versatile`.
+
+### Resend (transactional email)
+- `send_pipeline_complete(user, pipeline)` — sent when a pipeline run finishes (respects `pipeline_complete` user pref).
+- `send_usage_warning(user, field, pct)` — sent at 80% of any plan limit (respects `usage_warning` pref).
+- `weekly_digest_service.send_weekly_digests(db)` — per-user 7-day activity summary, triggered by cron endpoint.
+- Feedback notification — sent to owner on homepage form submission.
+
+### Razorpay (billing)
+- `GET /api/billing/plans` lists available plans.
+- `POST /api/billing/subscribe` creates a subscription.
+- `POST /api/billing/webhook` receives plan-change events (HMAC-verified).
 
 ## Data Storage Model
-- Transactional/metadata layer: Supabase Postgres
-	- User/workspace records, dataset metadata, recipes, dashboards, approvals, shares, audit logs.
-- File/object layer: S3
-	- Dataset binaries/parquet and storage-tiered objects.
-- Compute/query layer: DuckDB
-	- Reads parquet from object storage and runs SQL transformations/previews.
-- Cache layer: Redis + Postgres fallback
-	- Hot query responses in Redis, with persisted query cache metadata/results in Postgres.
+| Layer | Technology | What's stored |
+|---|---|---|
+| Transactional/metadata | Supabase Postgres | Users, workspaces, projects, dataset metadata, recipes, pipelines, dashboards, comments, reviews, audit logs, billing, feedback |
+| File/object | S3 | Dataset binaries / Parquet |
+| Compute/query | DuckDB | Executes SQL over Parquet; profiling, transformations, previews |
+| Cache | Redis + Postgres fallback | Hot query responses; rate limit counters |
 
 ## Request and Data Flow
-1. User authenticates in frontend via Supabase Auth.
-2. Frontend sends bearer token to backend APIs.
-3. Backend validates token/claims and applies RBAC checks.
-4. Dataset imports are normalized and written to object storage (S3), while dataset metadata is stored in Supabase Postgres.
-5. DuckDB executes profiling/query/transformation SQL over stored parquet data.
-6. Query responses are cached in Redis; cache records and usage metadata are persisted in Postgres.
-7. Dashboards, shares, approvals, and audit events are served from backend APIs and persisted in Postgres.
+1. User authenticates via Supabase Auth (browser).
+2. Frontend sends Bearer token to backend APIs.
+3. Backend validates JWT claims and applies RBAC checks.
+4. Dataset imports are normalised and written to S3 (Parquet); metadata stored in Postgres.
+5. DuckDB executes profiling/query/transformation SQL over stored Parquet.
+6. Query responses cached in Redis; cache metadata persisted in Postgres.
+7. Dashboards, shares, approvals, and audit events served from backend and persisted in Postgres.
+8. Email notifications dispatched asynchronously via Resend (`fire-and-forget` asyncio tasks).
+9. Usage is tracked per-user per-month in `user_usage`; limits enforced on every relevant API call.
 
 ## Security and Operations
-- Authentication: Supabase JWT-based auth (plus configurable OIDC settings).
-- Authorization: backend-enforced RBAC (viewer/editor/admin style roles).
-- Auditability: API mutation events captured in audit logs.
-- Observability: backend exposes `/metrics`; Prometheus/Grafana stack can be enabled for monitoring.
+- **Authentication:** Supabase JWT (configurable OIDC).
+- **Authorisation:** backend-enforced RBAC (viewer/editor/admin).
+- **Rate limiting:** slowapi — per-IP limits on all endpoints; stricter limits on upload and LLM routes.
+- **File validation:** format allowlist, MIME check, content sniff on every upload.
+- **Audit trail:** all POST/PUT/DELETE events captured; per-user audit log API + settings UI.
+- **Observability:** `/metrics` (Prometheus); optional Grafana stack.
 
 ## Environment Variants
-- Managed cloud (current): Vercel + Render + Supabase + Upstash + S3.
-- Local/self-hosted: Docker Compose with local Postgres/Redis/Chroma and configurable storage providers.
-- Storage provider abstraction supports S3 by default, with optional R2/GCS/Azure/local modes.
+- **Managed cloud (current):** Vercel + Render + Supabase + Upstash + S3.
+- **Local/self-hosted:** Docker Compose with local Postgres/Redis/Chroma and configurable storage providers.
+- **Kubernetes:** Helm chart in `infra/helm/datahub`.

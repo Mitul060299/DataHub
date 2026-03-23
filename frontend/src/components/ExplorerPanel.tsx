@@ -22,7 +22,7 @@ interface ExplorerPanelProps {
 }
 
 export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
-  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members } = useWorkspaceContext();
+  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, projectsLoading } = useWorkspaceContext();
   const { steps, setScheduleInfo } = usePipelineContext();
   const { exportPipeline, schedule } = usePipeline();
 
@@ -34,6 +34,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [datasetLoadError, setDatasetLoadError] = useState<string | null>(null);
+  const [datasetsLoading, setDatasetsLoading] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const operationByOutputDataset = useMemo(() => {
@@ -121,6 +122,19 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   }, [datasets, datasetsById, operationByOutputDataset, workflowLeafOutputIds, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
+    const cacheKey = `dh_ds_${workspaceId}_${activeProject?.id ?? "all"}`;
+    // Hydrate immediately from session cache so the list paints before the
+    // network round-trip completes (especially useful on Render cold-starts).
+    if (attempt === 0) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          setDatasets(JSON.parse(cached) as Dataset[]);
+          setDatasetsLoading(false);
+        }
+      } catch { /* ignore parse/quota errors */ }
+    }
+    setDatasetsLoading(true);
     const requestConfig = {
       params: activeProject?.id ? { project_id: activeProject.id } : undefined,
       headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
@@ -138,6 +152,8 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       }));
       setDatasets(mapped);
       setDatasetLoadError(null);
+      // Persist for instant hydration on next open
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(mapped)); } catch { /* ignore */ }
     } catch (error: unknown) {
       const maybeError = error as {
         response?: { status?: number; data?: { detail?: string; message?: string } };
@@ -165,6 +181,8 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             : detail;
       setDatasetLoadError(message);
       setDatasets([]);
+    } finally {
+      setDatasetsLoading(false);
     }
   }, [activeProject?.id, workspaceId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -182,9 +200,13 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     }
   };
 
+  // Wait for the project list to resolve so loadDatasets runs exactly once
+  // with the correct project_id, eliminating the wasted blank-project-id request
+  // that fires on every cold mount (Render cold-start double-fetch).
   useEffect(() => {
+    if (projectsLoading) return;
     void loadDatasets();
-  }, [loadDatasets, refreshNonce]);
+  }, [loadDatasets, refreshNonce, projectsLoading]);
 
   useEffect(() => {
     if (typeof searchFocusNonce !== "number") return;
@@ -251,6 +273,23 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       ) : null}
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {datasetsLoading && datasets.length === 0 ? (
+          // Skeleton shimmer — shown only on first load before any cache exists
+          <div style={{ borderTop: "1px solid var(--bd)", paddingTop: 8 }}>
+            <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", marginBottom: 8 }}>▼ DATA</div>
+            {[70, 88, 55].map((w, i) => (
+              <div key={i} style={{
+                height: 30, borderRadius: 6, marginBottom: 4,
+                background: "linear-gradient(90deg, var(--bg2) 25%, var(--bg3,#1e1e28) 50%, var(--bg2) 75%)",
+                backgroundSize: "200% 100%",
+                animation: "dh-shimmer 1.4s infinite",
+                width: `${w}%`,
+                opacity: 0.7,
+              }} />
+            ))}
+            <style>{`@keyframes dh-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+          </div>
+        ) : (
         <DataSection
           datasets={sourceDatasets}
           activeDatasetId={activeDataset?.id}
@@ -263,6 +302,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             void loadDatasets();
           }}
         />
+        )}
         <PipelineSection
           onSchedule={() => setScheduleModalOpen(true)}
           onExport={() => exportPipeline(steps)}

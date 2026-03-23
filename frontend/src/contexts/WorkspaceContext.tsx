@@ -72,13 +72,18 @@ function toProject(raw: ProjectOut): Project {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(false);
+  // Start as true so ExplorerPanel waits for the first project fetch before
+  // loading datasets — prevents a wasted no-project-id request on cold mount.
+  const [projectsLoading, setProjectsLoading] = useState(true);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [activeDataset, setActiveDataset] = useState<Dataset | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
 
   const refreshProjects = useCallback(async () => {
-    if (!session) return;
+    if (!session) {
+      setProjectsLoading(false);
+      return;
+    }
     setProjectsLoading(true);
     try {
       const data = await fetchProjects();

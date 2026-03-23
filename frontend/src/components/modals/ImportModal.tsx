@@ -163,7 +163,7 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
             <button
               key={source.key}
               className="btn"
-              disabled={isUploading || isTesting}
+              disabled={isUploading}
               style={{
                 height: 56,
                 justifyContent: "flex-start",
@@ -173,7 +173,6 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
               }}
               onClick={() => {
                 setErrorText(null);
-                setTestResultText(null);
                 if (source.key === "file") {
                   fileRef.current?.click();
                 }

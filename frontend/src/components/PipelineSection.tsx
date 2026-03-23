@@ -473,6 +473,14 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           <div style={{ display: "flex", gap: 4 }}>
             <button
               className="btn"
+              style={{ fontSize: 11, padding: "3px 8px" }}
+              onClick={() => setTemplatePickerOpen(true)}
+              title="Browse pipeline templates"
+            >
+              Templates
+            </button>
+            <button
+              className="btn"
               style={{ width: 26, padding: 0 }}
               onClick={() => setImportPipelineOpen(true)}
               aria-label="Import pipeline"

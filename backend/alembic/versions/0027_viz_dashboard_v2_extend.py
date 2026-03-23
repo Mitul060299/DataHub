@@ -82,21 +82,24 @@ def upgrade() -> None:
         except Exception:
             pass
 
-        bind.execute(text("ALTER TABLE dashboard_access ENABLE ROW LEVEL SECURITY"))
-        # Owner full access
-        bind.execute(text(
-            "CREATE POLICY dashboard_access_owner ON dashboard_access "
-            "FOR ALL USING ("
-            "  EXISTS (SELECT 1 FROM dashboards_v2 d "
-            "          WHERE d.id = dashboard_access.dashboard_id "
-            "          AND auth.uid()::text = d.user_id)"
-            ")"
-        ))
-        # Grantee can see own grant row
-        bind.execute(text(
-            "CREATE POLICY dashboard_access_grantee_select ON dashboard_access "
-            "FOR SELECT USING (auth.uid()::text = granted_to_user_id)"
-        ))
+        # RLS policies use auth.uid() which only exists on Supabase.
+        # Wrap in try/except so the migration succeeds on plain Postgres.
+        try:
+            bind.execute(text("ALTER TABLE dashboard_access ENABLE ROW LEVEL SECURITY"))
+            bind.execute(text(
+                "CREATE POLICY dashboard_access_owner ON dashboard_access "
+                "FOR ALL USING ("
+                "  EXISTS (SELECT 1 FROM dashboards_v2 d "
+                "          WHERE d.id = dashboard_access.dashboard_id "
+                "          AND auth.uid()::text = d.user_id)"
+                ")"
+            ))
+            bind.execute(text(
+                "CREATE POLICY dashboard_access_grantee_select ON dashboard_access "
+                "FOR SELECT USING (auth.uid()::text = granted_to_user_id)"
+            ))
+        except Exception:
+            pass  # auth.uid() not available on plain Postgres — skip RLS
 
     # ── dashboard_views ───────────────────────────────────────────────────
     if not _table_exists(inspector, "dashboard_views"):
@@ -112,21 +115,22 @@ def upgrade() -> None:
         op.create_index("idx_dashboard_views_dashboard", "dashboard_views", ["dashboard_id"])
         op.create_index("idx_dashboard_views_user", "dashboard_views", ["viewed_by_user_id"])
 
-        bind.execute(text("ALTER TABLE dashboard_views ENABLE ROW LEVEL SECURITY"))
-        # Any authenticated user can INSERT (for public share token routes handled at API layer)
-        bind.execute(text(
-            "CREATE POLICY dashboard_views_insert ON dashboard_views "
-            "FOR INSERT WITH CHECK (true)"
-        ))
-        # Only dashboard owner can SELECT
-        bind.execute(text(
-            "CREATE POLICY dashboard_views_owner_select ON dashboard_views "
-            "FOR SELECT USING ("
-            "  EXISTS (SELECT 1 FROM dashboards_v2 d "
-            "          WHERE d.id = dashboard_views.dashboard_id "
-            "          AND auth.uid()::text = d.user_id)"
-            ")"
-        ))
+        try:
+            bind.execute(text("ALTER TABLE dashboard_views ENABLE ROW LEVEL SECURITY"))
+            bind.execute(text(
+                "CREATE POLICY dashboard_views_insert ON dashboard_views "
+                "FOR INSERT WITH CHECK (true)"
+            ))
+            bind.execute(text(
+                "CREATE POLICY dashboard_views_owner_select ON dashboard_views "
+                "FOR SELECT USING ("
+                "  EXISTS (SELECT 1 FROM dashboards_v2 d "
+                "          WHERE d.id = dashboard_views.dashboard_id "
+                "          AND auth.uid()::text = d.user_id)"
+                ")"
+            ))
+        except Exception:
+            pass  # auth.uid() not available on plain Postgres — skip RLS
 
 
 def downgrade() -> None:

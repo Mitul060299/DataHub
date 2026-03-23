@@ -311,7 +311,8 @@ export function MarketplacePage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <main style={{ padding: "28px 32px", maxWidth: 1100, margin: "0 auto" }}>
+    <main style={{ flex: 1, overflowY: "auto", width: "100%" }}>
+      <div style={{ padding: "28px 32px", maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 12, flexWrap: "wrap" }}>
         <div>
@@ -429,6 +430,7 @@ export function MarketplacePage() {
           toggling={togglingId}
         />
       )}
+      </div>
     </main>
   );
 }

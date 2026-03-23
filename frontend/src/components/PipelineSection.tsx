@@ -147,15 +147,18 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   useEffect(() => {
     const loadWorkflowTemplates = async () => {
       try {
-        const response = await api.get("/api/pipelines");
-        const payload = response.data as { data?: unknown; pipelines?: unknown } | unknown[];
-        const source = Array.isArray(payload)
-          ? payload
-          : (Array.isArray((payload as { data?: unknown })?.data)
-            ? (payload as { data: unknown[] }).data
-            : Array.isArray((payload as { pipelines?: unknown })?.pipelines)
-              ? (payload as { pipelines: unknown[] }).pipelines
-              : []);
+        const response = await api.get("/api/pipelines", { params: { limit: 100 } });
+        const payload = response.data as { data?: { pipelines?: unknown[] }; pipelines?: unknown[] } | unknown[];
+        let source: unknown[];
+        if (Array.isArray(payload)) {
+          source = payload;
+        } else if (Array.isArray((payload as { data?: { pipelines?: unknown[] } }).data?.pipelines)) {
+          source = (payload as { data: { pipelines: unknown[] } }).data.pipelines;
+        } else if (Array.isArray((payload as { pipelines?: unknown[] }).pipelines)) {
+          source = (payload as { pipelines: unknown[] }).pipelines;
+        } else {
+          source = [];
+        }
 
         const mapped = source
           .map((item) => {

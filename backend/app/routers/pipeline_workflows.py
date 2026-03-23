@@ -68,6 +68,11 @@ class CreateFromTemplateRequest(BaseModel):
     workspace_id: str = "default"
 
 
+class SharePipelineRequest(BaseModel):
+    tags: Optional[List[str]] = None
+    description: Optional[str] = None
+
+
 # ── Template endpoints ────────────────────────────────────────────────────────
 
 @router.get("/templates")
@@ -211,12 +216,97 @@ async def list_pipelines(
                     "status": p.status,
                     "version": p.version,
                     "steps_count": len(p.steps),
+                    "is_public": bool(p.is_public),
                     "created_at": p.created_at.isoformat(),
                     "updated_at": p.updated_at.isoformat(),
                 }
                 for p in pipelines
             ]
         }
+    }
+
+
+@router.get("/marketplace")
+async def list_marketplace_pipelines(
+    category: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, le=100),
+    offset: int = Query(0, ge=0),
+    db: DBSession = Depends(get_db),
+):
+    """List built-in templates + community-published pipelines for the Marketplace."""
+    from app.services.pipeline_template_service import list_templates
+
+    # ── Built-in templates ────────────────────────────────────────────────────
+    built_in = list_templates(category=category)
+    if search:
+        q = search.lower()
+        built_in = [
+            t for t in built_in
+            if q in t["name"].lower()
+            or q in t["description"].lower()
+            or any(q in tag for tag in t["tags"])
+        ]
+    templates_out = [
+        {
+            "source": "official",
+            "id": t["id"],
+            "name": t["name"],
+            "description": t["description"],
+            "category": t["category"],
+            "tags": t["tags"],
+            "steps_count": len(t["steps"]),
+            "author": "DataHub",
+            "clones": 0,
+        }
+        for t in built_in
+    ]
+
+    # ── Community pipelines (is_public=True) ─────────────────────────────────
+    from app.models_db import User as UserDB
+
+    query = db.query(PipelineV2DB).filter(PipelineV2DB.is_public.is_(True))
+    if category:
+        query = query.filter(PipelineV2DB.tags.contains([category]))
+    if search:
+        q_like = f"%{search}%"
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(
+                PipelineV2DB.name.ilike(q_like),
+                PipelineV2DB.description.ilike(q_like),
+            )
+        )
+    total_community = query.count()
+    community_rows = query.order_by(PipelineV2DB.updated_at.desc()).limit(limit).offset(offset).all()
+
+    # Build a user_id → display name lookup
+    user_ids = list({str(p.user_id) for p in community_rows})
+    users = db.query(UserDB.id, UserDB.username).filter(UserDB.id.in_(user_ids)).all() if user_ids else []
+    user_map = {str(u.id): (u.username or "Anonymous") for u in users}
+
+    community_out = [
+        {
+            "source": "community",
+            "id": str(p.id),
+            "name": p.name,
+            "description": p.description or "",
+            "category": (p.tags[0] if p.tags else "General"),
+            "tags": p.tags or [],
+            "steps_count": len(p.steps or []),
+            "author": user_map.get(str(p.user_id), "Anonymous"),
+            "clones": 0,
+        }
+        for p in community_rows
+    ]
+
+    return {
+        "success": True,
+        "data": {
+            "templates": templates_out,
+            "community": community_out,
+            "total_community": total_community,
+        },
     }
 
 
@@ -308,6 +398,69 @@ async def publish_pipeline(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{pipeline_id}/share")
+async def share_pipeline_to_marketplace(
+    pipeline_id: str,
+    payload: SharePipelineRequest,
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+):
+    """Publish a pipeline to the public Marketplace (sets is_public=True)."""
+    from datetime import datetime
+
+    pipeline = (
+        db.query(PipelineV2DB)
+        .filter(PipelineV2DB.id == pipeline_id, PipelineV2DB.user_id == current_user_id)
+        .first()
+    )
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    pipeline.is_public = True
+    pipeline.status = "published"
+    if payload.description is not None:
+        pipeline.description = payload.description
+    if payload.tags is not None:
+        pipeline.tags = payload.tags
+    pipeline.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            "id": str(pipeline.id),
+            "name": pipeline.name,
+            "is_public": True,
+        },
+    }
+
+
+@router.delete("/{pipeline_id}/share")
+async def unshare_pipeline_from_marketplace(
+    pipeline_id: str,
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+):
+    """Remove a pipeline from the public Marketplace (sets is_public=False)."""
+    from datetime import datetime
+
+    pipeline = (
+        db.query(PipelineV2DB)
+        .filter(PipelineV2DB.id == pipeline_id, PipelineV2DB.user_id == current_user_id)
+        .first()
+    )
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    pipeline.is_public = False
+    pipeline.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"success": True, "data": {"id": str(pipeline.id), "is_public": False}}
 
 
 @router.post("/{pipeline_id}/clone")

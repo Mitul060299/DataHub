@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "0036_reviews"
 down_revision = "0035_dashboard_comments"
@@ -16,6 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Guard: the startup safety-net DDL may have already created this table.
+    bind = op.get_bind()
+    if "reviews" in inspect(bind).get_table_names():
+        return
+
     op.create_table(
         "reviews",
         sa.Column(

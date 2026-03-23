@@ -49,6 +49,33 @@ Current production stack:
 - Powers NL pipeline editing (`POST /api/pipelines/{id}/nl-edit`): accepts a plain-English prompt and returns rewritten pipeline steps (JSON-mode, rate-limited 15/min).
 - Model: `llama-3.3-70b-versatile`.
 
+### AI Agent — LangGraph State Machine
+The agent is a compiled LangGraph `StateGraph` defined in `backend/app/services/agent/graph.py`.
+
+**8 nodes** (in execution order for a planning-path request):
+
+| Node | File | Role |
+|---|---|---|
+| `context_loader` | `nodes/context_loader.py` | Entry point — loads dataset schema, glossary, and workspace context into state |
+| `intent_classifier` | `nodes/intent_classifier.py` | Classifies the user turn into one of: `clean`, `filter`, `transform`, `add_column`, `pivot`, `union`, `join`, `reconcile`, `sql_query`, `visualise`, `export`, `validate`, `summarise`, `converse` |
+| `planner` | `nodes/planner.py` | Generates an ordered plan of execution steps from the intent + context |
+| `plan_presenter` | `nodes/plan_presenter.py` | Presents the plan to the user and awaits approval (gate) |
+| `execute_step` | `nodes/execute_step.py` | Executes one step of the plan via DuckDB / pandas |
+| `reflect` | `nodes/reflect.py` | Reviews execution output; decides to retry, continue, or abort |
+| `pipeline_recorder` | `nodes/pipeline_recorder.py` | Persists the completed pipeline steps to `pipelines_v2` |
+| `responder` | `nodes/responder.py` | Formats the final response sent to the client |
+
+**Conditional edge routers** (in `edges.py`):
+
+| Router | Source node | Branches to |
+|---|---|---|
+| `route_intent` | `intent_classifier` | `planner` (planning intents) · `execute_step` (auto-execute: validate/summarise) · `responder` (conversational) |
+| `route_after_present` | `plan_presenter` | `execute_step` (approved) · `END` (rejected/no approval) |
+| `route_after_execute` | `execute_step` | `reflect` (step done) · `execute_step` (loop to next step) · `pipeline_recorder` (all steps done) |
+| `route_after_reflect` | `reflect` | `execute_step` (retry) · `pipeline_recorder` (accept result) |
+
+Entry point: `context_loader`. Terminal: `responder → END`.
+
 ### Resend (transactional email)
 - `send_pipeline_complete(user, pipeline)` — sent when a pipeline run finishes (respects `pipeline_complete` user pref).
 - `send_usage_warning(user, field, pct)` — sent at 80% of any plan limit (respects `usage_warning` pref).

@@ -191,7 +191,13 @@ class AgentGraphService:
                     }
 
         except Exception as exc:
-            yield {"type": "agent.error", "error": str(exc)}
+            import logging
+            logging.getLogger(__name__).exception("AgentGraph execution error")
+            msg = str(exc)
+            # Surface a concise, human-readable error — strip internal Python tracebacks
+            if len(msg) > 300:
+                msg = msg[:300] + "…"
+            yield {"type": "agent.error", "error": msg}
 
     @classmethod
     def process_command(

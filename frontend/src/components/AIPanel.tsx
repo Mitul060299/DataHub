@@ -234,14 +234,19 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         break;
       }
       case "agent.error": {
-        const errorText = typeof event.error === "string" ? event.error : "Unknown error";
+        // Use the raw backend message for agent.error events — they are already
+        // concise server-side strings. Only fall through humaniseError for
+        // network-layer errors (handled in the catch block below).
+        const errorText = typeof event.error === "string" && event.error.trim()
+          ? event.error.trim()
+          : "The AI agent encountered an unexpected error. Please try again.";
         capture("ai_error", { error_type: "agent.error", message: errorText.slice(0, 200) });
         setMessages((previous) => [
           ...previous,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `Error: ${humaniseError(errorText)}`,
+            content: errorText,
           },
         ]);
         break;

@@ -33,14 +33,18 @@ async def planner(state: AgentState) -> dict:
         user_goal=user_goal,
     )
 
-    response = await _llm.ainvoke(
-        [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Generate the execution plan for: {user_goal}"),
-        ]
-    )
-
-    raw = str(response.content).strip()
+    try:
+        response = await _llm.ainvoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"Generate the execution plan for: {user_goal}"),
+            ]
+        )
+        raw = str(response.content).strip()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("planner LLM error: %s", exc)
+        raise RuntimeError(f"AI service error while building plan: {exc}") from exc
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):

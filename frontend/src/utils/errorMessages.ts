@@ -46,9 +46,9 @@ export function humaniseError(error: unknown): string {
     return "The server encountered an error. Please try again shortly.";
   }
 
-  // Fallback: trim down overly long messages
-  if (message.length > 120) {
-    return "An unexpected error occurred. Please try again.";
+  // Fallback: show a trimmed but readable version of the real error
+  if (message.length > 200) {
+    return message.slice(0, 200) + "…";
   }
 
   return message;

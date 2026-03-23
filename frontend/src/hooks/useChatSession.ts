@@ -137,8 +137,18 @@ export function useChatSession() {
               setRunId(completedRunId);
               payload.onRunCompleted?.(completedRunId);
             }
-            if (event.type === "agent.error" && typeof event.error === "string") {
-              throw new Error(event.error);
+            if (event.type === "agent.error") {
+              // Let the onEvent handler (AIPanel) display the error bubble.
+              // Do NOT also throw here — that would create a second duplicate error bubble.
+              return {
+                session_id: sid,
+                response: "",
+                runId: null,
+                transformation: undefined,
+                needsConfirmation: false,
+                plan: undefined,
+                artifact: undefined,
+              };
             }
           } catch (error) {
             if (error instanceof Error) {

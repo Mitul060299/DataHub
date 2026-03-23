@@ -31,14 +31,18 @@ async def intent_classifier(state: AgentState) -> dict:
         table_registry=json.dumps(state.get("table_registry", {}), indent=2),
     )
 
-    response = await _llm.ainvoke(
-        [
-            SystemMessage(content=prompt),
-            HumanMessage(content=last_message),
-        ]
-    )
-
-    intent = str(response.content).strip().lower()
+    try:
+        response = await _llm.ainvoke(
+            [
+                SystemMessage(content=prompt),
+                HumanMessage(content=last_message),
+            ]
+        )
+        intent = str(response.content).strip().lower()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("intent_classifier LLM error: %s", exc)
+        intent = "converse"
     if intent not in VALID_INTENTS:
         intent = "converse"
 

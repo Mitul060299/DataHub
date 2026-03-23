@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { IconDatabase, IconPlus } from "./Icons";
 import type { Dataset } from "../contexts/WorkspaceContext";
 
@@ -31,6 +31,7 @@ interface DataSectionProps {
 
 export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename, onAddConnection }: DataSectionProps) {
   const [open, setOpen] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,13 +55,61 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
           {open ? "▼" : "▶"} DATA
         </button>
         {open ? (
-          <div style={{ display: "flex", gap: 4 }}>
-            <button className="btn" style={{ width: 26, padding: 0 }} onClick={onAddConnection} aria-label="Add DB connection" title="Add DB connection">
-              <IconDatabase size={14} />
-            </button>
-            <button className="btn" style={{ width: 26, padding: 0 }} onClick={onImport} aria-label="Import file">
+          <div style={{ position: "relative" }}>
+            <button
+              className="btn"
+              style={{ width: 26, padding: 0 }}
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Add data"
+              title="Add data"
+            >
               <IconPlus size={14} />
             </button>
+            {menuOpen && (
+              <div
+                onMouseLeave={() => setMenuOpen(false)}
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 4px)",
+                  zIndex: 200,
+                  background: "var(--bg2)",
+                  border: "1px solid var(--bd)",
+                  borderRadius: "var(--r6)",
+                  minWidth: 164,
+                  boxShadow: "0 4px 12px rgba(0,0,0,.25)",
+                  overflow: "hidden",
+                }}
+              >
+                {([
+                  { label: "Upload file", icon: <IconPlus size={13} />, action: () => { setMenuOpen(false); onImport(); } },
+                  { label: "Connect database", icon: <IconDatabase size={13} />, action: () => { setMenuOpen(false); onAddConnection?.(); } },
+                ] as { label: string; icon: React.ReactNode; action: () => void }[]).map(({ label, icon, action }) => (
+                  <button
+                    key={label}
+                    onClick={action}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      width: "100%",
+                      padding: "7px 12px",
+                      fontSize: 12,
+                      color: "var(--tx1)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
       </header>

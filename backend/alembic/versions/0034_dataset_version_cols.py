@@ -16,12 +16,21 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Set a short lock_timeout so the statement fails fast if another transaction
+    # holds an exclusive lock, rather than queuing indefinitely and hitting
+    # the global statement/deployment timeout.
+    # The entrypoint will retry alembic upgrade head on LockNotAvailable.
+    op.execute("SET lock_timeout = '10s'")
+
     op.execute(
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS version_number INTEGER NOT NULL DEFAULT 1"
     )
     op.execute(
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS version_note TEXT"
     )
+
+    # Reset before the index (CREATE INDEX CONCURRENTLY does not need the lock)
+    op.execute("SET lock_timeout = '0'")
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_datasets_parent_id ON dataset_meta (parent_id)"
     )

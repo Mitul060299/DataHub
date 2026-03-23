@@ -34,6 +34,18 @@ if [ "${RUN_MIGRATIONS:-}" = "1" ]; then
 				echo "[entrypoint] Migration still failing after stamp+retry — aborting"
 				exit 1
 			fi
+		elif grep -qE "LockNotAvailable|lock timeout|canceling statement due to lock" /tmp/_alembic_out.txt; then
+			echo "[entrypoint] Migration blocked by lock — sleeping 10s and retrying once"
+			sleep 10
+			set +e
+			_run_alembic > /tmp/_alembic_out2.txt 2>&1
+			_retry_status=$?
+			set -e
+			cat /tmp/_alembic_out2.txt
+			if [ "${_retry_status}" != "0" ]; then
+				echo "[entrypoint] Migration still failing after lock-retry — aborting"
+				exit 1
+			fi
 		elif grep -qE "timed out" /tmp/_alembic_out.txt 2>/dev/null || [ "${_alembic_status}" = "124" ]; then
 			echo "[entrypoint] Migration timed out after ${MIGRATION_TIMEOUT_SECONDS}s"
 			exit "${_alembic_status}"

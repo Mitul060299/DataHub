@@ -84,6 +84,24 @@ const CONNECTORS: ConnectorDef[] = [
     lockedLabel: "coming soon",
     fields: [],
   },
+  {
+    id: "snowflake",
+    label: "Snowflake",
+    icon: "❄️",
+    description: "Snowflake data warehouse",
+    locked: true,
+    lockedLabel: "coming soon",
+    fields: [],
+  },
+  {
+    id: "redshift",
+    label: "Redshift",
+    icon: "🔴",
+    description: "Amazon Redshift",
+    locked: true,
+    lockedLabel: "coming soon",
+    fields: [],
+  },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────

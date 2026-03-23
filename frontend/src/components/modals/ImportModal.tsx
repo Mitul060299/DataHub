@@ -10,13 +10,10 @@ interface ImportModalProps {
   onImported: () => void;
 }
 
-type SourceType = "file" | "snowflake" | "bigquery" | "redshift";
+type SourceType = "file";
 
 const sourceCards: Array<{ key: SourceType; label: string; description: string }> = [
   { key: "file", label: "File Upload", description: "CSV, Excel, JSON, Parquet" },
-  { key: "snowflake", label: "Snowflake", description: "Warehouse + table or query" },
-  { key: "bigquery", label: "BigQuery", description: "Project + table or SQL" },
-  { key: "redshift", label: "Redshift", description: "Host + DB + table or query" },
 ];
 
 interface FilePreview {
@@ -35,41 +32,11 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
   const { markFirstUpload } = useUser();
   const [isUploading, setIsUploading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [testResultText, setTestResultText] = useState<string | null>(null);
   const [datasetName, setDatasetName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [sourceType, setSourceType] = useState<SourceType>("file");
+  const [sourceType] = useState<SourceType>("file");
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
-
-  const [snowflake, setSnowflake] = useState({
-    account: "",
-    username: "",
-    password: "",
-    warehouse: "",
-    database: "",
-    schema: "PUBLIC",
-    table: "",
-    query: "",
-  });
-  const [bigquery, setBigquery] = useState({
-    project_id: "",
-    dataset: "",
-    table: "",
-    query: "",
-    credentials_json: "",
-  });
-  const [redshift, setRedshift] = useState({
-    host: "",
-    port: "5439",
-    database: "",
-    username: "",
-    password: "",
-    schema: "public",
-    table: "",
-    query: "",
-  });
 
   if (!open) return null;
 
@@ -102,19 +69,6 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const connectorPayload = () => {
-    if (sourceType === "snowflake") {
-      return { type: "snowflake", ...snowflake };
-    }
-    if (sourceType === "bigquery") {
-      return { type: "bigquery", ...bigquery };
-    }
-    return {
-      type: "redshift",
-      ...redshift,
-      port: redshift.port ? Number(redshift.port) : 5439,
-    };
-  };
 
   const uploadFile = async () => {
     if (!selectedFile || isUploading) return;
@@ -152,50 +106,13 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
   };
 
   const testConnection = async () => {
-    if (sourceType === "file" || isTesting || isUploading) return;
-    setErrorText(null);
-    setTestResultText(null);
-    setIsTesting(true);
-    try {
-      const response = await api.post("/import/test-connection", connectorPayload(), {
-        headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
-        timeout: 120000,
-      });
-      if (response.data?.success) {
-        setTestResultText(response.data?.message ?? "Connection successful");
-      } else {
-        setErrorText(response.data?.error ?? "Connection failed");
-      }
-    } catch (error: unknown) {
-      const maybeError = error as { response?: { data?: { detail?: string } } };
-      setErrorText(maybeError.response?.data?.detail ?? "Connection test failed. Please check your settings.");
-    } finally {
-      setIsTesting(false);
-    }
+    // Only file uploads are supported in this modal; DB connections use the Connector modal.
+    return;
   };
 
   const importConnector = async () => {
-    if (sourceType === "file" || isUploading) return;
-    setErrorText(null);
-    setTestResultText(null);
-    setIsUploading(true);
-    try {
-      await api.post("/import/connector-import", {
-        ...connectorPayload(),
-        dataset_name: datasetName.trim() || undefined,
-      }, {
-        headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
-        timeout: 300000,
-      });
-      onImported();
-      onClose();
-    } catch (error: unknown) {
-      const maybeError = error as { response?: { data?: { detail?: string } } };
-      setErrorText(maybeError.response?.data?.detail ?? "Import failed. Please try again.");
-    } finally {
-      setIsUploading(false);
-      setDatasetName("");
-    }
+    // Only file uploads are supported in this modal; DB connections use the Connector modal.
+    return;
   };
 
   return (
@@ -255,7 +172,6 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
                 background: sourceType === source.key ? "var(--acl)" : "var(--bg3)",
               }}
               onClick={() => {
-                setSourceType(source.key);
                 setErrorText(null);
                 setTestResultText(null);
                 if (source.key === "file") {
@@ -270,61 +186,12 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
             </button>
           ))}
         </div>
-        {sourceType !== "file" ? (
-          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-            {sourceType === "snowflake" ? (
-              <>
-                <input value={snowflake.account} onChange={(event) => setSnowflake((prev) => ({ ...prev, account: event.target.value }))} placeholder="Account" style={inputStyle} />
-                <input value={snowflake.username} onChange={(event) => setSnowflake((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username" style={inputStyle} />
-                <input value={snowflake.password} onChange={(event) => setSnowflake((prev) => ({ ...prev, password: event.target.value }))} placeholder="Password" type="password" style={inputStyle} />
-                <input value={snowflake.warehouse} onChange={(event) => setSnowflake((prev) => ({ ...prev, warehouse: event.target.value }))} placeholder="Warehouse" style={inputStyle} />
-                <input value={snowflake.database} onChange={(event) => setSnowflake((prev) => ({ ...prev, database: event.target.value }))} placeholder="Database" style={inputStyle} />
-                <input value={snowflake.schema} onChange={(event) => setSnowflake((prev) => ({ ...prev, schema: event.target.value }))} placeholder="Schema (optional)" style={inputStyle} />
-                <input value={snowflake.table} onChange={(event) => setSnowflake((prev) => ({ ...prev, table: event.target.value }))} placeholder="Table (or use query below)" style={inputStyle} />
-                <textarea value={snowflake.query} onChange={(event) => setSnowflake((prev) => ({ ...prev, query: event.target.value }))} placeholder="Query (optional)" rows={3} style={textareaStyle} />
-              </>
-            ) : null}
-            {sourceType === "bigquery" ? (
-              <>
-                <input value={bigquery.project_id} onChange={(event) => setBigquery((prev) => ({ ...prev, project_id: event.target.value }))} placeholder="Project ID" style={inputStyle} />
-                <input value={bigquery.dataset} onChange={(event) => setBigquery((prev) => ({ ...prev, dataset: event.target.value }))} placeholder="Dataset (optional)" style={inputStyle} />
-                <input value={bigquery.table} onChange={(event) => setBigquery((prev) => ({ ...prev, table: event.target.value }))} placeholder="Table (or use query below)" style={inputStyle} />
-                <textarea value={bigquery.query} onChange={(event) => setBigquery((prev) => ({ ...prev, query: event.target.value }))} placeholder="Query (optional)" rows={3} style={textareaStyle} />
-                <textarea value={bigquery.credentials_json} onChange={(event) => setBigquery((prev) => ({ ...prev, credentials_json: event.target.value }))} placeholder="Service account JSON (optional)" rows={4} style={textareaStyle} />
-              </>
-            ) : null}
-            {sourceType === "redshift" ? (
-              <>
-                <input value={redshift.host} onChange={(event) => setRedshift((prev) => ({ ...prev, host: event.target.value }))} placeholder="Host" style={inputStyle} />
-                <input value={redshift.port} onChange={(event) => setRedshift((prev) => ({ ...prev, port: event.target.value }))} placeholder="Port" style={inputStyle} />
-                <input value={redshift.database} onChange={(event) => setRedshift((prev) => ({ ...prev, database: event.target.value }))} placeholder="Database" style={inputStyle} />
-                <input value={redshift.username} onChange={(event) => setRedshift((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username" style={inputStyle} />
-                <input value={redshift.password} onChange={(event) => setRedshift((prev) => ({ ...prev, password: event.target.value }))} placeholder="Password" type="password" style={inputStyle} />
-                <input value={redshift.schema} onChange={(event) => setRedshift((prev) => ({ ...prev, schema: event.target.value }))} placeholder="Schema (optional)" style={inputStyle} />
-                <input value={redshift.table} onChange={(event) => setRedshift((prev) => ({ ...prev, table: event.target.value }))} placeholder="Table (or use query below)" style={inputStyle} />
-                <textarea value={redshift.query} onChange={(event) => setRedshift((prev) => ({ ...prev, query: event.target.value }))} placeholder="Query (optional)" rows={3} style={textareaStyle} />
-              </>
-            ) : null}
-          </div>
-        ) : null}
         {errorText ? <p style={{ marginTop: 10, color: "var(--rd)", fontSize: 12 }}>{errorText}</p> : null}
-        {testResultText ? <p style={{ marginTop: 10, color: "var(--gr)", fontSize: 12 }}>{testResultText}</p> : null}
         {isUploading ? <p style={{ marginTop: 10, color: "var(--tx2)", fontSize: 12 }}>Uploading...</p> : null}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-          {sourceType === "file" ? (
-            <button className="btn btn-primary" onClick={() => void uploadFile()} disabled={!selectedFile || !filePreview || isUploading || isValidating} style={{ marginRight: 8 }}>
-              {isUploading ? "Uploading..." : isValidating ? "Validating…" : filePreview ? "Upload File" : "Select a file first"}
-            </button>
-          ) : (
-            <>
-              <button className="btn" onClick={() => void testConnection()} disabled={isTesting || isUploading} style={{ marginRight: 8 }}>
-                {isTesting ? "Testing..." : "Test Connection"}
-              </button>
-              <button className="btn btn-primary" onClick={() => void importConnector()} disabled={isUploading || isTesting} style={{ marginRight: 8 }}>
-                {isUploading ? "Importing..." : "Import from Connector"}
-              </button>
-            </>
-          )}
+          <button className="btn btn-primary" onClick={() => void uploadFile()} disabled={!selectedFile || !filePreview || isUploading || isValidating} style={{ marginRight: 8 }}>
+            {isUploading ? "Uploading..." : isValidating ? "Validating…" : filePreview ? "Upload File" : "Select a file first"}
+          </button>
           <button className="btn" onClick={onClose} disabled={isUploading}>Close</button>
         </div>
       </div>

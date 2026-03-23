@@ -5,6 +5,9 @@ import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
 import { api } from "../api";
 import { TemplatePickerModal } from "./modals/TemplatePickerModal";
+import { ImportPipelineModal } from "./modals/ImportPipelineModal";
+
+const FLAT_FILE_FORMATS = new Set(["csv", "xlsx", "xls", "excel", "json", "parquet", "txt", "tsv"]);
 
 interface PipelineSectionProps {
   onSchedule: () => void;
@@ -56,9 +59,15 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactData, setArtifactData] = useState<PipelineRunArtifact | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [importPipelineOpen, setImportPipelineOpen] = useState(false);
   const [nlPrompt, setNlPrompt] = useState("");
   const [nlApplying, setNlApplying] = useState(false);
   const [nlFeedback, setNlFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const canSchedule = Boolean(
+    activeDataset?.format &&
+    !FLAT_FILE_FORMATS.has(activeDataset.format.toLowerCase()),
+  );
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -461,9 +470,20 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           </span>
         </button>
         {open ? (
-          <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps">
-            <IconTrash size={14} />
-          </button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              className="btn"
+              style={{ width: 26, padding: 0 }}
+              onClick={() => setImportPipelineOpen(true)}
+              aria-label="Import pipeline"
+              title="Import a saved pipeline into this project"
+            >
+              <IconCopy size={14} />
+            </button>
+            <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps" title="Clear all steps">
+              <IconTrash size={14} />
+            </button>
+          </div>
         ) : null}
       </header>
 
@@ -1017,7 +1037,15 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           </button>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button className="btn" onClick={onSchedule}>Schedule</button>
+            <button
+              className="btn"
+              onClick={canSchedule ? onSchedule : undefined}
+              disabled={!canSchedule}
+              title={canSchedule ? "Schedule pipeline" : "Scheduling is only available for database connections, not flat files (CSV, Excel, etc.)"}
+              style={{ opacity: canSchedule ? 1 : 0.35, cursor: canSchedule ? "pointer" : "not-allowed" }}
+            >
+              Schedule
+            </button>
             <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
           </div>
 
@@ -1039,6 +1067,16 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           setSelectedTemplateId(pipelineId);
           setPipelineWorkflowId(pipelineId);
           setWorkflowMessage(`Pipeline created from template. Ready to run.`);
+        }}
+      />
+      <ImportPipelineModal
+        open={importPipelineOpen}
+        workspaceId={activeProject?.workspaceId ?? "default"}
+        onClose={() => setImportPipelineOpen(false)}
+        onCloned={(pipelineId, pipelineName) => {
+          setSelectedTemplateId(pipelineId);
+          setPipelineWorkflowId(pipelineId);
+          setWorkflowMessage(`Pipeline "${pipelineName}" cloned. Ready to run.`);
         }}
       />
     </section>

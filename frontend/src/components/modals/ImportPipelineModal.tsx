@@ -51,16 +51,23 @@ export function ImportPipelineModal({
 
     import("../../api").then(({ api }) =>
       api
-        .get("/api/pipelines")
+        .get("/api/pipelines", { params: { limit: 100 } })
         .then((r) => {
-          const raw = r.data as { data?: unknown; pipelines?: unknown } | unknown[];
-          const source: unknown[] = Array.isArray(raw)
-            ? raw
-            : Array.isArray((raw as { data?: unknown }).data)
-              ? (raw as { data: unknown[] }).data
-              : Array.isArray((raw as { pipelines?: unknown }).pipelines)
-                ? (raw as { pipelines: unknown[] }).pipelines
-                : [];
+          // API returns { success, data: { total, pipelines: [...] } }
+          const raw = r.data as {
+            data?: { pipelines?: unknown[] };
+            pipelines?: unknown[];
+          } | unknown[];
+          let source: unknown[];
+          if (Array.isArray(raw)) {
+            source = raw;
+          } else if (Array.isArray((raw as { data?: { pipelines?: unknown[] } }).data?.pipelines)) {
+            source = (raw as { data: { pipelines: unknown[] } }).data.pipelines;
+          } else if (Array.isArray((raw as { pipelines?: unknown[] }).pipelines)) {
+            source = (raw as { pipelines: unknown[] }).pipelines;
+          } else {
+            source = [];
+          }
           setPipelines(
             source
               .map((i) => normalizePipeline(i as Record<string, unknown>))

@@ -35,15 +35,31 @@ if [ "${RUN_MIGRATIONS:-}" = "1" ]; then
 				exit 1
 			fi
 		elif grep -qE "LockNotAvailable|lock timeout|canceling statement due to lock" /tmp/_alembic_out.txt; then
-			echo "[entrypoint] Migration blocked by lock — sleeping 10s and retrying once"
-			sleep 10
-			set +e
-			_run_alembic > /tmp/_alembic_out2.txt 2>&1
-			_retry_status=$?
-			set -e
-			cat /tmp/_alembic_out2.txt
-			if [ "${_retry_status}" != "0" ]; then
-				echo "[entrypoint] Migration still failing after lock-retry — aborting"
+			# Retry up to 2 times with increasing delays to let the blocking
+			# connection from the previous Render instance drain.
+			_lock_retry=0
+			_lock_ok=0
+			for _wait in 30 60; do
+				_lock_retry=$((_lock_retry + 1))
+				echo "[entrypoint] Migration blocked by lock (attempt ${_lock_retry}) — sleeping ${_wait}s then retrying"
+				sleep "${_wait}"
+				set +e
+				_run_alembic > /tmp/_alembic_out2.txt 2>&1
+				_retry_status=$?
+				set -e
+				cat /tmp/_alembic_out2.txt
+				if [ "${_retry_status}" = "0" ]; then
+					_lock_ok=1
+					break
+				fi
+				if ! grep -qE "LockNotAvailable|lock timeout|canceling statement due to lock" /tmp/_alembic_out2.txt; then
+					# Different error — stop retrying
+					break
+				fi
+				cp /tmp/_alembic_out2.txt /tmp/_alembic_out.txt
+			done
+			if [ "${_lock_ok}" != "1" ]; then
+				echo "[entrypoint] Migration still failing after ${_lock_retry} lock-retries — aborting"
 				exit 1
 			fi
 		elif grep -qE "timed out" /tmp/_alembic_out.txt 2>/dev/null || [ "${_alembic_status}" = "124" ]; then

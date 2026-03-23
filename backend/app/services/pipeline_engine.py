@@ -28,6 +28,147 @@ from app.services.data_conversion import DataConversionService
 from app.services.duckdb_service import DuckDBService
 
 
+# ---------------------------------------------------------------------------
+# Standalone helpers for template transform / ai_transform operations
+# ---------------------------------------------------------------------------
+
+def _apply_pipeline_operation(
+    df: pd.DataFrame,
+    step_type: str,
+    operation: str,
+    config: Dict[str, Any],
+) -> pd.DataFrame:
+    """Execute a named transform or ai_transform operation on a DataFrame."""
+    import re as _re
+    import numpy as _np
+
+    if step_type == "transform":
+        if operation == "drop_duplicates":
+            keep = config.get("keep", "first")
+            return df.drop_duplicates(keep=keep)
+
+        elif operation == "trim_string_columns":
+            for col in df.select_dtypes(include="object").columns:
+                df[col] = df[col].str.strip()
+            return df
+
+        elif operation == "drop_null_columns":
+            threshold = float(config.get("threshold", 0.5))
+            min_count = max(1, int(len(df) * (1 - threshold)))
+            return df.dropna(thresh=min_count, axis=1)
+
+        elif operation == "rename_snake_case":
+            def _to_snake(s: str) -> str:
+                s = _re.sub(r"[^A-Za-z0-9]+", "_", str(s)).strip("_").lower()
+                return s or "col"
+            return df.rename(columns=_to_snake)
+
+        elif operation == "parse_dates":
+            for col in df.columns:
+                if df[col].dtype == object:
+                    try:
+                        parsed = pd.to_datetime(df[col], errors="coerce")
+                        if len(df) > 0 and parsed.notna().sum() / len(df) > 0.5:
+                            df[col] = parsed
+                    except Exception:
+                        pass
+            return df
+
+        elif operation == "resample_timeseries":
+            freq = config.get("freq", "D")
+            agg = config.get("agg", "sum")
+            date_col = None
+            for col in df.columns:
+                try:
+                    parsed = pd.to_datetime(df[col], errors="coerce")
+                    if len(df) > 0 and parsed.notna().sum() / len(df) > 0.5:
+                        df[col] = parsed
+                        date_col = col
+                        break
+                except Exception:
+                    pass
+            if date_col:
+                numeric_cols = df.select_dtypes(include="number").columns.tolist()
+                if numeric_cols:
+                    df = (
+                        df.set_index(date_col)[numeric_cols]
+                        .resample(freq)
+                        .agg(agg)
+                        .reset_index()
+                    )
+            return df
+
+    elif step_type == "ai_transform":
+        if operation == "sentiment":
+            input_col = config.get("input_column", "text")
+            output_col = config.get("output_column", "sentiment_score")
+            if input_col in df.columns:
+                _POS = {"good", "great", "excellent", "positive", "love", "amazing",
+                        "best", "happy", "wonderful", "fantastic", "superb", "perfect",
+                        "outstanding", "brilliant", "nice", "awesome"}
+                _NEG = {"bad", "terrible", "awful", "negative", "hate", "worst",
+                        "poor", "horrible", "disappointing", "sad", "dreadful",
+                        "mediocre", "disgusting", "nasty", "failure", "wrong"}
+
+                def _score(text: Any) -> float:
+                    if not isinstance(text, str):
+                        return 0.0
+                    words = set(_re.findall(r"[a-z]+", text.lower()))
+                    pos = len(words & _POS)
+                    neg = len(words & _NEG)
+                    total = pos + neg
+                    return round((pos - neg) / total, 2) if total else 0.0
+
+                df[output_col] = df[input_col].apply(_score)
+                label_col = output_col.replace("_score", "_label") if "_score" in output_col else output_col + "_label"
+                df[label_col] = df[output_col].apply(
+                    lambda s: "positive" if s > 0 else ("negative" if s < 0 else "neutral")
+                )
+            return df
+
+        elif operation == "keywords":
+            input_col = config.get("input_column", "text")
+            output_col = config.get("output_column", "keywords")
+            top_k = int(config.get("top_k", 5))
+            _STOP = {
+                "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+                "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+                "should", "may", "might", "must", "can", "could", "to", "of", "in",
+                "on", "at", "by", "for", "with", "about", "and", "but", "or", "not",
+                "this", "that", "it", "its", "from", "as", "into", "so", "if",
+            }
+            if input_col in df.columns:
+                def _keywords(text: Any) -> str:
+                    if not isinstance(text, str):
+                        return ""
+                    words = _re.findall(r"\b[a-z]{3,}\b", text.lower())
+                    freq: Dict[str, int] = {}
+                    for w in words:
+                        if w not in _STOP:
+                            freq[w] = freq.get(w, 0) + 1
+                    return ", ".join(sorted(freq, key=freq.get, reverse=True)[:top_k])  # type: ignore[arg-type]
+                df[output_col] = df[input_col].apply(_keywords)
+            return df
+
+        elif operation == "anomaly_detection":
+            method = config.get("method", "zscore")
+            threshold = float(config.get("threshold", 3.0))
+            output_col = config.get("output_column", "is_anomaly")
+            numeric_cols = df.select_dtypes(include="number").columns.tolist()
+            if method == "zscore" and numeric_cols:
+                means = df[numeric_cols].mean()
+                stds = df[numeric_cols].std(ddof=0).replace(0, _np.nan)
+                z_scores = ((df[numeric_cols] - means) / stds).abs().fillna(0)
+                df[output_col] = (z_scores > threshold).any(axis=1)
+                df["anomaly_score"] = z_scores.max(axis=1).round(3)
+            else:
+                df[output_col] = False
+            return df
+
+    # Unknown operation — pass through unchanged
+    return df
+
+
 class PipelineEngine:
     """Executes reproducible pipelines with monitoring and error handling"""
 
@@ -473,8 +614,15 @@ class PipelineEngine:
         
         start_time = time.time()
 
-        action_type = str(step.get('action_type') or '').lower()
-        sql = str(step.get('sql') or step.get('query') or '').strip()
+        # Support both legacy format (action_type / sql at top level) and
+        # template format (type + config dict)
+        step_type = str(step.get('type') or '').lower()
+        config = step.get('config') if isinstance(step.get('config'), dict) else {}
+        operation = str(config.get('operation') or '').lower()
+
+        action_type = str(step.get('action_type') or step_type or '').lower()
+        # SQL may live at top level OR inside the config block (template format)
+        sql = str(step.get('sql') or step.get('query') or config.get('sql') or '').strip()
         parameters = step.get('parameters') if isinstance(step.get('parameters'), dict) else {}
 
         current_meta, current_rows = self._load_dataset_rows(dataset_id)
@@ -483,7 +631,24 @@ class PipelineEngine:
         output_rows = input_rows
         output_dataset_id = dataset_id
 
-        if sql or action_type in {'sql', 'query', 'transform', 'join', 'aggregate'}:
+        # ── pandas-based transform / ai_transform (template steps) ──────────
+        if step_type in {'transform', 'ai_transform'} and not sql:
+            df = pd.DataFrame(current_rows)
+            if not df.empty:
+                df = _apply_pipeline_operation(df, step_type, operation, config)
+            step_result_rows = (
+                df.astype(object).where(pd.notnull(df), None).to_dict(orient='records')
+                if not df.empty else []
+            )
+            output_meta = self._persist_output_dataset(
+                source_dataset=current_meta,
+                rows=step_result_rows,
+                step=step,
+            )
+            output_dataset_id = output_meta.id
+            output_rows = len(step_result_rows)
+
+        elif sql or action_type in {'sql', 'query', 'transform', 'join', 'aggregate'}:
             relation_rows = self._build_step_relations(
                 current_rows=current_rows,
                 step=step,

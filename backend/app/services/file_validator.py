@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE_MB = 50
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".parquet"}
 
+# Known magic-byte signatures keyed by file extension.
+# For text-based formats (csv/json) we check for binary content instead.
+_MAGIC_SIGNATURES: dict[str, list[bytes]] = {
+    ".xlsx": [b"PK\x03\x04", b"PK\x05\x06"],  # ZIP-based OOXML
+    ".xls":  [b"PK\x03\x04", b"\xD0\xCF\x11\xE0"],  # ZIP or OLE compound doc
+    ".parquet": [b"PAR1"],
+}
+
 
 @dataclass
 class ColumnInfo:
@@ -61,6 +69,14 @@ def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
             f"File type {display_ext} is not supported. "
             "Upload a CSV, Excel, JSON or Parquet file."
         )
+        return result
+
+    # ── 2b. Magic-bytes / content-type verification ───────────────────────────
+    # A renamed binary file (e.g. malware.exe → data.csv) has wrong magic bytes.
+    # TODO: integrate ClamAV scanning here for full AV coverage.
+    _magic_error = _check_magic_bytes(file_bytes, ext)
+    if _magic_error:
+        result.error = _magic_error
         return result
 
     # ── 5. Excel password protection (before read attempt) ───────────────────
@@ -113,6 +129,35 @@ def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+def _check_magic_bytes(file_bytes: bytes, ext: str) -> Optional[str]:
+    """Return an error string if file contents don't match the declared extension.
+
+    Checks leading magic bytes for binary formats; for text formats verifies
+    that the first 512 bytes don't contain null bytes (binary file indicator).
+    Returns None when the check passes.
+    """
+    header = file_bytes[:8]
+
+    # Binary format: match known magic signatures
+    if ext in _MAGIC_SIGNATURES:
+        expected = _MAGIC_SIGNATURES[ext]
+        if not any(header.startswith(sig) for sig in expected):
+            return (
+                f"File type mismatch: the content does not match the "
+                f"{ext!r} extension. The file may be renamed or corrupted."
+            )
+
+    # Text format: reject files containing null bytes (sign of binary/malicious content)
+    if ext in {".csv", ".json", ".txt", ".tsv"}:
+        if b"\x00" in file_bytes[:512]:
+            return (
+                "File appears to contain binary content rather than text. "
+                "Please upload a valid CSV or JSON file."
+            )
+
+    return None
+
 
 def _read_with_duckdb(con, file_bytes: bytes, ext: str) -> Optional[dict]:
     """Read file bytes via DuckDB and return row/column metadata."""

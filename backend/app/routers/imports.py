@@ -101,6 +101,15 @@ async def upload_file(
 
     logger.info(f"File read successfully: {len(content)} bytes")
 
+    # ── Run full file validation before any further processing ────────────────
+    from ..services.file_validator import validate_upload as _validate_upload
+    _vr = _validate_upload(content, file.filename or "")
+    if not _vr.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "file_validation_failed", "message": _vr.error or "File validation failed."},
+        )
+
     try:
         source_format = FileParserService.detect_file_format(file.filename)
     except ValueError as exc:
@@ -153,7 +162,13 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(exc)}") from exc
 
     try:
-        file_base = os.path.splitext(file.filename or "dataset")[0]
+        # Sanitize the filename to prevent path traversal attacks on the
+        # storage key. os.path.basename strips all directory separators so
+        # a name like "../../evil.csv" becomes "evil.csv". re.sub then removes
+        # any remaining special characters that have no place in a storage key.
+        _raw_name = file.filename or "dataset"
+        _safe_name = os.path.basename(_raw_name.replace("\\", "/"))
+        file_base = re.sub(r"[^\w\-.]", "_", os.path.splitext(_safe_name)[0]) or "dataset"
         parquet_name = f"{file_base}.parquet"
         initial_tier = storage_tier_service.assign_initial_tier(
             file_size_bytes=len(content),

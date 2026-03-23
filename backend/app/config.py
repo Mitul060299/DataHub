@@ -6,12 +6,18 @@ import re
 import sys
 
 
-DEFAULT_CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
+_PROD_CORS_ORIGINS = [
     "https://datahub.org.in",
     "https://www.datahub.org.in",
 ]
+# Localhost origins are only included when APP_ENV != "production" so that
+# developer machines cannot make credentialed requests to the production API.
+_APP_ENV_FOR_CORS = os.getenv("APP_ENV", "development")
+DEFAULT_CORS_ORIGINS = (
+    _PROD_CORS_ORIGINS
+    if _APP_ENV_FOR_CORS == "production"
+    else _PROD_CORS_ORIGINS + ["http://localhost:5173", "http://localhost:3000"]
+)
 
 
 def _parse_origins(value: str) -> List[str]:

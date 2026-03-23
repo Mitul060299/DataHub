@@ -89,7 +89,10 @@ class StorageService:
         storage_tier: str = "hot",
     ) -> str:
         key_prefix = user_id or "anonymous"
-        key = f"{key_prefix}/{dataset_id}/{file_name}"
+        # Sanitize file_name to prevent path traversal in the storage key,
+        # whether on local disk or in S3-style object stores.
+        _safe_file_name = os.path.basename(file_name.replace("\\", "/")) or "data.parquet"
+        key = f"{key_prefix}/{dataset_id}/{_safe_file_name}"
 
         provider = settings.storage_provider.lower()
         
@@ -99,7 +102,12 @@ class StorageService:
                 raise ValueError("GCS_BUCKET_NAME is required for GCS uploads")
             bucket = client.bucket(settings.gcs_bucket_name)
             blob = bucket.blob(key)
-            blob.upload_from_string(buffer, content_type="application/octet-stream")
+            # Step 8: enforce private ACL so the object inherits no public policy.
+            blob.upload_from_string(
+                buffer,
+                content_type="application/octet-stream",
+                predefined_acl="private",
+            )
             return f"gcs://{settings.gcs_bucket_name}/{key}"
 
         if provider == "azure" or provider == "azure-blob":
@@ -119,6 +127,8 @@ class StorageService:
                 "Key": key,
                 "Body": buffer,
                 "ContentType": "application/octet-stream",
+                # Step 8: enable server-side encryption for R2 objects.
+                "ServerSideEncryption": "AES256",
             }
             storage_class = storage_tier_service.resolve_storage_class(storage_tier, provider)
             if storage_class:
@@ -144,16 +154,36 @@ class StorageService:
             return f"s3://{settings.s3_bucket_name}/{key}"
 
         # Default to local
-        local_path = cls._local_dir() / key
+        # Step 9: verify the resolved path is inside the storage root before
+        # writing to prevent any path traversal that bypassed key sanitization.
+        storage_root = cls._local_dir().resolve()
+        local_path = (cls._local_dir() / key).resolve()
+        if not str(local_path).startswith(str(storage_root)):
+            raise ValueError(f"Storage path traversal detected for key: {key!r}")
         local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.write_bytes(buffer)
+        # Step 8: restrict to owner read/write only — prevents other OS users
+        # on the same host from reading uploaded files.
+        try:
+            os.chmod(local_path, 0o600)
+        except Exception:
+            pass
         return f"local://{key}"
 
     @classmethod
-    def get_signed_url(cls, storage_path: str, expires_in: int = 3600) -> str:
+    def get_signed_url(cls, storage_path: str, expires_in: int = 900) -> str:
+        """Return a short-lived pre-signed URL (default: 15 min / 900 s).
+
+        Pass a larger ``expires_in`` for bulk export downloads.
+        All calls are logged for audit purposes.
+        """
         provider, bucket, key, local_path = cls._parse_path(storage_path)
-        
+        logger.info(
+            "presigned_url_generated storage_path=%s ttl_seconds=%d",
+            storage_path, expires_in,
+        )
         if provider == "local":
+            # Local paths are only for internal DuckDB reads, not for frontend serving.
             return str(local_path)
 
         if provider == "gcs":
@@ -234,9 +264,25 @@ class StorageService:
 
     @classmethod
     def get_query_path(cls, storage_path: str) -> str:
+        """Return a DuckDB-readable path for the given object.
+
+        INTERNAL USE ONLY — never include the return value in a JSON API
+        response. For local storage the return value is a raw filesystem path
+        which would expose the server’s directory layout to callers.
+        """
         provider, _, _, local_path = cls._parse_path(storage_path)
         if provider == "local":
-            return local_path.as_posix()
+            # Verify the resolved path stays within the configured storage root
+            # to catch any path traversal that might have slipped through upload.
+            storage_root = cls._local_dir().resolve()
+            resolved = local_path.resolve()
+            if not str(resolved).startswith(str(storage_root)):
+                logger.error(
+                    "Path traversal detected in get_query_path: %s escaped root %s",
+                    local_path, storage_root,
+                )
+                raise ValueError("Storage path traversal detected.")
+            return resolved.as_posix()
         return cls.get_signed_url(storage_path)
 
     @classmethod

@@ -144,9 +144,11 @@ class AIAgentService:
 
         system_prompt = (
             "You are an expert data transformation assistant.\n\n"
-            f"Dataset context:\n- Columns: {', '.join(context['columns'])}\n"
+            "[DATA SCHEMA START]\n"
+            f"- Columns: {', '.join(AIAgentService._sanitize_for_prompt(c) for c in context['columns'])}\n"
             f"- Row count: {context['rowCount']:,}\n"
-            f"- Data types: {json.dumps(context['schema'])}\n\n"
+            f"- Data types: {json.dumps({AIAgentService._sanitize_for_prompt(k): v for k, v in context['schema'].items()})}\n"
+            "[DATA SCHEMA END]\n\n"
         )
 
         # Include schemas of any secondary datasets so the LLM can generate
@@ -157,9 +159,14 @@ class AIAgentService:
                 try:
                     sec_ctx = AIAgentService._get_dataset_context(sec_id, db)
                     sec_meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == sec_id).first()
-                    alias = (str(sec_meta.name) if sec_meta and sec_meta.name else sec_id)
+                    alias = AIAgentService._sanitize_for_prompt(
+                        str(sec_meta.name) if sec_meta and sec_meta.name else sec_id
+                    )
+                    safe_cols = ', '.join(
+                        AIAgentService._sanitize_for_prompt(c) for c in sec_ctx['columns']
+                    )
                     secondary_info_lines.append(
-                        f"- {alias} (id: {sec_id}): columns={', '.join(sec_ctx['columns'])} | "
+                        f"- {alias} (id: {sec_id}): columns={safe_cols} | "
                         f"rows={sec_ctx['rowCount']:,}"
                     )
                 except Exception:
@@ -290,6 +297,32 @@ class AIAgentService:
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
+
+    @staticmethod
+    def _sanitize_for_prompt(value: str, max_len: int = 100) -> str:
+        """Sanitize a user-controlled string before embedding it in an LLM prompt.
+
+        Strips common prompt-injection trigger phrases and control characters,
+        then truncates to ``max_len`` characters so injection payloads cannot
+        carry arbitrarily long instructions.
+        """
+        import re as _re
+        # Remove line-feed and carriage-return to prevent instruction injection
+        # across lines inside the system prompt.
+        cleaned = value.replace("\n", " ").replace("\r", " ")
+        # Neutralise common instruction-override trigger words by prefixing them
+        # with a zero-width space so the LLM does not treat them as directives.
+        _TRIGGERS = ("ignore ", "forget ", "disregard ", "system:", "<|", "###",
+                     "assistant:", "user:", "human:")
+        lower = cleaned.lower()
+        for trigger in _TRIGGERS:
+            if trigger in lower:
+                # Replace case-insensitively
+                cleaned = _re.sub(
+                    _re.escape(trigger), f"\u200b{trigger}", cleaned,
+                    flags=_re.IGNORECASE,
+                )
+        return cleaned[:max_len]
 
     @staticmethod
     def _provider_config() -> tuple[str, str, str]:

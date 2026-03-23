@@ -43,20 +43,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _json_rate_limit_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 
-ALLOWED_CORS_ORIGINS = [
-    "https://datahub.org.in",
-    "https://www.datahub.org.in",
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
+# Single source of truth: driven by the CORS_ORIGINS env var (comma-separated).
+# Localhost origins are included automatically in development (see config.py).
+# Never use a hardcoded list here — change config.py or the env var instead.
+_CORS_ORIGINS = settings.cors_origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_CORS_ORIGINS,
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Workspace-Id", "X-Request-Id"],
+    expose_headers=["X-Request-Id"],
 )
 
 
@@ -160,7 +158,7 @@ async def cors_on_error(request: Request, call_next):
         response = JSONResponse(status_code=500, content={"detail": str(exc)})
 
     origin = request.headers.get("origin", "")
-    if origin in ALLOWED_CORS_ORIGINS:
+    if origin in _CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
@@ -170,7 +168,7 @@ async def cors_on_error(request: Request, call_next):
 async def unhandled_exception_handler(request: Request, exc: Exception):
     response = JSONResponse(status_code=500, content={"detail": str(exc)})
     origin = request.headers.get("origin", "")
-    if origin in ALLOWED_CORS_ORIGINS:
+    if origin in _CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
     return response

@@ -29,7 +29,13 @@ summary (3-6 sentences) explaining what matters and what to do next. Avoid specu
 
 
 def _build_payload(df: pd.DataFrame, context_text: str) -> str:
-    sample = df.head(20).to_dict(orient="records")
+    raw_sample = df.head(20).to_dict(orient="records")
+    # Truncate cell values to <= 200 chars to prevent prompt-stuffing via
+    # large cells that could carry injected instructions to the LLM.
+    sample = [
+        {k: (str(v)[:200] if v is not None else v) for k, v in row.items()}
+        for row in raw_sample
+    ]
     columns = list(df.columns)
     return json.dumps(
         {

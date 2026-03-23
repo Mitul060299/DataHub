@@ -197,6 +197,22 @@ async def upload_dataset(
     user_plan = resolve_user_plan(db, authorization)
     enforce_usage_limit(user_id, user_plan, "datasets_uploaded", db)
     content = await file.read()
+    # ── File validation: extension, magic bytes, size, encoding ──────────────
+    from ..services.file_validator import validate_upload as _validate_upload
+    _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File is empty.")
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the 50 MB limit ({len(content) // (1024 * 1024)} MB uploaded). Split the file and retry.",
+        )
+    _vr = _validate_upload(content, file.filename or "")
+    if not _vr.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "file_validation_failed", "message": _vr.error or "File validation failed."},
+        )
     df = pd.read_csv(pd.io.common.BytesIO(content))
     df = df.astype(object).where(pd.notnull(df), None)
     resolved_name = (dataset_name or "").strip() or (file.filename or "dataset")

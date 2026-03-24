@@ -1,22 +1,32 @@
 from .state import AgentState
 
 
-# Intents that skip the planner and straight to execute_step (read-only / auto)
+# Intents that are auto-approved — they go through the planner (to generate SQL)
+# but skip plan_presenter so the user never has to click Approve.
 _AUTO_EXECUTE = {"validate", "summarise"}
-# All planning intents that need the planner + plan_presenter gate
+
+# All intents that require the planner to generate a SQL plan.
+# _AUTO_EXECUTE intents are included so they also get planner-generated SQL.
 _PLANNING_INTENTS = {
     "clean", "filter", "transform", "add_column", "pivot",
     "union", "join", "reconcile", "sql_query", "visualise", "export",
+    "validate", "summarise",
 }
 
 
 def route_intent(state: AgentState) -> str:
     intent = state.get("intent", "converse")
-    if intent in _AUTO_EXECUTE:
-        return "execute_step"
     if intent in _PLANNING_INTENTS:
         return "planner"
     return "responder"
+
+
+def route_after_planner(state: AgentState) -> str:
+    """Skip plan_presenter for auto-approved intents (summarise / validate)
+    so they execute immediately without a user confirmation step."""
+    if state.get("plan_approved"):
+        return "execute_step"
+    return "plan_presenter"
 
 
 def route_after_present(state: AgentState) -> str:

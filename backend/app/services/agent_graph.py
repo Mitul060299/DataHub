@@ -117,10 +117,12 @@ class AgentGraphService:
 
                 elif node_name == "planner":
                     plan = data.get("output", {}).get("plan", [])
+                    auto_approved = bool(data.get("output", {}).get("plan_approved", False))
                     yield {
                         "type": "agent.plan",
                         "plan": plan,
-                        "message": "Plan ready for approval",
+                        "auto_approved": auto_approved,
+                        "message": "Plan ready for approval" if not auto_approved else "Executing plan automatically...",
                     }
 
                 elif node_name == "plan_presenter":

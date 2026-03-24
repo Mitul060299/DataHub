@@ -58,16 +58,15 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
     switch (event.type) {
       case "agent.plan": {
         const plan = (event.plan as PlanStep[] | undefined) || [];
-        const autoApproved = Boolean(event.auto_approved);
         setMessages((previous) => [
           ...previous,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: autoApproved ? "Running automatically:" : "Here's my plan:",
+            content: "Here's my plan:",
             plan,
-            planPending: !autoApproved,
-            planApproved: autoApproved,
+            planPending: true,
+            planApproved: false,
           },
         ]);
         break;
@@ -223,13 +222,6 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             };
           }
         }
-
-        // Clear any plan bubbles that are still pending — execution already ran.
-        setMessages((previous) =>
-          previous.map((msg) =>
-            msg.planPending ? { ...msg, planPending: false, planApproved: true } : msg
-          )
-        );
 
         setMessages((previous) => [
           ...previous,

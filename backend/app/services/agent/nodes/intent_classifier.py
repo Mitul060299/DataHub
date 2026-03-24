@@ -19,9 +19,6 @@ VALID_INTENTS = {
     "sql_query", "visualise", "export", "converse",
 }
 
-# Intents that go directly to execute_step without planner/plan_presenter
-AUTO_EXECUTE_INTENTS = {"validate", "summarise"}
-
 
 async def intent_classifier(state: AgentState) -> dict:
     messages = state.get("messages", [])
@@ -46,4 +43,4 @@ async def intent_classifier(state: AgentState) -> dict:
     if intent not in VALID_INTENTS:
         intent = "converse"
 
-    return {"intent": intent, "plan_approved": intent in AUTO_EXECUTE_INTENTS}
+    return {"intent": intent, "plan_approved": False}

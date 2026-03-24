@@ -5,7 +5,7 @@ from .groq_compat import apply_groq_compat_patches
 
 apply_groq_compat_patches()
 
-from .edges import route_after_execute, route_after_planner, route_after_present, route_after_reflect, route_intent
+from .edges import route_after_execute, route_after_present, route_after_reflect, route_intent
 from .nodes.context_loader import context_loader
 from .nodes.execute_step import execute_step
 from .nodes.intent_classifier import intent_classifier
@@ -32,20 +32,14 @@ def build_agent_graph():
     graph.set_entry_point("context_loader")
 
     graph.add_edge("context_loader", "intent_classifier")
-    # Auto-approved intents (summarise/validate) bypass plan_presenter and go
-    # straight to execute_step. All other planning intents require user approval.
-    graph.add_conditional_edges(
-        "planner",
-        route_after_planner,
-        {"execute_step": "execute_step", "plan_presenter": "plan_presenter"},
-    )
+    graph.add_edge("planner", "plan_presenter")
     graph.add_edge("pipeline_recorder", "responder")
     graph.add_edge("responder", END)
 
     graph.add_conditional_edges(
         "intent_classifier",
         route_intent,
-        {"planner": "planner", "execute_step": "execute_step", "responder": "responder"},
+        {"planner": "planner", "responder": "responder"},
     )
     graph.add_conditional_edges(
         "plan_presenter",

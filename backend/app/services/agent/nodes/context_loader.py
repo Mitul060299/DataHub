@@ -68,11 +68,58 @@ async def context_loader(state: AgentState) -> dict:
         for dashboard in DashboardsV2Service.list_dashboards(user_id=user_id, workspace_id=workspace_id)
     ]
 
+    # ── DuckDB session setup (always run, even when schema is cached) ────────
+    # Re-registers views after an approval-path restart so execute_step SQL works.
+    session_id = state.get("session_id", "")
+    table_registry: dict = dict(state.get("table_registry") or {})
+
+    def _register_dataset_view(ds_id: str, alias: str, storage_path: str | None = None) -> None:
+        """Register one dataset as a named view in the persistent DuckDB session."""
+        if not session_id or not storage_path:
+            return
+        try:
+            file_path = StorageService.get_query_path(storage_path)
+            register_view(session_id, alias, file_path)
+        except Exception:
+            pass
+
+    if session_id:
+        try:
+            get_connection(session_id)
+        except SessionExpiredError as exc:
+            return {"error": str(exc)}
+
+    # Always re-register primary dataset view so execute_step can query it.
+    if dataset and dataset.storage_path:
+        _primary_alias = _sanitize_alias(str(dataset.name if dataset and dataset.name else dataset_id))
+        _register_dataset_view(dataset_id, _primary_alias, storage_path=dataset.storage_path)
+        if _primary_alias not in table_registry:
+            _col_names: list[str] = []
+            _cached = state.get("schema") or {}
+            if isinstance(_cached, dict):
+                for _c in _cached.get("columns", []):
+                    if isinstance(_c, dict) and _c.get("name"):
+                        _col_names.append(_c["name"])
+            table_registry[_primary_alias] = {
+                "duckdb_name": _primary_alias,
+                "dataset_id": dataset_id,
+                "display_name": _primary_alias,
+                "source_intent": "upload",
+                "parent_tables": [],
+                "row_count": int(dataset.row_count or 0) if dataset else 0,
+                "column_names": _col_names,
+                "pipeline_step_number": 0,
+                "is_artifact": False,
+                "is_view": True,
+            }
+
     if state.get("schema"):
+        # Schema already loaded — skip expensive reload but return refreshed table_registry.
         return {
             "available_templates": available_templates,
             "calculated_columns": calculated_columns,
             "dashboards": dashboards,
+            "table_registry": table_registry,
         }
 
     # Load secondary dataset schemas so the planner can generate cross-dataset SQL
@@ -104,25 +151,7 @@ async def context_loader(state: AgentState) -> dict:
         finally:
             sec_db.close()
 
-    # ── DuckDB session: register views & build table_registry ───────────────
-    session_id = state.get("session_id", "")
-    table_registry: dict = dict(state.get("table_registry") or {})
-
-    def _register_dataset_view(ds_id: str, alias: str, storage_path: str | None = None) -> None:
-        """Register one dataset as a named view in the persistent DuckDB session."""
-        if not session_id or not storage_path:
-            return
-        try:
-            file_path = StorageService.get_query_path(storage_path)
-            register_view(session_id, alias, file_path)
-        except Exception:
-            pass  # best-effort; operations will fall back gracefully
-
-    if session_id:
-        try:
-            get_connection(session_id)  # touch session to reset TTL / raise if expired
-        except SessionExpiredError as exc:
-            return {"error": str(exc)}
+    # (DuckDB session setup moved above early-return check; views already registered)
 
     try:
         schema = DuckDBService.get_schema(dataset_id)

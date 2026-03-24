@@ -55,6 +55,7 @@ class CleaningController:
         authorization: str | None,
         db: Session,
         secondary_dataset_ids: list[str] | None = None,
+        pending_plan: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         role = get_current_role(authorization)
         require_role("viewer", role)
@@ -72,6 +73,7 @@ class CleaningController:
             session_id=session_id,
             pipeline_steps=pipeline_steps,
             plan_approved=plan_approved,
+            pending_plan=pending_plan or [],
             user_id=request_user_id,
             workspace_id=effective_workspace_id,
             db=db,

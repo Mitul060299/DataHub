@@ -66,32 +66,60 @@ class AgentGraphService:
         workspace_id: str,
         db: Session,
         secondary_dataset_ids: list[str] | None = None,
+        pending_plan: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         _ = db
         config = {"configurable": {"thread_id": session_id}}
         if plan_approved:
-            # Resume path: load the saved checkpoint so we reuse the plan already
-            # generated, then restart with plan_approved=True so route_intent
-            # short-circuits directly to execute_step (skips planner/plan_presenter).
+            # Resume path: prefer plan sent by the frontend (pending_plan).
+            # Fall back to MemorySaver checkpoint only if nothing was sent.
+            # Clear schema so context_loader re-registers DuckDB views.
             existing = agent_graph.get_state(config)
             snapshot: dict = existing.values if existing else {}
-            if not snapshot:
+
+            resolved_plan: list = pending_plan or snapshot.get("plan", [])
+            if not resolved_plan:
                 yield {
                     "type": "agent.error",
-                    "error": "No pending plan found for this session. Please send a new request first.",
+                    "error": "No pending plan found. Please send a new request first.",
                 }
                 return
+
+            # Re-use the original user message for intent classification so
+            # route_intent can detect plan_approved=True and skip planning.
+            snapshot_messages = snapshot.get("messages", [])
+            user_msgs = [m for m in snapshot_messages if getattr(m, "type", "") == "human"]
+            resume_message = user_msgs[-1] if user_msgs else HumanMessage(content=user_message or "proceed")
+
             initial_state: dict = {
-                **snapshot,
+                "messages": [resume_message],
                 "root_dataset_id": snapshot.get("root_dataset_id", dataset_id),
                 "dataset_id": snapshot.get("dataset_id", dataset_id),
                 "user_id": user_id,
                 "workspace_id": workspace_id,
+                "session_id": snapshot.get("session_id", session_id),
                 "plan_approved": True,
+                "plan": resolved_plan,
+                "intent": snapshot.get("intent", ""),
                 "current_step_index": 0,
                 "execution_results": [],
                 "retry_count": 0,
                 "pipeline_steps": pipeline_steps or snapshot.get("pipeline_steps", []),
+                # Clear schema so context_loader re-runs DuckDB view registration.
+                "schema": {},
+                "stats": {},
+                "sample_rows": [],
+                "table_registry": {},
+                "calculated_columns": [],
+                "dashboards": [],
+                "available_templates": [],
+                "error": None,
+                "run_id": None,
+                "output_dataset_id": snapshot.get("dataset_id", dataset_id),
+                "run_steps": [],
+                "final_response": "",
+                "chart_config": None,
+                "query_results": None,
             }
         else:
             initial_state = cls._build_initial_state(

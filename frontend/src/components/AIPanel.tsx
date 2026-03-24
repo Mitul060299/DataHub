@@ -265,7 +265,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
     }
   };
 
-  const handleSend = async (text?: string, approvePlan?: boolean) => {
+  const handleSend = async (text?: string, approvePlan?: boolean, pendingPlan?: PlanStep[]) => {
     if (!dataset) return;
     const content = (text || input).trim();
     if (!content && !approvePlan) return;
@@ -293,6 +293,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           rows_affected: step.affectedRows,
         })),
         plan_approved: approvePlan ?? false,
+        pending_plan: pendingPlan,
         onEvent: handleAgentEvent,
       });
     } catch (error: unknown) {
@@ -312,12 +313,18 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
       ?.content
       ?.trim() || "";
 
+    // Collect the pending plan steps from the plan message so the backend can
+    // execute them without relying on in-process MemorySaver checkpoints.
+    const pendingPlanSteps = messages
+      .filter((m) => m.planPending && Array.isArray(m.plan))
+      .flatMap((m) => m.plan ?? []);
+
     setMessages((previous) => previous.map((message) => (
       message.planPending
         ? { ...message, planPending: false, planApproved: true }
         : message
     )));
-    void handleSend(latestUserPrompt, true);
+    void handleSend(latestUserPrompt, true, pendingPlanSteps);
   };
 
   const rejectPlan = () => {

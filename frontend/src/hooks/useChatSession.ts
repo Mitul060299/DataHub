@@ -55,6 +55,7 @@ export function useChatSession() {
     conversation_history: ConversationMessage[];
     pipeline_steps?: Array<Record<string, unknown>>;
     plan_approved?: boolean;
+    pending_plan?: PlanStep[];
     onEvent?: (event: AgentEvent) => void;
     onRunCompleted?: (runId: string | null) => void;
   }) => {
@@ -79,6 +80,7 @@ export function useChatSession() {
           project_id: payload.project_id,
           pipeline_steps: payload.pipeline_steps ?? [],
           plan_approved: payload.plan_approved ?? false,
+          pending_plan: payload.pending_plan ?? [],
           conversation_history: payload.conversation_history,
         }),
       });

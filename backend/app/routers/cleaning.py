@@ -23,6 +23,7 @@ class CommandRequest(BaseModel):
     project_id: str | None = None
     pipeline_steps: list[dict[str, Any]] = Field(default_factory=list)
     plan_approved: bool = False
+    pending_plan: list[dict[str, Any]] = Field(default_factory=list)
     conversation_history: list[dict[str, Any]] = Field(default_factory=list)
     secondary_dataset_ids: list[str] = Field(
         default_factory=list,
@@ -59,6 +60,7 @@ async def process_command(
                 session_id=payload.session_id,
                 pipeline_steps=payload.pipeline_steps,
                 plan_approved=payload.plan_approved,
+                pending_plan=payload.pending_plan,
                 workspace_id=payload.workspace_id,
                 authorization=authorization,
                 db=db,

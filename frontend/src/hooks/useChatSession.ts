@@ -11,6 +11,7 @@ export type PlanStep = {
   operation: string;
   description: string;
   parameters?: Record<string, unknown>;
+  sql?: string;
   template_id?: string | null;
   estimated_rows: string;
   reversible: boolean;

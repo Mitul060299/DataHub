@@ -133,6 +133,43 @@ def create_tables() -> None:
             created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_reviews_approved ON reviews (approved)",
+        # 0027 — dashboards_v2 extended columns (originally missed due to RLS crash)
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{}'",
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false",
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS share_token TEXT",
+        # 0027 — dashboard_tiles extended columns
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS tile_type TEXT NOT NULL DEFAULT 'chart'",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS echarts_config JSONB",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS table_data JSONB",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_value TEXT",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_label TEXT",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_trend TEXT",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_threshold JSONB",
+        # 0027 — dashboard_access table
+        """CREATE TABLE IF NOT EXISTS dashboard_access (
+            id                  TEXT PRIMARY KEY,
+            dashboard_id        TEXT NOT NULL REFERENCES dashboards_v2(id) ON DELETE CASCADE,
+            granted_to_user_id  TEXT,
+            granted_to_email    TEXT,
+            access_level        TEXT NOT NULL DEFAULT 'view',
+            granted_by          TEXT NOT NULL,
+            expires_at          TIMESTAMPTZ,
+            token               TEXT,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_access_dashboard ON dashboard_access (dashboard_id)",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_access_user ON dashboard_access (granted_to_user_id)",
+        # 0027 — dashboard_views table
+        """CREATE TABLE IF NOT EXISTS dashboard_views (
+            id                  TEXT PRIMARY KEY,
+            dashboard_id        TEXT NOT NULL REFERENCES dashboards_v2(id) ON DELETE CASCADE,
+            viewed_by_user_id   TEXT,
+            viewed_by_email     TEXT,
+            viewed_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+            ip_address          TEXT
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_views_dashboard ON dashboard_views (dashboard_id)",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_views_user ON dashboard_views (viewed_by_user_id)",
     ]
     try:
         from sqlalchemy import text as _text

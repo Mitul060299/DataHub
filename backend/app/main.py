@@ -69,7 +69,91 @@ def create_tables() -> None:
     # Schema safety-net: ADD COLUMN / CREATE TABLE IF NOT EXISTS for all columns
     # added by recent migrations. No-op if already present. Bypasses alembic
     # stamp state (safety net for timed-out Render free-tier deploys).
+    # Each statement runs independently — one failure never blocks the rest.
     _schema_ddl = [
+        # 0026 — data_sources table (must precede 0029 project_id column)
+        """CREATE TABLE IF NOT EXISTS data_sources (
+            id          TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            name        TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            config      JSONB NOT NULL DEFAULT '{}',
+            last_tested_at  TIMESTAMPTZ,
+            last_pulled_at  TIMESTAMPTZ,
+            is_active   BOOLEAN NOT NULL DEFAULT true,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_data_sources_user ON data_sources (user_id)",
+        # 0026 — pipeline_schedules table
+        """CREATE TABLE IF NOT EXISTS pipeline_schedules (
+            id                      TEXT PRIMARY KEY,
+            pipeline_id             TEXT NOT NULL REFERENCES pipelines_v2(id) ON DELETE CASCADE,
+            user_id                 TEXT NOT NULL,
+            cron_expression         TEXT NOT NULL DEFAULT '0 9 * * 1',
+            timezone                TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+            is_active               BOOLEAN NOT NULL DEFAULT false,
+            last_run_at             TIMESTAMPTZ,
+            next_run_at             TIMESTAMPTZ,
+            auto_refresh_on_upload  BOOLEAN NOT NULL DEFAULT false,
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_schedules_pipeline ON pipeline_schedules (pipeline_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_schedules_next_run ON pipeline_schedules (next_run_at)",
+        # 0026 — table_snapshots table
+        """CREATE TABLE IF NOT EXISTS table_snapshots (
+            id              TEXT PRIMARY KEY,
+            pipeline_run_id TEXT NOT NULL REFERENCES pipeline_runs_v2(id) ON DELETE CASCADE,
+            table_name      TEXT NOT NULL,
+            snapshot_url    TEXT NOT NULL,
+            row_count       INTEGER,
+            schema          JSONB NOT NULL DEFAULT '{}',
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_table_snapshots_run ON table_snapshots (pipeline_run_id)",
+        "CREATE INDEX IF NOT EXISTS idx_table_snapshots_table_name ON table_snapshots (table_name)",
+        # 0026 — pipeline_runs_v2 extra column
+        "ALTER TABLE pipeline_runs_v2 ADD COLUMN IF NOT EXISTS output_snapshot_url TEXT",
+        # 0026 — dashboard_tiles extra columns
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS snapshot_id TEXT REFERENCES table_snapshots(id) ON DELETE SET NULL",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_tiles_snapshot ON dashboard_tiles (snapshot_id)",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS refresh_config JSONB NOT NULL DEFAULT '{}'",
+        # 0027 — dashboards_v2 extended columns (originally missed due to RLS crash)
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{}'",
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false",
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS share_token TEXT",
+        # 0027 — dashboard_tiles extended columns
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS tile_type TEXT NOT NULL DEFAULT 'chart'",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS echarts_config JSONB",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS table_data JSONB",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_value TEXT",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_label TEXT",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_trend TEXT",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_threshold JSONB",
+        # 0027 — dashboard_access table
+        """CREATE TABLE IF NOT EXISTS dashboard_access (
+            id                  TEXT PRIMARY KEY,
+            dashboard_id        TEXT NOT NULL REFERENCES dashboards_v2(id) ON DELETE CASCADE,
+            granted_to_user_id  TEXT,
+            granted_to_email    TEXT,
+            access_level        TEXT NOT NULL DEFAULT 'view',
+            granted_by          TEXT NOT NULL,
+            expires_at          TIMESTAMPTZ,
+            token               TEXT,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_access_dashboard ON dashboard_access (dashboard_id)",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_access_user ON dashboard_access (granted_to_user_id)",
+        # 0027 — dashboard_views table
+        """CREATE TABLE IF NOT EXISTS dashboard_views (
+            id                  TEXT PRIMARY KEY,
+            dashboard_id        TEXT NOT NULL REFERENCES dashboards_v2(id) ON DELETE CASCADE,
+            viewed_by_user_id   TEXT,
+            viewed_by_email     TEXT,
+            viewed_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+            ip_address          TEXT
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_views_dashboard ON dashboard_views (dashboard_id)",
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_views_user ON dashboard_views (viewed_by_user_id)",
         # 0028 — user onboarding flags
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN NOT NULL DEFAULT false",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_uploaded_first_file BOOLEAN NOT NULL DEFAULT false",
@@ -133,51 +217,24 @@ def create_tables() -> None:
             created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_reviews_approved ON reviews (approved)",
-        # 0027 — dashboards_v2 extended columns (originally missed due to RLS crash)
-        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{}'",
-        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false",
-        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS share_token TEXT",
-        # 0027 — dashboard_tiles extended columns
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS tile_type TEXT NOT NULL DEFAULT 'chart'",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS echarts_config JSONB",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS table_data JSONB",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_value TEXT",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_label TEXT",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_trend TEXT",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_threshold JSONB",
-        # 0027 — dashboard_access table
-        """CREATE TABLE IF NOT EXISTS dashboard_access (
-            id                  TEXT PRIMARY KEY,
-            dashboard_id        TEXT NOT NULL REFERENCES dashboards_v2(id) ON DELETE CASCADE,
-            granted_to_user_id  TEXT,
-            granted_to_email    TEXT,
-            access_level        TEXT NOT NULL DEFAULT 'view',
-            granted_by          TEXT NOT NULL,
-            expires_at          TIMESTAMPTZ,
-            token               TEXT,
-            created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
-        )""",
-        "CREATE INDEX IF NOT EXISTS idx_dashboard_access_dashboard ON dashboard_access (dashboard_id)",
-        "CREATE INDEX IF NOT EXISTS idx_dashboard_access_user ON dashboard_access (granted_to_user_id)",
-        # 0027 — dashboard_views table
-        """CREATE TABLE IF NOT EXISTS dashboard_views (
-            id                  TEXT PRIMARY KEY,
-            dashboard_id        TEXT NOT NULL REFERENCES dashboards_v2(id) ON DELETE CASCADE,
-            viewed_by_user_id   TEXT,
-            viewed_by_email     TEXT,
-            viewed_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-            ip_address          TEXT
-        )""",
-        "CREATE INDEX IF NOT EXISTS idx_dashboard_views_dashboard ON dashboard_views (dashboard_id)",
-        "CREATE INDEX IF NOT EXISTS idx_dashboard_views_user ON dashboard_views (viewed_by_user_id)",
     ]
     try:
         from sqlalchemy import text as _text
+        _failed: list[str] = []
         with engine.connect() as _conn:
             for _stmt in _schema_ddl:
-                _conn.execute(_text(_stmt))
-            _conn.commit()
-        logger.warning("startup: schema safety-net DDL applied successfully")
+                try:
+                    _conn.execute(_text(_stmt))
+                    _conn.commit()
+                except Exception as _stmt_exc:
+                    _conn.rollback()
+                    _short = _stmt.strip().splitlines()[0][:80]
+                    logger.warning("startup DDL skipped (%s): %s", _short, _stmt_exc)
+                    _failed.append(_short)
+        if _failed:
+            logger.warning("startup: %d DDL statement(s) skipped (see warnings above)", len(_failed))
+        else:
+            logger.warning("startup: schema safety-net DDL applied successfully")
     except Exception as _exc:
         logger.error("startup: schema safety-net DDL failed: %s", _exc)
 

@@ -47,12 +47,15 @@ def upgrade() -> None:
         )
         op.create_index("idx_data_sources_user", "data_sources", ["user_id"])
 
-        # RLS
-        bind.execute(text("ALTER TABLE data_sources ENABLE ROW LEVEL SECURITY"))
-        bind.execute(text(
-            "CREATE POLICY data_sources_owner_all ON data_sources "
-            "FOR ALL USING (auth.uid()::text = user_id)"
-        ))
+        # RLS — Supabase only; skip silently on plain Postgres
+        try:
+            bind.execute(text("ALTER TABLE data_sources ENABLE ROW LEVEL SECURITY"))
+            bind.execute(text(
+                "CREATE POLICY data_sources_owner_all ON data_sources "
+                "FOR ALL USING (auth.uid()::text = user_id)"
+            ))
+        except Exception:
+            pass
 
     # ── 2. pipeline_schedules ─────────────────────────────────────────────────
     if not _table_exists(inspector, "pipeline_schedules"):
@@ -72,11 +75,15 @@ def upgrade() -> None:
         op.create_index("idx_pipeline_schedules_pipeline", "pipeline_schedules", ["pipeline_id"])
         op.create_index("idx_pipeline_schedules_next_run", "pipeline_schedules", ["next_run_at"])
 
-        bind.execute(text("ALTER TABLE pipeline_schedules ENABLE ROW LEVEL SECURITY"))
-        bind.execute(text(
-            "CREATE POLICY pipeline_schedules_owner_all ON pipeline_schedules "
-            "FOR ALL USING (auth.uid()::text = user_id)"
-        ))
+        # RLS — Supabase only; skip silently on plain Postgres
+        try:
+            bind.execute(text("ALTER TABLE pipeline_schedules ENABLE ROW LEVEL SECURITY"))
+            bind.execute(text(
+                "CREATE POLICY pipeline_schedules_owner_all ON pipeline_schedules "
+                "FOR ALL USING (auth.uid()::text = user_id)"
+            ))
+        except Exception:
+            pass
 
     # ── 3. table_snapshots ────────────────────────────────────────────────────
     if not _table_exists(inspector, "table_snapshots"):

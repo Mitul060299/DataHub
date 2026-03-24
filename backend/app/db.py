@@ -1,6 +1,7 @@
 from urllib.parse import urlparse, urlunparse
+import re
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import NullPool
 from .config import settings
@@ -12,56 +13,46 @@ class Base(DeclarativeBase):
 
 def _resolve_db_url(raw_url: str) -> tuple[str, bool]:
     """
-    Detect whether the DATABASE_URL points at Supabase's Session-mode pooler
-    (port 5432) and, if so, rewrite it to Transaction-mode (port 6543).
+    If DATABASE_URL points at Supabase's Session-mode pooler (port 5432),
+    rewrite to Transaction-mode (port 6543) so the server-side pool is shared
+    across all clients and the 'MaxClientsInSessionMode' cap is never hit.
 
-    Transaction mode supports far more concurrent clients — the server-side
-    pool is shared across all connections rather than one connection per client.
+    Uses regex replacement on the raw string — avoids urlparse scheme issues
+    with non-standard schemes like 'postgresql+psycopg'.
 
     Returns (resolved_url, is_transaction_mode).
     """
-    parsed = urlparse(raw_url)
-    host = parsed.hostname or ""
-    port = parsed.port or 5432
+    is_supabase_pooler = "pooler.supabase.com" in raw_url
 
-    # Supabase pooler hostnames contain 'pooler.supabase.com'
-    is_supabase_pooler = "pooler.supabase.com" in host
+    if is_supabase_pooler:
+        # Replace :5432 immediately before / or end-of-netloc with :6543.
+        # The pattern matches :5432 followed by / (path start) or end-of-string.
+        rewritten = re.sub(r":5432(/|$)", r":6543\1", raw_url)
+        is_transaction_mode = ":6543" in rewritten
+        return rewritten, is_transaction_mode
 
-    if is_supabase_pooler and port == 5432:
-        # Rewrite to Transaction mode port
-        netloc = parsed.netloc.replace(":5432", ":6543") if ":5432" in parsed.netloc else f"{parsed.hostname}:6543"
-        if parsed.username:
-            user_info = parsed.netloc.split("@")[0]
-            netloc = f"{user_info}@{parsed.hostname}:6543"
-        resolved = urlunparse(parsed._replace(netloc=netloc))
-        return resolved, True
-
-    return raw_url, is_supabase_pooler and port == 6543
+    return raw_url, False
 
 
 _DB_URL, _IS_TRANSACTION_MODE = _resolve_db_url(settings.database_url)
 
 # Pool strategy:
-#   - Transaction mode (port 6543): light pool — connections are short-lived
-#     and released back to the server-side pool after each transaction.        
-#   - Session mode  (port 5432):  use NullPool — one DBAPI connection per
-#     SQLAlchemy connection request, returned immediately on close().
-#     This avoids holding connections across the gunicorn worker lifetime.
-#   - Any other DB (e.g. localhost Postgres): standard pool.
+#   - Transaction mode (port 6543): small pool — connections released after
+#     each transaction back to Supabase's server-side pool.
+#   - Session mode still on port 5432 (rewrite failed): NullPool — never
+#     hold an idle connection so we stay under the hard cap.
+#   - Any other DB (local Postgres, etc.): standard pool.
 if _IS_TRANSACTION_MODE:
     engine = create_engine(
         _DB_URL,
         pool_pre_ping=True,
-        # Keep a modest pool — 3 connections per worker is plenty for
-        # Transaction mode because connections aren't held between requests.
         pool_size=3,
         max_overflow=2,
         pool_recycle=300,
         pool_timeout=30,
     )
-elif "pooler.supabase.com" in _DB_URL and ":5432" in _DB_URL:
-    # Fallback: we couldn't rewrite the URL (unusual) — use NullPool so we
-    # never hold more than one connection at a time per request.
+elif "pooler.supabase.com" in _DB_URL:
+    # Session-mode fallback: one DBAPI connection per request, released immediately.
     engine = create_engine(_DB_URL, poolclass=NullPool, pool_pre_ping=True)
 else:
     engine = create_engine(

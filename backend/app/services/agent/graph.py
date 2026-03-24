@@ -39,7 +39,7 @@ def build_agent_graph():
     graph.add_conditional_edges(
         "intent_classifier",
         route_intent,
-        {"planner": "planner", "responder": "responder"},
+        {"planner": "planner", "execute_step": "execute_step", "responder": "responder"},
     )
     graph.add_conditional_edges(
         "plan_presenter",
@@ -64,11 +64,7 @@ def build_agent_graph():
         },
     )
 
-    # interrupt_after="plan_presenter" implements the human-in-the-loop approval gate:
-    # the graph pauses after plan_presenter emits the plan to the user.
-    # On Approve the caller calls update_state({plan_approved:True}) then resumes
-    # with astream_events(None, config) — route_after_present then routes to execute_step.
-    return graph.compile(checkpointer=MemorySaver(), interrupt_after=["plan_presenter"])
+    return graph.compile(checkpointer=MemorySaver())
 
 
 agent_graph = build_agent_graph()

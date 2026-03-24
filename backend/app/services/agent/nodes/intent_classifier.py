@@ -43,4 +43,5 @@ async def intent_classifier(state: AgentState) -> dict:
     if intent not in VALID_INTENTS:
         intent = "converse"
 
-    return {"intent": intent, "plan_approved": False}
+    # Never overwrite plan_approved=True that was set by the resume path.
+    return {"intent": intent}

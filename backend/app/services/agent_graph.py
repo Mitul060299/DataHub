@@ -70,19 +70,31 @@ class AgentGraphService:
         _ = db
         config = {"configurable": {"thread_id": session_id}}
         if plan_approved:
-            # Human-in-the-loop resume: inject approval into the paused checkpoint
-            # then resume with None input — do NOT restart from context_loader.
-            existing_state = agent_graph.get_state(config)
-            if not existing_state or not existing_state.values:
+            # Resume path: load the saved checkpoint so we reuse the plan already
+            # generated, then restart with plan_approved=True so route_intent
+            # short-circuits directly to execute_step (skips planner/plan_presenter).
+            existing = agent_graph.get_state(config)
+            snapshot: dict = existing.values if existing else {}
+            if not snapshot:
                 yield {
                     "type": "agent.error",
                     "error": "No pending plan found for this session. Please send a new request first.",
                 }
                 return
-            agent_graph.update_state(config, {"plan_approved": True})
-            stream_input: dict | None = None
+            initial_state: dict = {
+                **snapshot,
+                "root_dataset_id": snapshot.get("root_dataset_id", dataset_id),
+                "dataset_id": snapshot.get("dataset_id", dataset_id),
+                "user_id": user_id,
+                "workspace_id": workspace_id,
+                "plan_approved": True,
+                "current_step_index": 0,
+                "execution_results": [],
+                "retry_count": 0,
+                "pipeline_steps": pipeline_steps or snapshot.get("pipeline_steps", []),
+            }
         else:
-            stream_input = cls._build_initial_state(
+            initial_state = cls._build_initial_state(
                 dataset_id=dataset_id,
                 message=user_message,
                 pipeline_steps=pipeline_steps,
@@ -94,7 +106,7 @@ class AgentGraphService:
             )
 
         try:
-            async for event in agent_graph.astream_events(stream_input, config=config, version="v2"):
+            async for event in agent_graph.astream_events(initial_state, config=config, version="v2"):
                 event_name = event.get("event", "")
                 node_name = event.get("name", "")
                 data = event.get("data", {})

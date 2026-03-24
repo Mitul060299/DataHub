@@ -10,6 +10,9 @@ _PLANNING_INTENTS = {
 
 
 def route_intent(state: AgentState) -> str:
+    # Resume path: plan already approved — skip planning nodes entirely.
+    if state.get("plan_approved"):
+        return "execute_step"
     intent = state.get("intent", "converse")
     if intent in _PLANNING_INTENTS:
         return "planner"

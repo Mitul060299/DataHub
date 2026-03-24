@@ -34,8 +34,13 @@ async def pipeline_recorder(state: AgentState) -> dict:
                         "run_id": result.get("run_id"),
                         "rows_affected": result.get("rows_affected"),
                         "input_tables": list(params.get("input_tables") or []),
-                        "output_table": params.get("output_table") or params.get("output_name") or None,
+                        "output_table": params.get("output_table") or params.get("output_name") or result.get("output_table") or None,
                         "timestamp": datetime.utcnow().isoformat(),
+                        # Frontend rendering extras
+                        "tile_created": result.get("tile_created"),
+                        "artifact_url": result.get("artifact_url"),
+                        "query_results": result.get("query_results"),
+                        "row_count_after": result.get("row_count_after"),
                     }
                 )
                 current_dataset_id = next_dataset_id
@@ -62,7 +67,7 @@ async def pipeline_recorder(state: AgentState) -> dict:
             run = PipelineRunV2DB(
                 id=str(uuid.uuid4()),
                 pipeline_id="agent",
-                user_id="agent",
+                user_id=str(state.get("user_id") or "agent"),
                 session_id=None,
                 status="completed",
                 step_results={

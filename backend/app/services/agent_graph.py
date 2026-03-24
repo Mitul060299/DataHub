@@ -190,6 +190,22 @@ class AgentGraphService:
                                         "chart_type": tile.get("chart_type"),
                                     },
                                 }
+                            artifact_url = last.get("artifact_url")
+                            if artifact_url:
+                                yield {
+                                    "type": "agent.artifact",
+                                    "artifact_url": artifact_url,
+                                    "operation": last.get("operation"),
+                                    "step": last.get("step_number"),
+                                }
+                            qr = last.get("query_results")
+                            if isinstance(qr, list) and qr:
+                                yield {
+                                    "type": "agent.query_results",
+                                    "results": qr,
+                                    "step": last.get("step_number"),
+                                    "operation": last.get("operation"),
+                                }
                             yield {
                                 "type": "agent.step.done",
                                 "step": last.get("step_number"),

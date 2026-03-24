@@ -32,6 +32,8 @@ type Message = ConversationMessage & {
   planApproved?: boolean;
   planRejected?: boolean;
   tileCreated?: TileCreatedData;
+  artifactUrl?: string;
+  queryResults?: Array<Record<string, unknown>>;
 };
 
 interface AIPanelProps {
@@ -260,6 +262,39 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         window.dispatchEvent(new CustomEvent("datahub:dashboard:refresh"));
         break;
       }
+      case "agent.artifact": {
+        const url = typeof event.artifact_url === "string" ? event.artifact_url : null;
+        if (url) {
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: "Export ready — click to download:",
+              artifactUrl: url,
+            },
+          ]);
+        }
+        break;
+      }
+      case "agent.query_results": {
+        const results = Array.isArray(event.results)
+          ? (event.results as Array<Record<string, unknown>>)
+          : [];
+        if (results.length > 0) {
+          const opLabel = typeof event.operation === "string" ? event.operation : "Results";
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: `${opLabel} (${results.length} row${results.length !== 1 ? "s" : ""}):`  ,
+              queryResults: results,
+            },
+          ]);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -478,6 +513,52 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                   >
                     📌 Pin to Dashboard
                   </button>
+                </div>
+              ) : null}
+              {message.artifactUrl ? (
+                <div style={{ marginTop: 8 }}>
+                  <a
+                    href={message.artifactUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "#5B6AF0", fontWeight: 600, fontSize: 12, textDecoration: "underline" }}
+                  >
+                    ⬇ Download export
+                  </a>
+                </div>
+              ) : null}
+              {message.queryResults && message.queryResults.length > 0 ? (
+                <div style={{ marginTop: 8, overflowX: "auto", maxHeight: 220 }}>
+                  <table style={{ borderCollapse: "collapse", fontSize: 11, whiteSpace: "nowrap" }}>
+                    <thead>
+                      <tr>
+                        {Object.keys(message.queryResults[0]).map((col) => (
+                          <th
+                            key={col}
+                            style={{ border: "1px solid var(--bd)", padding: "3px 8px", background: "var(--bg1)", fontWeight: 600 }}
+                          >
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {message.queryResults.slice(0, 20).map((row, ri) => (
+                        <tr key={ri}>
+                          {Object.values(row).map((val, ci) => (
+                            <td key={ci} style={{ border: "1px solid var(--bd)", padding: "2px 8px" }}>
+                              {String(val ?? "")}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {message.queryResults.length > 20 ? (
+                    <p style={{ marginTop: 4, fontSize: 11, color: "var(--tx1)" }}>
+                      Showing first 20 of {message.queryResults.length} rows.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>

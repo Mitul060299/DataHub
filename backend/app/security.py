@@ -45,7 +45,7 @@ def _get_supabase_jwks() -> Dict[str, Any]:
         print("ERROR: SUPABASE_URL not configured")
         return {}
     
-    jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
+    jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
     
     # Supabase requires the anon key header even for public endpoints
     headers = {}

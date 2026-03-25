@@ -361,10 +361,12 @@ async def execute_step(state: AgentState) -> dict:
                                 )
                             except Exception as _upload_exc:
                                 import logging as _logging
-                                _logging.getLogger(__name__).warning(
-                                    "artifact S3 upload failed for %s %s: %s",
+                                _logging.getLogger(__name__).error(
+                                    "S3 upload FULL ERROR for %s %s: %s",
                                     intent_key, result_table, _upload_exc,
+                                    exc_info=True,
                                 )
+                                raise
                     else:
                         # Plain SELECT — just execute and return rows directly
                         rows = execute_in_session(session_id, step_sql) if session_id else []
@@ -456,9 +458,12 @@ async def execute_step(state: AgentState) -> dict:
                                 )
                         except Exception as _upload_exc:
                             import logging as _logging
-                            _logging.getLogger(__name__).warning(
-                                "artifact S3 upload failed for %s: %s", output_table, _upload_exc
+                            _logging.getLogger(__name__).error(
+                                "S3 upload FULL ERROR for %s: %s",
+                                output_table, _upload_exc,
+                                exc_info=True,
                             )
+                            raise
                         # Fetch inline preview rows for the chat table card
                         try:
                             preview_rows = execute_in_session(

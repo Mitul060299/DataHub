@@ -384,10 +384,40 @@ async def execute_step(state: AgentState) -> dict:
                     }
                     if artifact_s3_key_sv:
                         result_dict["artifact_s3_key"] = artifact_s3_key_sv
+                        # Persist summarise/validate result as a new DatasetMetaDB
+                        try:
+                            _sv_ds_id = str(uuid.uuid4())
+                            _sv_col_schema = list(rows[0].keys()) if rows else []
+                            _sv_db = SessionLocal()
+                            try:
+                                _sv_ds = DatasetMetaDB(
+                                    id=_sv_ds_id,
+                                    user_id=str(state.get("user_id") or "agent"),
+                                    workspace_id=str(state.get("workspace_id") or "default"),
+                                    name=str(result_table or intent_key),
+                                    source_type="agent_output",
+                                    storage_path=artifact_s3_key_sv,
+                                    file_format="parquet",
+                                    columns=_sv_col_schema,
+                                    row_count=len(rows) if isinstance(rows, list) else 0,
+                                    status="ready",
+                                    parent_id=str(state.get("dataset_id") or ""),
+                                )
+                                _sv_db.add(_sv_ds)
+                                _sv_db.commit()
+                                result_dict["output_dataset_id"] = _sv_ds_id
+                            finally:
+                                _sv_db.close()
+                        except Exception as _sv_ds_exc:
+                            import logging as _logging_sv
+                            _logging_sv.getLogger(__name__).warning(
+                                "DatasetMetaDB persist failed for %s: %s", result_table, _sv_ds_exc
+                            )
                     execution_result = result_dict
+                    _sv_out_ds = result_dict.get("output_dataset_id") or state.get("dataset_id")
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
-                        "dataset_id": state.get("dataset_id"),
+                        "dataset_id": _sv_out_ds,
                         "current_step_index": idx + 1,
                         "retry_count": 0,
                         "error": None,
@@ -486,6 +516,38 @@ async def execute_step(state: AgentState) -> dict:
                         (datetime.now(timezone.utc) - _step_start_ts).total_seconds() * 1000
                     )
 
+                    # Persist result as a new DatasetMetaDB so it appears in the datasets list
+                    output_dataset_id_new: str | None = None
+                    if artifact_s3_key:
+                        try:
+                            _new_ds_id = str(uuid.uuid4())
+                            _ds_name = str(parameters.get("display_name") or output_table)
+                            _ds_db = SessionLocal()
+                            try:
+                                _new_ds = DatasetMetaDB(
+                                    id=_new_ds_id,
+                                    user_id=str(state.get("user_id") or "agent"),
+                                    workspace_id=str(state.get("workspace_id") or "default"),
+                                    name=_ds_name,
+                                    source_type="agent_output",
+                                    storage_path=artifact_s3_key,
+                                    file_format="parquet",
+                                    columns=out_cols,
+                                    row_count=rows_out or 0,
+                                    status="ready",
+                                    parent_id=str(state.get("dataset_id") or ""),
+                                )
+                                _ds_db.add(_new_ds)
+                                _ds_db.commit()
+                                output_dataset_id_new = _new_ds_id
+                            finally:
+                                _ds_db.close()
+                        except Exception as _ds_exc:
+                            import logging as _logging_ds
+                            _logging_ds.getLogger(__name__).warning(
+                                "DatasetMetaDB persist failed for %s: %s", output_table, _ds_exc
+                            )
+
                     # Update table_registry
                     input_tables = list(parameters.get("input_tables") or [])
                     if not input_tables:
@@ -499,7 +561,7 @@ async def execute_step(state: AgentState) -> dict:
 
                     new_entry: TableRegistryEntry = {
                         "duckdb_name": output_table,
-                        "dataset_id": str(state.get("dataset_id") or ""),
+                        "dataset_id": str(output_dataset_id_new or state.get("dataset_id") or ""),
                         "display_name": str(parameters.get("display_name") or output_table),
                         "source_intent": intent_key,
                         "parent_tables": input_tables,
@@ -511,13 +573,14 @@ async def execute_step(state: AgentState) -> dict:
                     }
                     table_registry[output_table] = new_entry
 
+                    _effective_output_dataset_id = output_dataset_id_new or state.get("dataset_id")
                     execution_result = {
                         "step_number": step["step_number"],
                         "operation": intent_key,
                         "success": True,
                         "rows_affected": rows_out,
                         "run_id": None,
-                        "output_dataset_id": state.get("dataset_id"),
+                        "output_dataset_id": _effective_output_dataset_id,
                         "sql": step_sql,
                         "error": None,
                         "output_table": output_table,
@@ -531,7 +594,7 @@ async def execute_step(state: AgentState) -> dict:
                     }
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
-                        "dataset_id": state.get("dataset_id"),
+                        "dataset_id": _effective_output_dataset_id,
                         "current_step_index": idx + 1,
                         "retry_count": 0,
                         "error": None,

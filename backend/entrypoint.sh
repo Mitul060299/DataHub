@@ -10,6 +10,31 @@ if [ "${RUN_MIGRATIONS:-}" = "1" ]; then
 	MIGRATION_TIMEOUT_SECONDS="${MIGRATION_TIMEOUT_SECONDS:-600}"
 	echo "[entrypoint] Running alembic upgrade head (timeout=${MIGRATION_TIMEOUT_SECONDS}s)"
 
+	# If alembic_version has more than one row (split-brain from a previous
+	# deploy that produced two heads), delete all but the lexicographically
+	# highest revision so alembic sees exactly one current head.
+	python3 - <<'PYDEDUP'
+import os, sys
+try:
+    import sqlalchemy as _sa
+    _url = os.environ.get("DATABASE_URL", "")
+    if not _url:
+        sys.exit(0)
+    _eng = _sa.create_engine(_url, poolclass=_sa.pool.NullPool)
+    with _eng.connect() as _c:
+        _rows = [r[0] for r in _c.execute(_sa.text("SELECT version_num FROM alembic_version"))]
+    if len(_rows) > 1:
+        _keep = sorted(_rows)[-1]
+        with _eng.connect() as _c:
+            _c.execute(_sa.text("DELETE FROM alembic_version WHERE version_num != :v"), {"v": _keep})
+            _c.commit()
+        print(f"[entrypoint] alembic_version deduplicated: removed {len(_rows)-1} extra row(s), kept {_keep}")
+    else:
+        print(f"[entrypoint] alembic_version OK ({len(_rows)} row(s))")
+except Exception as _e:
+    print(f"[entrypoint] alembic_version dedup skipped: {_e}")
+PYDEDUP
+
 	_run_alembic() {
 		if command -v timeout >/dev/null 2>&1; then
 			timeout "${MIGRATION_TIMEOUT_SECONDS}" alembic upgrade head

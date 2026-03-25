@@ -252,7 +252,11 @@ async def create_tables() -> None:
     logger.warning("GROQ KEY SET: %s", bool(settings.groq_api_key))
     logger.warning("APP ENV: %s", settings.app_env)
     if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
-        Base.metadata.create_all(bind=engine)
+        # Offload synchronous SQLAlchemy I/O to a thread so it never blocks
+        # uvicorn's event loop.  Without this, ~30 round-trips to Supabase
+        # hold the loop for several seconds per worker, causing Render's HTTP
+        # health-check probes to time out and the port-scan to fail.
+        await asyncio.to_thread(Base.metadata.create_all, engine)
 
     # Schema safety-net DDL is run in a background task so that uvicorn can
     # bind to the port immediately.  On Render free tier, ALTER TABLE statements
@@ -308,6 +312,14 @@ async def audit_middleware(request: Request, call_next):
     except Exception:
         timer.observe(500)
         raise
+
+@app.get("/", include_in_schema=False)
+async def root() -> dict:
+    """Lightweight root probe — returns immediately without touching the DB.
+    Render's port scanner/health checker hits / by default; a 200 here allows
+    it to confirm the port is open well before the startup DDL finishes."""
+    return {"status": "ok"}
+
 
 app.include_router(health.router)
 app.include_router(metrics.router)

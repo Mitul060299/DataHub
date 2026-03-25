@@ -258,11 +258,79 @@ async def execute_step(state: AgentState) -> dict:
                     }
 
                 elif intent_key in {"validate", "summarise"}:
-                    # Read-only: just execute the SQL and return results
+                    import re as _re
                     if not step_sql:
                         raise ValueError(f"No SQL provided for {intent_key} step")
-                    rows = execute_in_session(session_id, step_sql) if session_id else []
-                    execution_result = {
+
+                    rows: list = []
+                    result_table: str | None = None
+                    artifact_s3_key_sv: str | None = None
+
+                    # The planner (rule 15) generates:
+                    #   CREATE TABLE <name>_summary AS SELECT … GROUP BY …
+                    # Running that DDL through execute_in_session returns []
+                    # because DDL produces no result rows — the user sees nothing.
+                    # Detect CREATE TABLE … AS SELECT, materialise it, then
+                    # SELECT * from the new table for the inline preview, and
+                    # upload a Parquet snapshot to S3 for the artifact download link.
+                    _ct_match = _re.match(
+                        r"CREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:OR\s+REPLACE\s+)?"
+                        r"TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(['\"]?[\w]+['\"]?)\s+AS\b",
+                        step_sql.strip(),
+                        _re.IGNORECASE,
+                    )
+
+                    if _ct_match and session_id:
+                        result_table = _ct_match.group(1).strip("'\"")
+                        # Materialise the table then fetch all rows (cap 500 for preview)
+                        register_table_from_sql(session_id, result_table, step_sql)
+                        try:
+                            rows = execute_in_session(session_id, f"SELECT * FROM {result_table} LIMIT 500")
+                        except Exception:
+                            rows = []
+
+                        # Register the new table in the session registry so it appears
+                        # in the session-tables sidebar and is referenceable in follow-up
+                        col_names: list[str] = list(rows[0].keys()) if rows else []
+                        table_registry[result_table] = {
+                            "duckdb_name": result_table,
+                            "dataset_id": str(state.get("dataset_id") or ""),
+                            "display_name": result_table,
+                            "source_intent": intent_key,
+                            "parent_tables": [],
+                            "row_count": len(rows),
+                            "column_names": col_names,
+                            "pipeline_step_number": step["step_number"],
+                            "is_artifact": False,
+                            "is_view": False,
+                        }
+
+                        # Upload Parquet snapshot to S3 (best-effort) for artifact download
+                        if rows:
+                            try:
+                                import io as _io
+                                import pyarrow as _pa
+                                import pyarrow.parquet as _pq
+                                _tbl = _pa.Table.from_pylist(rows)
+                                _buf = _io.BytesIO()
+                                _pq.write_table(_tbl, _buf)
+                                artifact_s3_key_sv = StorageService.upload(
+                                    user_id=str(state.get("user_id") or "agent"),
+                                    dataset_id=f"artifacts/{session_id or 'nosession'}",
+                                    buffer=_buf.getvalue(),
+                                    file_name=f"{result_table}.parquet",
+                                )
+                            except Exception as _upload_exc:
+                                import logging as _logging
+                                _logging.getLogger(__name__).warning(
+                                    "artifact S3 upload failed for %s %s: %s",
+                                    intent_key, result_table, _upload_exc,
+                                )
+                    else:
+                        # Plain SELECT — just execute and return rows directly
+                        rows = execute_in_session(session_id, step_sql) if session_id else []
+
+                    result_dict: dict = {
                         "step_number": step["step_number"],
                         "operation": intent_key,
                         "success": True,
@@ -272,7 +340,12 @@ async def execute_step(state: AgentState) -> dict:
                         "sql": step_sql,
                         "error": None,
                         "query_results": rows,
+                        "output_table": result_table,
+                        "row_count_after": len(rows) if isinstance(rows, list) else None,
                     }
+                    if artifact_s3_key_sv:
+                        result_dict["artifact_s3_key"] = artifact_s3_key_sv
+                    execution_result = result_dict
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
                         "dataset_id": state.get("dataset_id"),

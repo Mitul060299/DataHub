@@ -6,7 +6,7 @@ import { PipelineProvider } from "./contexts/PipelineContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import { billingEnabled } from "./utils/featureFlags";
 
-const PUBLIC_PATHS = ["/home", "/marketplace", "/pricing"];
+const PUBLIC_PATHS = ["/home", "/marketplace", "/pricing", "/docs"];
 
 export function AppShell() {
   const { session, loading } = useAuth();

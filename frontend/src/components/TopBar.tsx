@@ -6,6 +6,7 @@ import { IconBell, IconChevronDown, IconCreditCard, IconLogOut, IconSettings, Ic
 const tabs = [
   { key: "home", label: "Home", path: "/home" },
   { key: "workspace", label: "Workspace", path: "/workspace" },
+  { key: "docs", label: "Docs", path: "/docs" },
   { key: "marketplace", label: "Marketplace", path: "/marketplace" },
 ];
 

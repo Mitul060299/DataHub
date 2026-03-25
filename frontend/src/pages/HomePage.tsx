@@ -833,6 +833,28 @@ export function HomePage() {
         </div>
       </section>
 
+      <footer style={{ borderTop: "1px solid #1a1a22", padding: "24px 0", textAlign: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "24px",
+            flexWrap: "wrap",
+            fontSize: "13px",
+            color: "#44445a",
+          }}
+        >
+          <a href="/docs" style={{ color: "#44445a", textDecoration: "none" }} onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.color = "#9898b0")} onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.color = "#44445a")}>
+            Documentation
+          </a>
+          <a href="mailto:hello@datahub.org.in" style={{ color: "#44445a", textDecoration: "none" }} onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.color = "#9898b0")} onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.color = "#44445a")}>
+            Contact
+          </a>
+          <span>© {new Date().getFullYear()} DataHub</span>
+        </div>
+      </footer>
+
       {showWaitlistToast ? (
         <div
           style={{

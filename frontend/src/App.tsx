@@ -13,6 +13,7 @@ import { SignupPage } from "./pages/SignupPage";
 import { SourcesPage } from "./pages/SourcesPage";
 import { WorkspaceHomePage } from "./pages/WorkspaceHomePage";
 import { WorkspacePage } from "./pages/WorkspacePage";
+import { DocsPage } from "./pages/DocsPage";
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
       <Route path="/dashboard/share/:token" element={<PublicDashboardPage />} />
+      <Route path="/docs" element={<DocsPage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<HomePage />} />

@@ -190,6 +190,8 @@ class AgentGraphService:
                                         "dashboard_id": tile.get("dashboard_id"),
                                         "title": tile.get("title"),
                                         "chart_type": tile.get("chart_type"),
+                                        "echarts_config": tile.get("echarts_config"),
+                                        "saveable": tile.get("saveable", True),
                                     },
                                 }
                             artifact_url = last.get("artifact_url")

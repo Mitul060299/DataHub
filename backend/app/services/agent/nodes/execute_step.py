@@ -92,6 +92,11 @@ async def execute_step(state: AgentState) -> dict:
             y_col: str | list[str] = y_col_raw if isinstance(y_col_raw, list) else str(y_col_raw).strip()
             group_by = str(parameters.get("group_by") or "").strip() or None
 
+            # Planner rule 9 puts the chart SQL inside query_spec.sql —
+            # fall back so we can fetch rows even when top-level sql is absent.
+            if not step_sql and isinstance(query_spec, dict):
+                step_sql = str(query_spec.get("sql") or "").strip()
+
             if not query_spec and step_sql:
                 query_spec = {
                     "sql": step_sql,
@@ -104,15 +109,22 @@ async def execute_step(state: AgentState) -> dict:
             # ── Pull rows from session DuckDB ──────────────────────────────
             session_id = state.get("session_id") or ""
             table_registry: dict = dict(state.get("table_registry") or {})
-            source_table = str(parameters.get("source_table") or "").strip()
+            _qs_source = query_spec.get("source_table") if isinstance(query_spec, dict) else ""
+            source_table = str(parameters.get("source_table") or _qs_source or "").strip()
+
+            # "dataset" is always registered as a view by context_loader —
+            # use it as the fallback so a raw table scan works even when
+            # the planner didn't supply an explicit source_table.
+            if not source_table or source_table not in table_registry:
+                source_table = "dataset"
 
             rows: list[dict] = []
             col_types: dict[str, str] = {}
 
-            if session_id and source_table and source_table in table_registry:
+            # First pass: scan the source table directly
+            if session_id and source_table:
                 try:
                     rows = execute_in_session(session_id, f"SELECT * FROM {source_table} LIMIT 500")
-                    # Get column types from DuckDB describe
                     try:
                         desc = execute_in_session(session_id, f"DESCRIBE {source_table}")
                         col_types = {r.get("column_name", r.get("name", "")): r.get("column_type", r.get("type", "")) for r in desc}
@@ -120,9 +132,13 @@ async def execute_step(state: AgentState) -> dict:
                         pass
                 except Exception:
                     rows = []
-            elif session_id and step_sql:
+
+            # Second pass: run the explicit SQL (aggregation / filtered query)
+            if not rows and session_id and step_sql:
                 try:
-                    rows = execute_in_session(session_id, step_sql) if session_id else []
+                    rows = execute_in_session(session_id, step_sql)
+                    if rows and not col_types:
+                        col_types = {k: "VARCHAR" for k in rows[0].keys()}
                 except Exception:
                     rows = []
 

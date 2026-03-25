@@ -42,6 +42,13 @@ _DB_URL, _IS_TRANSACTION_MODE = _resolve_db_url(settings.database_url)
 #   - Session mode still on port 5432 (rewrite failed): NullPool — never
 #     hold an idle connection so we stay under the hard cap.
 #   - Any other DB (local Postgres, etc.): standard pool.
+# psycopg3 (psycopg v3) auto-prepares statements server-side by default.
+# Supabase Transaction-mode PgBouncer does NOT support server-side prepared
+# statements — each transaction may land on a different backend, causing:
+#   "DuplicatePreparedStatement: prepared statement _pg3_0 already exists"
+# Setting prepare_threshold=None disables auto-prepare globally.
+_CONNECT_ARGS: dict = {"prepare_threshold": None}
+
 if _IS_TRANSACTION_MODE:
     engine = create_engine(
         _DB_URL,
@@ -50,10 +57,11 @@ if _IS_TRANSACTION_MODE:
         max_overflow=12,
         pool_recycle=300,
         pool_timeout=15,
+        connect_args=_CONNECT_ARGS,
     )
 elif "pooler.supabase.com" in _DB_URL:
     # Session-mode fallback: one DBAPI connection per request, released immediately.
-    engine = create_engine(_DB_URL, poolclass=NullPool, pool_pre_ping=True)
+    engine = create_engine(_DB_URL, poolclass=NullPool, pool_pre_ping=True, connect_args=_CONNECT_ARGS)
 else:
     engine = create_engine(
         _DB_URL,
@@ -62,6 +70,7 @@ else:
         max_overflow=5,
         pool_recycle=600,
         pool_timeout=30,
+        connect_args=_CONNECT_ARGS,
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

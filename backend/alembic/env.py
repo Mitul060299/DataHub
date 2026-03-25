@@ -52,6 +52,9 @@ def run_migrations_online() -> None:
         {"sqlalchemy.url": get_url()},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # psycopg3 auto-prepares statements; Transaction-mode PgBouncer
+        # doesn't support them → "DuplicatePreparedStatement" on startup.
+        connect_args={"prepare_threshold": None},
     )
 
     with connectable.connect() as connection:

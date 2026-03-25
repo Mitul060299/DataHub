@@ -20,7 +20,7 @@ try:
     _url = os.environ.get("DATABASE_URL", "")
     if not _url:
         sys.exit(0)
-    _eng = _sa.create_engine(_url, poolclass=_sa.pool.NullPool)
+    _eng = _sa.create_engine(_url, poolclass=_sa.pool.NullPool, connect_args={"prepare_threshold": None})
     with _eng.connect() as _c:
         _rows = [r[0] for r in _c.execute(_sa.text("SELECT version_num FROM alembic_version"))]
     if len(_rows) > 1:

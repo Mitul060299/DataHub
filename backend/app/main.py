@@ -313,11 +313,12 @@ async def audit_middleware(request: Request, call_next):
         timer.observe(500)
         raise
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 async def root() -> dict:
     """Lightweight root probe — returns immediately without touching the DB.
     Render's port scanner/health checker hits / by default; a 200 here allows
-    it to confirm the port is open well before the startup DDL finishes."""
+    it to confirm the port is open well before the startup DDL finishes.
+    HEAD is also handled so Render's initial HEAD probe doesn't return 405."""
     return {"status": "ok"}
 
 

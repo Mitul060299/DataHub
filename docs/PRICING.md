@@ -30,7 +30,8 @@ DataHub is priced in **USD** with INR equivalents shown in brackets. All plans a
 | Storage | 1 GB |
 | Team members | 1 |
 | Scheduled pipelines | 0 |
-| Dashboards | 2 |
+| Canvases | 2 |
+| Visualizations Library | Unlimited |
 | DB connections | CSV & Excel only |
 | Support | Community |
 
@@ -48,7 +49,8 @@ CTA: **Get started**
 | Storage | 20 GB |
 | Team members | 1 |
 | Scheduled pipelines | 5 |
-| Dashboards | 20 |
+| Canvases | 20 |
+| Visualizations Library | Unlimited |
 | DB connections | CSV, Excel, Google Sheets |
 | Support | Email |
 
@@ -66,7 +68,8 @@ CTA: **Start free trial**
 | Storage | 100 GB |
 | Team members | 10 |
 | Scheduled pipelines | 20 |
-| Dashboards | Unlimited |
+| Canvases | Unlimited |
+| Visualizations Library | Unlimited |
 | DB connections | + PostgreSQL, MySQL _(coming soon)_ |
 | Audit log | ✅ |
 | Support | Priority email |
@@ -85,7 +88,8 @@ CTA: **Start free trial**
 | Storage | 500 GB |
 | Team members | 50 |
 | Scheduled pipelines | Unlimited |
-| Dashboards | Unlimited |
+| Canvases | Unlimited |
+| Visualizations Library | Unlimited |
 | DB connections | + Snowflake, BigQuery _(coming soon)_ |
 | Audit log | ✅ |
 | SSO / SAML | _(coming soon)_ |
@@ -105,7 +109,8 @@ CTA: **Start free trial**
 | Storage | Custom |
 | Team members | Unlimited |
 | Scheduled pipelines | Unlimited |
-| Dashboards | Unlimited |
+| Canvases | Unlimited |
+| Visualizations Library | Unlimited |
 | DB connections | Custom _(coming soon)_ |
 | White-label option | _(coming soon)_ |
 | SSO / SAML | ✅ |
@@ -123,7 +128,7 @@ CTA: **Contact sales** → hello@datahub.org.in
 Plan limits are enforced in two backend files:
 
 ### `backend/app/services/plan_guard.py`
-Enforces per-upload file size, total storage, dataset count, workspace count, allowed file formats, allowed connectors, SSO, scheduling, and dashboard sharing.
+Enforces per-upload file size, total storage, dataset count, workspace count, allowed file formats, allowed connectors, SSO, scheduling, and canvas/dashboard sharing.
 
 | Plan | Max file size | Max storage | Scheduling | SSO |
 |---|---|---|---|---|
@@ -168,4 +173,6 @@ DB connectors are not yet live. Availability by tier when shipped:
 - **Plans configured in**: `backend/app/razorpay_plans.py`
 - **Billing UI**: `frontend/src/components/PlansPanel.tsx`
 - **Plan enforcement entry point**: `backend/app/services/plan_guard.py`
+- **Canvas limit enforcement**: `backend/app/routers/canvas.py` (`_CANVAS_LIMITS` — Free: 2, Pro: 20, Team/Business/Enterprise: Unlimited)
+- **Saved Visualizations**: `backend/app/routers/saved_visualizations.py` (not plan-gated — unlimited for all tiers)
 - **Usage tracking**: `backend/app/services/usage_service.py`

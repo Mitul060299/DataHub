@@ -2,7 +2,7 @@ import { useState } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import type { CalculatedColumn } from "../types";
-import { IconBarChart, IconDownload, IconPlay, IconTable, IconUpload } from "./Icons";
+import { IconBarChart, IconDownload, IconTable, IconUpload } from "./Icons";
 import { DataTable } from "./DataTable";
 import { ChartView } from "./ChartView";
 
@@ -18,11 +18,10 @@ interface CanvasPanelProps {
   lastAction: string;
   onImport: () => void;
   onExport: () => void;
-  onRun: () => void;
   onColumnsChanged: () => void;
 }
 
-export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onExport, onRun, onColumnsChanged }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onExport, onColumnsChanged }: CanvasPanelProps) {
   const { steps } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
 
@@ -43,7 +42,6 @@ export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calc
         <div style={{ display: "inline-flex", gap: 6 }}>
           <button className="btn" onClick={onImport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconUpload size={14} />Import</span></button>
           <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
-          <button className="btn btn-primary" onClick={onRun}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run</span></button>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>

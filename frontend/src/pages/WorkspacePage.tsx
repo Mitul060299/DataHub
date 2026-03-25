@@ -135,7 +135,6 @@ export function WorkspacePage() {
         lastAction={steps.length ? steps[steps.length - 1].operation : "Idle"}
         onImport={() => setImportOpen(true)}
         onExport={() => exportPipeline(steps)}
-        onRun={() => void runPipeline()}
         onColumnsChanged={() => {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();

@@ -310,6 +310,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         <ArtifactsSection
           artifacts={artifacts}
           activeDatasetId={activeDataset?.id}
+          refreshNonce={refreshNonce}
           onSelect={setActiveDataset}
           onRemove={(dataset) => void removeDataset(dataset)}
           onRename={async (dataset, name) => {

@@ -40,6 +40,7 @@ interface ArtifactsSectionProps {
   artifacts: ArtifactItem[];
   activeDatasetId?: string;
   sessionId?: string;              // optional — enables Load into session
+  refreshNonce?: number;           // increment to force re-fetch stored artifacts
   onSelect: (dataset: Dataset) => void;
   onRemove: (dataset: Dataset) => void;
   onRename?: (dataset: Dataset, newName: string) => void;
@@ -66,6 +67,7 @@ export function ArtifactsSection({
   artifacts,
   activeDatasetId,
   sessionId,
+  refreshNonce,
   onSelect,
   onRemove,
   onRename,
@@ -101,7 +103,7 @@ export function ArtifactsSection({
 
   useEffect(() => {
     void fetchStored();
-  }, [fetchStored]);
+  }, [fetchStored, refreshNonce]);
 
   // ── Session table handlers ────────────────────────────────────────────────
   const commitRename = (artifact: ArtifactItem) => {

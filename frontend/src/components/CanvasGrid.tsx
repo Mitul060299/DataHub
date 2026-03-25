@@ -1,20 +1,26 @@
 /**
- * CanvasGrid
- * ───────────
- * react-grid-layout drop zone for canvas tiles.
- * External visualizations can be dragged from VisualizationsSection and
- * dropped here; the component emits the updated layout via `onChange`.
+ * CanvasGrid — react-grid-layout drop zone for canvas tiles.
+ *
+ * Fixes:
+ *  1. Empty-state overlay uses position:absolute + pointerEvents:none so
+ *     drag events still reach ReactGridLayout underneath.
+ *  2. ReactGridLayout always has minHeight:600px so there is always a
+ *     droppable hit-area even when the tile list is empty.
+ *  3. Chart height is computed in pixels (tile.h * ROW_H - HEADER_H) so
+ *     ECharts canvas gets a concrete size, not "100%" which resolves to 0
+ *     inside a flex child with minHeight:0.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactGridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import type { CanvasTileItem, SavedVisualization } from "../api";
 import { EChartsRenderer } from "./EChartsRenderer";
 
-// pixels per column / row unit
 const COLS = 12;
 const ROW_H = 80;
+const HEADER_H = 28;
+const MIN_GRID_H = 600;
 
 interface CanvasGridProps {
   tiles: CanvasTileItem[];
@@ -25,8 +31,19 @@ interface CanvasGridProps {
 const DROPPING_ITEM = { i: "__dropping__", w: 4, h: 4, minW: 2, minH: 2 };
 
 export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
-  const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
-  const containerWidth = containerRef?.offsetWidth ?? 900;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(900);
+
+  // Use ResizeObserver so RGL always gets a real pixel width, not a stale snapshot
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerWidth(el.offsetWidth || 900);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Convert tiles to react-grid-layout Layout items
   const layout: Layout[] = tiles.map((t) => ({
@@ -48,8 +65,9 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
     onChange(updated);
   };
 
-  const handleDrop = (_layout: Layout[], item: Layout, e: DragEvent) => {
-    const raw = e.dataTransfer?.getData("viz_config");
+  const handleDrop = (_layout: Layout[], item: Layout, e: Event) => {
+    const de = e as DragEvent;
+    const raw = de.dataTransfer?.getData("viz_config");
     if (!raw) return;
     try {
       const viz: SavedVisualization = JSON.parse(raw);
@@ -77,29 +95,37 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
 
   return (
     <div
-      ref={setContainerRef}
-      style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg1)" }}
+      ref={containerRef}
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: "auto",
+        background: "var(--bg1)",
+        position: "relative",
+      }}
     >
-      {tiles.length === 0 ? (
+      {/* Empty-state hint — pointer-events:none lets drags reach RGL underneath */}
+      {tiles.length === 0 && (
         <div
           style={{
+            position: "absolute",
+            inset: 0,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            height: "100%",
             gap: 12,
             color: "var(--tx1)",
             userSelect: "none",
+            pointerEvents: "none",
+            zIndex: 1,
           }}
         >
           <span style={{ fontSize: 32 }}>🖼</span>
-          <p style={{ fontSize: 13, fontWeight: 600 }}>Drop visualizations here</p>
-          <p style={{ fontSize: 11 }}>
-            Drag charts from the Visualizations panel on the left
-          </p>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Drop visualizations here</p>
+          <p style={{ margin: 0, fontSize: 11 }}>Drag charts from the Visualizations panel on the left</p>
         </div>
-      ) : null}
+      )}
 
       <ReactGridLayout
         className="layout"
@@ -113,9 +139,13 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
         droppingItem={DROPPING_ITEM}
         onLayoutChange={handleLayoutChange}
         onDrop={handleDrop}
-        style={{ minHeight: tiles.length === 0 ? "100%" : undefined }}
+        style={{ minHeight: MIN_GRID_H }}
       >
-        {tiles.map((tile) => (
+        {tiles.map((tile) => {
+          // Explicit pixel height so ECharts canvas gets a real size
+          const chartH = Math.max(60, tile.h * ROW_H - HEADER_H);
+
+          return (
           <div
             key={tile.id}
             style={{
@@ -172,8 +202,8 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
               </button>
             </div>
 
-            {/* tile body */}
-            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            {/* tile body — explicit pixel height so ECharts can size its canvas */}
+            <div style={{ height: chartH, overflow: "hidden", flexShrink: 0 }}>
               {tile.type === "text" ? (
                 <p style={{ padding: 8, fontSize: 12, color: "var(--tx)" }}>
                   {tile.text_content ?? ""}
@@ -181,7 +211,7 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
               ) : tile.echarts_config ? (
                 <EChartsRenderer
                   config={tile.echarts_config}
-                  height="100%"
+                  height={chartH}
                 />
               ) : (
                 <p style={{ padding: 8, fontSize: 11, color: "var(--tx1)" }}>
@@ -190,7 +220,8 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </ReactGridLayout>
     </div>
   );

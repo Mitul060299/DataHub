@@ -46,10 +46,10 @@ if _IS_TRANSACTION_MODE:
     engine = create_engine(
         _DB_URL,
         pool_pre_ping=True,
-        pool_size=3,
-        max_overflow=2,
+        pool_size=8,
+        max_overflow=12,
         pool_recycle=300,
-        pool_timeout=30,
+        pool_timeout=15,
     )
 elif "pooler.supabase.com" in _DB_URL:
     # Session-mode fallback: one DBAPI connection per request, released immediately.

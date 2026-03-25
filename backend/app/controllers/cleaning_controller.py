@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import HTTPException, Header
 from sqlalchemy.orm import Session
 
+from ..db import SessionLocal
 from ..security import get_current_role, get_current_subject, get_current_user_id, require_role
 from ..models_db import DatasetMetaDB, TransformationHistoryDB
 from ..services.ai_agent_service import AIAgentService
@@ -53,19 +54,21 @@ class CleaningController:
         plan_approved: bool,
         workspace_id: str | None,
         authorization: str | None,
-        db: Session,
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         role = get_current_role(authorization)
         require_role("viewer", role)
 
-        dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-
-        request_user_id = get_current_user_id(authorization) or get_current_subject(authorization) or "agent"
-        effective_workspace_id = workspace_id or dataset.workspace_id or "default"
+        _db = SessionLocal()
+        try:
+            dataset = _db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+            if not dataset:
+                raise HTTPException(status_code=404, detail="Dataset not found")
+            request_user_id = get_current_user_id(authorization) or get_current_subject(authorization) or "agent"
+            effective_workspace_id = workspace_id or dataset.workspace_id or "default"
+        finally:
+            _db.close()
 
         return AgentGraphService.process_command_stream(
             dataset_id=dataset_id,
@@ -76,7 +79,6 @@ class CleaningController:
             pending_plan=pending_plan or [],
             user_id=request_user_id,
             workspace_id=effective_workspace_id,
-            db=db,
             secondary_dataset_ids=secondary_dataset_ids or [],
         )
 

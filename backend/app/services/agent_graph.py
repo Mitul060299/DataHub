@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from .agent.graph import agent_graph
 from ..models_db import ArtifactDB
+from ..db import SessionLocal
 
 
 class AgentGraphService:
@@ -67,7 +68,6 @@ class AgentGraphService:
         plan_approved: bool,
         user_id: str,
         workspace_id: str,
-        db: Session,
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
@@ -204,18 +204,22 @@ class AgentGraphService:
                             if isinstance(artifact_s3, str) and artifact_s3:
                                 art_id = str(_uuid.uuid4())
                                 try:
-                                    art = ArtifactDB(
-                                        id=art_id,
-                                        user_id=str(initial_state.get("user_id") or "agent"),
-                                        session_id=str(initial_state.get("session_id") or ""),
-                                        name=str(last.get("output_table") or last.get("operation") or "artifact"),
-                                        s3_key=artifact_s3,
-                                        row_count=last.get("rows_affected"),
-                                        column_schema=last.get("column_schema") or [],
-                                        type="auto",
-                                    )
-                                    db.add(art)
-                                    db.commit()
+                                    _art_db = SessionLocal()
+                                    try:
+                                        art = ArtifactDB(
+                                            id=art_id,
+                                            user_id=str(initial_state.get("user_id") or "agent"),
+                                            session_id=str(initial_state.get("session_id") or ""),
+                                            name=str(last.get("output_table") or last.get("operation") or "artifact"),
+                                            s3_key=artifact_s3,
+                                            row_count=last.get("rows_affected"),
+                                            column_schema=last.get("column_schema") or [],
+                                            type="auto",
+                                        )
+                                        _art_db.add(art)
+                                        _art_db.commit()
+                                    finally:
+                                        _art_db.close()
                                 except Exception as _db_exc:
                                     _log.getLogger(__name__).warning(
                                         "ArtifactDB insert failed: %s", _db_exc

@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..models_db import PipelineRunV2DB
 from ..controllers.cleaning_controller import CleaningController
 
@@ -49,7 +49,6 @@ async def process_command(
     dataset_id: str,
     payload: CommandRequest,
     authorization: str | None = Header(default=None),
-    db: Session = Depends(get_db),
 ) -> StreamingResponse:
     async def event_stream():
         last_run_id: str | None = None
@@ -63,7 +62,6 @@ async def process_command(
                 pending_plan=payload.pending_plan,
                 workspace_id=payload.workspace_id,
                 authorization=authorization,
-                db=db,
                 secondary_dataset_ids=payload.secondary_dataset_ids or [],
             )
             async for event in stream:
@@ -80,15 +78,19 @@ async def process_command(
                                     done_run_id = step.get("run_id")
                                     break
                         if not done_run_id and payload.plan_approved:
-                            latest_agent_run = (
-                                db.query(PipelineRunV2DB)
-                                .filter(PipelineRunV2DB.input_dataset_id == dataset_id)
-                                .filter(PipelineRunV2DB.triggered_by == "agent")
-                                .order_by(PipelineRunV2DB.created_at.desc())
-                                .first()
-                            )
-                            if latest_agent_run:
-                                done_run_id = str(latest_agent_run.id)
+                            _db = SessionLocal()
+                            try:
+                                latest_agent_run = (
+                                    _db.query(PipelineRunV2DB)
+                                    .filter(PipelineRunV2DB.input_dataset_id == dataset_id)
+                                    .filter(PipelineRunV2DB.triggered_by == "agent")
+                                    .order_by(PipelineRunV2DB.created_at.desc())
+                                    .first()
+                                )
+                                if latest_agent_run:
+                                    done_run_id = str(latest_agent_run.id)
+                            finally:
+                                _db.close()
                         event = {
                             **event,
                             "run_id": done_run_id or last_run_id,

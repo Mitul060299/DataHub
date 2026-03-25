@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+import asyncio
 import os
 import logging
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,18 +59,13 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def create_tables() -> None:
-    logger.warning("CORS ORIGINS LOADED: %s", settings.cors_origins)
-    logger.warning("GROQ KEY SET: %s", bool(settings.groq_api_key))
-    logger.warning("APP ENV: %s", settings.app_env)
-    if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
-        Base.metadata.create_all(bind=engine)
+def _apply_startup_ddl() -> None:
+    """Run schema safety-net DDL + scheduler in a background thread.
 
-    # Schema safety-net: ADD COLUMN / CREATE TABLE IF NOT EXISTS for all columns
-    # added by recent migrations. No-op if already present. Bypasses alembic
-    # stamp state (safety net for timed-out Render free-tier deploys).
-    # Each statement runs independently — one failure never blocks the rest.
+    Called via asyncio.to_thread so it never blocks uvicorn's event loop or
+    port-binding.  Each statement is tried independently — a Supabase statement
+    timeout on one entry never prevents the others from running.
+    """
     _schema_ddl = [
         # 0026 — data_sources table (must precede 0029 project_id column)
         """CREATE TABLE IF NOT EXISTS data_sources (
@@ -242,6 +238,27 @@ def create_tables() -> None:
         start_scheduler()
     except Exception:
         pass
+
+
+async def _apply_startup_ddl_bg() -> None:
+    """Async wrapper — runs _apply_startup_ddl in a thread pool so the event
+    loop (and therefore the HTTP port) is never blocked."""
+    await asyncio.to_thread(_apply_startup_ddl)
+
+
+@app.on_event("startup")
+async def create_tables() -> None:
+    logger.warning("CORS ORIGINS LOADED: %s", settings.cors_origins)
+    logger.warning("GROQ KEY SET: %s", bool(settings.groq_api_key))
+    logger.warning("APP ENV: %s", settings.app_env)
+    if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
+        Base.metadata.create_all(bind=engine)
+
+    # Schema safety-net DDL is run in a background task so that uvicorn can
+    # bind to the port immediately.  On Render free tier, ALTER TABLE statements
+    # can time out after ~2 minutes each; running them synchronously here would
+    # push total startup past Render's port-scan deadline and kill the deploy.
+    asyncio.create_task(_apply_startup_ddl_bg())
 
 
 @app.middleware("http")

@@ -27,6 +27,8 @@ from .routers import pipeline_refresh, cron, data_sources
 from .routers import dashboard_access
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
+from .routers.saved_visualizations import router as saved_visualizations_router
+from .routers.canvas import router as canvas_router
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine
 from . import models_db
@@ -213,6 +215,37 @@ def _apply_startup_ddl() -> None:
             created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_reviews_approved ON reviews (approved)",
+        # 0037 — saved visualizations (AI-generated charts the user explicitly saves)
+        """CREATE TABLE IF NOT EXISTS visualizations (
+            id              TEXT PRIMARY KEY,
+            user_id         TEXT NOT NULL,
+            workspace_id    TEXT NOT NULL DEFAULT 'default',
+            project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
+            name            TEXT NOT NULL,
+            chart_type      TEXT NOT NULL DEFAULT 'bar',
+            echarts_config  JSONB NOT NULL DEFAULT '{}',
+            thumbnail_s3_key TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_visualizations_user ON visualizations (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_visualizations_workspace ON visualizations (workspace_id)",
+        # 0037 — canvas layouts (drag-drop dashboards per project)
+        """CREATE TABLE IF NOT EXISTS canvas_layouts (
+            id              TEXT PRIMARY KEY,
+            user_id         TEXT NOT NULL,
+            workspace_id    TEXT NOT NULL DEFAULT 'default',
+            project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
+            name            TEXT NOT NULL DEFAULT 'Untitled Dashboard',
+            layout          JSONB NOT NULL DEFAULT '[]',
+            is_public       BOOLEAN NOT NULL DEFAULT false,
+            public_token    TEXT UNIQUE,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_user ON canvas_layouts (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_workspace ON canvas_layouts (workspace_id)",
+        "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_project ON canvas_layouts (project_id)",
     ]
     try:
         from sqlalchemy import text as _text
@@ -363,3 +396,5 @@ app.include_router(data_sources.router)
 app.include_router(projects_router)
 app.include_router(workspace_recent_router)
 app.include_router(artifacts_router)
+app.include_router(saved_visualizations_router)
+app.include_router(canvas_router)

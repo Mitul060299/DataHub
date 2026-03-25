@@ -7,15 +7,14 @@ import { IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
 import { StepCard } from "./StepCard";
 import { EChartsRenderer } from "./EChartsRenderer";
-import { PinToDashboardModal } from "./PinToDashboardModal";
+import { saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
 import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
 import { capture } from "../lib/posthog";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 
 interface TileCreatedData {
-  id: string;
-  dashboard_id: string;
+  chart_id: string;
   title: string;
   chart_type: string;
   echarts_config: Record<string, unknown> | null;
@@ -52,7 +51,8 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [pinModal, setPinModal] = useState<TileCreatedData | null>(null);
+  const [savingVizIds, setSavingVizIds] = useState<Set<string>>(new Set());
+  const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
 
@@ -214,8 +214,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           const tc = step.tile_created as Record<string, unknown> | undefined;
           if (tc && tc.echarts_config && tc.saveable) {
             tileCreatedData = {
-              id: String(tc.id ?? ""),
-              dashboard_id: String(tc.dashboard_id ?? ""),
+              chart_id: String(tc.chart_id ?? crypto.randomUUID()),
               title: String(tc.title ?? "Chart"),
               chart_type: String(tc.chart_type ?? "bar"),
               echarts_config: tc.echarts_config as Record<string, unknown>,
@@ -509,22 +508,48 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                     config={message.tileCreated.echarts_config}
                     height={280}
                   />
-                  <button
-                    onClick={() => setPinModal(message.tileCreated!)}
-                    style={{
-                      marginTop: 6,
-                      background: "#5B6AF0",
-                      border: "none",
-                      borderRadius: 6,
-                      color: "#fff",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      padding: "4px 12px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    📌 Pin to Dashboard
-                  </button>
+                  {(() => {
+                    const chartId = message.tileCreated!.chart_id;
+                    const isSaving = savingVizIds.has(chartId);
+                    const isSaved = savedVizIds.has(chartId);
+                    return (
+                      <button
+                        disabled={isSaving || isSaved}
+                        onClick={async () => {
+                          if (!message.tileCreated?.echarts_config) return;
+                          setSavingVizIds((prev) => new Set([...prev, chartId]));
+                          try {
+                            await saveVisualization({
+                              name: message.tileCreated!.title || "AI Chart",
+                              chart_type: message.tileCreated!.chart_type || "bar",
+                              echarts_config: message.tileCreated!.echarts_config!,
+                              workspace_id: workspaceId,
+                            });
+                            setSavedVizIds((prev) => new Set([...prev, chartId]));
+                            window.dispatchEvent(new CustomEvent("datahub:visualizations:refresh"));
+                          } catch {
+                            // silently allow retry
+                          } finally {
+                            setSavingVizIds((prev) => { const n = new Set(prev); n.delete(chartId); return n; });
+                          }
+                        }}
+                        style={{
+                          marginTop: 6,
+                          background: isSaved ? "#22c55e" : "#5B6AF0",
+                          border: "none",
+                          borderRadius: 6,
+                          color: "#fff",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: "4px 12px",
+                          cursor: isSaving || isSaved ? "default" : "pointer",
+                          opacity: isSaving ? 0.7 : 1,
+                        }}
+                      >
+                        {isSaved ? "✓ Saved" : isSaving ? "Saving…" : "☁ Save to Visualizations"}
+                      </button>
+                    );
+                  })()}
                 </div>
               ) : null}
               {message.artifactUrl ? (
@@ -603,13 +628,6 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           }}
         />
       </div>
-      {pinModal && (
-        <PinToDashboardModal
-          tileCreated={pinModal}
-          workspaceId={workspaceId}
-          onClose={() => setPinModal(null)}
-        />
-      )}
     </aside>
   );
 }

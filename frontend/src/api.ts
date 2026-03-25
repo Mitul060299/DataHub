@@ -1215,3 +1215,118 @@ export async function getApprovedReviews(): Promise<ReviewOut[]> {
   const response = await api.get("/reviews");
   return response.data;
 }
+
+// ── Saved Visualizations ──────────────────────────────────────────────────────
+
+export interface SavedVisualization {
+  id: string;
+  name: string;
+  chart_type: string;
+  echarts_config: Record<string, unknown>;
+  project_id: string | null;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listVisualizations(): Promise<SavedVisualization[]> {
+  const response = await api.get("/api/visualizations/saved");
+  return response.data;
+}
+
+export async function saveVisualization(payload: {
+  name: string;
+  chart_type: string;
+  echarts_config: Record<string, unknown>;
+  project_id?: string;
+  workspace_id?: string;
+}): Promise<SavedVisualization> {
+  const response = await api.post("/api/visualizations/saved", payload);
+  return response.data;
+}
+
+export async function getVisualization(id: string): Promise<SavedVisualization> {
+  const response = await api.get(`/api/visualizations/saved/${id}`);
+  return response.data;
+}
+
+export async function renameVisualization(id: string, name: string): Promise<SavedVisualization> {
+  const response = await api.patch(`/api/visualizations/saved/${id}`, { name });
+  return response.data;
+}
+
+export async function deleteVisualization(id: string): Promise<void> {
+  await api.delete(`/api/visualizations/saved/${id}`);
+}
+
+// ── Canvas Layouts ────────────────────────────────────────────────────────────
+
+export interface CanvasLimitStatus {
+  count: number;
+  limit: number | null;
+  can_create: boolean;
+  plan: string;
+}
+
+export interface CanvasLayout {
+  id: string;
+  name: string;
+  layout: CanvasTileItem[];
+  is_public: boolean;
+  public_token: string | null;
+  project_id: string | null;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CanvasTileItem {
+  id: string;
+  viz_id?: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z?: number;
+  type: "chart" | "text";
+  title?: string;
+  chart_type?: string;
+  echarts_config?: Record<string, unknown>;
+  text_content?: string;
+}
+
+export async function getCanvasLimitStatus(): Promise<CanvasLimitStatus> {
+  const response = await api.get("/api/canvas/limit-status");
+  return response.data;
+}
+
+export async function listCanvasLayouts(projectId?: string): Promise<CanvasLayout[]> {
+  const response = await api.get("/api/canvas", { params: projectId ? { project_id: projectId } : {} });
+  return response.data;
+}
+
+export async function createCanvasLayout(payload: {
+  name?: string;
+  project_id?: string;
+  workspace_id?: string;
+}): Promise<CanvasLayout> {
+  const response = await api.post("/api/canvas", payload);
+  return response.data;
+}
+
+export async function getCanvasLayout(id: string): Promise<CanvasLayout> {
+  const response = await api.get(`/api/canvas/${id}`);
+  return response.data;
+}
+
+export async function saveCanvasLayout(
+  id: string,
+  payload: { name?: string; layout?: CanvasTileItem[]; is_public?: boolean },
+): Promise<CanvasLayout> {
+  const response = await api.patch(`/api/canvas/${id}`, payload);
+  return response.data;
+}
+
+export async function deleteCanvasLayout(id: string): Promise<void> {
+  await api.delete(`/api/canvas/${id}`);
+}

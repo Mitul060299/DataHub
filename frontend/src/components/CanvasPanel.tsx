@@ -4,12 +4,13 @@ import type { Dataset } from "../contexts/WorkspaceContext";
 import type { CalculatedColumn } from "../types";
 import { IconBarChart, IconDownload, IconTable, IconUpload } from "./Icons";
 import { DataTable } from "./DataTable";
-import { ChartView } from "./ChartView";
+import { CanvasView } from "./CanvasView";
 
-type CanvasTab = "data" | "charts";
+type CanvasTab = "data" | "canvas";
 
 interface CanvasPanelProps {
   workspaceId: string;
+  projectId: string;
   dataset: Dataset | null;
   loading: boolean;
   columns: string[];
@@ -21,7 +22,7 @@ interface CanvasPanelProps {
   onColumnsChanged: () => void;
 }
 
-export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onExport, onColumnsChanged }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onExport, onColumnsChanged }: CanvasPanelProps) {
   const { steps } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
 
@@ -32,8 +33,8 @@ export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calc
           <button className="btn" onClick={() => setTab("data")} style={{ background: tab === "data" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "data" ? "var(--acg)" : "var(--bd2)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconTable size={14} />Data</span>
           </button>
-          <button className="btn" onClick={() => setTab("charts")} style={{ background: tab === "charts" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "charts" ? "var(--acg)" : "var(--bd2)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconBarChart size={14} />Charts</span>
+          <button className="btn" onClick={() => setTab("canvas")} style={{ background: tab === "canvas" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "canvas" ? "var(--acg)" : "var(--bd2)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconBarChart size={14} />Canvas</span>
           </button>
           <span className="mono" style={{ height: 30, padding: "0 10px", borderRadius: "var(--r6)", background: "var(--bg3)", border: "1px solid var(--bd2)", display: "inline-flex", alignItems: "center", color: "var(--tx1)" }}>
             {dataset?.name ?? "No dataset"}
@@ -57,7 +58,7 @@ export function CanvasPanel({ workspaceId, dataset, loading, columns, rows, calc
             onColumnsChanged={onColumnsChanged}
           />
         ) : (
-          <ChartView workspaceId={workspaceId} datasetId={dataset?.id} />
+          <CanvasView workspaceId={workspaceId} projectId={projectId} />
         )}
       </div>
     </section>

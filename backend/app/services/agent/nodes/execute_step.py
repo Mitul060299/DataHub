@@ -173,34 +173,9 @@ async def execute_step(state: AgentState) -> dict:
                 except Exception:
                     echarts_config = None
 
-            if not dashboard_id:
-                existing = DashboardsV2Service.list_dashboards(user_id=user_id, workspace_id=workspace_id)
-                if existing:
-                    dashboard_id = existing[0].id
-                else:
-                    created_dashboard = DashboardsV2Service.create_dashboard(
-                        user_id=user_id,
-                        workspace_id=workspace_id,
-                        dataset_id=state["dataset_id"],
-                        name="AI Dashboard",
-                        description="Auto-created by agent",
-                        layout={},
-                        theme={},
-                    )
-                    dashboard_id = created_dashboard.id
-
-            tile = DashboardsV2Service.add_tile(
-                user_id=user_id,
-                dashboard_id=dashboard_id,
-                dataset_id=state["dataset_id"],
-                title=title,
-                chart_type=chart_type,
-                query_spec=query_spec,
-                layout=layout,
-                tile_type="chart",
-                echarts_config=echarts_config,
-                source_table=source_table or None,
-            )
+            # Charts are ephemeral — not persisted until the user explicitly
+            # clicks "Save to Visualizations" in the AI panel.
+            chart_id = str(uuid.uuid4())
 
             execution_result = {
                 "step_number": step["step_number"],
@@ -212,10 +187,9 @@ async def execute_step(state: AgentState) -> dict:
                 "sql": step_sql or None,
                 "error": None,
                 "tile_created": {
-                    "id": tile.id,
-                    "dashboard_id": tile.dashboard_id,
-                    "title": tile.title,
-                    "chart_type": tile.chart_type,
+                    "chart_id": chart_id,
+                    "title": title,
+                    "chart_type": chart_type,
                     "echarts_config": echarts_config,
                     "saveable": True,
                 },

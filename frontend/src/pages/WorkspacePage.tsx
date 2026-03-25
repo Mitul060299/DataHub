@@ -127,6 +127,7 @@ export function WorkspacePage() {
       ) : null}
       <CanvasPanel
         workspaceId={workspaceId}
+        projectId={resolvedProject?.id ?? ""}
         dataset={activeDataset}
         loading={loading}
         columns={data?.columns ?? []}

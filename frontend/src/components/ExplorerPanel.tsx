@@ -4,6 +4,7 @@ import { usePipeline } from "../hooks/usePipeline";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { IconChevronDown, IconTeam } from "./Icons";
 import { ArtifactsSection, type ArtifactItem } from "./ArtifactsSection";
+import { VisualizationsSection } from "./VisualizationsSection";
 import { DataSection } from "./DataSection";
 
 import { PipelineSection } from "./PipelineSection";
@@ -318,6 +319,8 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             void loadDatasets();
           }}
         />
+
+        <VisualizationsSection />
 
       </div>
 

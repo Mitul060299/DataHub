@@ -809,3 +809,47 @@ class DashboardCommentDB(Base):
     body = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class VisualizationDB(Base):
+    """User-saved chart configurations from the AI agent visualization flow."""
+    __tablename__ = "visualizations"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    name = Column(String, nullable=False)
+    chart_type = Column(String, nullable=False, default="bar")
+    echarts_config = Column(JSONB, nullable=False, default=dict)   # full ECharts option object
+    thumbnail_s3_key = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_visualizations_user", "user_id"),
+        Index("idx_visualizations_workspace", "workspace_id"),
+    )
+
+
+class CanvasLayoutDB(Base):
+    """Drag-and-drop canvas dashboards — each project builds its own arrangement of saved charts."""
+    __tablename__ = "canvas_layouts"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    name = Column(String, nullable=False, default="Untitled Dashboard")
+    # Array of layout items: {id, viz_id, x, y, w, h, z, type, text_content, echarts_config, chart_type, title}
+    layout = Column(JSONB, nullable=False, default=list)
+    is_public = Column(Boolean, nullable=False, default=False)
+    public_token = Column(Text, nullable=True, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_canvas_layouts_user", "user_id"),
+        Index("idx_canvas_layouts_workspace", "workspace_id"),
+        Index("idx_canvas_layouts_project", "project_id"),
+    )

@@ -215,7 +215,7 @@ async def execute_step(state: AgentState) -> dict:
         from ...pipeline_engine import PipelineEngine
 
         # ── Session-based operations (use DuckDB session for 8 new intents) ───
-        _SESSION_OPS = {"clean", "validate", "filter", "summarise", "pivot", "union", "reconcile", "export"}
+        _SESSION_OPS = {"clean", "validate", "filter", "transform", "summarise", "pivot", "union", "reconcile", "export"}
         if operation in _SESSION_OPS or state.get("intent") in _SESSION_OPS:
             intent_key = operation if operation in _SESSION_OPS else str(state.get("intent"))
             session_id = state.get("session_id") or ""
@@ -361,12 +361,10 @@ async def execute_step(state: AgentState) -> dict:
                                 )
                             except Exception as _upload_exc:
                                 import logging as _logging
-                                _logging.getLogger(__name__).error(
-                                    "S3 upload FULL ERROR for %s %s: %s",
+                                _logging.getLogger(__name__).warning(
+                                    "artifact S3 upload failed for %s %s: %s",
                                     intent_key, result_table, _upload_exc,
-                                    exc_info=True,
                                 )
-                                raise
                     else:
                         # Plain SELECT — just execute and return rows directly
                         rows = execute_in_session(session_id, step_sql) if session_id else []
@@ -398,8 +396,11 @@ async def execute_step(state: AgentState) -> dict:
                     }
 
                 else:
-                    # Write ops: clean, filter, pivot, union, reconcile
-                    # SQL should be a CREATE TABLE AS ... or SELECT that we register
+                    # Write ops: clean, filter, transform, pivot, union, reconcile
+                    # SQL may be a bare SELECT or a CREATE TABLE AS SELECT — strip any
+                    # CREATE [OR REPLACE] TABLE/VIEW <name> AS prefix so that
+                    # register_table_from_sql (which adds its own CREATE OR REPLACE TABLE)
+                    # receives only the query body.
                     output_table = str(
                         parameters.get("output_table")
                         or parameters.get("output_name")
@@ -407,6 +408,14 @@ async def execute_step(state: AgentState) -> dict:
                     )
                     if not step_sql:
                         raise ValueError(f"No SQL provided for {intent_key} step")
+
+                    import re as _re_step
+                    _ct_match = _re_step.match(
+                        r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                        step_sql,
+                    )
+                    if _ct_match:
+                        step_sql = step_sql[_ct_match.end():].strip()
 
                     artifact_s3_key: str | None = None
                     preview_rows: list = []
@@ -458,12 +467,10 @@ async def execute_step(state: AgentState) -> dict:
                                 )
                         except Exception as _upload_exc:
                             import logging as _logging
-                            _logging.getLogger(__name__).error(
-                                "S3 upload FULL ERROR for %s: %s",
+                            _logging.getLogger(__name__).warning(
+                                "artifact S3 upload failed for %s: %s",
                                 output_table, _upload_exc,
-                                exc_info=True,
                             )
-                            raise
                         # Fetch inline preview rows for the chat table card
                         try:
                             preview_rows = execute_in_session(

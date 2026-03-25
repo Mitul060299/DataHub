@@ -82,7 +82,7 @@ Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
   "steps": [
     {{
       "step_number": 1,
-      "operation": "remove_duplicates",
+      "operation": "clean",
       "description": "Remove 142 exact duplicate rows based on all columns",
       "sql": "SELECT DISTINCT * FROM dataset",
       "parameters": {{

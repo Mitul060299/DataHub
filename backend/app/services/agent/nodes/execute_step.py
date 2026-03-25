@@ -10,6 +10,7 @@ from ...plan_guard import normalize_plan
 from ...duckdb_session import (
     register_table_from_sql,
     execute_in_session,
+    get_connection,
     SessionExpiredError,
 )
 from ...export_service import ExportService
@@ -282,31 +283,51 @@ async def execute_step(state: AgentState) -> dict:
 
                     if _ct_match and session_id:
                         result_table = _ct_match.group(1).strip("'\"")
-                        # Materialise the table then fetch all rows (cap 500 for preview)
-                        register_table_from_sql(session_id, result_table, step_sql)
+                        # Execute the DDL directly — do NOT pass it to register_table_from_sql
+                        # which would double-wrap it as:
+                        #   CREATE OR REPLACE TABLE x AS CREATE TABLE x AS SELECT …
+                        # (invalid DuckDB SQL). Instead we normalise the DDL to
+                        # CREATE OR REPLACE TABLE for idempotent re-runs and run it raw.
                         try:
-                            rows = execute_in_session(session_id, f"SELECT * FROM {result_table} LIMIT 500")
+                            _normalized_ddl = _re.sub(
+                                r"CREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?",
+                                "CREATE OR REPLACE TABLE ",
+                                step_sql.strip(),
+                                count=1,
+                                flags=_re.IGNORECASE,
+                            )
+                            get_connection(session_id).execute(_normalized_ddl)
+                        except Exception as _ddl_exc:
+                            import logging as _logging
+                            _logging.getLogger(__name__).warning(
+                                "summarise DDL failed for %s: %s", result_table, _ddl_exc
+                            )
+                            result_table = None
+                        try:
+                            rows = execute_in_session(session_id, f"SELECT * FROM {result_table} LIMIT 500") if result_table else []
                         except Exception:
                             rows = []
 
-                        # Register the new table in the session registry so it appears
-                        # in the session-tables sidebar and is referenceable in follow-up
-                        col_names: list[str] = list(rows[0].keys()) if rows else []
-                        table_registry[result_table] = {
-                            "duckdb_name": result_table,
-                            "dataset_id": str(state.get("dataset_id") or ""),
-                            "display_name": result_table,
-                            "source_intent": intent_key,
-                            "parent_tables": [],
-                            "row_count": len(rows),
-                            "column_names": col_names,
-                            "pipeline_step_number": step["step_number"],
-                            "is_artifact": False,
-                            "is_view": False,
-                        }
+                        # Only register / upload when the DDL actually succeeded
+                        if result_table:
+                            # Register the new table in the session registry so it appears
+                            # in the session-tables sidebar and is referenceable in follow-up
+                            col_names: list[str] = list(rows[0].keys()) if rows else []
+                            table_registry[result_table] = {
+                                "duckdb_name": result_table,
+                                "dataset_id": str(state.get("dataset_id") or ""),
+                                "display_name": result_table,
+                                "source_intent": intent_key,
+                                "parent_tables": [],
+                                "row_count": len(rows),
+                                "column_names": col_names,
+                                "pipeline_step_number": step["step_number"],
+                                "is_artifact": False,
+                                "is_view": False,
+                            }
 
                         # Upload Parquet snapshot to S3 (best-effort) for artifact download
-                        if rows:
+                        if rows and result_table:
                             try:
                                 import io as _io
                                 import pyarrow as _pa

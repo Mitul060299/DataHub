@@ -274,6 +274,18 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               artifactUrl: url,
             },
           ]);
+        } else if (typeof event.artifact_s3_key === "string") {
+          const tableName = typeof event.table_name === "string" ? event.table_name : "table";
+          const rowCount = typeof event.row_count === "number" ? event.row_count : null;
+          const label = rowCount !== null ? `${rowCount} row${rowCount !== 1 ? "s" : ""}` : "saved";
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: `✓ Saved: ${tableName} (${label})`,
+            },
+          ]);
         }
         break;
       }

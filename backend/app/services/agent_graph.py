@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging as _log
+import uuid as _uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -7,6 +9,7 @@ from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import Session
 
 from .agent.graph import agent_graph
+from ..models_db import ArtifactDB
 
 
 class AgentGraphService:
@@ -68,7 +71,6 @@ class AgentGraphService:
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        _ = db
         config = {"configurable": {"thread_id": session_id}}
         if plan_approved:
             # Resume path: prefer plan sent by the frontend (pending_plan).
@@ -197,6 +199,33 @@ class AgentGraphService:
                                     "artifact_url": artifact_url,
                                     "operation": last.get("operation"),
                                     "step": last.get("step_number"),
+                                }
+                            artifact_s3 = last.get("artifact_s3_key")
+                            if isinstance(artifact_s3, str) and artifact_s3:
+                                art_id = str(_uuid.uuid4())
+                                try:
+                                    art = ArtifactDB(
+                                        id=art_id,
+                                        user_id=str(initial_state.get("user_id") or "agent"),
+                                        session_id=str(initial_state.get("session_id") or ""),
+                                        name=str(last.get("output_table") or last.get("operation") or "artifact"),
+                                        s3_key=artifact_s3,
+                                        row_count=last.get("rows_affected"),
+                                        column_schema=last.get("column_schema") or [],
+                                        type="auto",
+                                    )
+                                    db.add(art)
+                                    db.commit()
+                                except Exception as _db_exc:
+                                    _log.getLogger(__name__).warning(
+                                        "ArtifactDB insert failed: %s", _db_exc
+                                    )
+                                yield {
+                                    "type": "agent.artifact",
+                                    "artifact_s3_key": artifact_s3,
+                                    "artifact_id": art_id,
+                                    "table_name": last.get("output_table"),
+                                    "row_count": last.get("rows_affected"),
                                 }
                             qr = last.get("query_results")
                             if isinstance(qr, list) and qr:

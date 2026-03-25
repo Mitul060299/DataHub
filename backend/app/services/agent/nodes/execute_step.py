@@ -407,6 +407,7 @@ async def execute_step(state: AgentState) -> dict:
                         raise ValueError(f"No SQL provided for {intent_key} step")
 
                     artifact_s3_key: str | None = None
+                    preview_rows: list = []
                     column_schema: list = []
                     row_count_before: int | None = None
                     _step_start_ts = datetime.now(timezone.utc)
@@ -458,6 +459,13 @@ async def execute_step(state: AgentState) -> dict:
                             _logging.getLogger(__name__).warning(
                                 "artifact S3 upload failed for %s: %s", output_table, _upload_exc
                             )
+                        # Fetch inline preview rows for the chat table card
+                        try:
+                            preview_rows = execute_in_session(
+                                session_id, f"SELECT * FROM {output_table} LIMIT 50"
+                            ) or []
+                        except Exception:
+                            preview_rows = []
                     else:
                         rows_out = None
                         out_cols = []
@@ -507,6 +515,7 @@ async def execute_step(state: AgentState) -> dict:
                         "execution_time_ms": _exec_time_ms,
                         "column_schema": column_schema,
                         "artifact_s3_key": artifact_s3_key,
+                        "query_results": preview_rows,
                     }
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
@@ -514,6 +523,7 @@ async def execute_step(state: AgentState) -> dict:
                         "current_step_index": idx + 1,
                         "retry_count": 0,
                         "error": None,
+                        "query_results": preview_rows,
                         "table_registry": table_registry,
                     }
 

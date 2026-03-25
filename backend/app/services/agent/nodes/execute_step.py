@@ -326,13 +326,31 @@ async def execute_step(state: AgentState) -> dict:
                                 "is_view": False,
                             }
 
-                        # Upload Parquet snapshot to S3 (best-effort) for artifact download
-                        if rows and result_table:
+                        # Upload Parquet snapshot to S3 (best-effort) for artifact download.
+                        # Gate only on DDL having succeeded (result_table set) — not on rows
+                        # being non-empty; a valid empty result is still a real artifact.
+                        if result_table:
                             try:
                                 import io as _io
                                 import pyarrow as _pa
                                 import pyarrow.parquet as _pq
-                                _tbl = _pa.Table.from_pylist(rows)
+                                if rows:
+                                    _tbl = _pa.Table.from_pylist(rows)
+                                else:
+                                    # DDL succeeded but table is empty — build a schema-only
+                                    # Parquet so the artifact record still exists.
+                                    try:
+                                        _desc = execute_in_session(session_id, f"DESCRIBE {result_table}")
+                                        _pa_schema = _pa.schema([
+                                            _pa.field(r["column_name"], _pa.string())
+                                            for r in (_desc or [])
+                                        ])
+                                    except Exception:
+                                        _pa_schema = _pa.schema([])
+                                    _tbl = _pa.table(
+                                        {f.name: _pa.array([], type=f.type) for f in _pa_schema},
+                                        schema=_pa_schema,
+                                    )
                                 _buf = _io.BytesIO()
                                 _pq.write_table(_tbl, _buf)
                                 artifact_s3_key_sv = StorageService.upload(

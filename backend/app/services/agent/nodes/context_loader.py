@@ -93,6 +93,11 @@ async def context_loader(state: AgentState) -> dict:
     if dataset and dataset.storage_path:
         _primary_alias = _sanitize_alias(str(dataset.name if dataset and dataset.name else dataset_id))
         _register_dataset_view(dataset_id, _primary_alias, storage_path=dataset.storage_path)
+        # ALSO register as the canonical "dataset" alias — the planner prompt (rule 10)
+        # hard-codes the primary input table as `dataset` in all generated SQL.  Without
+        # this view the DDL fails with "Table 'dataset' not found" and no artifact is created.
+        if _primary_alias != "dataset":
+            _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
         if _primary_alias not in table_registry:
             _col_names: list[str] = []
             _cached = state.get("schema") or {}
@@ -184,6 +189,9 @@ async def context_loader(state: AgentState) -> dict:
         pass
 
     _register_dataset_view(dataset_id, primary_alias, storage_path=dataset.storage_path if dataset else None)
+    # Always register canonical "dataset" alias that planner rule 10 generates SQL against.
+    if primary_alias != "dataset" and dataset and dataset.storage_path:
+        _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
 
     primary_entry: TableRegistryEntry = {
         "duckdb_name": primary_alias,

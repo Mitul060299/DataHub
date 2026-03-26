@@ -918,7 +918,7 @@ function Faq() {
     },
     {
       q: "Can I use DataHub for free?",
-      a: "Yes. The Free plan lets you create 2 projects, upload files up to 50 MB, use 50 AI messages per month, and build 2 dashboards — with no credit card required.",
+      a: "Yes. The Free plan lets you create 2 projects, upload files up to 50 MB, use 50 AI messages per month, and build 2 canvases — with no credit card required.",
     },
     {
       q: "Is there an API?",
@@ -984,7 +984,8 @@ function PlanLimits() {
             <tr><td>Storage</td><td>1 GB</td><td>20 GB</td><td>100 GB</td><td>500 GB</td></tr>
             <tr><td>Team members</td><td>1</td><td>1</td><td>10</td><td>50</td></tr>
             <tr><td>Scheduled pipelines</td><td>—</td><td>5</td><td>20</td><td>Unlimited</td></tr>
-            <tr><td>Dashboards</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Canvases</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Visualizations Library</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
             <tr><td>Public sharing</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
             <tr><td>Audit log</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
             <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>🔜</td></tr>

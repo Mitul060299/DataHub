@@ -121,24 +121,30 @@ async def execute_step(state: AgentState) -> dict:
             rows: list[dict] = []
             col_types: dict[str, str] = {}
 
-            # First pass: scan the source table directly
-            if session_id and source_table:
-                try:
-                    rows = execute_in_session(session_id, f"SELECT * FROM {source_table} LIMIT 500")
-                    try:
-                        desc = execute_in_session(session_id, f"DESCRIBE {source_table}")
-                        col_types = {r.get("column_name", r.get("name", "")): r.get("column_type", r.get("type", "")) for r in desc}
-                    except Exception:
-                        pass
-                except Exception:
-                    rows = []
-
-            # Second pass: run the explicit SQL (aggregation / filtered query)
-            if not rows and session_id and step_sql:
+            # First pass: run the aggregation/filter SQL — this is the chart query.
+            # Must run before the full table scan so grouped results are used, not raw rows.
+            if session_id and step_sql:
                 try:
                     rows = execute_in_session(session_id, step_sql)
                     if rows and not col_types:
                         col_types = {k: "VARCHAR" for k in rows[0].keys()}
+                except Exception:
+                    rows = []
+
+            # Second pass: fall back to full table scan only if no SQL or SQL returned nothing.
+            # This gives build_echarts_config something to work with for simple "show me a chart"
+            # requests where no aggregation SQL was generated.
+            if not rows and session_id and source_table:
+                try:
+                    rows = execute_in_session(session_id, f"SELECT * FROM {source_table} LIMIT 500")
+                    try:
+                        desc = execute_in_session(session_id, f"DESCRIBE {source_table}")
+                        col_types = {
+                            r.get("column_name", r.get("name", "")): r.get("column_type", r.get("type", ""))
+                            for r in desc
+                        }
+                    except Exception:
+                        pass
                 except Exception:
                     rows = []
 

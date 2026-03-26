@@ -142,7 +142,7 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
   }
 
   return (
-    <div className="panel" style={{ margin: 8, display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div className="panel" style={{ margin: 8, display: "flex", flexDirection: "column", minHeight: 0, height: "calc(100% - 16px)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: 8, borderBottom: "1px solid var(--bd)" }}>
         <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
           <IconSearch size={14} className="search-icon" />

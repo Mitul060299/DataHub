@@ -96,10 +96,6 @@ export function WorkspacePage() {
       <ActivityBar
         explorerOpen={explorerOpen}
         onToggleExplorer={() => setExplorerOpen((value) => !value)}
-        onSearch={() => {
-          setExplorerOpen(true);
-          setExplorerSearchFocusNonce((value) => value + 1);
-        }}
       />
       {explorerOpen ? (
         <>

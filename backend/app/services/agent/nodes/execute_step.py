@@ -176,6 +176,7 @@ async def execute_step(state: AgentState) -> dict:
                         title=title,
                         subtitle=subtitle,
                     )
+                    import logging; logging.getLogger(__name__).warning("CHART_DEBUG rows=%s x_col=%s y_col=%s config=%s", rows[:2], x_col, y_col, echarts_config)
                 except Exception:
                     echarts_config = None
 

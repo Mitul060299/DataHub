@@ -94,7 +94,7 @@ export async function initiateSubscription(
     },
     modal: {
       ondismiss: () => {
-        console.log("Razorpay checkout closed");
+        // checkout dismissed by user
       },
     },
   };

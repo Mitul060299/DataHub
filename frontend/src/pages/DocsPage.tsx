@@ -29,7 +29,8 @@ const SECTIONS: Section[] = [
       { id: "projects", label: "Projects" },
       { id: "pipelines", label: "Pipelines" },
       { id: "artifacts", label: "Artifacts" },
-      { id: "dashboards", label: "Dashboards" },
+      { id: "canvases", label: "Canvases" },
+      { id: "visualizations", label: "Visualizations Library" },
     ],
   },
   {
@@ -431,7 +432,7 @@ function WhatIsArtifact() {
 function WhatIsDashboard() {
   return (
     <article className="docs-article">
-      <h1>Dashboards</h1>
+      <h1>Canvases &amp; Visualizations</h1>
       <p className="docs-lead">
         A dashboard is a drag-and-drop canvas of charts, tables, and KPI cards — each card powered by a live query or artifact from your pipelines.
       </p>
@@ -1122,7 +1123,9 @@ function DocContent({ page }: { page: string }) {
     case "projects":     return <WhatIsProject />;
     case "pipelines":    return <WhatIsPipeline />;
     case "artifacts":    return <WhatIsArtifact />;
-    case "dashboards":   return <WhatIsDashboard />;
+    case "dashboards":     // legacy alias
+    case "canvases":       return <WhatIsDashboard />;
+    case "visualizations": return <WhatIsDashboard />;
     case "guide-start":  return <GuideStart />;
     case "guide-upload": return <GuideUpload />;
     case "guide-database": return <GuideDatabase />;

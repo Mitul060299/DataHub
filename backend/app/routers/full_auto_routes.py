@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+import logging
 
 from app.db import get_db
 from app.security import get_current_subject
@@ -14,6 +15,8 @@ from app.controllers.full_auto_controller import FullAutoController
 
 
 router = APIRouter(prefix='/api/auto', tags=['auto'])
+
+logger = logging.getLogger(__name__)
 
 
 def get_controller(db: Session = Depends(get_db)) -> FullAutoController:
@@ -71,7 +74,7 @@ async def start_auto_analysis(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Error in start_auto_analysis: {e}")
+        logger.error("Error in start_auto_analysis: %s", e)
         raise HTTPException(status_code=500, detail='Internal server error')
 
 
@@ -90,7 +93,7 @@ async def check_auto_guardrails(
             user_request=user_request,
         )
     except Exception as e:
-        print(f"Error in check_auto_guardrails: {e}")
+        logger.error("Error in check_auto_guardrails: %s", e)
         raise HTTPException(status_code=500, detail='Failed to evaluate guardrails')
 
 
@@ -107,7 +110,7 @@ async def get_user_sessions(
             'count': len(sessions)
         }
     except Exception as e:
-        print(f"Error fetching sessions: {e}")
+        logger.error("Error fetching sessions: %s", e)
         raise HTTPException(status_code=500, detail='Error fetching sessions')
 
 
@@ -129,7 +132,7 @@ async def get_session_details(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching session {session_id}: {e}")
+        logger.error("Error fetching session %s: %s", session_id, e)
         raise HTTPException(status_code=500, detail='Error fetching session')
 
 
@@ -151,7 +154,7 @@ async def cancel_session(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error cancelling session: {e}")
+        logger.error("Error cancelling session: %s", e)
         raise HTTPException(status_code=500, detail='Error cancelling session')
 
 
@@ -188,5 +191,5 @@ async def save_session(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error saving session: {e}")
+        logger.error("Error saving session: %s", e)
         raise HTTPException(status_code=500, detail='Error saving session')

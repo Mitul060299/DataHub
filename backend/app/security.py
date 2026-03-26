@@ -2,12 +2,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 import base64
 import json
+import logging
 import time
 import httpx
 import jwt
 from .config import settings
 from fastapi import Header, HTTPException
 
+logger = logging.getLogger(__name__)
 
 
 _JWKS_CACHE: Dict[str, Any] = {}
@@ -42,7 +44,7 @@ def _get_supabase_jwks() -> Dict[str, Any]:
     if cached:
         return cached
     if not settings.supabase_url:
-        print("ERROR: SUPABASE_URL not configured")
+        logger.error("SUPABASE_URL not configured")
         return {}
     
     jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
@@ -53,17 +55,17 @@ def _get_supabase_jwks() -> Dict[str, Any]:
         headers["apikey"] = settings.supabase_anon_key
         headers["Authorization"] = f"Bearer {settings.supabase_anon_key}"
     
-    print(f"Fetching JWKS from: {jwks_url} (with auth: {bool(settings.supabase_anon_key)})")
+    logger.debug("Fetching JWKS from: %s (with auth: %s)", jwks_url, bool(settings.supabase_anon_key))
     try:
         response = httpx.get(jwks_url, headers=headers, timeout=10.0, follow_redirects=True)
-        print(f"JWKS response status: {response.status_code}")
+        logger.debug("JWKS response status: %s", response.status_code)
         response.raise_for_status()
         jwks = response.json()
-        print(f"Successfully fetched {len(jwks.get('keys', []))} keys")
+        logger.debug("Successfully fetched %s keys", len(jwks.get('keys', [])))
         _cache_set("supabase_jwks", jwks, ttl=300)
         return jwks
     except Exception as e:
-        print(f"ERROR fetching JWKS: {type(e).__name__}: {str(e)}")
+        logger.error("ERROR fetching JWKS: %s: %s", type(e).__name__, str(e))
         return {}
 
 
@@ -74,31 +76,31 @@ def _get_supabase_key(id_token: str) -> Optional[Any]:
     
     # For HMAC algorithms (HS256), use the JWT secret
     if alg.startswith("HS"):
-        print(f"Using HS256 with JWT secret for token verification")
+        logger.debug("Using HS256 with JWT secret for token verification")
         if not settings.supabase_jwt_secret:
             return None
         return _decode_jwt_secret(settings.supabase_jwt_secret)
     
     # For RSA/EC algorithms, fetch JWKS
-    print(f"Token uses {alg}, fetching JWKS for public key")
+    logger.debug("Token uses %s, fetching JWKS for public key", alg)
     jwks = _get_supabase_jwks()
     if not jwks or not jwks.get("keys"):
-        print(f"WARNING: No JWKS keys available, falling back to JWT secret")
+        logger.warning("No JWKS keys available, falling back to JWT secret")
         # Fallback: try JWT secret even for RS256/ES256 (won't work but worth trying)
         return settings.supabase_jwt_secret or None
     
     kid = unverified.get("kid")
-    print(f"Looking for key with kid: {kid}")
+    logger.debug("Looking for key with kid: %s", kid)
     for jwk in jwks.get("keys", []):
         if jwk.get("kid") == kid:
-            print(f"Found matching key with algorithm: {jwk.get('alg')}")
+            logger.debug("Found matching key with algorithm: %s", jwk.get('alg'))
             # Handle both RSA and EC keys
             if jwk.get("kty") == "RSA":
                 return jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
             elif jwk.get("kty") == "EC":
                 return jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(jwk))
     
-    print(f"ERROR: No matching key found for kid: {kid}")
+    logger.error("No matching key found for kid: %s", kid)
     return None
 
 
@@ -115,11 +117,11 @@ def _decode_jwt_secret(secret: str) -> str:
         # Try base64 decoding
         decoded_bytes = base64.b64decode(secret)
         decoded_str = decoded_bytes.decode('utf-8')
-        print(f"JWT_SECRET was base64 encoded, decoded length: {len(decoded_str)}")
+        logger.debug("JWT_SECRET was base64 encoded, decoded length: %s", len(decoded_str))
         return decoded_str
     except Exception:
         # Not base64 or decode failed, use as-is
-        print(f"JWT_SECRET is plain text, length: {len(secret)}")
+        logger.debug("JWT_SECRET is plain text, length: %s", len(secret))
         return secret
 
 
@@ -130,16 +132,16 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
     Tries HS256 first (Supabase default), then ES256 if needed.
     """
     if not settings.supabase_url:
-        print("WARNING: SUPABASE_URL not configured")
+        logger.warning("SUPABASE_URL not configured")
         return {}
     
     # Get the algorithm from token header
     try:
         header = jwt.get_unverified_header(token)
         alg = header.get("alg", "HS256")
-        print(f"Token algorithm: {alg}, kid: {header.get('kid')}")
+        logger.debug("Token algorithm: %s, kid: %s", alg, header.get('kid'))
     except Exception as e:
-        print(f"ERROR: Could not decode token header: {e}")
+        logger.error("Could not decode token header: %s", e)
         return {}
     
     issuer = _get_supabase_issuer()
@@ -147,10 +149,10 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
 
     verification_key = _get_supabase_key(token)
     if not verification_key:
-        print(f"ERROR: Could not resolve verification key for algorithm {alg}")
+        logger.error("Could not resolve verification key for algorithm %s", alg)
     else:
         try:
-            print(f"Attempting {alg} verification with resolved key")
+            logger.debug("Attempting %s verification with resolved key", alg)
             decoded = jwt.decode(
                 token,
                 verification_key,
@@ -164,13 +166,13 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
                     "verify_iss": bool(issuer),
                 },
             )
-            print(f"✅ Successfully verified token ({alg}) for user: {decoded.get('email', decoded.get('sub'))}")
+            logger.debug("Successfully verified token (%s) for user: %s", alg, decoded.get('email', decoded.get('sub')))
             return decoded
         except jwt.ExpiredSignatureError:
-            print("ERROR: Token has expired")
+            logger.warning("Token has expired")
             return {}
         except jwt.InvalidAudienceError as e:
-            print(f"ERROR: Invalid audience - {str(e)}")
+            logger.warning("Invalid audience: %s", str(e))
             try:
                 decoded = jwt.decode(
                     token,
@@ -178,17 +180,17 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
                     algorithms=[alg],
                     options={"verify_signature": True, "verify_exp": True, "verify_aud": False},
                 )
-                print(f"✅ Verified token ({alg}, no audience check) for user: {decoded.get('email', decoded.get('sub'))}")
+                logger.debug("Verified token (%s, no audience check) for user: %s", alg, decoded.get('email', decoded.get('sub')))
                 return decoded
             except Exception as e2:
-                print(f"ERROR: {alg} without audience also failed: {str(e2)}")
+                logger.error("%s without audience also failed: %s", alg, str(e2))
         except Exception as e:
-            print(f"{alg} verification failed: {type(e).__name__}: {str(e)}")
+            logger.warning("%s verification failed: %s: %s", alg, type(e).__name__, str(e))
 
     if alg != "HS256" and settings.supabase_jwt_secret:
         jwt_secret = _decode_jwt_secret(settings.supabase_jwt_secret)
         try:
-            print("Attempting HS256 verification fallback with JWT_SECRET")
+            logger.debug("Attempting HS256 verification fallback with JWT_SECRET")
             decoded = jwt.decode(
                 token,
                 jwt_secret,
@@ -202,29 +204,12 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
                     "verify_iss": bool(issuer),
                 },
             )
-            print(f"✅ Successfully verified token (HS256 fallback) for user: {decoded.get('email', decoded.get('sub'))}")
+            logger.debug("Successfully verified token (HS256 fallback) for user: %s", decoded.get('email', decoded.get('sub')))
             return decoded
         except Exception as e:
-            print(f"HS256 fallback failed: {type(e).__name__}: {str(e)}")
-    
-    # APPROACH 2: If HS256 failed and token is ES256, try fallback decode
-    if alg in {"ES256", "RS256"}:
-        print(f"⚠️  FALLBACK: Token is {alg}, decoding without signature verification")
-        print("   NOTE: This is insecure but allows the app to function.")
-        print("   TODO: Ensure JWKS/public key verification is configured and reachable")
-        
-        try:
-            decoded = jwt.decode(
-                token,
-                options={"verify_signature": False, "verify_exp": True}
-            )
-            print(f"⚠️  Decoded ES256 token (unverified) for user: {decoded.get('email', decoded.get('sub'))}")
-            return decoded
-        except Exception as e:
-            print(f"ERROR: Even unverified decode failed: {str(e)}")
-            return {}
-    
-    print(f"ERROR: All verification methods failed for algorithm: {alg}")
+            logger.debug("HS256 fallback failed: %s: %s", type(e).__name__, str(e))
+
+    logger.error("All verification methods failed for algorithm: %s", alg)
     return {}
 
 

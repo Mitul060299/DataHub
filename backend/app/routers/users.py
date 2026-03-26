@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
+import logging
 import uuid
 from ..db import get_db
 from ..models import UserCreate, UserOut, UserProfileOut, UserUsage
@@ -9,179 +10,7 @@ from ..services.plan_guard import resolve_user_plan
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-
-@router.get("/debug/token-inspect")
-def debug_token_inspect(
-    authorization: str | None = Header(default=None),
-) -> dict:
-    """Detailed token inspection with raw header/payload decode"""
-    import base64
-    import json
-    
-    if not authorization:
-        return {"error": "No Authorization header provided"}
-    
-    try:
-        # Extract token from "Bearer <token>"
-        token = authorization.split(" ")[1] if " " in authorization else authorization
-        
-        # Split token into parts
-        parts = token.split('.')
-        if len(parts) != 3:
-            return {"error": f"Invalid token format - has {len(parts)} parts, expected 3"}
-        
-        header_b64, payload_b64, signature_b64 = parts
-        
-        # Decode header (add padding if needed)
-        header_b64_padded = header_b64 + '=' * (4 - len(header_b64) % 4)
-        header_bytes = base64.urlsafe_b64decode(header_b64_padded)
-        header = json.loads(header_bytes)
-        
-        # Decode payload
-        payload_b64_padded = payload_b64 + '=' * (4 - len(payload_b64) % 4)
-        payload_bytes = base64.urlsafe_b64decode(payload_b64_padded)
-        payload = json.loads(payload_bytes)
-        
-        # Determine verification approach
-        alg = header.get("alg", "UNKNOWN")
-        
-        return {
-            "success": True,
-            "raw_header": header,
-            "raw_payload": payload,
-            "algorithm": alg,
-            "key_id": header.get("kid"),
-            "token_type": header.get("typ"),
-            "user_id": payload.get("sub"),
-            "email": payload.get("email"),
-            "audience": payload.get("aud"),
-            "issuer": payload.get("iss"),
-            "expires_at": payload.get("exp"),
-            "issued_at": payload.get("iat"),
-            "verification_note": f"Token uses {alg} - {'Use JWT_SECRET with HS256' if alg == 'HS256' else 'Need public key for ' + alg if alg in ['ES256', 'RS256'] else 'Unknown method'}"
-        }
-    except Exception as e:
-        import traceback
-        return {
-            "error": str(e),
-            "type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }
-
-
-@router.get("/debug/token-algorithm")
-def debug_token_algorithm(
-    authorization: str | None = Header(default=None),
-) -> dict:
-    """Debug endpoint to check what algorithm the JWT token uses"""
-    import jwt
-    import base64
-    import json
-    
-    if not authorization:
-        return {"error": "No Authorization header provided"}
-    
-    try:
-        # Extract token from "Bearer <token>"
-        token = authorization.split(" ")[1] if " " in authorization else authorization
-        
-        # Decode header without verification
-        header = jwt.get_unverified_header(token)
-        
-        # Decode payload without verification to see structure
-        payload = jwt.decode(token, options={"verify_signature": False})
-        
-        # Determine verification approach
-        alg = header.get("alg", "UNKNOWN")
-        verification_method = ""
-        needs_jwks = False
-        
-        if alg.startswith("HS"):
-            verification_method = f"Use SUPABASE_JWT_SECRET directly with {alg}"
-            needs_jwks = False
-        elif alg.startswith("RS") or alg.startswith("ES"):
-            verification_method = f"Need public key from JWKS for {alg}"
-            needs_jwks = True
-        else:
-            verification_method = f"Unknown algorithm: {alg}"
-        
-        return {
-            "success": True,
-            "header": header,
-            "algorithm": alg,
-            "key_id": header.get("kid"),
-            "verification_method": verification_method,
-            "needs_jwks": needs_jwks,
-            "payload_sample": {
-                "sub": payload.get("sub"),
-                "email": payload.get("email"),
-                "role": payload.get("role"),
-                "aud": payload.get("aud"),
-                "iss": payload.get("iss"),
-                "exp": payload.get("exp"),
-                "iat": payload.get("iat"),
-            }
-        }
-    except Exception as e:
-        return {
-            "error": str(e),
-            "type": type(e).__name__
-        }
-
-
-@router.get("/debug/jwks")
-def debug_jwks() -> dict:
-    """Debug endpoint to check JWKS fetching"""
-    import httpx
-    from ..config import settings
-    
-    try:
-        if not settings.supabase_url:
-            return {"error": "SUPABASE_URL not configured"}
-        
-        jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/keys"
-        print(f"Testing JWKS fetch from: {jwks_url}")
-        
-        response = httpx.get(jwks_url, timeout=10.0)
-        print(f"Response status: {response.status_code}")
-        response.raise_for_status()
-        jwks = response.json()
-        
-        return {
-            "success": True,
-            "jwks_url": jwks_url,
-            "keys_count": len(jwks.get("keys", [])),
-            "key_ids": [key.get("kid") for key in jwks.get("keys", [])],
-            "your_kid": "47e89e81-5372-4086-b372-06cadcb765fe"
-        }
-    except Exception as e:
-        return {
-            "error": str(e),
-            "type": type(e).__name__,
-            "jwks_url": settings.supabase_url.rstrip("/") + "/auth/v1/keys" if settings.supabase_url else "N/A"
-        }
-
-
-@router.get("/debug/auth")
-def debug_auth(
-    authorization: str | None = Header(default=None),
-) -> dict:
-    """Debug endpoint to check authentication parsing"""
-    from ..security import get_current_subject, get_current_role, get_current_user_id
-    from ..config import settings
-    
-    return {
-        "has_auth_header": authorization is not None,
-        "auth_header_preview": authorization[:50] + "..." if authorization and len(authorization) > 50 else authorization,
-        "subject": get_current_subject(authorization),
-        "role": get_current_role(authorization),
-        "user_id": get_current_user_id(authorization),
-        "config": {
-            "supabase_url_set": bool(settings.supabase_url),
-            "supabase_jwt_secret_set": bool(settings.supabase_jwt_secret),
-            "supabase_jwt_audience": settings.supabase_jwt_audience,
-        }
-    }
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=UserOut)
@@ -239,7 +68,7 @@ def get_me(
         except Exception as e:
             # Handle duplicate ID edge case
             db.rollback()
-            print(f"Failed to create user with ID {user_id_to_use}: {str(e)}")
+            logger.error("Failed to create user with ID %s: %s", user_id_to_use, str(e))
             user = User(id=str(uuid.uuid4()), username=subject, role=role, plan="Free")
             db.add(user)
             db.commit()

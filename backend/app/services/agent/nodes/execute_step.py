@@ -118,6 +118,15 @@ async def execute_step(state: AgentState) -> dict:
             if not source_table or source_table not in table_registry:
                 source_table = "dataset"
 
+            if not step_sql:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "CHART_NO_SQL: create_chart step has no SQL. "
+                    "x_col=%s y_col=%s — will fall back to raw table scan. "
+                    "Planner should always generate aggregation SQL for chart steps.",
+                    x_col, y_col,
+                )
+
             rows: list[dict] = []
             col_types: dict[str, str] = {}
 

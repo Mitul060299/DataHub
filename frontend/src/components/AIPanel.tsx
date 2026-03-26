@@ -208,9 +208,17 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           onDatasetMutated?.();
         }
 
-        // Extract tile_created with echarts_config from run_steps
+        // Extract tile_created from execution_results (where the backend actually puts it)
         let tileCreatedData: TileCreatedData | undefined;
-        for (const step of sortedCompletedSteps) {
+
+        const executionResults = Array.isArray(event.execution_results)
+          ? (event.execution_results as Array<Record<string, unknown>>)
+          : [];
+
+        // Also check sortedCompletedSteps as fallback for backwards compatibility
+        const allStepsToCheck = [...executionResults, ...sortedCompletedSteps];
+
+        for (const step of allStepsToCheck) {
           const tc = step.tile_created as Record<string, unknown> | undefined;
           if (tc && tc.echarts_config && tc.saveable) {
             tileCreatedData = {
@@ -221,6 +229,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               source_table: tc.source_table ? String(tc.source_table) : undefined,
               saveable: true,
             };
+            break; // take the first chart found
           }
         }
 
@@ -259,6 +268,36 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
       }
       case "tile_created": {
         window.dispatchEvent(new CustomEvent("datahub:dashboard:refresh"));
+        // Also render the chart inline if echarts_config is present on this event
+        const tc = event as unknown as Record<string, unknown>;
+        if (tc.echarts_config && tc.saveable) {
+          const tileData: TileCreatedData = {
+            chart_id: String(tc.chart_id ?? crypto.randomUUID()),
+            title: String(tc.title ?? "Chart"),
+            chart_type: String(tc.chart_type ?? "bar"),
+            echarts_config: tc.echarts_config as Record<string, unknown>,
+            source_table: tc.source_table ? String(tc.source_table) : undefined,
+            saveable: true,
+          };
+          setMessages((previous) => {
+            // Attach to the last assistant message if it exists, otherwise create one
+            const last = [...previous].reverse().find((m) => m.role === "assistant");
+            if (last) {
+              return previous.map((m) =>
+                m.id === last.id ? { ...m, tileCreated: tileData } : m
+              );
+            }
+            return [
+              ...previous,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                content: "Here's your chart:",
+                tileCreated: tileData,
+              },
+            ];
+          });
+        }
         break;
       }
       case "agent.artifact": {

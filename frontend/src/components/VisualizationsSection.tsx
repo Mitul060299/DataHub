@@ -15,7 +15,7 @@ import {
   type SavedVisualization,
 } from "../api";
 import { EChartsRenderer } from "./EChartsRenderer";
-import { IconBarChart } from "./Icons";
+import { IconBarChart, IconX } from "./Icons";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +92,7 @@ export function VisualizationsSection() {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
 
   const [preview, setPreview] = useState<{
@@ -207,13 +208,10 @@ export function VisualizationsSection() {
                   borderRadius: 4,
                   position: "relative",
                   userSelect: "none",
+                  background: hoveredId === viz.id ? "var(--bg2)" : "transparent",
                 }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background = "var(--bg2)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background = "transparent";
-                }}
+                onMouseEnter={() => setHoveredId(viz.id)}
+                onMouseLeave={() => setHoveredId((cur) => (cur === viz.id ? null : cur))}
               >
                 {/* drag handle dots */}
                 <span style={{ color: "var(--tx2)", fontSize: 10, flexShrink: 0 }}>⠿</span>
@@ -260,6 +258,30 @@ export function VisualizationsSection() {
                     {viz.name}
                   </span>
                 )}
+
+                {/* inline delete button — visible on hover */}
+                <button
+                  className="btn"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    padding: 0,
+                    flexShrink: 0,
+                    background: "none",
+                    border: "none",
+                    color: "#ef4444",
+                    opacity: hoveredId === viz.id && editingId !== viz.id ? 1 : 0,
+                    pointerEvents: hoveredId === viz.id && editingId !== viz.id ? "auto" : "none",
+                    transition: "opacity 120ms ease",
+                  }}
+                  title="Delete visualization"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleDelete(viz.id);
+                  }}
+                >
+                  <IconX size={11} />
+                </button>
 
                 {/* type badge */}
                 <span

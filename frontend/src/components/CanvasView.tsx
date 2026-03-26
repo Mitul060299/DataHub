@@ -24,6 +24,7 @@ import {
 } from "../api";
 import { CanvasGrid } from "./CanvasGrid";
 import { CanvasToolbar } from "./CanvasToolbar";
+import { IconX } from "./Icons";
 
 interface CanvasViewProps {
   workspaceId: string;
@@ -35,6 +36,7 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
   const [limitStatus, setLimitStatus] = useState<CanvasLimitStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
 
   // currently open canvas
   const [activeCanvas, setActiveCanvas] = useState<CanvasLayout | null>(null);
@@ -192,7 +194,7 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
                 zIndex: 10,
               }}
             >
-              Limit reached · Upgrade to {limitStatus.plan === "free" ? "Pro" : "Team"}
+              Limit reached · Upgrade to {limitStatus?.plan === "free" ? "Pro" : "Team"}
             </span>
           )}
         </div>
@@ -237,14 +239,11 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
                 overflow: "hidden",
                 cursor: "pointer",
                 transition: "box-shadow .15s",
+                boxShadow: hoveredCardId === canvas.id ? "0 4px 16px rgba(0,0,0,.18)" : "none",
               }}
               onClick={() => openCanvas(canvas)}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,.18)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-              }}
+              onMouseEnter={() => setHoveredCardId(canvas.id)}
+              onMouseLeave={() => setHoveredCardId((cur) => (cur === canvas.id ? null : cur))}
             >
               {/* thumbnail area */}
               <div
@@ -292,11 +291,15 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
                 <button
                   className="btn"
                   style={{
-                    padding: "2px 6px",
-                    fontSize: 11,
+                    width: 22,
+                    height: 22,
+                    padding: 0,
                     color: "#ef4444",
                     background: "none",
                     border: "none",
+                    opacity: hoveredCardId === canvas.id ? 1 : 0,
+                    pointerEvents: hoveredCardId === canvas.id ? "auto" : "none",
+                    transition: "opacity 120ms ease",
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -304,7 +307,7 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
                   }}
                   title="Delete canvas"
                 >
-                  ✕
+                  <IconX size={13} />
                 </button>
               </div>
             </div>

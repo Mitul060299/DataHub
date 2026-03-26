@@ -385,7 +385,7 @@ export function HomePage() {
               }}
             >
               🚀
-              Now Live — Help us improve
+              Beta Live - Help us Improve
             </div>
 
             <h1 className="hero-title">

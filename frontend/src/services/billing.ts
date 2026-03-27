@@ -10,8 +10,8 @@ export type BillingPlanSlug = "professional" | "team" | "business";
 export type BillingCycle = "monthly" | "annual";
 
 const PRICES_INR: Record<BillingPlanSlug, Record<BillingCycle, number>> = {
-  professional: { monthly: 3299, annual: 31670 },
-  team: { monthly: 6199, annual: 59510 },
+  professional: { monthly: 3299, annual: 32990 },
+  team: { monthly: 6199, annual: 61990 },
   business: { monthly: 16599, annual: 165990 },
 };
 

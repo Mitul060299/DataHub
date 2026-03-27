@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional
 import pandas as pd
 from io import StringIO
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 from supabase import create_client
 from .plugins import plugin_registry, PluginInfo
 import logging
@@ -565,7 +566,7 @@ class SQLiteConnector:
             if where:
                 query = f"{query} WHERE {where}"
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, poolclass=NullPool)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -575,7 +576,7 @@ class SQLiteConnector:
             if not file_path:
                 return {"success": False, "error": "file_path is required"}
             connection_url = f"sqlite:///{file_path}"
-            engine = create_engine(connection_url, pool_pre_ping=True)
+            engine = create_engine(connection_url, poolclass=NullPool)
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             return {"success": True, "message": f"Successfully connected to SQLite database '{file_path}'"}
@@ -589,7 +590,7 @@ class SQLiteConnector:
             if not file_path:
                 return []
             connection_url = f"sqlite:///{file_path}"
-            engine = create_engine(connection_url, pool_pre_ping=True)
+            engine = create_engine(connection_url, poolclass=NullPool)
             with engine.connect() as conn:
                 result = conn.execute(text(
                     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"

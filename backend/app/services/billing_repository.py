@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 import uuid
 
+
 from supabase import Client, create_client
 
 from ..config import settings
@@ -148,6 +149,23 @@ def get_effective_plan(user_id: str) -> str | None:
         return None
 
     status = str(latest.get("status") or "").lower()
+
+    # Cancelled-at-cycle-end: keep paid plan until period expires
+    if status == "pending_cancellation":
+        current_end_raw = latest.get("current_end")
+        if current_end_raw:
+            try:
+                current_end = datetime.fromisoformat(
+                    str(current_end_raw).replace("Z", "+00:00")
+                )
+                if not current_end.tzinfo:
+                    current_end = current_end.replace(tzinfo=timezone.utc)
+                if current_end > datetime.now(timezone.utc):
+                    return to_canonical_plan(latest.get("plan"))
+            except Exception:
+                pass
+        return "Free"
+
     if status in _ACTIVE_STATUSES:
         return to_canonical_plan(latest.get("plan"))
     if status in _TERMINAL_STATUSES:

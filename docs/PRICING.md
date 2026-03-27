@@ -51,7 +51,7 @@ CTA: **Get started**
 | Scheduled pipelines | 5 |
 | Canvases | 20 |
 | Visualizations Library | Unlimited |
-| DB connections | PostgreSQL, MySQL, SQLite, MSSQL, Oracle _(coming soon)_ |
+| DB connections | PostgreSQL, MySQL (SQLite, MSSQL, Oracle — coming soon) |
 | Support | Email |
 
 CTA: **Start free trial**
@@ -151,15 +151,15 @@ Enforces monthly rolling usage quotas (AI calls, pipeline runs, dataset uploads)
 
 ---
 
-## DB Connector Roadmap
+## DB Connector Availability
 
-DB connectors are not yet live. Availability by tier when shipped:
+SQL DB connectors (PostgreSQL, MySQL) are live. Others are in progress.
 
 | Connector | Free | Pro | Team | Business | Enterprise |
 |---|---|---|---|---|---|
 | CSV / Excel | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PostgreSQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| MySQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
+| PostgreSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
+| MySQL | ❌ | ✅ | ✅ | ✅ | ✅ |
 | SQLite | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
 | MSSQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
 | Oracle | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
@@ -175,7 +175,7 @@ DB connectors are not yet live. Availability by tier when shipped:
 
 - **Provider**: Razorpay (INR billing)
 - **Plans configured in**: `backend/app/razorpay_plans.py`
-- **Billing UI**: `frontend/src/components/PlansPanel.tsx`
+- **Billing UI**: `frontend/src/components/BillingSettings.tsx`
 - **Plan enforcement entry point**: `backend/app/services/plan_guard.py`
 - **Canvas limit enforcement**: `backend/app/routers/canvas.py` (`_CANVAS_LIMITS` — Free: 2, Pro: 20, Team/Business/Enterprise: Unlimited)
 - **Saved Visualizations**: `backend/app/routers/saved_visualizations.py` (not plan-gated — unlimited for all tiers)

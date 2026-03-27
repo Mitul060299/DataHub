@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -272,7 +273,31 @@ async def _on_cancelled(entities: dict[str, Any], payload: dict[str, Any]):
     user_id = notes.get("user_id")
     razorpay_sub_id = str(sub.get("id") or "")
     if razorpay_sub_id:
-        billing_repository.update_subscription_status(razorpay_sub_id, "cancelled", str(user_id) if user_id else None, "free")
+        # Check whether the user still has paid access (at_cycle_end cancellation)
+        existing = billing_repository.get_subscription_by_razorpay_id(razorpay_sub_id)
+        current_end_raw = existing.get("current_end") if existing else None
+        still_active = False
+        if current_end_raw:
+            try:
+                current_end = datetime.fromisoformat(
+                    str(current_end_raw).replace("Z", "+00:00")
+                )
+                if not current_end.tzinfo:
+                    current_end = current_end.replace(tzinfo=timezone.utc)
+                still_active = current_end > datetime.now(timezone.utc)
+            except Exception:
+                pass
+        if still_active:
+            # Keep paid plan active until period end; get_effective_plan will
+            # downgrade automatically once current_end passes.
+            plan = existing.get("plan") if existing else None
+            billing_repository.update_subscription_status(
+                razorpay_sub_id, "pending_cancellation", str(user_id) if user_id else None, plan
+            )
+        else:
+            billing_repository.update_subscription_status(
+                razorpay_sub_id, "cancelled", str(user_id) if user_id else None, "free"
+            )
     await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.cancelled", payload)
 
 

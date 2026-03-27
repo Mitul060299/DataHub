@@ -107,6 +107,24 @@ class SqlQueryConnector:
 class PostgreSQLConnector:
     """PostgreSQL database connector using psycopg driver."""
     name = "postgresql"
+    supports_query_folding: bool = True
+
+    def _build_engine(self, config: Dict[str, Any]):
+        host = config.get("host", "localhost")
+        port = config.get("port", 5432)
+        database = config.get("database")
+        username = config.get("username")
+        password = config.get("password")
+        if not all([host, database, username, password]):
+            raise ValueError("host, database, username, and password are required")
+        url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
+        return create_engine(url, pool_pre_ping=True)
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source PostgreSQL database and return results."""
+        engine = self._build_engine(config)
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         host = config.get("host", "localhost")
@@ -125,7 +143,7 @@ class PostgreSQLConnector:
             raise ValueError("query or table is required")
 
         connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-        
+
         if not query:
             query = f"SELECT * FROM {schema}.{table}"
             if where:
@@ -241,6 +259,24 @@ class SupabaseConnector:
 class MySQLConnector:
     """MySQL database connector using PyMySQL driver."""
     name = "mysql"
+    supports_query_folding: bool = True
+
+    def _build_engine(self, config: Dict[str, Any]):
+        host = config.get("host", "localhost")
+        port = config.get("port", 3306)
+        database = config.get("database")
+        username = config.get("username")
+        password = config.get("password")
+        if not all([host, database, username, password]):
+            raise ValueError("host, database, username, and password are required")
+        url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
+        return create_engine(url, pool_pre_ping=True)
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source MySQL database and return results."""
+        engine = self._build_engine(config)
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         host = config.get("host", "localhost")
@@ -334,6 +370,24 @@ class MySQLConnector:
 class SQLServerConnector:
     """Microsoft SQL Server connector using PyMSSQL driver."""
     name = "mssql"
+    supports_query_folding: bool = True
+
+    def _build_engine(self, config: Dict[str, Any]):
+        host = config.get("host", "localhost")
+        port = config.get("port", 1433)
+        database = config.get("database")
+        username = config.get("username")
+        password = config.get("password")
+        if not all([host, database, username, password]):
+            raise ValueError("host, database, username, and password are required")
+        url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
+        return create_engine(url, pool_pre_ping=True)
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source SQL Server database and return results."""
+        engine = self._build_engine(config)
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         host = config.get("host", "localhost")
@@ -427,6 +481,28 @@ class SQLServerConnector:
 class OracleConnector:
     """Oracle Database connector using python-oracledb (thin mode)."""
     name = "oracle"
+    supports_query_folding: bool = True
+
+    def _build_engine(self, config: Dict[str, Any]):
+        host = config.get("host", "localhost")
+        port = config.get("port", 1521)
+        service_name = config.get("service_name")
+        sid = config.get("sid")
+        username = config.get("username")
+        password = config.get("password")
+        if not all([host, username, password]):
+            raise ValueError("host, username, and password are required")
+        if not service_name and not sid:
+            raise ValueError("service_name or sid is required")
+        dsn = f"{host}:{port}/{service_name or sid}"
+        url = f"oracle+oracledb://{username}:{password}@{dsn}"
+        return create_engine(url, pool_pre_ping=True, thick_mode=False)
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source Oracle database and return results."""
+        engine = self._build_engine(config)
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         host = config.get("host", "localhost")
@@ -548,6 +624,20 @@ class OracleConnector:
 class SQLiteConnector:
     """SQLite file-based connector (read-only)."""
     name = "sqlite"
+    supports_query_folding: bool = True
+
+    def _build_engine(self, config: Dict[str, Any]):
+        file_path = config.get("file_path")
+        if not file_path:
+            raise ValueError("file_path is required")
+        url = f"sqlite:///{file_path}"
+        return create_engine(url, poolclass=NullPool)
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the SQLite file and return results."""
+        engine = self._build_engine(config)
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         file_path = config.get("file_path")

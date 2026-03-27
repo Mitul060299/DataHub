@@ -53,3 +53,9 @@ simple-salesforce==1.12.6  # Salesforce SOQL/API connector
 
 # Cron scheduling (pipeline scheduler) — croniter pinned above
 pytz==2024.1
+
+# Credential encryption (query folding + write-back)
+cryptography>=42.0.0
+
+# TTL cache (live dataset federation)
+cachetools>=5.3.0

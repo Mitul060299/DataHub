@@ -24,9 +24,10 @@ from ..models import (
     JoinableResponse,
     StorageTierPolicyOut,
     StorageTierPolicyUpdate,
+    DatasetExportConnectorRequest,
 )
 from ..services.events import emit_event
-from ..security import get_current_role, get_current_user_id, require_role
+from ..security import get_current_role, get_current_user_id, require_role, decrypt_connector_config
 from ..db import get_db
 from ..config import settings
 from ..services.cache import invalidate_profile_cache
@@ -39,7 +40,7 @@ from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.usage_service import enforce_usage_limit, increment_usage
 from ..services.audit import audit_store
 from ..models import AuditEntry
-from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB
+from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB
 from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -933,7 +934,19 @@ def preview_dataset(
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    df = get_dataset_from_db(dataset_id, db)
+    # ── Live federation: query source DB, not stored rows ─────────────────
+    if getattr(meta, "import_mode", "cached") == "live":
+        try:
+            from ..services.live_dataset import LiveDatasetService
+            live_df = LiveDatasetService.get_live_data(meta, db)
+            df = live_df
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Source database unavailable for live dataset: {exc}",
+            ) from exc
+    else:
+        df = get_dataset_from_db(dataset_id, db)
     rows: list[dict] = df.to_dict(orient="records")
 
     if filter_col and filter_op and filter_val is not None:
@@ -1060,3 +1073,89 @@ def get_joinable_datasets(
     joinable.sort(key=lambda j: len(j.shared_columns), reverse=True)
 
     return JoinableResponse(dataset_id=dataset_id, joinable=joinable)
+
+
+# ── Write-back: export a dataset to any SQL connector ─────────────────────────
+
+@router.post("/{dataset_id}/export/connector")
+def export_dataset_to_connector(
+    dataset_id: str,
+    payload: DatasetExportConnectorRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Write the rows of a dataset directly into a SQL database table.
+
+    The caller supplies either:
+    - credential_id  → use a previously saved encrypted credential, OR
+    - connector_config → inline credentials (not saved)
+
+    mode: 'append' (default) | 'replace' | 'fail'
+    """
+    from ..services.connectors import connector_registry
+    from ..services.plan_guard import resolve_user_plan, enforce_connector_access
+
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_connector_access(user_plan, payload.connector_type)
+
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # ── Resolve credentials ──────────────────────────────────────────────────
+    if payload.credential_id:
+        cred_row = (
+            db.query(ConnectorCredentialDB)
+            .filter(ConnectorCredentialDB.id == payload.credential_id)
+            .first()
+        )
+        if not cred_row:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        config = decrypt_connector_config(cred_row.encrypted_config)
+    elif payload.connector_config:
+        config = dict(payload.connector_config)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide credential_id or connector_config",
+        )
+
+    # ── Load dataset rows ────────────────────────────────────────────────────
+    try:
+        df = get_dataset(dataset_id)
+    except KeyError:
+        df = get_dataset_from_db(dataset_id, db)
+
+    if df.empty:
+        raise HTTPException(status_code=400, detail="Dataset is empty — nothing to write")
+
+    # ── Resolve connector and write ──────────────────────────────────────────
+    connector = connector_registry.get(payload.connector_type)
+    if not connector:
+        raise HTTPException(status_code=404, detail=f"Connector '{payload.connector_type}' not found")
+
+    if not hasattr(connector, "write"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Connector '{payload.connector_type}' does not support write-back",
+        )
+
+    # Safety: default to 'append' unless the user explicitly chose 'replace'
+    mode = payload.mode if payload.mode in ("append", "replace", "fail") else "append"
+
+    try:
+        rows_written = connector.write(config=config, df=df, table=payload.table_name, mode=mode)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Write-back failed: {exc}") from exc
+
+    return {
+        "ok": True,
+        "dataset_id": dataset_id,
+        "connector_type": payload.connector_type,
+        "table": payload.table_name,
+        "mode": mode,
+        "rows_written": rows_written,
+    }

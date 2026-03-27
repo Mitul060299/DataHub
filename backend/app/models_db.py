@@ -119,6 +119,10 @@ class DatasetMetaDB(Base):
     parent_id = Column(String, nullable=True)
     version_number = Column(Integer, nullable=False, default=1)
     version_note = Column(Text, nullable=True)
+    # Query-folding / write-back / live federation
+    connector_credential_id = Column(String, nullable=True)  # FK to connector_credentials.id
+    import_mode = Column(String, nullable=False, server_default="cached")  # 'cached' | 'live'
+    connector_config = Column(JSONB, nullable=True)  # stores original import config for fold/live
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -134,6 +138,23 @@ class DatasetDataDB(Base):
     __tablename__ = "dataset_data"
     id = Column(String, primary_key=True)
     rows = Column(JSONB, nullable=False, default=list)
+
+
+class ConnectorCredentialDB(Base):
+    """Encrypted connector credentials for query folding, write-back, and live federation."""
+    __tablename__ = "connector_credentials"
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    workspace_id = Column(String, nullable=False, default="default")
+    connector_type = Column(String, nullable=False)  # e.g. 'postgresql', 'mysql'
+    label = Column(String, nullable=True)            # human-readable name
+    encrypted_config = Column(Text, nullable=False)  # Fernet-encrypted JSON
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_connector_credentials_user_workspace", "user_id", "workspace_id"),
+    )
 
 
 class DatasetChunkDB(Base):

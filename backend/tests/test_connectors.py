@@ -583,5 +583,261 @@ class TestConnectionURLs(unittest.TestCase):
             self.assertEqual(url, "sqlite:////tmp/test.db")
 
 
+# ─── Credential encryption ────────────────────────────────────────────────────
+
+class TestCredentialEncryption(unittest.TestCase):
+    """Verify that connector config can be Fernet-encrypted and decrypted."""
+
+    def test_roundtrip_basic(self):
+        from app.security import encrypt_connector_config, decrypt_connector_config
+        cfg = {"host": "localhost", "database": "mydb", "username": "user", "password": "s3cr3t"}
+        enc = encrypt_connector_config(cfg)
+        self.assertIsInstance(enc, str)
+        self.assertNotIn("s3cr3t", enc)  # the plaintext must not appear verbatim
+        dec = decrypt_connector_config(enc)
+        self.assertEqual(dec, cfg)
+
+    def test_encrypted_tokens_differ_between_calls(self):
+        """Fernet uses a random IV — two encryptions of the same value must differ."""
+        from app.security import encrypt_connector_config
+        cfg = {"password": "same"}
+        self.assertNotEqual(encrypt_connector_config(cfg), encrypt_connector_config(cfg))
+
+    def test_tampered_ciphertext_raises(self):
+        from app.security import encrypt_connector_config, decrypt_connector_config
+        enc = encrypt_connector_config({"k": "v"})
+        tampered = enc[:-4] + "XXXX"
+        with self.assertRaises(Exception):
+            decrypt_connector_config(tampered)
+
+    def test_empty_config_roundtrip(self):
+        from app.security import encrypt_connector_config, decrypt_connector_config
+        self.assertEqual(decrypt_connector_config(encrypt_connector_config({})), {})
+
+
+# ─── execute_sql (query folding utility) ─────────────────────────────────────
+
+class TestExecuteSql(unittest.TestCase):
+    """Each SQL connector's execute_sql() must push the query to the source DB."""
+
+    def _run(self, connector, creds, sql="SELECT 1"):
+        expected = pd.DataFrame({"n": [1]})
+        with patch("app.services.connectors.create_engine") as mock_ce, \
+             patch("app.services.connectors.pd.read_sql_query", return_value=expected):
+            engine_mock, _, _ = _make_engine_mock()
+            mock_ce.return_value = engine_mock
+            result = connector.execute_sql(sql, creds)
+        return result, mock_ce
+
+    def test_postgresql_execute_sql(self):
+        result, mock_ce = self._run(PostgreSQLConnector(), _PG_CREDS)
+        url = mock_ce.call_args[0][0]
+        self.assertTrue(url.startswith("postgresql+psycopg://"))
+
+    def test_mysql_execute_sql(self):
+        result, mock_ce = self._run(MySQLConnector(), _MYSQL_CREDS)
+        url = mock_ce.call_args[0][0]
+        self.assertTrue(url.startswith("mysql+pymysql://"))
+
+    def test_mssql_execute_sql(self):
+        result, mock_ce = self._run(SQLServerConnector(), _MSSQL_CREDS)
+        url = mock_ce.call_args[0][0]
+        self.assertTrue(url.startswith("mssql+pymssql://"))
+
+    def test_oracle_execute_sql(self):
+        result, mock_ce = self._run(OracleConnector(), _ORA_CREDS)
+        url = mock_ce.call_args[0][0]
+        self.assertTrue(url.startswith("oracle+oracledb://"))
+
+    def test_sqlite_execute_sql(self):
+        import tempfile, sqlite3, os
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute("CREATE TABLE nums (n INTEGER)")
+            conn.execute("INSERT INTO nums VALUES (42)")
+            conn.commit()
+            conn.close()
+            result = SQLiteConnector().execute_sql("SELECT n FROM nums", {"file_path": db_path})
+            self.assertEqual(result["n"].iloc[0], 42)
+        finally:
+            os.unlink(db_path)
+
+
+# ─── QueryFoldOptimizer ───────────────────────────────────────────────────────
+
+class TestQueryFoldOptimizer(unittest.TestCase):
+    """Unit tests for fold-chain building logic."""
+
+    def _meta(self, **kwargs):
+        class M:
+            id = kwargs.get("id", "ds-1")
+            connector_credential_id = kwargs.get("cred_id", "cred-abc")
+            source_type = kwargs.get("source_type", "postgresql")
+            connector_config = kwargs.get("connector_config", {"table": "orders", "schema": "public"})
+        return M()
+
+    def setUp(self):
+        from app.services.fold_optimizer import QueryFoldOptimizer, FoldabilityClassifier
+        self.QFO = QueryFoldOptimizer
+        self.FC = FoldabilityClassifier
+
+    def test_sql_step_is_foldable(self):
+        meta = self._meta()
+        step = {"type": "sql", "sql": "SELECT * FROM dataset WHERE x > 1"}
+        self.assertTrue(self.FC.is_foldable(step, meta))
+
+    def test_pandas_sentiment_not_foldable(self):
+        meta = self._meta()
+        step = {"type": "transform", "config": {"operation": "sentiment"}}
+        self.assertFalse(self.FC.is_foldable(step, meta))
+
+    def test_no_credential_not_foldable(self):
+        meta = self._meta(cred_id=None)
+        step = {"type": "sql", "sql": "SELECT * FROM dataset"}
+        self.assertFalse(self.FC.is_foldable(step, meta))
+
+    def test_non_sql_connector_not_foldable(self):
+        meta = self._meta(source_type="google_sheets")
+        step = {"type": "sql", "sql": "SELECT * FROM dataset"}
+        self.assertFalse(self.FC.is_foldable(step, meta))
+
+    def test_build_folded_sql_from_table(self):
+        opt = self.QFO()
+        meta = self._meta(connector_config={"table": "orders", "schema": "public"})
+        step = {"type": "sql", "sql": "SELECT id FROM dataset WHERE status = 'open'"}
+        folded = opt.build_folded_sql(step, meta)
+        self.assertIsNotNone(folded)
+        self.assertIn("FROM (SELECT * FROM public.orders) AS dataset", folded)
+        self.assertIn("WHERE status = 'open'", folded)
+
+    def test_build_folded_sql_from_query(self):
+        opt = self.QFO()
+        meta = self._meta(connector_config={"query": "SELECT * FROM orders WHERE year = 2025"})
+        step = {"type": "sql", "sql": "SELECT COUNT(*) FROM dataset"}
+        folded = opt.build_folded_sql(step, meta)
+        self.assertIn("SELECT * FROM orders WHERE year = 2025", folded)
+
+    def test_non_foldable_step_resets_chain(self):
+        opt = self.QFO()
+        meta = self._meta()
+        # Fold step 1
+        opt.build_folded_sql({"type": "sql", "sql": "SELECT * FROM dataset WHERE x > 0"}, meta)
+        # Non-foldable step breaks chain
+        result = opt.build_folded_sql({"type": "transform", "config": {"operation": "sentiment"}}, meta)
+        self.assertIsNone(result)
+        self.assertIsNone(opt._accumulated_sql)
+
+    def test_chained_fold_wraps_previous_sql(self):
+        opt = self.QFO()
+        meta = self._meta(connector_config={"table": "t", "schema": "s"})
+        step1 = {"type": "sql", "sql": "SELECT a, b FROM dataset WHERE a > 0"}
+        step2 = {"type": "sql", "sql": "SELECT a, SUM(b) FROM dataset GROUP BY a"}
+        _ = opt.build_folded_sql(step1, meta)
+        folded2 = opt.build_folded_sql(step2, meta)
+        self.assertIsNotNone(folded2)
+        # Step2 should wrap step1 output as a subquery
+        self.assertIn("FROM (", folded2)
+        self.assertIn("GROUP BY a", folded2)
+
+    def test_max_fold_depth_resets(self):
+        from app.services.fold_optimizer import MAX_FOLD_DEPTH
+        opt = self.QFO()
+        meta = self._meta(connector_config={"table": "t"})
+        step = {"type": "sql", "sql": "SELECT * FROM dataset"}
+        for _ in range(MAX_FOLD_DEPTH):
+            opt.build_folded_sql(step, meta)
+        # One more should return None and reset
+        result = opt.build_folded_sql(step, meta)
+        self.assertIsNone(result)
+        self.assertEqual(opt._fold_depth, 0)
+
+    def test_no_table_or_query_in_config_returns_none(self):
+        opt = self.QFO()
+        meta = self._meta(connector_config={})  # neither table nor query
+        step = {"type": "sql", "sql": "SELECT * FROM dataset"}
+        result = opt.build_folded_sql(step, meta)
+        self.assertIsNone(result)
+
+    def test_sqlite_fold_omits_schema_prefix(self):
+        opt = self.QFO()
+        meta = self._meta(
+            source_type="sqlite",
+            connector_config={"table": "items", "schema": "main"},
+        )
+        step = {"type": "sql", "sql": "SELECT * FROM dataset LIMIT 10"}
+        folded = opt.build_folded_sql(step, meta)
+        # Should NOT use schema.table for SQLite
+        self.assertNotIn("main.items", folded)
+        self.assertIn("FROM items", folded)
+
+
+# ─── Write-back (connector.write) ────────────────────────────────────────────
+
+class TestWriteBack(unittest.TestCase):
+    """Verify that connector.write() calls df.to_sql with the correct arguments."""
+
+    def _mock_engine(self):
+        engine_mock, _, _ = _make_engine_mock()
+        return engine_mock
+
+    def _run_write(self, connector, creds, df, table, mode):
+        with patch("app.services.connectors.create_engine") as mock_ce, \
+             patch.object(df, "to_sql") as mock_to_sql:
+            mock_ce.return_value = self._mock_engine()
+            mock_to_sql.return_value = None
+            result = connector.write(config=creds, df=df, table=table, mode=mode)
+            return result, mock_to_sql
+
+    def _df(self):
+        return pd.DataFrame({"id": [1, 2, 3], "val": ["a", "b", "c"]})
+
+    def test_postgresql_write_append(self):
+        df = self._df()
+        rows, mock_ts = self._run_write(PostgreSQLConnector(), _PG_CREDS, df, "out_table", "append")
+        self.assertEqual(rows, 3)
+        mock_ts.assert_called_once()
+        _, kwargs = mock_ts.call_args
+        self.assertEqual(kwargs["if_exists"], "append")
+
+    def test_postgresql_write_replace(self):
+        df = self._df()
+        _, mock_ts = self._run_write(PostgreSQLConnector(), _PG_CREDS, df, "out_table", "replace")
+        _, kwargs = mock_ts.call_args
+        self.assertEqual(kwargs["if_exists"], "replace")
+
+    def test_mysql_write_append(self):
+        df = self._df()
+        rows, mock_ts = self._run_write(MySQLConnector(), _MYSQL_CREDS, df, "tbl", "append")
+        self.assertEqual(rows, 3)
+        _, kwargs = mock_ts.call_args
+        self.assertEqual(kwargs["if_exists"], "append")
+
+    def test_mssql_write_replace(self):
+        df = self._df()
+        _, mock_ts = self._run_write(SQLServerConnector(), _MSSQL_CREDS, df, "tbl", "replace")
+        _, kwargs = mock_ts.call_args
+        self.assertEqual(kwargs["if_exists"], "replace")
+
+    def test_oracle_write_append(self):
+        df = self._df()
+        rows, _ = self._run_write(OracleConnector(), _ORA_CREDS, df, "tbl", "append")
+        self.assertEqual(rows, 3)
+
+    def test_write_missing_postgres_credentials_raises(self):
+        df = self._df()
+        with self.assertRaises(ValueError):
+            PostgreSQLConnector().write(config={}, df=df, table="t", mode="append")
+
+    def test_write_returns_row_count(self):
+        df = pd.DataFrame({"x": range(100)})
+        with patch("app.services.connectors.create_engine") as mock_ce, \
+             patch.object(df, "to_sql"):
+            mock_ce.return_value = self._mock_engine()
+            result = PostgreSQLConnector().write(config=_PG_CREDS, df=df, table="t", mode="append")
+        self.assertEqual(result, 100)
+
+
 if __name__ == "__main__":
     unittest.main()

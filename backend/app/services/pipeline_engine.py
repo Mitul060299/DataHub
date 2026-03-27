@@ -4,6 +4,7 @@ Handles: Pipeline creation, execution, monitoring, scheduling
 """
 
 import json
+import logging
 import uuid
 import hashlib
 import time
@@ -13,6 +14,8 @@ from typing import Optional, Dict, Any, AsyncGenerator, List
 
 import pandas as pd
 from sqlalchemy.orm import Session as DBSession
+
+logger = logging.getLogger(__name__)
 
 from app.models_db import (
     PipelineV2DB,
@@ -26,6 +29,8 @@ from app.models_db import (
 from app.services.chat_engine import ChatEvent, EventType
 from app.services.data_conversion import DataConversionService
 from app.services.duckdb_service import DuckDBService
+from app.services.fold_optimizer import QueryFoldOptimizer
+from app.services.live_dataset import LiveDatasetService
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +183,8 @@ class PipelineEngine:
         self.db = db
         self.user_id = user_id
         self.user_plan = user_plan
+        # One fold optimizer per engine instance (= per pipeline run)
+        self._fold_optimizer = QueryFoldOptimizer()
     
     def create_pipeline(
         self,
@@ -654,12 +661,51 @@ class PipelineEngine:
                 step=step,
                 runtime_parameters=runtime_parameters,
             )
-            step_result_rows = DuckDBService.transform_named_relations(
-                relation_rows=relation_rows,
-                sql=sql,
-                output_relation='dataset',
-                dataset_id=dataset_id,
-            )
+
+            # ── Query Folding: attempt to push SQL to the source database ──
+            folded = False
+            folded_sql = self._fold_optimizer.build_folded_sql(step, current_meta)
+            if folded_sql:
+                try:
+                    from app.models_db import ConnectorCredentialDB
+                    from app.security import decrypt_connector_config
+                    from app.services.connectors import connector_registry
+
+                    cred_row = (
+                        self.db.query(ConnectorCredentialDB)
+                        .filter(ConnectorCredentialDB.id == current_meta.connector_credential_id)
+                        .first()
+                    )
+                    if cred_row:
+                        config_dec = decrypt_connector_config(cred_row.encrypted_config)
+                        connector = connector_registry.get(cred_row.connector_type)
+                        if connector and hasattr(connector, "execute_sql"):
+                            fold_df = connector.execute_sql(folded_sql, config_dec)
+                            step_result_rows = (
+                                fold_df.astype(object)
+                                .where(pd.notnull(fold_df), None)
+                                .to_dict(orient="records")
+                            )
+                            folded = True
+                            logger.info(
+                                "[FOLD] Step %d pushed to %s for dataset %s",
+                                step_num, cred_row.connector_type, current_meta.id,
+                            )
+                except Exception as exc:
+                    logger.warning(
+                        "[FOLD] Push-down failed for step %d (dataset=%s) — "
+                        "falling back to DuckDB: %s",
+                        step_num, current_meta.id, exc,
+                    )
+                    self._fold_optimizer.reset()
+
+            if not folded:
+                step_result_rows = DuckDBService.transform_named_relations(
+                    relation_rows=relation_rows,
+                    sql=sql,
+                    output_relation='dataset',
+                    dataset_id=dataset_id,
+                )
 
             output_meta = self._persist_output_dataset(
                 source_dataset=current_meta,
@@ -701,6 +747,23 @@ class PipelineEngine:
         dataset = self.db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
             raise ValueError(f"Dataset not found: {dataset_id}")
+
+        # ── Live federation: fetch from source DB instead of stored chunks ──
+        if getattr(dataset, 'import_mode', 'cached') == 'live':
+            try:
+                live_df = LiveDatasetService.get_live_data(dataset, self.db)
+                rows = (
+                    live_df.astype(object)
+                    .where(pd.notnull(live_df), None)
+                    .to_dict(orient='records')
+                )
+                return dataset, rows
+            except Exception as exc:
+                logger.warning(
+                    "[LIVE] Failed to fetch live data for dataset %s — "
+                    "falling back to stored rows: %s",
+                    dataset_id, exc,
+                )
 
         chunks = (
             self.db.query(DatasetChunkDB)

@@ -434,6 +434,33 @@ class PipelineRun(BaseModel):
 class ConnectorImportRequest(BaseModel):
     connector: str
     config: Dict[str, Any] = Field(default_factory=dict)
+    # Optional: persist credentials for future fold/write-back/live operations
+    credential_id: Optional[str] = None   # use a previously saved credential
+    save_credential: bool = False         # encrypt + save config as a new credential
+    credential_label: Optional[str] = None
+    import_mode: str = "cached"           # 'cached' (default) | 'live'
+
+
+class ConnectorCredentialCreate(BaseModel):
+    connector_type: str
+    config: Dict[str, Any]
+    label: Optional[str] = None
+
+
+class ConnectorCredentialOut(BaseModel):
+    id: str
+    connector_type: str
+    label: Optional[str]
+    created_at: str
+
+
+class DatasetExportConnectorRequest(BaseModel):
+    """Request body for POST /datasets/{id}/export/connector (write-back)."""
+    connector_type: str
+    table_name: str
+    mode: str = "append"           # 'append' | 'replace' | 'fail'
+    credential_id: Optional[str] = None   # use saved credential
+    connector_config: Optional[Dict[str, Any]] = None  # inline creds (if no credential_id)
 
 
 class UserCreate(BaseModel):

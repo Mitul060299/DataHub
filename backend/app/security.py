@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 import base64
+import hashlib
 import json
 import logging
 import time
@@ -8,6 +9,32 @@ import httpx
 import jwt
 from .config import settings
 from fastapi import Header, HTTPException
+
+
+# ── Connector credential encryption (Fernet / AES-128-CBC) ──────────────────
+
+def _get_fernet():
+    """Return a Fernet instance derived from CONNECTOR_ENCRYPTION_KEY (or APP_SECRET_KEY)."""
+    from cryptography.fernet import Fernet
+    key_str = settings.connector_encryption_key or settings.app_secret_key
+    # Derive a stable 32-byte key, then base64url-encode for Fernet
+    key_bytes = hashlib.sha256(key_str.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(key_bytes)
+    return Fernet(fernet_key)
+
+
+def encrypt_connector_config(config: dict) -> str:
+    """Encrypt a connector config dict to a URL-safe string."""
+    plaintext = json.dumps(config, separators=(",", ":")).encode()
+    return _get_fernet().encrypt(plaintext).decode()
+
+
+def decrypt_connector_config(encrypted: str) -> dict:
+    """Decrypt a connector config string back to a dict."""
+    plaintext = _get_fernet().decrypt(encrypted.encode())
+    return json.loads(plaintext.decode())
+
+
 
 logger = logging.getLogger(__name__)
 

@@ -149,6 +149,10 @@ class Settings(BaseModel):
     supabase_realtime_url: str = os.getenv("SUPABASE_REALTIME_URL", "")
     resend_api_key: str = os.getenv("RESEND_API_KEY", "")
     email_from_address: str = os.getenv("EMAIL_FROM_ADDRESS", "DataHub <noreply@datahub.org.in>")
+    # Connector credential encryption — kept separate from JWT key so each can rotate independently
+    connector_encryption_key: str = os.getenv("CONNECTOR_ENCRYPTION_KEY", "")
+    # Live dataset federation — TTL (in seconds) for the per-dataset in-process result cache
+    live_dataset_ttl_seconds: int = int(os.getenv("LIVE_DATASET_TTL_SECONDS", "300"))
 
 
 settings = Settings()

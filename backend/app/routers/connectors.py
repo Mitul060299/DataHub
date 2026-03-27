@@ -2,14 +2,25 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 import pandas as pd
 import uuid
-from ..models import ConnectorImportRequest, DatasetPreview
-from ..models_db import ImportConnectionDB
+from ..models import (
+    ConnectorImportRequest,
+    ConnectorCredentialCreate,
+    ConnectorCredentialOut,
+    DatasetPreview,
+)
+from ..models_db import ImportConnectionDB, ConnectorCredentialDB, DatasetMetaDB
 from ..services.connectors import connector_registry
 from .datasets import save_dataset
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
 from ..services.sync_store import sync_store
-from ..security import get_current_role, get_current_user_id, require_role
+from ..security import (
+    get_current_role,
+    get_current_user_id,
+    require_role,
+    encrypt_connector_config,
+    decrypt_connector_config,
+)
 from ..services.plan_guard import resolve_user_plan, enforce_connector_access, enforce_file_constraints
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
@@ -38,10 +49,53 @@ def import_from_connector(
     if not connector:
         raise HTTPException(status_code=404, detail="Connector not found")
 
-    df = connector.read(payload.config)
+    # ── Resolve / save connector credentials ──────────────────────────────
+    credential_id: str | None = None
+    effective_config = dict(payload.config)
+
+    if payload.credential_id:
+        # Use a previously saved credential
+        cred_row = (
+            db.query(ConnectorCredentialDB)
+            .filter(ConnectorCredentialDB.id == payload.credential_id)
+            .first()
+        )
+        if not cred_row:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        credential_id = cred_row.id
+        effective_config = decrypt_connector_config(cred_row.encrypted_config)
+    elif payload.save_credential and payload.config:
+        # Encrypt and persist the supplied config
+        cred_row = ConnectorCredentialDB(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            workspace_id=workspace_id or "default",
+            connector_type=payload.connector,
+            label=payload.credential_label or payload.connector,
+            encrypted_config=encrypt_connector_config(dict(payload.config)),
+        )
+        db.add(cred_row)
+        db.flush()  # get the id without committing yet
+        credential_id = cred_row.id
+
+    # ── Read data from source ──────────────────────────────────────────────
+    if payload.import_mode == "live":
+        # Live mode: skip data pull — just save metadata
+        if not credential_id:
+            raise HTTPException(
+                status_code=400,
+                detail="import_mode='live' requires save_credential=true or a credential_id",
+            )
+        # We need a minimal DataFrame to get column info for the dataset record
+        df = connector.read(effective_config)
+        estimated_original_size = int(df.memory_usage(deep=True).sum())
+    else:
+        df = connector.read(effective_config)
+        estimated_original_size = int(df.memory_usage(deep=True).sum())
+
     if df.empty:
         raise HTTPException(status_code=400, detail="No data returned from connector")
-    estimated_original_size = int(df.memory_usage(deep=True).sum())
+
     enforce_file_constraints(
         plan=user_plan,
         workspace_id=workspace_id or "default",
@@ -49,7 +103,25 @@ def import_from_connector(
         upload_size_bytes=max(estimated_original_size, 1),
         db=db,
     )
-    dataset_id = save_dataset(df, db, workspace_id=workspace_id, user_id=user_id)
+
+    # ── Persist dataset (always — even for live, we store schema/preview info) ──
+    save_df = df.head(10) if payload.import_mode == "live" else df
+    dataset_id = save_dataset(
+        save_df,
+        db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+    )
+
+    # ── Attach fold/live metadata to DatasetMetaDB ─────────────────────────
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if meta:
+        meta.connector_credential_id = credential_id
+        meta.import_mode = payload.import_mode
+        meta.source_type = payload.connector
+        meta.connector_config = dict(payload.config)  # store original for fold base relation
+        db.commit()
+
     return DatasetPreview(
         dataset_id=dataset_id,
         columns=list(df.columns),
@@ -57,6 +129,87 @@ def import_from_connector(
         row_count=int(df.shape[0]),
         sample_rows=df.head(10).to_dict(orient="records"),
     )
+
+
+# ── Connector Credential Management ────────────────────────────────────────
+
+@router.post("/credentials", response_model=ConnectorCredentialOut)
+def save_connector_credential(
+    payload: ConnectorCredentialCreate,
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> ConnectorCredentialOut:
+    """Encrypt and persist a connector config as a reusable credential."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_user_id(authorization)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_connector_access(user_plan, payload.connector_type)
+
+    row = ConnectorCredentialDB(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        workspace_id=workspace_id or "default",
+        connector_type=payload.connector_type,
+        label=payload.label or payload.connector_type,
+        encrypted_config=encrypt_connector_config(dict(payload.config)),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return ConnectorCredentialOut(
+        id=row.id,
+        connector_type=row.connector_type,
+        label=row.label,
+        created_at=row.created_at.isoformat(),
+    )
+
+
+@router.get("/credentials", response_model=dict)
+def list_connector_credentials(
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """List saved credentials for the current workspace (config is never returned)."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    ws = workspace_id or "default"
+    rows = (
+        db.query(ConnectorCredentialDB)
+        .filter(ConnectorCredentialDB.workspace_id == ws)
+        .order_by(ConnectorCredentialDB.created_at.desc())
+        .all()
+    )
+    return {
+        "credentials": [
+            {
+                "id": r.id,
+                "connector_type": r.connector_type,
+                "label": r.label,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.delete("/credentials/{credential_id}")
+def delete_connector_credential(
+    credential_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Revoke a saved credential.  Datasets using it will lose fold/live capability."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    row = db.query(ConnectorCredentialDB).filter(ConnectorCredentialDB.id == credential_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/sync")

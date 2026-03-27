@@ -16,8 +16,8 @@ const PRICES_INR: Record<BillingPlanSlug, Record<BillingCycle, number>> = {
 };
 
 export const PLAN_FEATURES: Record<BillingPlanSlug, string[]> = {
-  professional: ["Core DB connectors", "500 AI messages/month", "Scheduled pipelines"],
-  team: ["Warehouse connectors", "Team collaboration + RBAC", "Unlimited AI messages"],
+  professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "500 AI messages/month", "Scheduled pipelines"],
+  team: ["+Snowflake, Redshift, BigQuery", "Team collaboration + RBAC", "Unlimited AI messages"],
   business: ["SSO + governance", "Webhooks + advanced controls", "Lineage + audit"],
 };
 

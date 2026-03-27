@@ -42,7 +42,7 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=3,
         max_workspaces=1,
         allowed_formats={"csv", "excel"},
-        allowed_connectors=set(),
+        allowed_connectors={"csv", "excel"},
         sso_enabled=False,
         webhooks_enabled=False,
         scheduling_enabled=False,
@@ -54,7 +54,7 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=25,
         max_workspaces=3,
         allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"postgresql", "mysql", "mongodb", "mssql"},
+        allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle"},
         sso_enabled=False,
         webhooks_enabled=False,
         scheduling_enabled=True,
@@ -66,7 +66,7 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=-1,
         max_workspaces=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"postgresql", "mysql", "mongodb", "mssql", "snowflake", "bigquery", "redshift", "azure-sql", "oracle"},
+        allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle", "snowflake", "redshift", "bigquery"},
         sso_enabled=False,
         webhooks_enabled=False,
         scheduling_enabled=True,
@@ -201,9 +201,14 @@ def enforce_connector_access(plan: str, connector_name: str) -> None:
     if "*" in limits.allowed_connectors:
         return
     if connector_name not in limits.allowed_connectors:
-        required_plan = "Team"
-        if connector_name in {"postgresql", "mysql", "mongodb", "mssql"}:
+        if connector_name in {"postgresql", "mysql", "sqlite", "mssql", "oracle"}:
             required_plan = "Professional"
+        elif connector_name in {"snowflake", "redshift", "bigquery"}:
+            required_plan = "Team"
+        elif connector_name == "custom":
+            required_plan = "Business"
+        else:
+            required_plan = "Enterprise"
         raise HTTPException(
             status_code=403,
             detail=format_upgrade_message(f"{connector_name} connector", plan, required_plan),

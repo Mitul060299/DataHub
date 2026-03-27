@@ -24,25 +24,25 @@ const planCards: PlanCard[] = [
     key: "Professional",
     price: "₹3,299 / month",
     description: "Solo consultants and analysts",
-    highlights: ["20 GB storage", "500 AI messages/month", "CSV, Excel & Google Sheets", "20 canvases", "Unlimited visualizations"],
+    highlights: ["20 GB storage", "500 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "20 canvases", "Unlimited visualizations"],
   },
   {
     key: "Team",
     price: "₹6,199 / month",
     description: "Small analytics and consulting teams",
-    highlights: ["100 GB shared storage", "Up to 10 team members", "+ PostgreSQL, MySQL (coming soon)", "Unlimited canvases", "Unlimited visualizations"],
+    highlights: ["100 GB shared storage", "Up to 10 team members", "+ Snowflake, Redshift, BigQuery (coming soon)", "Unlimited canvases", "Unlimited visualizations"],
   },
   {
     key: "Business",
     price: "₹16,599 / month",
     description: "Governance-first mid-size enterprises",
-    highlights: ["500 GB storage", "Up to 50 team members", "SSO/SAML (coming soon)", "Unlimited canvases", "Unlimited visualizations"],
+    highlights: ["500 GB storage", "Up to 50 team members", "SSO/SAML (coming soon)", "+ Custom connectors (coming soon)", "Unlimited canvases", "Unlimited visualizations"],
   },
   {
     key: "Enterprise",
     price: "Custom",
     description: "Fortune 500 and regulated environments",
-    highlights: ["Custom TB-scale storage", "On-prem / VPC deployments", "24/7 dedicated support", "Custom compliance + integrations"],
+    highlights: ["Custom TB-scale storage", "Custom + on-premise connectors (coming soon)", "24/7 dedicated support", "Custom compliance + integrations"],
   },
 ];
 

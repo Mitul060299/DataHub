@@ -123,9 +123,24 @@ async def verify_payment(
     if not verified:
         raise HTTPException(status_code=400, detail="Payment verification failed — invalid signature")
 
+    # Signature is valid — promote subscription to active immediately.
+    # store_subscription already wrote the correct plan when checkout was
+    # initiated; this just flips status from "created" to "active" so
+    # get_effective_plan returns the paid plan on the next page load.
+    sub = billing_repository.get_subscription_by_razorpay_id(payload.razorpay_subscription_id)
+    if sub:
+        billing_repository.update_subscription_status(
+            payload.razorpay_subscription_id,
+            "active",
+            user.id,
+            sub.get("plan"),
+        )
+
+    effective_plan = billing_repository.get_effective_plan(user.id)
     return {
         "verified": True,
         "user_id": user.id,
+        "plan": effective_plan,
     }
 
 

@@ -51,7 +51,7 @@ CTA: **Get started**
 | Scheduled pipelines | 5 |
 | Canvases | 20 |
 | Visualizations Library | Unlimited |
-| DB connections | PostgreSQL, MySQL (SQLite, MSSQL, Oracle — coming soon) |
+| DB connections | PostgreSQL, MySQL, SQLite, MSSQL, Oracle |
 | Support | Email |
 
 CTA: **Start free trial**
@@ -160,9 +160,9 @@ SQL DB connectors (PostgreSQL, MySQL) are live. Others are in progress.
 | CSV / Excel | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PostgreSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
 | MySQL | ❌ | ✅ | ✅ | ✅ | ✅ |
-| SQLite | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| MSSQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| Oracle | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
+| SQLite | ❌ | ✅ | ✅ | ✅ | ✅ |
+| MSSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Oracle | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Snowflake | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
 | Redshift | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
 | BigQuery | ❌ | ❌ | 🔜 | 🔜 | 🔜 |

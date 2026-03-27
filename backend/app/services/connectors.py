@@ -399,6 +399,29 @@ class SQLServerConnector:
             logger.error(f"SQL Server connection test failed: {e}")
             return {"success": False, "error": str(e)}
 
+    def list_tables(self, config: Dict[str, Any]) -> list:
+        try:
+            host = config.get("host", "localhost")
+            port = config.get("port", 1433)
+            database = config.get("database")
+            username = config.get("username")
+            password = config.get("password")
+            if not all([host, database, username, password]):
+                return []
+            connection_url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
+            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"timeout": 5})
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT TABLE_SCHEMA, TABLE_NAME, 0
+                    FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_TYPE = 'BASE TABLE'
+                    ORDER BY TABLE_SCHEMA, TABLE_NAME
+                """))
+                return [{"schema": r[0], "table": r[1], "row_count": r[2]} for r in result.fetchall()]
+        except Exception as e:
+            logger.error(f"SQL Server list_tables failed: {e}")
+            return []
+
 
 class OracleConnector:
     """Oracle Database connector using python-oracledb (thin mode)."""
@@ -492,6 +515,89 @@ class OracleConnector:
         except Exception as e:
             logger.error(f"Oracle connection test failed: {e}")
             return {"success": False, "error": str(e)}
+
+    def list_tables(self, config: Dict[str, Any]) -> list:
+        try:
+            host = config.get("host", "localhost")
+            port = config.get("port", 1521)
+            service_name = config.get("service_name")
+            sid = config.get("sid")
+            username = config.get("username")
+            password = config.get("password")
+            if not all([host, username, password]) or not (service_name or sid):
+                return []
+            dsn = f"{host}:{port}/{service_name or sid}"
+            connection_url = f"oracle+oracledb://{username}:{password}@{dsn}"
+            engine = create_engine(connection_url, pool_pre_ping=True, thick_mode=False)
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT owner, table_name, COALESCE(num_rows, 0)
+                    FROM all_tables
+                    WHERE owner NOT IN (
+                        'SYS','SYSTEM','CTXSYS','MDSYS','ORDDATA','ORDSYS','OUTLN','WMSYS','XDB'
+                    )
+                    ORDER BY owner, table_name
+                """))
+                return [{"schema": r[0], "table": r[1], "row_count": r[2]} for r in result.fetchall()]
+        except Exception as e:
+            logger.error(f"Oracle list_tables failed: {e}")
+            return []
+
+
+class SQLiteConnector:
+    """SQLite file-based connector (read-only)."""
+    name = "sqlite"
+
+    def read(self, config: Dict[str, Any]) -> pd.DataFrame:
+        file_path = config.get("file_path")
+        query = config.get("query")
+        table = config.get("table")
+        where = config.get("where")
+
+        if not file_path:
+            raise ValueError("file_path is required")
+        if not query and not table:
+            raise ValueError("query or table is required")
+
+        connection_url = f"sqlite:///{file_path}"
+        if not query:
+            query = f"SELECT * FROM {table}"
+            if where:
+                query = f"{query} WHERE {where}"
+
+        engine = create_engine(connection_url, pool_pre_ping=True)
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(query), conn)
+
+    def test_connection(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            file_path = config.get("file_path")
+            if not file_path:
+                return {"success": False, "error": "file_path is required"}
+            connection_url = f"sqlite:///{file_path}"
+            engine = create_engine(connection_url, pool_pre_ping=True)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return {"success": True, "message": f"Successfully connected to SQLite database '{file_path}'"}
+        except Exception as e:
+            logger.error(f"SQLite connection test failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def list_tables(self, config: Dict[str, Any]) -> list:
+        try:
+            file_path = config.get("file_path")
+            if not file_path:
+                return []
+            connection_url = f"sqlite:///{file_path}"
+            engine = create_engine(connection_url, pool_pre_ping=True)
+            with engine.connect() as conn:
+                result = conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                ))
+                return [{"schema": "main", "table": r[0], "row_count": 0} for r in result.fetchall()]
+        except Exception as e:
+            logger.error(f"SQLite list_tables failed: {e}")
+            return []
 
 
 class MongoDBConnector:
@@ -1049,6 +1155,7 @@ class ConnectorRegistry:
             MySQLConnector.name: MySQLConnector(),
             SQLServerConnector.name: SQLServerConnector(),
             OracleConnector.name: OracleConnector(),
+            SQLiteConnector.name: SQLiteConnector(),
             MongoDBConnector.name: MongoDBConnector(),
             
             # Cloud data warehouses (Team/Enterprise tier)

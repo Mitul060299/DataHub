@@ -51,7 +51,7 @@ CTA: **Get started**
 | Scheduled pipelines | 5 |
 | Canvases | 20 |
 | Visualizations Library | Unlimited |
-| DB connections | PostgreSQL, MySQL, SQLite, MSSQL, Oracle _(coming soon)_ |
+| DB connections | PostgreSQL, MySQL, SQLite, MSSQL, Oracle |
 | Support | Email |
 
 CTA: **Start free trial**
@@ -70,7 +70,7 @@ CTA: **Start free trial**
 | Scheduled pipelines | 20 |
 | Canvases | Unlimited |
 | Visualizations Library | Unlimited |
-| DB connections | + Snowflake, Redshift, BigQuery _(coming soon)_ |
+| DB connections | + Snowflake, Redshift, BigQuery |
 | Audit log | ✅ |
 | Support | Priority email |
 
@@ -90,7 +90,7 @@ CTA: **Start free trial**
 | Scheduled pipelines | Unlimited |
 | Canvases | Unlimited |
 | Visualizations Library | Unlimited |
-| DB connections | + Custom connectors _(coming soon)_ |
+| DB connections | + Custom connectors |
 | Audit log | ✅ |
 | SSO / SAML | _(coming soon)_ |
 | Support | 24/7 dedicated |
@@ -111,7 +111,7 @@ CTA: **Start free trial**
 | Scheduled pipelines | Unlimited |
 | Canvases | Unlimited |
 | Visualizations Library | Unlimited |
-| DB connections | Custom _(coming soon)_ |
+| DB connections | Custom |
 | White-label option | _(coming soon)_ |
 | SSO / SAML | ✅ |
 | Audit log | ✅ |
@@ -158,14 +158,14 @@ DB connectors are not yet live. Availability by tier when shipped:
 | Connector | Free | Pro | Team | Business | Enterprise |
 |---|---|---|---|---|---|
 | CSV / Excel | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PostgreSQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| MySQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| SQLite | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| MSSQL | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| Oracle | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
-| Snowflake | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
-| Redshift | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
-| BigQuery | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
+| PostgreSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
+| MySQL | ❌ | ✅ | ✅ | ✅ | ✅ |
+| SQLite | ❌ | ✅ | ✅ | ✅ | ✅ |
+| MSSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Oracle | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Snowflake | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Redshift | ❌ | ❌ | ✅ | ✅ | ✅ |
+| BigQuery | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Custom | ❌ | ❌ | ❌ | 🔜 | 🔜 |
 | On-premise | ❌ | ❌ | ❌ | ❌ | 🔜 |
 

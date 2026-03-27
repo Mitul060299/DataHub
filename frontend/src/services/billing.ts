@@ -17,8 +17,8 @@ const PRICES_INR: Record<BillingPlanSlug, Record<BillingCycle, number>> = {
 
 export const PLAN_FEATURES: Record<BillingPlanSlug, string[]> = {
   professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "500 AI messages/month", "Scheduled pipelines"],
-  team: ["+Snowflake, Redshift, BigQuery", "Team collaboration + RBAC", "Unlimited AI messages"],
-  business: ["SSO + governance", "Webhooks + advanced controls", "Lineage + audit"],
+  team: ["+ Snowflake, Redshift, BigQuery", "Team collaboration + RBAC", "Unlimited AI messages"],
+  business: ["+ Custom connectors", "SSO + governance", "Webhooks + advanced controls"],
 };
 
 export function getDisplayPrice(plan: BillingPlanSlug, cycle: BillingCycle): string {

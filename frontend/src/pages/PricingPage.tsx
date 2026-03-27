@@ -30,13 +30,13 @@ const planCards: PlanCard[] = [
     key: "Team",
     price: "₹6,199 / month",
     description: "Small analytics and consulting teams",
-    highlights: ["100 GB shared storage", "Up to 10 team members", "+ Snowflake, Redshift, BigQuery (coming soon)", "Unlimited canvases", "Unlimited visualizations"],
+    highlights: ["100 GB shared storage", "Up to 10 team members", "+ Snowflake, Redshift, BigQuery", "Unlimited canvases", "Unlimited visualizations"],
   },
   {
     key: "Business",
     price: "₹16,599 / month",
     description: "Governance-first mid-size enterprises",
-    highlights: ["500 GB storage", "Up to 50 team members", "SSO/SAML (coming soon)", "+ Custom connectors (coming soon)", "Unlimited canvases", "Unlimited visualizations"],
+    highlights: ["500 GB storage", "Up to 50 team members", "SSO/SAML (coming soon)", "+ Custom connectors", "Unlimited canvases", "Unlimited visualizations"],
   },
   {
     key: "Enterprise",

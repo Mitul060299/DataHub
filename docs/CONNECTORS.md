@@ -36,18 +36,20 @@ Complete guide to connecting DataHub with various data sources including relatio
 | Data Source | Free | Professional | Team | Business | Enterprise |
 |-------------|------|--------------|------|----------|------------|
 | **Files (CSV, Excel, JSON, Parquet)** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **PostgreSQL** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **MySQL** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **SQL Server** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **Oracle** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **MongoDB** | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **PostgreSQL** | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
+| **MySQL** | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
+| **SQLite** | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
+| **SQL Server (MSSQL)** | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
+| **Oracle** | ❌ | 🔜 | 🔜 | 🔜 | 🔜 |
 | **Amazon S3** | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **Google Cloud Storage** | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **Azure Blob Storage** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **Snowflake** | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Google BigQuery** | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Amazon Redshift** | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Azure Synapse** | ❌ | ❌ | ✅ | ✅ | ✅ |
+| **Snowflake** | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
+| **Google BigQuery** | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
+| **Amazon Redshift** | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
+| **Azure Synapse** | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
+| **Custom connectors** | ❌ | ❌ | ❌ | 🔜 | 🔜 |
+| **On-premise custom** | ❌ | ❌ | ❌ | ❌ | 🔜 |
 | **Salesforce** | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ---
@@ -240,7 +242,7 @@ oracle+oracledb://username:password@host:port/service_name
 
 ### MongoDB
 
-**Tier Required:** Professional+
+**Tier Required:** Not available _(MongoDB has been removed from the DataHub connector roadmap. Use CSV/Parquet exports from MongoDB Compass or `mongoexport` to import data via file upload.)_
 
 **Connection Parameters:**
 ```json

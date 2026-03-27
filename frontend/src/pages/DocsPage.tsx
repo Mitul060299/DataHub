@@ -221,7 +221,7 @@ function KeyConcepts() {
           <dt>Data source</dt>
           <dd>
             A registered file or database connection that pipelines can read from. Supported sources include CSV, Excel, Parquet, JSON, and (coming soon)
-            PostgreSQL, MySQL, Google Sheets, Snowflake, BigQuery.
+            PostgreSQL, MySQL, SQLite, MSSQL, Oracle (Professional+), Snowflake, Redshift, BigQuery (Team+).
           </dd>
         </div>
         <div className="docs-glossary__item">
@@ -601,8 +601,8 @@ function GuideDatabase() {
       <h1>Connect a database</h1>
       <p className="docs-lead">Database connectors let you query live data from PostgreSQL, MySQL, and more — without exporting to CSV first.</p>
       <div className="docs-callout docs-callout--warn">
-        <strong>Coming soon.</strong> Database connectors are not yet live. CSV and Excel uploads are available today. PostgreSQL and MySQL connectors are
-        planned for the Team plan; Snowflake and BigQuery for Business.
+        <strong>Coming soon.</strong> Database connectors are not yet live. CSV and Excel uploads are available today. PostgreSQL, MySQL, SQLite, MSSQL, and Oracle connectors are
+        planned for the Professional plan; Snowflake, Redshift, and BigQuery for Team; Custom connectors for Business.
       </div>
       <h2>Connector roadmap</h2>
       <div className="docs-table-wrap">
@@ -625,23 +625,37 @@ function GuideDatabase() {
               <td>✅</td>
             </tr>
             <tr>
-              <td>Google Sheets</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
               <td>PostgreSQL</td>
               <td>—</td>
-              <td>—</td>
+              <td>🔜</td>
               <td>🔜</td>
               <td>🔜</td>
             </tr>
             <tr>
               <td>MySQL</td>
               <td>—</td>
+              <td>🔜</td>
+              <td>🔜</td>
+              <td>🔜</td>
+            </tr>
+            <tr>
+              <td>SQLite</td>
               <td>—</td>
+              <td>🔜</td>
+              <td>🔜</td>
+              <td>🔜</td>
+            </tr>
+            <tr>
+              <td>MSSQL</td>
+              <td>—</td>
+              <td>🔜</td>
+              <td>🔜</td>
+              <td>🔜</td>
+            </tr>
+            <tr>
+              <td>Oracle</td>
+              <td>—</td>
+              <td>🔜</td>
               <td>🔜</td>
               <td>🔜</td>
             </tr>
@@ -649,11 +663,25 @@ function GuideDatabase() {
               <td>Snowflake</td>
               <td>—</td>
               <td>—</td>
+              <td>🔜</td>
+              <td>🔜</td>
+            </tr>
+            <tr>
+              <td>Redshift</td>
               <td>—</td>
+              <td>—</td>
+              <td>🔜</td>
               <td>🔜</td>
             </tr>
             <tr>
               <td>BigQuery</td>
+              <td>—</td>
+              <td>—</td>
+              <td>🔜</td>
+              <td>🔜</td>
+            </tr>
+            <tr>
+              <td>Custom</td>
               <td>—</td>
               <td>—</td>
               <td>—</td>
@@ -989,7 +1017,7 @@ function PlanLimits() {
             <tr><td>Public sharing</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
             <tr><td>Audit log</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
             <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>🔜</td></tr>
-            <tr><td>DB connections</td><td>CSV, Excel</td><td>+ Google Sheets</td><td>+ PG, MySQL 🔜</td><td>+ Snowflake 🔜</td></tr>
+            <tr><td>DB connections</td><td>CSV, Excel</td><td>PG, MySQL, SQLite, MSSQL, Oracle 🔜</td><td>+ Snowflake, Redshift, BigQuery 🔜</td><td>+ Custom 🔜</td></tr>
             <tr><td>Support</td><td>Community</td><td>Email</td><td>Priority email</td><td>24/7 dedicated</td></tr>
           </tbody>
         </table>

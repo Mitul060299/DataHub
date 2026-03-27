@@ -107,7 +107,7 @@ type PricingPlan = {
   features: string[];
   buttonLabel: string;
   buttonStyle: "ghost" | "blue" | "primary" | "amber" | "dark";
-  action: "trial" | "contact" | "waitlist";
+  action: "trial" | "contact" | "waitlist" | "checkout";
   popular?: boolean;
 };
 
@@ -154,9 +154,9 @@ const plans: PricingPlan[] = [
       "DB connections: PostgreSQL, MySQL, SQLite, MSSQL, Oracle (coming soon)",
       "Email support",
     ],
-    buttonLabel: "Join waitlist",
+    buttonLabel: "Start free trial",
     buttonStyle: "blue",
-    action: "waitlist",
+    action: "checkout",
   },
   {
     tier: "Team",
@@ -277,6 +277,10 @@ export function HomePage() {
   const handleWaitlist = () => {
     setShowWaitlistToast(true);
     setTimeout(() => setShowWaitlistToast(false), 4000);
+  };
+
+  const handleCheckout = () => {
+    navigate(session ? "/settings/billing" : "/signup");
   };
 
   const handleGetStarted = () => {
@@ -665,6 +669,10 @@ export function HomePage() {
                     <a className={buttonClass} href="mailto:hello@datahub.org.in">
                       {plan.buttonLabel}
                     </a>
+                  ) : plan.action === "checkout" ? (
+                    <button type="button" className={buttonClass} onClick={handleCheckout}>
+                      {plan.buttonLabel}
+                    </button>
                   ) : plan.action === "waitlist" ? (
                     <button type="button" className={buttonClass} onClick={handleWaitlist}>
                       {plan.buttonLabel}

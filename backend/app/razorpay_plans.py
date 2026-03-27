@@ -1,15 +1,19 @@
+import os
+_IS_TEST = os.getenv("RAZORPAY_KEY_ID", "").startswith("rzp_test_")
+_TEST_PLAN = "plan_SW9abXgqVnqDXQ"
+
 RAZORPAY_PLAN_IDS = {
     "professional": {
-        "monthly": "plan_SOLTBKP1tIuQNo",
-        "annual": "plan_SW8bF6uIpPdXk5",
+        "monthly": _TEST_PLAN if _IS_TEST else "plan_SOLTBKP1tIuQNo",
+        "annual":  _TEST_PLAN if _IS_TEST else "plan_SW8bF6uIpPdXk5",
     },
     "team": {
-        "monthly": "plan_SOLTBzQU9djxij",
-        "annual": "plan_SW8c72AwddqKA2",
+        "monthly": _TEST_PLAN if _IS_TEST else "plan_SOLTBzQU9djxij",
+        "annual":  _TEST_PLAN if _IS_TEST else "plan_SW8c72AwddqKA2",
     },
     "business": {
-        "monthly": "plan_SW8cqoA3iBwVR4",
-        "annual": "plan_SW8dS1KtDjepLS",
+        "monthly": _TEST_PLAN if _IS_TEST else "plan_SW8cqoA3iBwVR4",
+        "annual":  _TEST_PLAN if _IS_TEST else "plan_SW8dS1KtDjepLS",
     },
 }
 

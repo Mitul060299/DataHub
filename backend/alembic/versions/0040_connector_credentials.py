@@ -1,8 +1,8 @@
 """add connector_credentials table and fold columns on dataset_meta
 
-Revision ID: 0024_connector_credentials
-Revises: 0023_dashboards_v2
-Create Date: 2026-03-27
+Revision ID: 0040_connector_credentials
+Revises: 0039_visualizations_canvas_layouts
+Create Date: 2026-03-28
 """
 
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect, text
 
 
-revision = "0024_connector_credentials"
-down_revision = "0023_dashboards_v2"
+revision = "0040_connector_credentials"
+down_revision = "0039_visualizations_canvas_layouts"
 branch_labels = None
 depends_on = None
 

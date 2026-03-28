@@ -115,9 +115,15 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
     onChange(tiles.filter((t) => t.id !== id));
   };
 
-  // Live KPI values and slicer options fetched from the backend
+  // Live KPI values, slicer options, and per-tile errors
   const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
   const [slicerOptions, setSlicerOptions] = useState<Record<string, string[]>>({});
+  const [tileErrors, setTileErrors] = useState<Record<string, string>>({});
+
+  const setError = (id: string, msg: string) =>
+    setTileErrors((prev) => ({ ...prev, [id]: msg }));
+  const clearError = (id: string) =>
+    setTileErrors((prev) => { const n = { ...prev }; delete n[id]; return n; });
 
   // Re-fetch only when the set of fully-configured KPI/Slicer tiles changes
   const configuredTileKey = tiles
@@ -132,15 +138,23 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
   useEffect(() => {
     tiles.forEach((tile) => {
       if (tile.type === "kpi" && tile.kpi_dataset_id && tile.kpi_column && tile.kpi_aggregation) {
+        clearError(tile.id);
         fetchTileData(tile.kpi_dataset_id, tile.kpi_column, tile.kpi_aggregation)
           .then((result) => {
             if (result.type === "aggregate") {
               setKpiValues((prev) => ({ ...prev, [tile.id]: result.value }));
             }
           })
-          .catch(() => setKpiValues((prev) => ({ ...prev, [tile.id]: "—" })));
+          .catch((err: unknown) => {
+            const msg =
+              (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+              "Failed to load value";
+            setKpiValues((prev) => ({ ...prev, [tile.id]: "—" }));
+            setError(tile.id, msg);
+          });
       }
       if (tile.type === "slicer" && tile.slicer_dataset_id && tile.slicer_column) {
+        clearError(tile.id);
         fetchTileData(tile.slicer_dataset_id, tile.slicer_column, "DISTINCT")
           .then((result) => {
             if (result.type === "distinct") {
@@ -159,7 +173,12 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
               }
             }
           })
-          .catch(() => {});
+          .catch((err: unknown) => {
+            const msg =
+              (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+              "Failed to load options";
+            setError(tile.id, msg);
+          });
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -416,8 +435,8 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                   />
                 </div>
               ) : tile.type === "kpi" ? (
-                /* KPI — config panel until dataset + column are chosen */
-                (!tile.kpi_dataset_id || !tile.kpi_column) ? (
+                /* KPI — config panel until dataset + column + aggregation are all chosen */
+                (!tile.kpi_dataset_id || !tile.kpi_column || !tile.kpi_aggregation) ? (
                   <div
                     onMouseDown={(e) => e.stopPropagation()}
                     style={{ padding: 10, display: "flex", flexDirection: "column", gap: 6, overflow: "auto", height: "100%" }}
@@ -427,7 +446,7 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                       value={tile.kpi_dataset_id ?? ""}
                       onChange={(e) => {
                         onChange(tiles.map((t) =>
-                          t.id === tile.id ? { ...t, kpi_dataset_id: e.target.value || undefined, kpi_column: undefined } : t
+                          t.id === tile.id ? { ...t, kpi_dataset_id: e.target.value || undefined, kpi_column: undefined, kpi_aggregation: undefined } : t
                         ));
                       }}
                       style={selectStyle}
@@ -441,8 +460,11 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                       <select
                         value={tile.kpi_column ?? ""}
                         onChange={(e) => {
+                          // auto-default aggregation to SUM so tile is ready to display immediately
                           onChange(tiles.map((t) =>
-                            t.id === tile.id ? { ...t, kpi_column: e.target.value || undefined } : t
+                            t.id === tile.id
+                              ? { ...t, kpi_column: e.target.value || undefined, kpi_aggregation: (e.target.value ? (t.kpi_aggregation ?? "SUM") : undefined) as "SUM" | "AVG" | "COUNT" | "MIN" | "MAX" | undefined }
+                              : t
                           ));
                         }}
                         style={selectStyle}
@@ -465,11 +487,11 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                         }}
                         style={selectStyle}
                       >
-                        <option value="SUM">SUM</option>
-                        <option value="AVG">AVG</option>
-                        <option value="COUNT">COUNT</option>
-                        <option value="MIN">MIN</option>
-                        <option value="MAX">MAX</option>
+                        <option value="SUM">SUM — total</option>
+                        <option value="AVG">AVG — average</option>
+                        <option value="COUNT">COUNT — row count</option>
+                        <option value="MIN">MIN — minimum</option>
+                        <option value="MAX">MAX — maximum</option>
                       </select>
                     )}
                   </div>
@@ -481,13 +503,19 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                       alignItems: "center", justifyContent: "center", padding: 12, gap: 4,
                     }}
                   >
-                    <span style={{ fontSize: 32, fontWeight: 700, color: "#5B6AF0", lineHeight: 1 }}>
+                    <span style={{ fontSize: 32, fontWeight: 700, color: tileErrors[tile.id] ? "#ef4444" : "#5B6AF0", lineHeight: 1 }}>
                       {kpiValues[tile.id] ?? "…"}
                     </span>
-                    <span style={{ fontSize: 11, color: "var(--tx1)", textAlign: "center" }}>
-                      {tile.kpi_aggregation} of {tile.kpi_column}
-                    </span>
-                    {tile.kpi_label && (
+                    {tileErrors[tile.id] ? (
+                      <span style={{ fontSize: 10, color: "#ef4444", textAlign: "center" }}>
+                        {tileErrors[tile.id]}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: "var(--tx1)", textAlign: "center" }}>
+                        {tile.kpi_aggregation} of {tile.kpi_column}
+                      </span>
+                    )}
+                    {tile.kpi_label && !tileErrors[tile.id] && (
                       <span style={{ fontSize: 10, color: "var(--tx1)", opacity: 0.6 }}>
                         {tile.kpi_label}
                       </span>
@@ -496,8 +524,9 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={() => {
                         onChange(tiles.map((t) =>
-                          t.id === tile.id ? { ...t, kpi_dataset_id: undefined, kpi_column: undefined } : t
+                          t.id === tile.id ? { ...t, kpi_dataset_id: undefined, kpi_column: undefined, kpi_aggregation: undefined } : t
                         ));
+                        clearError(tile.id);
                       }}
                       style={{
                         marginTop: 4, background: "none", border: "1px solid var(--bd)",
@@ -552,36 +581,67 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                     <span style={{ fontSize: 11, color: "var(--tx1)", fontWeight: 600 }}>
                       {tile.slicer_label || `Filter by ${tile.slicer_column}`}
                     </span>
-                    <select
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        window.dispatchEvent(
-                          new CustomEvent("datahub:canvas:filter", {
-                            detail: {
-                              field: tile.slicer_column,
-                              value: e.target.value,
-                              dataset_id: tile.slicer_dataset_id,
-                            },
-                          }),
-                        );
-                      }}
-                      style={{
-                        background: "var(--bg1)", border: "1px solid var(--bd)",
-                        borderRadius: 6, color: "var(--tx)", padding: "6px 8px",
-                        fontSize: 12, width: "100%", cursor: "pointer",
-                      }}
-                    >
-                      <option value="">All</option>
-                      {(slicerOptions[tile.id] ?? tile.slicer_options ?? []).map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
+                    {tileErrors[tile.id] ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontSize: 10, color: "#ef4444" }}>{tileErrors[tile.id]}</span>
+                        <button
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={() => {
+                            clearError(tile.id);
+                            if (tile.slicer_dataset_id && tile.slicer_column) {
+                              fetchTileData(tile.slicer_dataset_id, tile.slicer_column, "DISTINCT")
+                                .then((result) => {
+                                  if (result.type === "distinct") {
+                                    setSlicerOptions((prev) => ({ ...prev, [tile.id]: result.values }));
+                                  }
+                                })
+                                .catch((err: unknown) => {
+                                  const msg =
+                                    (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+                                    "Failed to load options";
+                                  setError(tile.id, msg);
+                                });
+                            }
+                          }}
+                          style={{
+                            background: "none", border: "1px solid var(--bd)", borderRadius: 4,
+                            color: "var(--tx1)", fontSize: 9, padding: "2px 6px", cursor: "pointer", width: "fit-content",
+                          }}
+                        >↺ Retry</button>
+                      </div>
+                    ) : (
+                      <select
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          window.dispatchEvent(
+                            new CustomEvent("datahub:canvas:filter", {
+                              detail: {
+                                field: tile.slicer_column,
+                                value: e.target.value,
+                                dataset_id: tile.slicer_dataset_id,
+                              },
+                            }),
+                          );
+                        }}
+                        style={{
+                          background: "var(--bg1)", border: "1px solid var(--bd)",
+                          borderRadius: 6, color: "var(--tx)", padding: "6px 8px",
+                          fontSize: 12, width: "100%", cursor: "pointer",
+                        }}
+                      >
+                        <option value="">All</option>
+                        {(slicerOptions[tile.id] ?? tile.slicer_options ?? []).map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    )}
                     <button
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={() => {
                         onChange(tiles.map((t) =>
                           t.id === tile.id ? { ...t, slicer_dataset_id: undefined, slicer_column: undefined } : t
                         ));
+                        clearError(tile.id);
                       }}
                       style={{
                         background: "none", border: "none", color: "var(--tx1)",

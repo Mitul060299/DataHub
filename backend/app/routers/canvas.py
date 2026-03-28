@@ -217,7 +217,8 @@ def get_tile_data(
     if agg not in ALLOWED_AGGS:
         raise HTTPException(status_code=400, detail=f"Invalid aggregation: {aggregation}")
 
-    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', column):
+    # Prevent double-quote injection (columns are always wrapped in "…")
+    if '"' in column or len(column) > 128:
         raise HTTPException(status_code=400, detail="Invalid column name")
 
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()

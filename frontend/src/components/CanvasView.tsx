@@ -116,6 +116,64 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
 
   // ── render open canvas ────────────────────────────────────────────────────
   if (activeCanvas) {
+    const nextY = () =>
+      tiles.length > 0 ? Math.max(...tiles.map((t) => t.y + t.h)) : 0;
+
+    const handleAddText = () => {
+      const newTile: CanvasTileItem = {
+        id: crypto.randomUUID(),
+        viz_id: null,
+        x: 0,
+        y: nextY(),
+        w: 6,
+        h: 2,
+        type: "text",
+        title: "Text",
+        text_content: "",
+      };
+      setTiles((prev) => [...prev, newTile]);
+    };
+
+    const handleAddKpi = () => {
+      const newTile: CanvasTileItem = {
+        id: crypto.randomUUID(),
+        viz_id: null,
+        x: 0,
+        y: nextY(),
+        w: 3,
+        h: 2,
+        type: "kpi",
+        title: "KPI",
+        kpi_value: "0",
+        kpi_label: "Metric",
+      };
+      setTiles((prev) => [...prev, newTile]);
+    };
+
+    const handleAddSlicer = () => {
+      const newTile: CanvasTileItem = {
+        id: crypto.randomUUID(),
+        viz_id: null,
+        x: 0,
+        y: nextY(),
+        w: 3,
+        h: 2,
+        type: "slicer",
+        title: "Filter",
+        slicer_label: "Filter by",
+        slicer_options: [],
+      };
+      setTiles((prev) => [...prev, newTile]);
+    };
+
+    const handleShare = async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+      } catch {
+        // ignore
+      }
+    };
+
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <CanvasToolbar
@@ -123,6 +181,10 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
           tiles={tiles}
           onBack={handleBack}
           onSaved={handleSaved}
+          onAddText={handleAddText}
+          onAddKpi={handleAddKpi}
+          onAddSlicer={handleAddSlicer}
+          onShare={handleShare}
         />
         <CanvasGrid tiles={tiles} onChange={setTiles} />
       </div>

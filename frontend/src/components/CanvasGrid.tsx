@@ -9,6 +9,7 @@
  *  3. Chart height is computed in pixels (tile.h * ROW_H - HEADER_H) so
  *     ECharts canvas gets a concrete size, not "100%" which resolves to 0
  *     inside a flex child with minHeight:0.
+ *  4. handleDrop computes nextY so new drops never stack on row 0.
  */
 import { useEffect, useRef, useState } from "react";
 import ReactGridLayout, { type Layout } from "react-grid-layout";
@@ -28,7 +29,7 @@ interface CanvasGridProps {
 }
 
 // Describe the ghost item shown while dragging an external viz over the grid
-const DROPPING_ITEM = { i: "__dropping__", w: 4, h: 4, minW: 2, minH: 2 };
+const DROPPING_ITEM = { i: "__dropping__", w: 6, h: 4, minW: 2, minH: 2 };
 
 export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,12 +72,17 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
     if (!raw) return;
     try {
       const viz: SavedVisualization = JSON.parse(raw);
+      // Compute next available y so tiles don't stack on row 0
+      const nextY =
+        tiles.length > 0
+          ? Math.max(...tiles.map((t) => t.y + t.h))
+          : 0;
       const newTile: CanvasTileItem = {
         id: crypto.randomUUID(),
         viz_id: viz.id,
-        x: item.x,
-        y: item.y,
-        w: item.w || 4,
+        x: item.x ?? 0,
+        y: item.y > 0 ? item.y : nextY,
+        w: item.w || 6,
         h: item.h || 4,
         type: "chart",
         title: viz.name,
@@ -205,14 +211,124 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
             {/* tile body — explicit pixel height so ECharts can size its canvas */}
             <div style={{ height: chartH, overflow: "hidden", flexShrink: 0 }}>
               {tile.type === "text" ? (
-                <p style={{ padding: 8, fontSize: 12, color: "var(--tx)" }}>
-                  {tile.text_content ?? ""}
-                </p>
+                <div style={{ padding: "8px 10px", height: "100%", overflow: "hidden" }}>
+                  <textarea
+                    defaultValue={tile.text_content ?? ""}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      const updated = tiles.map((t) =>
+                        t.id === tile.id ? { ...t, text_content: e.target.value } : t
+                      );
+                      onChange(updated);
+                    }}
+                    placeholder="Add text, heading or label…"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      background: "transparent",
+                      border: "none",
+                      outline: "none",
+                      resize: "none",
+                      color: "var(--tx)",
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                      lineHeight: 1.5,
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              ) : tile.type === "kpi" ? (
+                <div
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 36,
+                      fontWeight: 700,
+                      color: "#5B6AF0",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {tile.kpi_value ?? "—"}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--tx1)",
+                      marginTop: 6,
+                      textAlign: "center",
+                    }}
+                  >
+                    {tile.kpi_label ?? tile.title ?? ""}
+                  </span>
+                  {tile.kpi_delta !== undefined && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: tile.kpi_delta >= 0 ? "#22c55e" : "#ef4444",
+                        marginTop: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {tile.kpi_delta >= 0 ? "▲" : "▼"} {Math.abs(tile.kpi_delta)}%
+                    </span>
+                  )}
+                </div>
+              ) : tile.type === "slicer" ? (
+                <div
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    padding: "8px 12px",
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "var(--tx1)", fontWeight: 600 }}>
+                    {tile.slicer_label ?? "Filter"}
+                  </span>
+                  <select
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      window.dispatchEvent(
+                        new CustomEvent("datahub:canvas:filter", {
+                          detail: {
+                            field: tile.slicer_field,
+                            value: e.target.value,
+                            canvasId: tile.id,
+                          },
+                        })
+                      );
+                    }}
+                    style={{
+                      background: "var(--bg1)",
+                      border: "1px solid var(--bd)",
+                      borderRadius: 6,
+                      color: "var(--tx)",
+                      padding: "6px 8px",
+                      fontSize: 12,
+                      width: "100%",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">All</option>
+                    {(tile.slicer_options ?? []).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               ) : tile.echarts_config ? (
-                <EChartsRenderer
-                  config={tile.echarts_config}
-                  height={chartH}
-                />
+                <EChartsRenderer config={tile.echarts_config} height={chartH} />
               ) : (
                 <p style={{ padding: 8, fontSize: 11, color: "var(--tx1)" }}>
                   No chart config

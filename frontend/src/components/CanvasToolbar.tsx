@@ -1,7 +1,7 @@
 /**
  * CanvasToolbar
  * ──────────────
- * Top bar for an open canvas: editable name, save layout, and back button.
+ * Top bar for an open canvas: editable name, add-block buttons, share, save.
  */
 import { useEffect, useRef, useState } from "react";
 import type { CanvasLayout, CanvasTileItem } from "../api";
@@ -12,9 +12,13 @@ interface CanvasToolbarProps {
   tiles: CanvasTileItem[];
   onBack: () => void;
   onSaved: (updated: CanvasLayout) => void;
+  onAddText: () => void;
+  onAddKpi: () => void;
+  onAddSlicer: () => void;
+  onShare: () => void;
 }
 
-export function CanvasToolbar({ canvas, tiles, onBack, onSaved }: CanvasToolbarProps) {
+export function CanvasToolbar({ canvas, tiles, onBack, onSaved, onAddText, onAddKpi, onAddSlicer, onShare }: CanvasToolbarProps) {
   const [name, setName] = useState(canvas.name);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -98,6 +102,22 @@ export function CanvasToolbar({ canvas, tiles, onBack, onSaved }: CanvasToolbarP
       />
 
       <span style={{ flex: 1 }} />
+
+      {/* insert block buttons */}
+      <button className="btn" style={{ fontSize: 11 }} onClick={onAddText}>
+        + Text
+      </button>
+      <button className="btn" style={{ fontSize: 11 }} onClick={onAddKpi}>
+        + KPI
+      </button>
+      <button className="btn" style={{ fontSize: 11 }} onClick={onAddSlicer}>
+        + Slicer
+      </button>
+
+      {/* share button */}
+      <button className="btn" style={{ fontSize: 11 }} onClick={onShare}>
+        Share
+      </button>
 
       {/* save layout */}
       <button

@@ -1282,17 +1282,25 @@ export interface CanvasLayout {
 
 export interface CanvasTileItem {
   id: string;
-  viz_id?: string;
+  viz_id?: string | null;
   x: number;
   y: number;
   w: number;
   h: number;
   z?: number;
-  type: "chart" | "text";
+  type: "chart" | "text" | "kpi" | "slicer";
   title?: string;
   chart_type?: string;
   echarts_config?: Record<string, unknown>;
   text_content?: string;
+  // KPI tile fields
+  kpi_value?: string;
+  kpi_label?: string;
+  kpi_delta?: number;
+  // Slicer tile fields
+  slicer_field?: string;
+  slicer_label?: string;
+  slicer_options?: string[];
 }
 
 export async function getCanvasLimitStatus(): Promise<CanvasLimitStatus> {

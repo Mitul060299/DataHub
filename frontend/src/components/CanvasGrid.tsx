@@ -10,6 +10,8 @@
  *     ECharts canvas gets a concrete size, not "100%" which resolves to 0
  *     inside a flex child with minHeight:0.
  *  4. handleDrop computes nextY so new drops never stack on row 0.
+ *  5. Text tiles have a formatting toolbar (size, bold, italic, color).
+ *  6. KPI and Slicer tiles are inline-editable.
  */
 import { useEffect, useRef, useState } from "react";
 import ReactGridLayout, { type Layout } from "react-grid-layout";
@@ -21,7 +23,7 @@ import { EChartsRenderer } from "./EChartsRenderer";
 const COLS = 12;
 const ROW_H = 80;
 const HEADER_H = 28;
-const MIN_GRID_H = 600;
+const MIN_GRID_H = 1200;
 
 interface CanvasGridProps {
   tiles: CanvasTileItem[];
@@ -73,15 +75,15 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
     try {
       const viz: SavedVisualization = JSON.parse(raw);
       // Compute next available y so tiles don't stack on row 0
-      const nextY =
-        tiles.length > 0
-          ? Math.max(...tiles.map((t) => t.y + t.h))
-          : 0;
+      const nextY = tiles.length > 0
+        ? Math.max(...tiles.map((t) => t.y + t.h))
+        : 0;
+      const dropY = (item.y != null && item.y > 0) ? item.y : nextY;
       const newTile: CanvasTileItem = {
         id: crypto.randomUUID(),
         viz_id: viz.id,
         x: item.x ?? 0,
-        y: item.y > 0 ? item.y : nextY,
+        y: dropY,
         w: item.w || 6,
         h: item.h || 4,
         type: "chart",
@@ -100,11 +102,14 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
   };
 
   return (
+    <>
+    <style>{`.text-tile:hover .text-tile-handle { opacity: 1 !important; }`}</style>
     <div
       ref={containerRef}
       style={{
         flex: 1,
         minHeight: 0,
+        height: "100%",
         overflow: "auto",
         background: "var(--bg1)",
         position: "relative",
@@ -145,7 +150,7 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
         droppingItem={DROPPING_ITEM}
         onLayoutChange={handleLayoutChange}
         onDrop={handleDrop}
-        style={{ minHeight: MIN_GRID_H }}
+        style={{ minHeight: MIN_GRID_H, paddingBottom: 200 }}
       >
         {tiles.map((tile) => {
           // Explicit pixel height so ECharts canvas gets a real size
@@ -154,64 +159,169 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
           return (
           <div
             key={tile.id}
+            className={tile.type === "text" ? "text-tile" : undefined}
             style={{
-              background: "var(--bg2)",
-              border: "1px solid var(--bd)",
+              background: tile.type === "text" ? "transparent" : "var(--bg2)",
+              border: tile.type === "text" ? "none" : "1px solid var(--bd)",
               borderRadius: 8,
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
             }}
           >
-            {/* tile header */}
-            <div
-              style={{
-                height: 28,
-                padding: "0 8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderBottom: "1px solid var(--bd)",
-                background: "var(--bg1)",
-                flexShrink: 0,
-                cursor: "move",
-              }}
-            >
-              <span
+            {tile.type === "text" ? (
+              /* invisible drag handle for text tiles — reveals on hover via CSS */
+              <div
+                className="text-tile-handle"
                 style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "var(--tx)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  flex: 1,
-                }}
-              >
-                {tile.title ?? "Chart"}
-              </span>
-              <button
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => removeTile(tile.id)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--tx1)",
-                  fontSize: 13,
-                  lineHeight: 1,
-                  padding: "2px 4px",
+                  height: 20,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  padding: "0 4px",
+                  opacity: 0,
+                  transition: "opacity 120ms",
                   flexShrink: 0,
+                  cursor: "move",
                 }}
               >
-                ×
-              </button>
-            </div>
+                <button
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => removeTile(tile.id)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--tx1)",
+                    fontSize: 13,
+                    padding: "2px 4px",
+                  }}
+                >×</button>
+              </div>
+            ) : (
+              /* standard tile header for chart / kpi / slicer */
+              <div
+                style={{
+                  height: 28,
+                  padding: "0 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderBottom: "1px solid var(--bd)",
+                  background: "var(--bg1)",
+                  flexShrink: 0,
+                  cursor: "move",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--tx)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
+                  }}
+                >
+                  {tile.title ?? "Chart"}
+                </span>
+                <button
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => removeTile(tile.id)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--tx1)",
+                    fontSize: 13,
+                    lineHeight: 1,
+                    padding: "2px 4px",
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             {/* tile body — explicit pixel height so ECharts can size its canvas */}
             <div style={{ height: chartH, overflow: "hidden", flexShrink: 0 }}>
               {tile.type === "text" ? (
-                <div style={{ padding: "8px 10px", height: "100%", overflow: "hidden" }}>
+                <div style={{ padding: "0 10px 8px", height: "100%", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {/* formatting toolbar */}
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0, flexWrap: "wrap" }}
+                  >
+                    <select
+                      defaultValue={tile.text_size ?? "body"}
+                      onChange={(e) => {
+                        const updated = tiles.map((t) =>
+                          t.id === tile.id ? { ...t, text_size: e.target.value } : t
+                        );
+                        onChange(updated);
+                      }}
+                      style={{
+                        background: "var(--bg1)", border: "1px solid var(--bd)", borderRadius: 4,
+                        color: "var(--tx)", fontSize: 10, padding: "2px 4px", cursor: "pointer",
+                      }}
+                    >
+                      <option value="h1">H1</option>
+                      <option value="h2">H2</option>
+                      <option value="h3">H3</option>
+                      <option value="body">Body</option>
+                      <option value="small">Small</option>
+                    </select>
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        const updated = tiles.map((t) =>
+                          t.id === tile.id ? { ...t, text_bold: !t.text_bold } : t
+                        );
+                        onChange(updated);
+                      }}
+                      style={{
+                        background: tile.text_bold ? "var(--ac)" : "var(--bg1)",
+                        border: "1px solid var(--bd)", borderRadius: 4,
+                        color: tile.text_bold ? "#fff" : "var(--tx)",
+                        fontWeight: 700, fontSize: 11, width: 22, height: 22,
+                        cursor: "pointer", padding: 0,
+                      }}
+                    >B</button>
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        const updated = tiles.map((t) =>
+                          t.id === tile.id ? { ...t, text_italic: !t.text_italic } : t
+                        );
+                        onChange(updated);
+                      }}
+                      style={{
+                        background: tile.text_italic ? "var(--ac)" : "var(--bg1)",
+                        border: "1px solid var(--bd)", borderRadius: 4,
+                        color: tile.text_italic ? "#fff" : "var(--tx)",
+                        fontStyle: "italic", fontSize: 11, width: 22, height: 22,
+                        cursor: "pointer", padding: 0,
+                      }}
+                    >I</button>
+                    <input
+                      type="color"
+                      defaultValue={tile.text_color ?? "#F0F2FF"}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const updated = tiles.map((t) =>
+                          t.id === tile.id ? { ...t, text_color: e.target.value } : t
+                        );
+                        onChange(updated);
+                      }}
+                      style={{
+                        width: 22, height: 22, border: "1px solid var(--bd)",
+                        borderRadius: 4, background: "none", padding: 1, cursor: "pointer",
+                      }}
+                      title="Text color"
+                    />
+                  </div>
                   <textarea
                     defaultValue={tile.text_content ?? ""}
                     onMouseDown={(e) => e.stopPropagation()}
@@ -221,19 +331,23 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
                       );
                       onChange(updated);
                     }}
-                    placeholder="Add text, heading or label…"
+                    placeholder="Type heading or label…"
                     style={{
-                      width: "100%",
-                      height: "100%",
+                      flex: 1,
                       background: "transparent",
                       border: "none",
                       outline: "none",
                       resize: "none",
-                      color: "var(--tx)",
-                      fontSize: 13,
+                      color: tile.text_color ?? "var(--tx)",
+                      fontSize: tile.text_size === "h1" ? 28
+                        : tile.text_size === "h2" ? 22
+                        : tile.text_size === "h3" ? 17
+                        : tile.text_size === "small" ? 10
+                        : 13,
+                      fontWeight: tile.text_bold ? 700 : 400,
+                      fontStyle: tile.text_italic ? "italic" : "normal",
                       fontFamily: "inherit",
-                      lineHeight: 1.5,
-                      boxSizing: "border-box",
+                      lineHeight: 1.4,
                     }}
                   />
                 </div>
@@ -246,40 +360,60 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
                     alignItems: "center",
                     justifyContent: "center",
                     padding: 12,
+                    gap: 6,
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: 36,
-                      fontWeight: 700,
-                      color: "#5B6AF0",
-                      lineHeight: 1,
+                  <input
+                    defaultValue={tile.kpi_value ?? "0"}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      const updated = tiles.map((t) =>
+                        t.id === tile.id ? { ...t, kpi_value: e.target.value } : t
+                      );
+                      onChange(updated);
                     }}
-                  >
-                    {tile.kpi_value ?? "—"}
-                  </span>
-                  <span
                     style={{
+                      background: "transparent", border: "none", outline: "none",
+                      fontSize: 36, fontWeight: 700, color: "#5B6AF0",
+                      width: "100%", textAlign: "center", cursor: "text",
+                    }}
+                  />
+                  <input
+                    defaultValue={tile.kpi_label ?? "Metric"}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      const updated = tiles.map((t) =>
+                        t.id === tile.id ? { ...t, kpi_label: e.target.value } : t
+                      );
+                      onChange(updated);
+                    }}
+                    style={{
+                      background: "transparent", border: "none", outline: "none",
+                      fontSize: 11, color: "var(--tx1)",
+                      width: "100%", textAlign: "center", cursor: "text",
+                    }}
+                  />
+                  <input
+                    type="number"
+                    defaultValue={tile.kpi_delta ?? ""}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    placeholder="±% delta"
+                    onBlur={(e) => {
+                      const val = e.target.value === "" ? undefined : Number(e.target.value);
+                      const updated = tiles.map((t) =>
+                        t.id === tile.id ? { ...t, kpi_delta: val } : t
+                      );
+                      onChange(updated);
+                    }}
+                    style={{
+                      background: "transparent", border: "none", outline: "none",
                       fontSize: 11,
-                      color: "var(--tx1)",
-                      marginTop: 6,
-                      textAlign: "center",
+                      color: tile.kpi_delta !== undefined
+                        ? (tile.kpi_delta >= 0 ? "#22c55e" : "#ef4444")
+                        : "var(--tx1)",
+                      width: "100%", textAlign: "center", cursor: "text",
                     }}
-                  >
-                    {tile.kpi_label ?? tile.title ?? ""}
-                  </span>
-                  {tile.kpi_delta !== undefined && (
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: tile.kpi_delta >= 0 ? "#22c55e" : "#ef4444",
-                        marginTop: 4,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {tile.kpi_delta >= 0 ? "▲" : "▼"} {Math.abs(tile.kpi_delta)}%
-                    </span>
-                  )}
+                  />
                 </div>
               ) : tile.type === "slicer" ? (
                 <div
@@ -292,40 +426,61 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
                     gap: 6,
                   }}
                 >
-                  <span style={{ fontSize: 11, color: "var(--tx1)", fontWeight: 600 }}>
-                    {tile.slicer_label ?? "Filter"}
-                  </span>
+                  <input
+                    defaultValue={tile.slicer_label ?? "Filter by"}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      const updated = tiles.map((t) =>
+                        t.id === tile.id ? { ...t, slicer_label: e.target.value } : t
+                      );
+                      onChange(updated);
+                    }}
+                    style={{
+                      background: "transparent", border: "none", outline: "none",
+                      fontSize: 11, color: "var(--tx1)", fontWeight: 600, width: "100%",
+                    }}
+                  />
                   <select
                     onMouseDown={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       window.dispatchEvent(
                         new CustomEvent("datahub:canvas:filter", {
-                          detail: {
-                            field: tile.slicer_field,
-                            value: e.target.value,
-                            canvasId: tile.id,
-                          },
+                          detail: { field: tile.slicer_field, value: e.target.value, canvasId: tile.id },
                         })
                       );
                     }}
                     style={{
-                      background: "var(--bg1)",
-                      border: "1px solid var(--bd)",
-                      borderRadius: 6,
-                      color: "var(--tx)",
-                      padding: "6px 8px",
-                      fontSize: 12,
-                      width: "100%",
-                      cursor: "pointer",
+                      background: "var(--bg1)", border: "1px solid var(--bd)",
+                      borderRadius: 6, color: "var(--tx)", padding: "6px 8px",
+                      fontSize: 12, width: "100%", cursor: "pointer",
                     }}
                   >
                     <option value="">All</option>
                     {(tile.slicer_options ?? []).map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
+                      <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
+                  <input
+                    defaultValue={(tile.slicer_options ?? []).join(", ")}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    placeholder="Options: A, B, C"
+                    onBlur={(e) => {
+                      const opts = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                      const updated = tiles.map((t) =>
+                        t.id === tile.id ? { ...t, slicer_options: opts } : t
+                      );
+                      onChange(updated);
+                    }}
+                    style={{
+                      background: "var(--bg1)", border: "1px solid var(--bd)",
+                      borderRadius: 4, color: "var(--tx1)", fontSize: 10,
+                      padding: "3px 6px", width: "100%", outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <span style={{ fontSize: 9, color: "var(--tx1)" }}>
+                    Enter comma-separated options above
+                  </span>
                 </div>
               ) : tile.echarts_config ? (
                 <EChartsRenderer config={tile.echarts_config} height={chartH} />
@@ -340,5 +495,6 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
         })}
       </ReactGridLayout>
     </div>
+    </>
   );
 }

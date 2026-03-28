@@ -1293,6 +1293,11 @@ export interface CanvasTileItem {
   chart_type?: string;
   echarts_config?: Record<string, unknown>;
   text_content?: string;
+  // Text formatting fields
+  text_size?: string;
+  text_bold?: boolean;
+  text_italic?: boolean;
+  text_color?: string;
   // KPI tile fields
   kpi_value?: string;
   kpi_label?: string;

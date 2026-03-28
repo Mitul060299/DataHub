@@ -1302,10 +1302,17 @@ export interface CanvasTileItem {
   kpi_value?: string;
   kpi_label?: string;
   kpi_delta?: number;
+  // KPI data binding
+  kpi_dataset_id?: string;
+  kpi_column?: string;
+  kpi_aggregation?: "SUM" | "AVG" | "COUNT" | "MIN" | "MAX";
   // Slicer tile fields
   slicer_field?: string;
   slicer_label?: string;
   slicer_options?: string[];
+  // Slicer data binding
+  slicer_dataset_id?: string;
+  slicer_column?: string;
 }
 
 export async function getCanvasLimitStatus(): Promise<CanvasLimitStatus> {
@@ -1342,4 +1349,19 @@ export async function saveCanvasLayout(
 
 export async function deleteCanvasLayout(id: string): Promise<void> {
   await api.delete(`/api/canvas/${id}`);
+}
+
+export type TileDataResult =
+  | { type: "aggregate"; value: string; raw: number | null }
+  | { type: "distinct"; values: string[] };
+
+export async function fetchTileData(
+  datasetId: string,
+  column: string,
+  aggregation: string,
+): Promise<TileDataResult> {
+  const res = await api.get("/api/canvas/tile-data", {
+    params: { dataset_id: datasetId, column, aggregation },
+  });
+  return res.data as TileDataResult;
 }

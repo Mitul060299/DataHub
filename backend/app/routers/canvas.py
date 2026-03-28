@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models_db import CanvasLayoutDB, User
+from ..models_db import CanvasLayoutDB, DatasetMetaDB, User
+from ..services.duckdb_service import DuckDBService
 from ..services.plan_guard import normalize_plan
 
 router = APIRouter(prefix="/api/canvas", tags=["canvas"])
@@ -196,3 +197,61 @@ def delete_canvas_layout(
         raise HTTPException(status_code=404, detail="Canvas not found")
     db.delete(canvas)
     db.commit()
+
+
+# ── Tile data endpoint ────────────────────────────────────────────────────────
+
+@router.get("/tile-data")
+def get_tile_data(
+    dataset_id: str,
+    column: str,
+    aggregation: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run an aggregation or DISTINCT query on a dataset column for KPI/Slicer tiles."""
+    import re
+
+    ALLOWED_AGGS = {"SUM", "AVG", "COUNT", "MIN", "MAX", "DISTINCT"}
+    agg = aggregation.upper()
+    if agg not in ALLOWED_AGGS:
+        raise HTTPException(status_code=400, detail=f"Invalid aggregation: {aggregation}")
+
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', column):
+        raise HTTPException(status_code=400, detail="Invalid column name")
+
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta or not meta.storage_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    try:
+        if agg == "DISTINCT":
+            sql = f'SELECT DISTINCT "{column}" FROM dataset WHERE "{column}" IS NOT NULL ORDER BY "{column}" LIMIT 200'
+        else:
+            sql = f'SELECT {agg}("{column}") AS result FROM dataset'
+
+        rows, _ = DuckDBService.query_with_cache(
+            db, dataset_id, meta.user_id, meta.storage_path, sql
+        )
+
+        if agg == "DISTINCT":
+            values = [str(r[column]) for r in rows if r.get(column) is not None]
+            return {"type": "distinct", "values": values}
+        else:
+            raw = rows[0]["result"] if rows else None
+            if raw is None:
+                formatted = "\u2014"
+            elif isinstance(raw, float):
+                formatted = f"{raw:,.2f}" if raw != int(raw) else f"{int(raw):,}"
+            elif isinstance(raw, int):
+                formatted = f"{raw:,}"
+            else:
+                formatted = str(raw)
+            return {
+                "type": "aggregate",
+                "value": formatted,
+                "raw": float(raw) if raw is not None else None,
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

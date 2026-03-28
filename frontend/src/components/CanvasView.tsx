@@ -18,10 +18,12 @@ import {
   deleteCanvasLayout,
   getCanvasLimitStatus,
   listCanvasLayouts,
+  listDatasets,
   type CanvasLayout,
   type CanvasLimitStatus,
   type CanvasTileItem,
 } from "../api";
+import type { DatasetMeta } from "../types";
 import { CanvasGrid } from "./CanvasGrid";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { IconX } from "./Icons";
@@ -42,6 +44,14 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
   const [activeCanvas, setActiveCanvas] = useState<CanvasLayout | null>(null);
   // local tile state (unsynced until Save)
   const [tiles, setTiles] = useState<CanvasTileItem[]>([]);
+  // datasets available for KPI / Slicer data binding
+  const [availableDatasets, setAvailableDatasets] = useState<DatasetMeta[]>([]);
+
+  useEffect(() => {
+    listDatasets()
+      .then((data) => setAvailableDatasets(data as DatasetMeta[]))
+      .catch(() => {});
+  }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -186,7 +196,7 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
           onAddSlicer={handleAddSlicer}
           onShare={handleShare}
         />
-        <CanvasGrid tiles={tiles} onChange={setTiles} />
+        <CanvasGrid tiles={tiles} onChange={setTiles} availableDatasets={availableDatasets} />
       </div>
     );
   }

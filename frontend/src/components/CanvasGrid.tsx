@@ -18,6 +18,8 @@ import ReactGridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import type { CanvasTileItem, SavedVisualization } from "../api";
+import { fetchTileData } from "../api";
+import type { DatasetMeta } from "../types";
 import { EChartsRenderer } from "./EChartsRenderer";
 
 const COLS = 12;
@@ -28,12 +30,24 @@ const MIN_GRID_H = 1200;
 interface CanvasGridProps {
   tiles: CanvasTileItem[];
   onChange: (tiles: CanvasTileItem[]) => void;
+  availableDatasets: DatasetMeta[];
 }
+
+const selectStyle: React.CSSProperties = {
+  background: "var(--bg1)",
+  border: "1px solid var(--bd)",
+  borderRadius: 6,
+  color: "var(--tx)",
+  padding: "4px 6px",
+  fontSize: 11,
+  width: "100%",
+  cursor: "pointer",
+};
 
 // Describe the ghost item shown while dragging an external viz over the grid
 const DROPPING_ITEM = { i: "__dropping__", w: 6, h: 4, minW: 2, minH: 2 };
 
-export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
+export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(900);
 
@@ -100,6 +114,56 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
   const removeTile = (id: string) => {
     onChange(tiles.filter((t) => t.id !== id));
   };
+
+  // Live KPI values and slicer options fetched from the backend
+  const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
+  const [slicerOptions, setSlicerOptions] = useState<Record<string, string[]>>({});
+
+  // Re-fetch only when the set of fully-configured KPI/Slicer tiles changes
+  const configuredTileKey = tiles
+    .filter(
+      (t) =>
+        (t.type === "kpi" && t.kpi_dataset_id && t.kpi_column && t.kpi_aggregation) ||
+        (t.type === "slicer" && t.slicer_dataset_id && t.slicer_column),
+    )
+    .map((t) => `${t.id}:${t.kpi_dataset_id ?? ""}:${t.kpi_column ?? ""}:${t.kpi_aggregation ?? ""}:${t.slicer_dataset_id ?? ""}:${t.slicer_column ?? ""}`)
+    .join("|");
+
+  useEffect(() => {
+    tiles.forEach((tile) => {
+      if (tile.type === "kpi" && tile.kpi_dataset_id && tile.kpi_column && tile.kpi_aggregation) {
+        fetchTileData(tile.kpi_dataset_id, tile.kpi_column, tile.kpi_aggregation)
+          .then((result) => {
+            if (result.type === "aggregate") {
+              setKpiValues((prev) => ({ ...prev, [tile.id]: result.value }));
+            }
+          })
+          .catch(() => setKpiValues((prev) => ({ ...prev, [tile.id]: "—" })));
+      }
+      if (tile.type === "slicer" && tile.slicer_dataset_id && tile.slicer_column) {
+        fetchTileData(tile.slicer_dataset_id, tile.slicer_column, "DISTINCT")
+          .then((result) => {
+            if (result.type === "distinct") {
+              setSlicerOptions((prev) => ({ ...prev, [tile.id]: result.values }));
+              // Persist fetched options so Save Layout captures them
+              const existing = tiles.find((t) => t.id === tile.id);
+              if (
+                existing &&
+                JSON.stringify(existing.slicer_options) !== JSON.stringify(result.values)
+              ) {
+                onChange(
+                  tiles.map((t) =>
+                    t.id === tile.id ? { ...t, slicer_options: result.values } : t,
+                  ),
+                );
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configuredTileKey]);
 
   return (
     <>
@@ -352,136 +416,180 @@ export function CanvasGrid({ tiles, onChange }: CanvasGridProps) {
                   />
                 </div>
               ) : tile.type === "kpi" ? (
-                <div
-                  style={{
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 12,
-                    gap: 6,
-                  }}
-                >
-                  <input
-                    defaultValue={tile.kpi_value ?? "0"}
+                /* KPI — config panel until dataset + column are chosen */
+                (!tile.kpi_dataset_id || !tile.kpi_column) ? (
+                  <div
                     onMouseDown={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                      const updated = tiles.map((t) =>
-                        t.id === tile.id ? { ...t, kpi_value: e.target.value } : t
-                      );
-                      onChange(updated);
-                    }}
+                    style={{ padding: 10, display: "flex", flexDirection: "column", gap: 6, overflow: "auto", height: "100%" }}
+                  >
+                    <span style={{ fontSize: 10, color: "var(--tx1)", fontWeight: 600 }}>Configure KPI</span>
+                    <select
+                      value={tile.kpi_dataset_id ?? ""}
+                      onChange={(e) => {
+                        onChange(tiles.map((t) =>
+                          t.id === tile.id ? { ...t, kpi_dataset_id: e.target.value || undefined, kpi_column: undefined } : t
+                        ));
+                      }}
+                      style={selectStyle}
+                    >
+                      <option value="">Select dataset…</option>
+                      {availableDatasets.map((ds) => (
+                        <option key={ds.dataset_id} value={ds.dataset_id}>{ds.name ?? ds.dataset_id}</option>
+                      ))}
+                    </select>
+                    {tile.kpi_dataset_id && (
+                      <select
+                        value={tile.kpi_column ?? ""}
+                        onChange={(e) => {
+                          onChange(tiles.map((t) =>
+                            t.id === tile.id ? { ...t, kpi_column: e.target.value || undefined } : t
+                          ));
+                        }}
+                        style={selectStyle}
+                      >
+                        <option value="">Select column…</option>
+                        {(availableDatasets.find((d) => d.dataset_id === tile.kpi_dataset_id)?.columns ?? []).map((col) => (
+                          <option key={col} value={col}>{col}</option>
+                        ))}
+                      </select>
+                    )}
+                    {tile.kpi_column && (
+                      <select
+                        value={tile.kpi_aggregation ?? "SUM"}
+                        onChange={(e) => {
+                          onChange(tiles.map((t) =>
+                            t.id === tile.id
+                              ? { ...t, kpi_aggregation: e.target.value as "SUM" | "AVG" | "COUNT" | "MIN" | "MAX" }
+                              : t
+                          ));
+                        }}
+                        style={selectStyle}
+                      >
+                        <option value="SUM">SUM</option>
+                        <option value="AVG">AVG</option>
+                        <option value="COUNT">COUNT</option>
+                        <option value="MIN">MIN</option>
+                        <option value="MAX">MAX</option>
+                      </select>
+                    )}
+                  </div>
+                ) : (
+                  /* KPI — live display */
+                  <div
                     style={{
-                      background: "transparent", border: "none", outline: "none",
-                      fontSize: 36, fontWeight: 700, color: "#5B6AF0",
-                      width: "100%", textAlign: "center", cursor: "text",
-                    }}
-                  />
-                  <input
-                    defaultValue={tile.kpi_label ?? "Metric"}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                      const updated = tiles.map((t) =>
-                        t.id === tile.id ? { ...t, kpi_label: e.target.value } : t
-                      );
-                      onChange(updated);
-                    }}
-                    style={{
-                      background: "transparent", border: "none", outline: "none",
-                      fontSize: 11, color: "var(--tx1)",
-                      width: "100%", textAlign: "center", cursor: "text",
-                    }}
-                  />
-                  <input
-                    type="number"
-                    defaultValue={tile.kpi_delta ?? ""}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    placeholder="±% delta"
-                    onBlur={(e) => {
-                      const val = e.target.value === "" ? undefined : Number(e.target.value);
-                      const updated = tiles.map((t) =>
-                        t.id === tile.id ? { ...t, kpi_delta: val } : t
-                      );
-                      onChange(updated);
-                    }}
-                    style={{
-                      background: "transparent", border: "none", outline: "none",
-                      fontSize: 11,
-                      color: tile.kpi_delta !== undefined
-                        ? (tile.kpi_delta >= 0 ? "#22c55e" : "#ef4444")
-                        : "var(--tx1)",
-                      width: "100%", textAlign: "center", cursor: "text",
-                    }}
-                  />
-                </div>
-              ) : tile.type === "slicer" ? (
-                <div
-                  style={{
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    padding: "8px 12px",
-                    gap: 6,
-                  }}
-                >
-                  <input
-                    defaultValue={tile.slicer_label ?? "Filter by"}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                      const updated = tiles.map((t) =>
-                        t.id === tile.id ? { ...t, slicer_label: e.target.value } : t
-                      );
-                      onChange(updated);
-                    }}
-                    style={{
-                      background: "transparent", border: "none", outline: "none",
-                      fontSize: 11, color: "var(--tx1)", fontWeight: 600, width: "100%",
-                    }}
-                  />
-                  <select
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      window.dispatchEvent(
-                        new CustomEvent("datahub:canvas:filter", {
-                          detail: { field: tile.slicer_field, value: e.target.value, canvasId: tile.id },
-                        })
-                      );
-                    }}
-                    style={{
-                      background: "var(--bg1)", border: "1px solid var(--bd)",
-                      borderRadius: 6, color: "var(--tx)", padding: "6px 8px",
-                      fontSize: 12, width: "100%", cursor: "pointer",
+                      height: "100%", display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", padding: 12, gap: 4,
                     }}
                   >
-                    <option value="">All</option>
-                    {(tile.slicer_options ?? []).map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  <input
-                    defaultValue={(tile.slicer_options ?? []).join(", ")}
+                    <span style={{ fontSize: 32, fontWeight: 700, color: "#5B6AF0", lineHeight: 1 }}>
+                      {kpiValues[tile.id] ?? "…"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--tx1)", textAlign: "center" }}>
+                      {tile.kpi_aggregation} of {tile.kpi_column}
+                    </span>
+                    {tile.kpi_label && (
+                      <span style={{ fontSize: 10, color: "var(--tx1)", opacity: 0.6 }}>
+                        {tile.kpi_label}
+                      </span>
+                    )}
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        onChange(tiles.map((t) =>
+                          t.id === tile.id ? { ...t, kpi_dataset_id: undefined, kpi_column: undefined } : t
+                        ));
+                      }}
+                      style={{
+                        marginTop: 4, background: "none", border: "1px solid var(--bd)",
+                        borderRadius: 4, color: "var(--tx1)", fontSize: 9,
+                        padding: "2px 6px", cursor: "pointer",
+                      }}
+                    >✎ reconfigure</button>
+                  </div>
+                )
+              ) : tile.type === "slicer" ? (
+                /* Slicer — config panel until dataset + column are chosen */
+                (!tile.slicer_dataset_id || !tile.slicer_column) ? (
+                  <div
                     onMouseDown={(e) => e.stopPropagation()}
-                    placeholder="Options: A, B, C"
-                    onBlur={(e) => {
-                      const opts = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                      const updated = tiles.map((t) =>
-                        t.id === tile.id ? { ...t, slicer_options: opts } : t
-                      );
-                      onChange(updated);
-                    }}
-                    style={{
-                      background: "var(--bg1)", border: "1px solid var(--bd)",
-                      borderRadius: 4, color: "var(--tx1)", fontSize: 10,
-                      padding: "3px 6px", width: "100%", outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                  <span style={{ fontSize: 9, color: "var(--tx1)" }}>
-                    Enter comma-separated options above
-                  </span>
-                </div>
+                    style={{ padding: 10, display: "flex", flexDirection: "column", gap: 6, overflow: "auto", height: "100%" }}
+                  >
+                    <span style={{ fontSize: 10, color: "var(--tx1)", fontWeight: 600 }}>Configure Filter</span>
+                    <select
+                      value={tile.slicer_dataset_id ?? ""}
+                      onChange={(e) => {
+                        onChange(tiles.map((t) =>
+                          t.id === tile.id ? { ...t, slicer_dataset_id: e.target.value || undefined, slicer_column: undefined } : t
+                        ));
+                      }}
+                      style={selectStyle}
+                    >
+                      <option value="">Select dataset…</option>
+                      {availableDatasets.map((ds) => (
+                        <option key={ds.dataset_id} value={ds.dataset_id}>{ds.name ?? ds.dataset_id}</option>
+                      ))}
+                    </select>
+                    {tile.slicer_dataset_id && (
+                      <select
+                        value={tile.slicer_column ?? ""}
+                        onChange={(e) => {
+                          onChange(tiles.map((t) =>
+                            t.id === tile.id ? { ...t, slicer_column: e.target.value || undefined } : t
+                          ));
+                        }}
+                        style={selectStyle}
+                      >
+                        <option value="">Select column to filter by…</option>
+                        {(availableDatasets.find((d) => d.dataset_id === tile.slicer_dataset_id)?.columns ?? []).map((col) => (
+                          <option key={col} value={col}>{col}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                ) : (
+                  /* Slicer — live dropdown with auto-populated options */
+                  <div style={{ padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6, height: "100%" }}>
+                    <span style={{ fontSize: 11, color: "var(--tx1)", fontWeight: 600 }}>
+                      {tile.slicer_label || `Filter by ${tile.slicer_column}`}
+                    </span>
+                    <select
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        window.dispatchEvent(
+                          new CustomEvent("datahub:canvas:filter", {
+                            detail: {
+                              field: tile.slicer_column,
+                              value: e.target.value,
+                              dataset_id: tile.slicer_dataset_id,
+                            },
+                          }),
+                        );
+                      }}
+                      style={{
+                        background: "var(--bg1)", border: "1px solid var(--bd)",
+                        borderRadius: 6, color: "var(--tx)", padding: "6px 8px",
+                        fontSize: 12, width: "100%", cursor: "pointer",
+                      }}
+                    >
+                      <option value="">All</option>
+                      {(slicerOptions[tile.id] ?? tile.slicer_options ?? []).map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        onChange(tiles.map((t) =>
+                          t.id === tile.id ? { ...t, slicer_dataset_id: undefined, slicer_column: undefined } : t
+                        ));
+                      }}
+                      style={{
+                        background: "none", border: "none", color: "var(--tx1)",
+                        fontSize: 9, cursor: "pointer", padding: 0, textAlign: "left",
+                      }}
+                    >✎ reconfigure</button>
+                  </div>
+                )
               ) : tile.echarts_config ? (
                 <EChartsRenderer config={tile.echarts_config} height={chartH} />
               ) : (

@@ -8,6 +8,7 @@ export interface DatasetPreview {
 
 export interface DatasetMeta {
   dataset_id: string;
+  name?: string | null;
   columns: string[];
   row_count: number;
   file_format?: string | null;

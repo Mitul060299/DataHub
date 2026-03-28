@@ -246,6 +246,22 @@ def _apply_startup_ddl() -> None:
         "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_user ON canvas_layouts (user_id)",
         "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_workspace ON canvas_layouts (workspace_id)",
         "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_project ON canvas_layouts (project_id)",
+        # 0040 — connector_credentials table (encrypted config store for fold/write-back/live)
+        """CREATE TABLE IF NOT EXISTS connector_credentials (
+            id              TEXT PRIMARY KEY,
+            user_id         TEXT NOT NULL,
+            workspace_id    TEXT NOT NULL DEFAULT 'default',
+            connector_type  TEXT NOT NULL,
+            label           TEXT,
+            encrypted_config TEXT NOT NULL,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_connector_credentials_user_workspace ON connector_credentials (user_id, workspace_id)",
+        # 0040 — dataset_meta new columns for live-mode / query-folding / write-back
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS connector_credential_id TEXT",
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS import_mode TEXT NOT NULL DEFAULT 'cached'",
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS connector_config JSONB",
     ]
     try:
         from sqlalchemy import text as _text

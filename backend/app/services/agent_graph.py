@@ -246,6 +246,9 @@ class AgentGraphService:
                                 "step": last.get("step_number"),
                                 "operation": last.get("operation"),
                                 "rows_affected": last.get("rows_affected"),
+                                "row_count_before": last.get("row_count_before"),
+                                "row_count_after": last.get("row_count_after"),
+                                "execution_time_ms": last.get("execution_time_ms"),
                             }
                         else:
                             yield {

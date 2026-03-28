@@ -345,7 +345,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         onClose={() => setScheduleModalOpen(false)}
         onConfirm={(payload) => {
           setScheduleInfo(payload);
-          void schedule("default", payload.cron);
+          void schedule("default", payload.cron, payload.autoRefreshOnUpload);
         }}
       />
       <ConnectorModal

@@ -281,7 +281,11 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     try {
       const res = await api.post<{ change_summary: string }>(
         `/api/pipelines/${pipelineWorkflowId}/nl-edit`,
-        { prompt: nlPrompt.trim() },
+        {
+          prompt: nlPrompt.trim(),
+          // Pass the active dataset ID so the LLM receives the real column schema
+          dataset_id: activeDataset?.id ?? null,
+        },
       );
       setNlFeedback({ ok: true, msg: res.data.change_summary ?? "Applied." });
       setNlPrompt("");

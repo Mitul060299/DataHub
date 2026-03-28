@@ -5,6 +5,7 @@ import { api } from "../api";
 export interface ScheduleInfo {
   label: string;
   cron: string;
+  autoRefreshOnUpload?: boolean;
 }
 
 export interface PipelineStep {

@@ -3,7 +3,7 @@ import { useState } from "react";
 interface ScheduleModalProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: (payload: { label: string; cron: string }) => void;
+  onConfirm: (payload: { label: string; cron: string; autoRefreshOnUpload: boolean }) => void;
 }
 
 export function ScheduleModal({ open, onClose, onConfirm }: ScheduleModalProps) {
@@ -11,6 +11,7 @@ export function ScheduleModal({ open, onClose, onConfirm }: ScheduleModalProps) 
   const [time, setTime] = useState("09:00");
   const [day, setDay] = useState("1");
   const [cron, setCron] = useState("0 9 * * *");
+  const [autoRefreshOnUpload, setAutoRefreshOnUpload] = useState(false);
 
   if (!open) return null;
 
@@ -54,10 +55,36 @@ export function ScheduleModal({ open, onClose, onConfirm }: ScheduleModalProps) 
           {mode === "custom" ? (
             <input className="auth-input mono" placeholder="0 9 * * *" value={cron} onChange={(event) => setCron(event.target.value)} />
           ) : null}
+
+          {/* Re-run on upload trigger */}
+          <div style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, display: "grid", gap: 4 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={autoRefreshOnUpload}
+                onChange={(e) => setAutoRefreshOnUpload(e.target.checked)}
+              />
+              <span style={{ fontSize: 13 }}>Auto re-run when a new file is uploaded</span>
+            </label>
+            {autoRefreshOnUpload ? (
+              <p style={{ margin: 0, fontSize: 11, color: "var(--tx2)", paddingLeft: 22 }}>
+                The pipeline will also run automatically whenever a new dataset is uploaded to the project, keeping downstream dashboards fresh without manual intervention.
+              </p>
+            ) : null}
+          </div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { onConfirm(buildCron()); onClose(); }}>Confirm</button>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              const built = buildCron();
+              onConfirm({ ...built, autoRefreshOnUpload });
+              onClose();
+            }}
+          >
+            Confirm
+          </button>
         </div>
       </div>
     </div>
@@ -74,9 +101,10 @@ const overlay: React.CSSProperties = {
 };
 
 const modal: React.CSSProperties = {
-  width: "min(460px, 92vw)",
+  width: "min(480px, 92vw)",
   background: "var(--bg1)",
   border: "1px solid var(--bd2)",
   borderRadius: "var(--r12)",
   padding: 14,
 };
+

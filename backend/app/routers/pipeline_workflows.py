@@ -680,6 +680,10 @@ async def get_run_artifact(
 class NLEditRequest(BaseModel):
     prompt: str = Field(..., min_length=4, max_length=1000,
                         description="Plain-English instruction to modify the pipeline")
+    dataset_id: str | None = Field(
+        default=None,
+        description="Optional dataset ID — used to inject column schema and sample rows into the LLM prompt",
+    )
 
 
 @router.post("/{pipeline_id}/nl-edit")
@@ -696,8 +700,15 @@ async def nl_edit_pipeline_endpoint(
 
     The pipeline steps are updated in-place and the pipeline version is bumped.
     Returns the updated pipeline object together with a change summary.
+
+    When `dataset_id` is supplied in the request body the LLM is given the full
+    column schema and up to 3 sample rows so it can use exact column names.
+    If the first LLM call fails the endpoint retries once with the error message
+    included so the LLM can self-correct.
     """
     from app.services.nl_pipeline_service import nl_edit_pipeline
+    from app.services.duckdb_service import DuckDBService
+    from app.models_db import DatasetMetaDB
     from datetime import datetime
 
     pipeline = (
@@ -709,7 +720,56 @@ async def nl_edit_pipeline_endpoint(
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
     current_steps: list = list(pipeline.steps or [])
-    result = nl_edit_pipeline(current_steps, payload.prompt)
+
+    # ── Fetch dataset schema & sample rows for LLM context ────────────────────
+    dataset_schema: dict | None = None
+    sample_rows: list | None = None
+    if payload.dataset_id:
+        try:
+            ds = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == payload.dataset_id).first()
+            if ds:
+                raw_schema = ds.schema_json or {}
+                # Normalise schema to {col_name: dtype_string}
+                if isinstance(raw_schema, dict):
+                    dataset_schema = {
+                        col: (
+                            str(meta.get("type", "unknown"))
+                            if isinstance(meta, dict)
+                            else str(meta)
+                        )
+                        for col, meta in raw_schema.items()
+                    }
+                # Fetch 3 sample rows from DuckDB
+                if ds.storage_path:
+                    try:
+                        sample_rows = DuckDBService.query_parquet(
+                            ds.storage_path,
+                            "SELECT * FROM dataset LIMIT 3",
+                            dataset_id=ds.id,
+                        )
+                    except Exception:
+                        sample_rows = None
+        except Exception:
+            pass  # Schema is optional — don't fail the whole request
+
+    # ── First LLM attempt ─────────────────────────────────────────────────────
+    result = nl_edit_pipeline(
+        current_steps,
+        payload.prompt,
+        dataset_schema=dataset_schema,
+        sample_rows=sample_rows,
+    )
+
+    # ── Auto-retry on error (once) with self-correction context ───────────────
+    if result.get("steps") is None:
+        prior_error = result.get("error", "LLM returned no steps.")
+        result = nl_edit_pipeline(
+            current_steps,
+            payload.prompt,
+            dataset_schema=dataset_schema,
+            sample_rows=sample_rows,
+            prior_error=prior_error,
+        )
 
     if result.get("steps") is None:
         raise HTTPException(

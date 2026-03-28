@@ -75,8 +75,12 @@ export function usePipeline() {
     return response.data;
   };
 
-  const schedule = async (pipelineId: string, cron: string) => {
-    const response = await api.post(`/pipelines/${pipelineId}/schedule`, { cron });
+  const schedule = async (pipelineId: string, cron: string, autoRefreshOnUpload?: boolean) => {
+    const response = await api.post(`/pipelines/${pipelineId}/schedule`, {
+      cron,
+      auto_refresh_on_upload: autoRefreshOnUpload ?? false,
+      is_active: true,
+    });
     return response.data;
   };
 

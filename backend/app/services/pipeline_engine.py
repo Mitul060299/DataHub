@@ -108,27 +108,96 @@ def _apply_pipeline_operation(
             input_col = config.get("input_column", "text")
             output_col = config.get("output_column", "sentiment_score")
             if input_col in df.columns:
-                _POS = {"good", "great", "excellent", "positive", "love", "amazing",
-                        "best", "happy", "wonderful", "fantastic", "superb", "perfect",
-                        "outstanding", "brilliant", "nice", "awesome"}
-                _NEG = {"bad", "terrible", "awful", "negative", "hate", "worst",
-                        "poor", "horrible", "disappointing", "sad", "dreadful",
-                        "mediocre", "disgusting", "nasty", "failure", "wrong"}
-
-                def _score(text: Any) -> float:
-                    if not isinstance(text, str):
-                        return 0.0
-                    words = set(_re.findall(r"[a-z]+", text.lower()))
-                    pos = len(words & _POS)
-                    neg = len(words & _NEG)
-                    total = pos + neg
-                    return round((pos - neg) / total, 2) if total else 0.0
-
-                df[output_col] = df[input_col].apply(_score)
-                label_col = output_col.replace("_score", "_label") if "_score" in output_col else output_col + "_label"
-                df[label_col] = df[output_col].apply(
-                    lambda s: "positive" if s > 0 else ("negative" if s < 0 else "neutral")
+                label_col = (
+                    output_col.replace("_score", "_label")
+                    if "_score" in output_col
+                    else output_col + "_label"
                 )
+                texts: list = df[input_col].fillna("").astype(str).tolist()
+
+                # ── Attempt LLM-based sentiment (Groq) ────────────────────────
+                scores: list[float] | None = None
+                labels: list[str] | None = None
+                try:
+                    import httpx as _httpx
+                    from app.config import settings as _settings
+
+                    _api_key = (
+                        _settings.groq_api_key
+                        if _settings.llm_provider.lower() == "groq"
+                        else ""
+                    )
+                    if _api_key:
+                        _BATCH = 60  # stay well within token limits
+                        all_scores: list[float] = []
+                        all_labels: list[str] = []
+                        for i in range(0, len(texts), _BATCH):
+                            batch = texts[i : i + _BATCH]
+                            _system = (
+                                "You are a sentiment analyser. "
+                                "Return ONLY valid JSON: "
+                                '{"results": [{"score": <float -1.0 to 1.0>, "label": "positive"|"negative"|"neutral"}, ...]}'
+                                " — one entry per input text, same order."
+                            )
+                            _user = (
+                                "Analyse the sentiment of each text below and return the JSON array.\n\n"
+                                + "\n".join(f"{j+1}. {t[:500]}" for j, t in enumerate(batch))
+                            )
+                            _resp = _httpx.post(
+                                f"{_settings.groq_base_url}/chat/completions",
+                                headers={"Authorization": f"Bearer {_api_key}"},
+                                json={
+                                    "model": _settings.groq_model,
+                                    "messages": [
+                                        {"role": "system", "content": _system},
+                                        {"role": "user", "content": _user},
+                                    ],
+                                    "temperature": 0.0,
+                                    "response_format": {"type": "json_object"},
+                                },
+                                timeout=60.0,
+                            )
+                            _resp.raise_for_status()
+                            _parsed = json.loads(
+                                _resp.json()["choices"][0]["message"]["content"]
+                            )
+                            _results = _parsed.get("results", [])
+                            for r in _results:
+                                all_scores.append(float(r.get("score", 0.0)))
+                                all_labels.append(str(r.get("label", "neutral")))
+                        # Pad if LLM returned fewer entries than expected
+                        while len(all_scores) < len(texts):
+                            all_scores.append(0.0)
+                            all_labels.append("neutral")
+                        scores = all_scores[: len(texts)]
+                        labels = all_labels[: len(texts)]
+                except Exception:
+                    scores = None  # Fall through to keyword fallback
+
+                # ── Keyword fallback (used when Groq is not configured / fails) ─
+                if scores is None:
+                    _POS = {"good", "great", "excellent", "positive", "love", "amazing",
+                            "best", "happy", "wonderful", "fantastic", "superb", "perfect",
+                            "outstanding", "brilliant", "nice", "awesome"}
+                    _NEG = {"bad", "terrible", "awful", "negative", "hate", "worst",
+                            "poor", "horrible", "disappointing", "sad", "dreadful",
+                            "mediocre", "disgusting", "nasty", "failure", "wrong"}
+
+                    def _kw_score(text: str) -> float:
+                        words = set(_re.findall(r"[a-z]+", text.lower()))
+                        pos = len(words & _POS)
+                        neg = len(words & _NEG)
+                        total = pos + neg
+                        return round((pos - neg) / total, 2) if total else 0.0
+
+                    scores = [_kw_score(t) for t in texts]
+                    labels = [
+                        "positive" if s > 0 else ("negative" if s < 0 else "neutral")
+                        for s in scores
+                    ]
+
+                df[output_col] = scores
+                df[label_col] = labels
             return df
 
         elif operation == "keywords":

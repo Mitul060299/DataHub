@@ -7,7 +7,7 @@ import { IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
 import { StepCard } from "./StepCard";
 import { EChartsRenderer } from "./EChartsRenderer";
-import { saveVisualization } from "../api";
+import { api, saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
 import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
 import { capture } from "../lib/posthog";
@@ -22,6 +22,111 @@ interface TileCreatedData {
   saveable?: boolean;
 }
 
+// ── Data Quality Profile types ─────────────────────────────────────────────
+
+interface ColProfile {
+  null_count: number;
+  null_pct: number;
+  unique_count: number;
+  unique_pct: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+  std?: number;
+  outlier_count?: number;
+  outlier_pct?: number;
+  top_values?: Array<{ value: string; count: number }>;
+}
+
+interface DataProfile {
+  row_count: number;
+  sample_size: number;
+  duplicate_rows: number;
+  duplicate_pct: number;
+  columns: Record<string, ColProfile>;
+}
+
+function DataProfileCard({ profile }: { profile: DataProfile }) {
+  const [open, setOpen] = useState(false);
+  const cols = Object.entries(profile.columns);
+  const highNullCols = cols.filter(([, c]) => c.null_pct >= 20).length;
+  const colsWithOutliers = cols.filter(([, c]) => (c.outlier_count ?? 0) > 0).length;
+
+  return (
+    <div style={{ marginTop: 8, border: "1px solid #27272a", borderRadius: 8, overflow: "hidden", fontSize: 12 }}>
+      {/* Summary header */}
+      <div style={{ background: "#111113", padding: "8px 10px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: "#71717a", fontSize: 10, letterSpacing: "0.06em" }}>ROWS</div>
+          <div style={{ fontWeight: 700, color: "#d4d4d8" }}>{profile.row_count.toLocaleString()}</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: "#71717a", fontSize: 10, letterSpacing: "0.06em" }}>COLUMNS</div>
+          <div style={{ fontWeight: 700, color: "#d4d4d8" }}>{cols.length}</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: "#71717a", fontSize: 10, letterSpacing: "0.06em" }}>DUPES</div>
+          <div style={{ fontWeight: 700, color: profile.duplicate_pct > 5 ? "#f87171" : "#22c55e" }}>{profile.duplicate_pct}%</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: "#71717a", fontSize: 10, letterSpacing: "0.06em" }}>NULL COLS</div>
+          <div style={{ fontWeight: 700, color: highNullCols > 0 ? "#fbbf24" : "#22c55e" }}>{highNullCols}</div>
+        </div>
+      </div>
+
+      {colsWithOutliers > 0 ? (
+        <div style={{ background: "#1c1200", borderTop: "1px solid #27272a", padding: "4px 10px", color: "#fbbf24", fontSize: 11 }}>
+          ⚠ {colsWithOutliers} column{colsWithOutliers > 1 ? "s" : ""} contain outliers (z-score &gt; 3)
+        </div>
+      ) : null}
+
+      {/* Per-column breakdown toggle */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "#18181b", borderTop: "1px solid #27272a", color: "#52525b", fontSize: 11, cursor: "pointer" }}
+      >
+        {open ? "▲ Hide column details" : "▼ Show column details"}
+      </button>
+
+      {open ? (
+        <div style={{ maxHeight: 260, overflowY: "auto" }}>
+          {cols.map(([col, c]) => (
+            <div key={col} style={{ padding: "5px 10px", borderTop: "1px solid #27272a", display: "grid", gap: 2 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="mono" style={{ color: "#d4d4d8", fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{col}</span>
+                <span style={{ fontSize: 10, color: c.null_pct >= 20 ? "#f87171" : c.null_pct >= 5 ? "#fbbf24" : "#52525b" }}>
+                  {c.null_pct}% null
+                </span>
+              </div>
+              {/* Null bar */}
+              <div style={{ height: 3, background: "#27272a", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${Math.min(c.null_pct, 100)}%`, background: c.null_pct >= 20 ? "#ef4444" : c.null_pct >= 5 ? "#f59e0b" : "#22c55e", transition: "width 300ms" }} />
+              </div>
+              {/* Numeric extras */}
+              {c.min !== undefined ? (
+                <div style={{ fontSize: 10, color: "#71717a", display: "flex", gap: 8 }}>
+                  <span>min {c.min}</span><span>max {c.max}</span><span>mean {c.mean}</span>
+                  {(c.outlier_count ?? 0) > 0 ? <span style={{ color: "#f87171" }}>{c.outlier_count} outliers</span> : null}
+                </div>
+              ) : null}
+              {/* Categorical top values */}
+              {c.top_values && c.top_values.length > 0 ? (
+                <div style={{ fontSize: 10, color: "#71717a", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {c.top_values.slice(0, 3).map((tv) => (
+                    <span key={tv.value} style={{ background: "#1f1f22", borderRadius: 4, padding: "1px 5px" }}>
+                      {tv.value.length > 12 ? tv.value.slice(0, 11) + "…" : tv.value} ({tv.count})
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type Message = ConversationMessage & {
   id: string;
   transformation?: TransformationPayload;
@@ -33,6 +138,7 @@ type Message = ConversationMessage & {
   tileCreated?: TileCreatedData;
   artifactUrl?: string;
   queryResults?: Array<Record<string, unknown>>;
+  dataProfile?: DataProfile;
 };
 
 interface AIPanelProps {
@@ -53,6 +159,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   const [input, setInput] = useState("");
   const [savingVizIds, setSavingVizIds] = useState<Set<string>>(new Set());
   const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
+  const [analyzingDataset, setAnalyzingDataset] = useState(false);
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
 
@@ -240,6 +347,50 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             role: "assistant",
             content: responseText,
             tileCreated: tileCreatedData,
+          },
+        ]);
+        break;
+      }
+      case "agent.step.done": {
+        // Show a compact inline progress row: "✔ Step N (operation): before → after rows"
+        const stepNum = typeof event.step === "number" ? event.step : null;
+        const opName = typeof event.operation === "string"
+          ? event.operation.replace(/_/g, " ")
+          : "step";
+        const rowsBefore = typeof event.row_count_before === "number" ? event.row_count_before : null;
+        const rowsAfter = typeof event.row_count_after === "number" ? event.row_count_after : null;
+        const execMs = typeof event.execution_time_ms === "number" ? event.execution_time_ms : null;
+        const rowDelta = rowsBefore !== null && rowsAfter !== null ? rowsAfter - rowsBefore : null;
+        const label = [
+          stepNum !== null ? `Step ${stepNum}` : null,
+          `(${opName})`,
+          rowsBefore !== null && rowsAfter !== null
+            ? `${rowsBefore.toLocaleString()} → ${rowsAfter.toLocaleString()} rows`
+            : null,
+          rowDelta !== null && rowDelta !== 0
+            ? `(${rowDelta >= 0 ? "+" : ""}${rowDelta.toLocaleString()})`
+            : null,
+          execMs !== null ? `${execMs}ms` : null,
+        ].filter(Boolean).join(" ");
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: `✔ ${label}`,
+          },
+        ]);
+        break;
+      }
+      case "agent.step.error": {
+        const stepNum = typeof event.step === "number" ? `Step ${event.step}` : "Step";
+        const errMsg = typeof event.error === "string" ? event.error : "Unknown error";
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: `✗ ${stepNum} failed: ${errMsg}`,
           },
         ]);
         break;
@@ -478,6 +629,45 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
     setMessages((current) => current.map((msg) => (msg.id === messageId ? { ...msg, stepStatus: "discarded" } : msg)));
   };
 
+  const runDataQualityReport = async () => {
+    if (!dataset || analyzingDataset) return;
+    setAnalyzingDataset(true);
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: "📊 Run data quality report" },
+    ]);
+    try {
+      const res = await api.post<{
+        issues: unknown[];
+        suggestions: unknown[];
+        data_profile?: DataProfile;
+        error?: string;
+      }>(`/api/cleaning/datasets/${dataset.id}/analyze`);
+      const profile = res.data.data_profile;
+      const issueCount = (res.data.issues ?? []).length;
+      const content = profile
+        ? `Found ${issueCount} issue${issueCount !== 1 ? "s" : ""} in your dataset. Here is the data quality report:`
+        : res.data.error ?? "Analysis complete.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content,
+          dataProfile: profile,
+        },
+      ]);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "assistant", content: `Error: ${detail ?? "Could not run analysis."}` },
+      ]);
+    } finally {
+      setAnalyzingDataset(false);
+    }
+  };
+
   return (
     <aside style={{ width: "var(--rw)", minWidth: "var(--rw)", borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <header style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
@@ -486,9 +676,22 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           <IconZap size={14} />
           AI Agent
         </span>
-        <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { setMessages([]); resetSession(); }}>
-          <IconRefresh size={14} />
-        </button>
+        <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+          {dataset ? (
+            <button
+              className="btn"
+              style={{ fontSize: 10, padding: "2px 7px", opacity: analyzingDataset ? 0.6 : 1 }}
+              onClick={() => void runDataQualityReport()}
+              disabled={analyzingDataset}
+              title="Run data quality report"
+            >
+              {analyzingDataset ? "Analyzing…" : "📊 Quality"}
+            </button>
+          ) : null}
+          <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { setMessages([]); resetSession(); }}>
+            <IconRefresh size={14} />
+          </button>
+        </span>
       </header>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
@@ -636,6 +839,9 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                     </p>
                   ) : null}
                 </div>
+              ) : null}
+              {message.dataProfile ? (
+                <DataProfileCard profile={message.dataProfile} />
               ) : null}
             </div>
             )}

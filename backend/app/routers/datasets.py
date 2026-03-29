@@ -279,42 +279,31 @@ async def upload_dataset(
     )
     emit_event("dataset.uploaded", preview.model_dump())
 
-    # ── Auto-refresh trigger: find pipelines with auto_refresh_on_upload ──────
+    # ── Auto-refresh trigger: fire any pipeline schedules with auto_refresh_on_upload ──
     try:
-        uploaded_filename = file.filename or resolved_name
-        matching_sources = (
-            db.query(DataSourceDB)
-            .filter(
-                DataSourceDB.user_id == (user_id or ""),
-                DataSourceDB.source_type == "manual_upload",
-                DataSourceDB.is_active == True,  # noqa: E712
-            )
-            .all()
-        )
-        for src in matching_sources:
-            cfg = src.config or {}
-            # Match by filename pattern stored in config["match_filename"]
-            pattern = str(cfg.get("match_filename", "")).strip()
-            if pattern and pattern not in uploaded_filename:
-                continue
-            # Find schedules for pipelines that reference this source
-            schedules = (
+        if user_id:
+            from ..models_db import PipelineV2DB
+            # Find all active auto-refresh schedules for pipelines owned by this user
+            auto_schedules = (
                 db.query(PipelineScheduleDB)
+                .join(PipelineV2DB, PipelineV2DB.id == PipelineScheduleDB.pipeline_id)
                 .filter(
-                    PipelineScheduleDB.is_active == True,  # noqa: E712
+                    PipelineScheduleDB.is_active == True,          # noqa: E712
                     PipelineScheduleDB.auto_refresh_on_upload == True,  # noqa: E712
+                    PipelineV2DB.user_id == user_id,
                 )
                 .all()
             )
-            for sched in schedules:
+            for sched in auto_schedules:
+                # Provide the newly uploaded dataset as the input, overriding default params
                 background_tasks.add_task(
                     _run_pipeline,
                     sched.pipeline_id,
                     "upload",
-                    {"source_id": src.id, "storage_path": None},
+                    {"input_dataset_id": dataset_id},
                 )
     except Exception:
-        pass  # never let the trigger logic break the upload response
+        pass  # never let trigger logic break the upload response
 
     return preview
 

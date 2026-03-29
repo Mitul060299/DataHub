@@ -37,6 +37,7 @@ class AIAgentService:
             return {
                 "issues": [],
                 "suggestions": [],
+                "data_profile": AIAgentService._compute_data_profile(context),
                 "error": "Groq is not configured. Set LLM_PROVIDER=groq and GROQ_API_KEY.",
             }
 
@@ -107,15 +108,109 @@ class AIAgentService:
             return {
                 "issues": [],
                 "suggestions": [],
+                "data_profile": AIAgentService._compute_data_profile(context),
                 "error": f"Groq request failed: {str(exc)}",
             }
 
         payload = AIAgentService._safe_json(response)
         if not isinstance(payload, dict):
-            return {"issues": [], "suggestions": []}
+            payload = {}
         payload.setdefault("issues", [])
         payload.setdefault("suggestions", [])
+        # Always include the computed profile — it is ground-truth, not LLM-estimated
+        payload["data_profile"] = AIAgentService._compute_data_profile(context)
         return payload
+
+    @staticmethod
+    def _compute_data_profile(context: dict[str, Any]) -> dict[str, Any]:
+        """Compute ground-truth data quality metrics from the sample data.
+
+        Returns a dict with:
+          - row_count         : total rows in the dataset
+          - sample_size       : number of rows analysed
+          - duplicate_rows    : exact duplicate row count in the sample
+          - duplicate_pct     : duplicate percentage in the sample
+          - columns           : per-column profile dict
+        """
+        sample = context.get("sampleData") or []
+        row_count: int = context.get("rowCount") or len(sample)
+
+        if not sample:
+            return {
+                "row_count": row_count,
+                "sample_size": 0,
+                "duplicate_rows": 0,
+                "duplicate_pct": 0.0,
+                "columns": {},
+            }
+
+        try:
+            df = pd.DataFrame(sample)
+        except Exception:
+            return {
+                "row_count": row_count,
+                "sample_size": len(sample),
+                "duplicate_rows": 0,
+                "duplicate_pct": 0.0,
+                "columns": {},
+            }
+
+        n = len(df)
+        duplicate_count = int(df.duplicated().sum())
+        duplicate_pct = round(duplicate_count / n * 100, 2) if n else 0.0
+
+        col_profiles: dict[str, Any] = {}
+        for col in df.columns:
+            series = df[col]
+            null_count = int(series.isna().sum())
+            # Also count common pseudo-nulls in string columns
+            if series.dtype == object:
+                pseudo_null_mask = series.astype(str).str.strip().str.lower().isin(
+                    {"", "null", "none", "n/a", "na", "nan", "-"}
+                )
+                null_count = int((series.isna() | pseudo_null_mask).sum())
+            null_pct = round(null_count / n * 100, 2) if n else 0.0
+            unique_count = int(series.nunique(dropna=True))
+
+            profile: dict[str, Any] = {
+                "null_count": null_count,
+                "null_pct": null_pct,
+                "unique_count": unique_count,
+                "unique_pct": round(unique_count / n * 100, 2) if n else 0.0,
+            }
+
+            # Numeric column extras: min, max, mean, std, outlier_count
+            numeric_series = pd.to_numeric(series, errors="coerce")
+            if numeric_series.notna().sum() / max(n, 1) > 0.5:
+                valid = numeric_series.dropna()
+                if len(valid) > 1:
+                    mean = float(valid.mean())
+                    std = float(valid.std(ddof=0))
+                    outlier_count = int((((valid - mean) / std).abs() > 3.0).sum()) if std > 0 else 0
+                    profile.update({
+                        "min": round(float(valid.min()), 4),
+                        "max": round(float(valid.max()), 4),
+                        "mean": round(mean, 4),
+                        "std": round(std, 4),
+                        "outlier_count": outlier_count,
+                        "outlier_pct": round(outlier_count / len(valid) * 100, 2),
+                    })
+            else:
+                # String/categorical: top 5 values
+                top = series.dropna().astype(str).value_counts().head(5)
+                profile["top_values"] = [
+                    {"value": str(v), "count": int(c)} for v, c in top.items()
+                ]
+
+            col_profiles[str(col)] = profile
+
+        return {
+            "row_count": row_count,
+            "sample_size": n,
+            "duplicate_rows": duplicate_count,
+            "duplicate_pct": duplicate_pct,
+            "columns": col_profiles,
+        }
 
     @staticmethod
     def process_command(

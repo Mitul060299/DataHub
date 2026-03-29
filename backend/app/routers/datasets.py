@@ -763,7 +763,50 @@ def suggest_columns(
     return {"query": query, "suggestions": suggestions[: max(1, min(limit, 20))]}
 
 
-@router.post("/{dataset_id}/query", response_model=DatasetQueryResponse)
+@router.get("/compare-schemas")
+def compare_schemas(
+    ids: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Compare column schemas of two datasets and return alignment info."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+
+    dataset_ids = [d.strip() for d in ids.split(",") if d.strip()]
+    if len(dataset_ids) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least two dataset IDs separated by commas")
+
+    results = []
+    for did in dataset_ids[:2]:
+        meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == did).first()
+        if not meta:
+            raise HTTPException(status_code=404, detail=f"Dataset {did!r} not found")
+        columns = list(meta.columns or [])
+        results.append({"id": did, "name": meta.name or did, "columns": columns})
+
+    cols_a = set(str(c) for c in results[0]["columns"])
+    cols_b = set(str(c) for c in results[1]["columns"])
+
+    exact_matches = sorted(cols_a & cols_b)
+    only_in_a = sorted(cols_a - cols_b)
+    only_in_b = sorted(cols_b - cols_a)
+
+    # Fuzzy column suggestions (difflib)
+    fuzzy_suggestions: list[dict] = []
+    for col in only_in_a:
+        close = difflib.get_close_matches(col, list(cols_b), n=1, cutoff=0.6)
+        if close:
+            fuzzy_suggestions.append({"column_a": col, "column_b": close[0], "confidence": "high"})
+
+    return {
+        "datasets": results,
+        "exact_matches": exact_matches,
+        "only_in_a": only_in_a,
+        "only_in_b": only_in_b,
+        "fuzzy_suggestions": fuzzy_suggestions,
+        "alignment_score": round(len(exact_matches) / max(len(cols_a | cols_b), 1), 2),
+    }
 def query_dataset(
     dataset_id: str,
     payload: DatasetQueryRequest,

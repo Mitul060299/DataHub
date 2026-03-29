@@ -74,6 +74,7 @@ def _connector_type_map(db_type: str) -> str:
 async def upload_file(
     file: UploadFile = File(...),
     dataset_name: str | None = Form(default=None),
+    sheet: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
@@ -109,6 +110,9 @@ async def upload_file(
             status_code=422,
             detail={"error": "file_validation_failed", "message": _vr.error or "File validation failed."},
         )
+    # Use UTF-8 converted bytes if encoding was fixed during validation
+    if _vr.converted_bytes is not None:
+        content = _vr.converted_bytes
 
     try:
         source_format = FileParserService.detect_file_format(file.filename)
@@ -126,7 +130,7 @@ async def upload_file(
 
     try:
         logger.info(f"Parsing file: {file.filename}")
-        df = FileParserService.parse_file(content, file.filename)
+        df = FileParserService.parse_file(content, file.filename, sheet_name=sheet)
         if df.empty:
             raise ValueError("CSV file is empty")
         if df.shape[0] == 0:
@@ -238,6 +242,26 @@ async def upload_file(
             status_code=500, 
             detail=f"Error saving file: {str(exc)}"
         ) from exc
+
+
+@router.post("/excel-sheets")
+async def list_excel_sheets(
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Return the list of sheet names in an uploaded Excel workbook."""
+    get_current_user_id(authorization)  # require auth
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File name is required")
+    content = await file.read()
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in {"xls", "xlsx"}:
+        raise HTTPException(status_code=400, detail="Only Excel files (.xls, .xlsx) are supported")
+    from ..services.file_parser import FileParserService as _FPS
+    sheets = _FPS.list_excel_sheets(content)
+    if not sheets:
+        raise HTTPException(status_code=422, detail="Could not read sheet names from this Excel file")
+    return {"sheets": sheets}
 
 
 @router.post("/test-connection")

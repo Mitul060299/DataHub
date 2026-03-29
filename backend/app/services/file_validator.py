@@ -44,6 +44,7 @@ class ValidationResult:
     file_size_mb: float = 0.0
     warnings: list[str] = field(default_factory=list)
     error: Optional[str] = None
+    converted_bytes: Optional[bytes] = None  # Set when encoding was converted
 
 
 def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
@@ -93,6 +94,7 @@ def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
         file_bytes, converted = _ensure_utf8(file_bytes)
         if converted:
             result.encoding_converted = True
+            result.converted_bytes = file_bytes
             result.warnings.append("File was automatically converted from non-UTF-8 encoding to UTF-8.")
 
     # ── 3. File is readable (attempt DuckDB open) ─────────────────────────────

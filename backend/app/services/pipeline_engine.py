@@ -103,6 +103,296 @@ def _apply_pipeline_operation(
                     )
             return df
 
+        # ── Workstream A: New data operations ─────────────────────────────────
+
+        elif operation == "fill_nulls":
+            col = config.get("column")
+            strategy = config.get("strategy", "mean")
+            value = config.get("value")
+            cols = [col] if col and col in df.columns else df.select_dtypes(include="number").columns.tolist()
+            for c in cols:
+                if strategy == "mean":
+                    df[c] = df[c].fillna(df[c].mean())
+                elif strategy == "median":
+                    df[c] = df[c].fillna(df[c].median())
+                elif strategy == "mode":
+                    mode_val = df[c].mode()
+                    df[c] = df[c].fillna(mode_val.iloc[0] if len(mode_val) > 0 else df[c])
+                elif strategy == "zero":
+                    df[c] = df[c].fillna(0)
+                elif strategy == "ffill":
+                    df[c] = df[c].ffill()
+                elif strategy == "bfill":
+                    df[c] = df[c].bfill()
+                elif strategy == "value" and value is not None:
+                    df[c] = df[c].fillna(value)
+            return df
+
+        elif operation == "cast_column_type":
+            col = config.get("column")
+            target_type = config.get("type", "str")
+            if col and col in df.columns:
+                try:
+                    if target_type in ("int", "integer"):
+                        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+                    elif target_type in ("float", "number"):
+                        df[col] = pd.to_numeric(df[col], errors="coerce")
+                    elif target_type in ("str", "string", "text"):
+                        df[col] = df[col].astype(str)
+                    elif target_type in ("datetime", "date"):
+                        df[col] = pd.to_datetime(df[col], errors="coerce")
+                    elif target_type == "bool":
+                        df[col] = df[col].astype(bool)
+                except Exception:
+                    pass
+            return df
+
+        elif operation == "add_calculated_column":
+            new_col = config.get("output_column", "calculated")
+            formula = config.get("formula", "")
+            if formula:
+                try:
+                    df[new_col] = df.eval(formula)
+                except Exception as exc:
+                    logger.warning("add_calculated_column eval failed: %s", exc)
+            return df
+
+        elif operation == "normalize_column":
+            col = config.get("column")
+            method = config.get("method", "minmax")
+            cols = [col] if col and col in df.columns else df.select_dtypes(include="number").columns.tolist()
+            for c in cols:
+                s = df[c].astype(float)
+                if method == "minmax":
+                    span = s.max() - s.min()
+                    df[c] = (s - s.min()) / span if span != 0 else s * 0
+                elif method == "zscore":
+                    std = s.std(ddof=0)
+                    df[c] = (s - s.mean()) / std if std != 0 else s * 0
+            return df
+
+        elif operation == "round_numeric":
+            decimals = int(config.get("decimals", 2))
+            col = config.get("column")
+            cols = [col] if col and col in df.columns else df.select_dtypes(include="number").columns.tolist()
+            for c in cols:
+                df[c] = df[c].round(decimals)
+            return df
+
+        elif operation == "encode_categorical":
+            col = config.get("column")
+            method = config.get("method", "label")
+            if col and col in df.columns:
+                if method == "onehot":
+                    dummies = pd.get_dummies(df[col], prefix=col, drop_first=False)
+                    df = pd.concat([df.drop(columns=[col]), dummies], axis=1)
+                else:  # label encoding
+                    uniques = {v: i for i, v in enumerate(df[col].dropna().unique())}
+                    df[col + "_encoded"] = df[col].map(uniques)
+            return df
+
+        elif operation == "filter_rows":
+            col = config.get("column")
+            op = config.get("operator", "==")
+            val = config.get("value")
+            if col and col in df.columns and val is not None:
+                try:
+                    s = df[col]
+                    numeric_val = float(val)
+                    s_num = pd.to_numeric(s, errors="coerce")
+                    ops = {"==": s_num == numeric_val, "!=": s_num != numeric_val,
+                           ">": s_num > numeric_val, ">=": s_num >= numeric_val,
+                           "<": s_num < numeric_val, "<=": s_num <= numeric_val}
+                    mask = ops.get(op, s_num == numeric_val)
+                except (ValueError, TypeError):
+                    str_val = str(val)
+                    ops = {"==": s.astype(str) == str_val, "!=": s.astype(str) != str_val,
+                           "contains": s.astype(str).str.contains(str_val, na=False),
+                           "startswith": s.astype(str).str.startswith(str_val),
+                           "endswith": s.astype(str).str.endswith(str_val)}
+                    mask = ops.get(op, s.astype(str) == str_val)
+                df = df[mask].reset_index(drop=True)
+            return df
+
+        elif operation == "deduplicate_by_column":
+            col = config.get("column")
+            keep = config.get("keep", "first")
+            subset = [col] if col and col in df.columns else None
+            return df.drop_duplicates(subset=subset, keep=keep).reset_index(drop=True)
+
+        elif operation == "filter_nulls":
+            col = config.get("column")
+            subset = [col] if col and col in df.columns else None
+            return df.dropna(subset=subset).reset_index(drop=True)
+
+        elif operation == "filter_outliers":
+            threshold = float(config.get("threshold", 3.0))
+            col = config.get("column")
+            cols = [col] if col and col in df.columns else df.select_dtypes(include="number").columns.tolist()
+            if cols:
+                numeric = df[cols].apply(pd.to_numeric, errors="coerce")
+                means = numeric.mean()
+                stds = numeric.std(ddof=0).replace(0, _np.nan)
+                z_scores = ((numeric - means) / stds).abs().fillna(0)
+                mask = (z_scores <= threshold).all(axis=1)
+                df = df[mask].reset_index(drop=True)
+            return df
+
+        elif operation == "sort_by_column":
+            col = config.get("column")
+            ascending = config.get("ascending", True)
+            if col and col in df.columns:
+                df = df.sort_values(by=col, ascending=bool(ascending)).reset_index(drop=True)
+            return df
+
+        elif operation in ("group_by_sum", "group_by_count", "group_by_mean"):
+            group_col = config.get("group_by") or config.get("column")
+            agg_col = config.get("agg_column")
+            agg_map = {"group_by_sum": "sum", "group_by_count": "count", "group_by_mean": "mean"}
+            agg_fn = agg_map[operation]
+            if group_col and group_col in df.columns:
+                if agg_col and agg_col in df.columns:
+                    df = df.groupby(group_col, as_index=False)[agg_col].agg(agg_fn)
+                else:
+                    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+                    if numeric_cols:
+                        df = df.groupby(group_col, as_index=False)[numeric_cols].agg(agg_fn)
+                    else:
+                        df = df.groupby(group_col, as_index=False).size().rename(columns={0: "count"})
+            return df
+
+        elif operation == "pivot_table":
+            index_col = config.get("index")
+            values_col = config.get("values")
+            columns_col = config.get("columns")
+            agg_fn = config.get("agg", "sum")
+            if index_col and values_col and index_col in df.columns and values_col in df.columns:
+                try:
+                    pivot_kwargs: dict = {"index": index_col, "values": values_col, "aggfunc": agg_fn}
+                    if columns_col and columns_col in df.columns:
+                        pivot_kwargs["columns"] = columns_col
+                    df = df.pivot_table(**pivot_kwargs).reset_index()
+                    df.columns.name = None
+                except Exception as exc:
+                    logger.warning("pivot_table failed: %s", exc)
+            return df
+
+        elif operation == "fuzzy_deduplicate":
+            col = config.get("column")
+            threshold = int(config.get("threshold", 90))
+            keep = config.get("keep", "first")
+            if col and col in df.columns:
+                try:
+                    from rapidfuzz import process as _rf_process, fuzz as _rf_fuzz  # type: ignore[import-untyped]
+                    values = df[col].astype(str).tolist()
+                    drop_idx: set[int] = set()
+                    seen: list[tuple[int, str]] = []
+                    for i, val in enumerate(values):
+                        if i in drop_idx:
+                            continue
+                        for j, seen_val in seen:
+                            if _rf_fuzz.ratio(val, seen_val) >= threshold:
+                                drop_idx.add(i if keep == "first" else j)
+                                break
+                        else:
+                            seen.append((i, val))
+                    df = df.drop(index=list(drop_idx)).reset_index(drop=True)
+                except ImportError:
+                    logger.warning("rapidfuzz not installed — falling back to exact dedup on column %s", col)
+                    df = df.drop_duplicates(subset=[col], keep=keep).reset_index(drop=True)
+            return df
+
+        elif operation == "validate_rules":
+            rules = config.get("rules", [])
+            mode = config.get("mode", "flag")  # flag | drop | report
+            flag_col = config.get("flag_column", "validation_failed")
+            failed_mask = pd.Series([False] * len(df), index=df.index)
+            for rule in rules:
+                r_col = rule.get("column")
+                r_op = rule.get("operator", "not_null")
+                r_val = rule.get("value")
+                if not r_col or r_col not in df.columns:
+                    continue
+                s = df[r_col]
+                if r_op == "not_null":
+                    rule_fail = s.isna()
+                elif r_op == ">" and r_val is not None:
+                    rule_fail = pd.to_numeric(s, errors="coerce") <= float(r_val)
+                elif r_op == ">=" and r_val is not None:
+                    rule_fail = pd.to_numeric(s, errors="coerce") < float(r_val)
+                elif r_op == "<" and r_val is not None:
+                    rule_fail = pd.to_numeric(s, errors="coerce") >= float(r_val)
+                elif r_op == "<=" and r_val is not None:
+                    rule_fail = pd.to_numeric(s, errors="coerce") > float(r_val)
+                elif r_op == "==" and r_val is not None:
+                    rule_fail = s.astype(str) != str(r_val)
+                elif r_op == "unique":
+                    rule_fail = s.duplicated(keep=False)
+                elif r_op == "regex" and r_val:
+                    rule_fail = ~s.astype(str).str.match(str(r_val), na=True)
+                elif r_op == "min_length" and r_val is not None:
+                    rule_fail = s.astype(str).str.len() < int(r_val)
+                else:
+                    continue
+                failed_mask = failed_mask | rule_fail.fillna(True)
+            if mode == "drop":
+                df = df[~failed_mask].reset_index(drop=True)
+            elif mode == "report":
+                df[flag_col] = failed_mask
+            else:  # flag
+                df[flag_col] = failed_mask
+            return df
+
+        elif operation == "detect_date_gaps":
+            date_col = config.get("date_column")
+            freq = config.get("freq", "D")
+            fill_method = config.get("fill_method", "ffill")
+            if date_col and date_col in df.columns:
+                try:
+                    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+                    df = df.dropna(subset=[date_col]).sort_values(date_col)
+                    full_range = pd.date_range(df[date_col].min(), df[date_col].max(), freq=freq)
+                    df = df.set_index(date_col).reindex(full_range)
+                    df.index.name = date_col
+                    if fill_method in ("ffill", "bfill"):
+                        df = getattr(df, fill_method)()
+                    df = df.reset_index()
+                except Exception as exc:
+                    logger.warning("detect_date_gaps failed: %s", exc)
+            return df
+
+        elif operation == "normalize_timezone":
+            date_col = config.get("date_column")
+            source_tz = config.get("source_tz", "UTC")
+            target_tz = config.get("target_tz", "UTC")
+            if date_col and date_col in df.columns:
+                try:
+                    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+                    s = df[date_col]
+                    if s.dt.tz is None:
+                        s = s.dt.tz_localize(source_tz, ambiguous="infer", nonexistent="shift_forward")
+                    df[date_col] = s.dt.tz_convert(target_tz)
+                except Exception as exc:
+                    logger.warning("normalize_timezone failed: %s", exc)
+            return df
+
+        elif operation == "generate_id":
+            output_col = config.get("output_column", "id")
+            strategy = config.get("strategy", "rownum")
+            if strategy == "rownum":
+                df[output_col] = _np.arange(1, len(df) + 1)
+            elif strategy == "uuid":
+                import uuid as _uuid_mod
+                df[output_col] = [str(_uuid_mod.uuid4()) for _ in range(len(df))]
+            elif strategy == "hash":
+                hash_cols = config.get("columns", df.columns.tolist())
+                valid_hash_cols = [c for c in hash_cols if c in df.columns]
+                if valid_hash_cols:
+                    df[output_col] = df[valid_hash_cols].astype(str).apply(
+                        lambda row: hashlib.md5("|".join(row.values).encode()).hexdigest()[:12], axis=1
+                    )
+            return df
+
     elif step_type == "ai_transform":
         if operation == "sentiment":
             input_col = config.get("input_column", "text")

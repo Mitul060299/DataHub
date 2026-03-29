@@ -53,33 +53,44 @@ The pipeline steps schema is:
 ]
 
 Common operation names for "type": "transform":
-  drop_duplicates, trim_string_columns, drop_null_columns, rename_snake_case,
-  fill_nulls (config: column, fill_value or strategy="mean"|"median"|"mode"|"zero"),
-  cast_column_type (config: column, target_type="int"|"float"|"str"|"datetime"),
-  add_calculated_column (config: new_column, formula e.g. "col_a * col_b"),
-  normalize_column (config: column, method="minmax"|"zscore"),
-  parse_dates (config: optional column), round_numeric (config: decimals),
-  encode_categorical (config: column, method="onehot"|"label")
+  drop_duplicates           — (config: keep="first"|"last")
+  trim_string_columns       — strip whitespace from all text columns
+  drop_null_columns         — (config: threshold=0.5) drop cols with >50% nulls
+  rename_snake_case         — rename all columns to snake_case
+  fill_nulls                — (config: column, strategy="mean"|"median"|"mode"|"zero"|"ffill"|"bfill"|"value", value)
+  cast_column_type          — (config: column, type="int"|"float"|"str"|"datetime"|"bool")
+  add_calculated_column     — (config: output_column, formula e.g. "col_a * col_b")
+  normalize_column          — (config: column, method="minmax"|"zscore")
+  parse_dates               — auto-detect and parse date columns
+  round_numeric             — (config: decimals=2, column optional)
+  encode_categorical        — (config: column, method="onehot"|"label")
+  resample_timeseries       — (config: freq="D"|"W"|"M", agg="sum"|"mean")
+  fuzzy_deduplicate         — (config: column, threshold=90, keep="first")
+  normalize_timezone        — (config: date_column, source_tz="UTC", target_tz="UTC")
+  generate_id               — (config: output_column="id", strategy="rownum"|"uuid"|"hash", columns=[...])
 
 Common operation names for "type": "filter":
-  filter_rows (config: column, operator="eq"|"ne"|"gt"|"lt"|"gte"|"lte"|"contains", value),
-  deduplicate_by_column (config: column), filter_nulls (config: column),
-  filter_outliers (config: column, threshold=3.0)
+  filter_rows               — (config: column, operator="=="|"!="|">"|">="|"<"|"<="|"contains"|"startswith", value)
+  deduplicate_by_column     — (config: column, keep="first")
+  filter_nulls              — (config: column) drop rows where column is null
+  filter_outliers           — (config: column, threshold=3.0) zscore-based outlier removal
 
 Common operation names for "type": "aggregate":
-  group_by_sum (config: group_by, value_column),
-  group_by_count (config: group_by),
-  group_by_mean (config: group_by, value_column),
-  pivot_table (config: index, columns, values, aggfunc), flatten
+  group_by_sum              — (config: group_by, agg_column)
+  group_by_count            — (config: group_by)
+  group_by_mean             — (config: group_by, agg_column)
+  pivot_table               — (config: index, values, columns optional, agg="sum")
+  detect_date_gaps          — (config: date_column, freq="D", fill_method="ffill"|"bfill")
 
 Common operation names for "type": "sort":
-  sort_by_column (config: column, ascending=true|false)
+  sort_by_column            — (config: column, ascending=true|false)
 
 Common operation names for "type": "ai_analysis":
-  sentiment_analysis (config: input_column, output_column),
-  text_classification (config: input_column, output_column, categories=[...]),
-  anomaly_detection (config: method="zscore", threshold=3.0, output_column),
-  forecast (config: date_column, value_column, periods=7)
+  sentiment                 — (config: input_column, output_column)
+  keywords                  — (config: input_column, output_column, top_k=5)
+  anomaly_detection         — (config: method="zscore", threshold=3.0, output_column)
+  validate_rules            — (config: rules=[{column, operator, value}], mode="flag"|"drop"|"report", flag_column)
+    Supported rule operators: not_null, >, >=, <, <=, ==, unique, regex, min_length
 
 "type": "custom" — raw DuckDB SQL (use when no built-in operation fits):
   config: {

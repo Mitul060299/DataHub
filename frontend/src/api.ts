@@ -167,16 +167,45 @@ export async function validateFile(file: File): Promise<{
   return response.data;
 }
 
-export async function uploadDataset(file: File, datasetName?: string) {
+export async function uploadDataset(file: File, datasetName?: string, sheet?: string) {
   const formData = new FormData();
   formData.append("file", file);
   if (datasetName?.trim()) {
     formData.append("dataset_name", datasetName.trim());
   }
+  if (sheet?.trim()) {
+    formData.append("sheet", sheet.trim());
+  }
   const response = await api.post("/datasets/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" }
   });
   invalidateAnalyticsCache();
+  return response.data;
+}
+
+export async function listExcelSheets(file: File): Promise<{ sheets: string[] }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post("/import/excel-sheets", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
+export async function fetchSchemaComparison(
+  datasetIdA: string,
+  datasetIdB: string
+): Promise<{
+  datasets: { id: string; name: string; columns: string[] }[];
+  exact_matches: string[];
+  only_in_a: string[];
+  only_in_b: string[];
+  fuzzy_suggestions: { column_a: string; column_b: string; confidence: string }[];
+  alignment_score: number;
+}> {
+  const response = await api.get("/datasets/compare-schemas", {
+    params: { ids: `${datasetIdA},${datasetIdB}` },
+  });
   return response.data;
 }
 

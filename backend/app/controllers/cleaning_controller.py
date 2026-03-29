@@ -204,7 +204,9 @@ class CleaningController:
         replayed: list[dict[str, Any]] = []
 
         for idx, step in enumerate(steps):
-            sql = step.get("sql") or step.get("transformation", {}).get("sql") if isinstance(step.get("transformation"), dict) else None
+            sql = step.get("sql")
+            if not sql and isinstance(step.get("transformation"), dict):
+                sql = step["transformation"].get("sql")
             if not sql:
                 # No SQL — report as pass-through
                 replayed.append({

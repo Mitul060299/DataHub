@@ -164,7 +164,7 @@ class AIAgentService:
             series = df[col]
             null_count = int(series.isna().sum())
             # Also count common pseudo-nulls in string columns
-            if series.dtype == object:
+            if pd.api.types.is_string_dtype(series) or pd.api.types.is_object_dtype(series):
                 pseudo_null_mask = series.astype(str).str.strip().str.lower().isin(
                     {"", "null", "none", "n/a", "na", "nan", "-"}
                 )

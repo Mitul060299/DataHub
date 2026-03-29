@@ -35,6 +35,8 @@ export interface PipelineStep {
   execution_time_ms?: number | null;
   status?: "completed" | "failed" | "pending";
   error_message?: string | null;
+  /** Full raw config dict from the agent, used for surgical step replay */
+  rawConfig?: Record<string, unknown>;
 }
 
 interface PipelineContextValue {
@@ -44,6 +46,8 @@ interface PipelineContextValue {
   renameStep: (stepId: string, newLabel: string) => void;
   keepStepsThrough: (stepId: string) => void;
   clearSteps: () => void;
+  replaceSteps: (newSteps: PipelineStep[]) => void;
+  updateStep: (stepId: string, updates: Partial<PipelineStep>) => void;
   runPipeline: () => Promise<void>;
   scheduleInfo: ScheduleInfo | null;
   setScheduleInfo: (info: ScheduleInfo | null) => void;
@@ -110,6 +114,16 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     setSteps([]);
   };
 
+  const replaceSteps = (newSteps: PipelineStep[]) => {
+    setSteps(newSteps);
+  };
+
+  const updateStep = (stepId: string, updates: Partial<PipelineStep>) => {
+    setSteps((current) =>
+      current.map((step) => (step.id === stepId ? { ...step, ...updates } : step))
+    );
+  };
+
   const runPipeline = async () => {
     if (!steps.length) return;
     try {
@@ -120,7 +134,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, runPipeline, scheduleInfo, setScheduleInfo }),
+    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, runPipeline, scheduleInfo, setScheduleInfo }),
     [steps, scheduleInfo],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 

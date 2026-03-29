@@ -155,3 +155,32 @@ def get_job_status(
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     return CleaningController.get_job_status(job_id, authorization)
+
+
+class ReplayRequest(BaseModel):
+    """Replay a chain of pipeline steps starting from pivot_dataset_id.
+
+    Each step dict must contain at minimum a ``sql`` key with the DuckDB
+    SQL that was used to produce its output.  The full ``rawConfig`` stored
+    by the frontend can be passed in as-is.
+    """
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.post("/datasets/{dataset_id}/replay")
+def replay_steps(
+    dataset_id: str,
+    payload: ReplayRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Re-execute a list of steps against *dataset_id* as the pivot/base.
+
+    Used for surgical mid-pipeline step removal: after splicing out step N,
+    the frontend calls this with the steps that followed N, starting from
+    the output dataset of step N-1.
+
+    Returns the updated chain so the frontend can patch the steps array and
+    set the active dataset to *final_dataset_id*.
+    """
+    return CleaningController.replay_steps(dataset_id, payload.steps, authorization, db)

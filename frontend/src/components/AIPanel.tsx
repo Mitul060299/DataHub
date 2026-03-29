@@ -273,6 +273,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             sql,
             affectedRows,
             appliedAt: new Date(),
+            rawConfig: stepRecord,
             inputDataset: dataset
               ? {
                   id: inputDatasetId || dataset.id,

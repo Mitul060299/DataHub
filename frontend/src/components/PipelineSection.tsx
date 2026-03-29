@@ -26,13 +26,14 @@ type RunStatusSummary = {
 };
 
 export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
-  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep } = usePipelineContext();
+  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
 
   const [open, setOpen] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [surgicalRemoving, setSurgicalRemoving] = useState(false);
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingStepName, setEditingStepName] = useState("");
@@ -458,6 +459,94 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     }
   };
 
+  /**
+   * Surgical step removal:
+   * – Removes step at index N from the pipeline.
+   * – If it was the last step, restores the active dataset to the step's input.
+   * – If subsequent steps exist, replays them via the /replay endpoint starting
+   *   from step[N-1]'s output dataset, then patches the steps array + active dataset.
+   */
+  const handleSurgicalRemove = async (stepId: string) => {
+    if (undoing || surgicalRemoving) return;
+
+    const stepIndex = steps.findIndex((s) => s.id === stepId);
+    if (stepIndex < 0) return;
+
+    const stepsAfter = steps.slice(stepIndex + 1);
+
+    // If there are no steps after, behave like undo-from-step
+    if (stepsAfter.length === 0) {
+      await handleUndoFromStep(stepId);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove step "${getStepLabel(steps[stepIndex])}" and re-run the ${stepsAfter.length} step${stepsAfter.length === 1 ? "" : "s"} that follow?`,
+    );
+    if (!confirmed) return;
+
+    setSurgicalRemoving(true);
+    try {
+      // Determine the pivot dataset — output of the step before the removed one,
+      // or the source dataset if the removed step was the first.
+      const pivotStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
+      const pivotDatasetId =
+        pivotStep?.outputDataset?.id ??
+        pivotStep?.inputDataset?.id ??
+        steps[0]?.inputDataset?.id ??
+        activeDataset?.id;
+
+      if (!pivotDatasetId) {
+        window.alert("Cannot determine pivot dataset — please use Undo from this step instead.");
+        return;
+      }
+
+      // Build the list of rawConfigs for the steps that follow the removed step
+      const replayStepPayloads = stepsAfter.map((s) => s.rawConfig ?? { operation: s.operation, sql: s.sql });
+
+      const response = await api.post(
+        `/api/cleaning/datasets/${pivotDatasetId}/replay`,
+        { steps: replayStepPayloads },
+      );
+
+      const data = response.data as {
+        replayed_steps: Array<{ step_index: number; input_dataset_id: string; output_dataset_id: string; row_count: number | null; skipped: boolean }>;
+        final_dataset_id: string;
+        final_row_count: number | null;
+      };
+
+      // Patch the steps array: remove the surgical step, update the ones that follow
+      const keptBefore = steps.slice(0, stepIndex);
+      const patchedAfter = stepsAfter.map((s, i) => {
+        const replay = data.replayed_steps[i];
+        if (!replay) return s;
+        return {
+          ...s,
+          inputDataset: s.inputDataset ? { ...s.inputDataset, id: replay.input_dataset_id } : s.inputDataset,
+          outputDataset: (!replay.skipped && replay.output_dataset_id !== replay.input_dataset_id)
+            ? { id: replay.output_dataset_id, name: s.outputDataset?.name ?? s.description, rowCount: replay.row_count ?? 0, parentId: replay.input_dataset_id }
+            : s.outputDataset,
+        };
+      });
+
+      replaceSteps([...keptBefore, ...patchedAfter]);
+
+      // Update active dataset to final output
+      if (data.final_dataset_id && data.final_dataset_id !== activeDataset?.id) {
+        setActiveDataset({
+          id: data.final_dataset_id,
+          name: activeDataset?.name ?? "Cleaned dataset",
+          rows: data.final_row_count ?? activeDataset?.rows ?? 0,
+        });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      window.alert(`Surgical remove failed: ${msg}\n\nUse "Undo from this step" to revert instead.`);
+    } finally {
+      setSurgicalRemoving(false);
+    }
+  };
+
   return (
     <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -657,11 +746,11 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                       <button
                         className="btn"
                         style={{ height: 20, width: 20, padding: 0 }}
-                        title="Remove step"
-                        onClick={() => removeStep(step.id)}
-                        disabled={undoing}
+                        title={steps.length > 1 && index < steps.length - 1 ? "Surgical remove (re-runs downstream steps)" : "Remove step"}
+                        onClick={() => void handleSurgicalRemove(step.id)}
+                        disabled={undoing || surgicalRemoving}
                       >
-                        <IconX size={12} />
+                        {surgicalRemoving ? "…" : <IconX size={12} />}
                       </button>
                     </div>
 

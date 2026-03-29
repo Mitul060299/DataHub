@@ -170,3 +170,82 @@ class CleaningController:
             return DataTransformationService.undo_last_transformation(dataset_id, user_id, db)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+
+    @staticmethod
+    def replay_steps(
+        pivot_dataset_id: str,
+        steps: list[dict[str, Any]],
+        authorization: str | None,
+        db: Session,
+    ) -> dict[str, Any]:
+        """Re-execute *steps* sequentially starting from *pivot_dataset_id*.
+
+        Each step must have a ``sql`` key.  Steps without SQL are skipped and
+        their input/output dataset ID is reported as the current pivot so the
+        frontend knows they didn't produce a new dataset.
+
+        Returns::
+
+            {
+                "replayed_steps": [
+                    {"step_index": 0, "input_dataset_id": "...",
+                     "output_dataset_id": "...", "row_count": 123},
+                    ...
+                ],
+                "final_dataset_id": "...",
+                "final_row_count": 123,
+            }
+        """
+        role = get_current_role(authorization)
+        require_role("editor", role)
+
+        user_id = get_current_subject(authorization) or "unknown"
+        current_dataset_id = pivot_dataset_id
+        replayed: list[dict[str, Any]] = []
+
+        for idx, step in enumerate(steps):
+            sql = step.get("sql") or step.get("transformation", {}).get("sql") if isinstance(step.get("transformation"), dict) else None
+            if not sql:
+                # No SQL — report as pass-through
+                replayed.append({
+                    "step_index": idx,
+                    "input_dataset_id": current_dataset_id,
+                    "output_dataset_id": current_dataset_id,
+                    "row_count": None,
+                    "skipped": True,
+                })
+                continue
+
+            transformation = {**step, "sql": sql}
+            dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_dataset_id).first()
+            if not dataset:
+                raise HTTPException(status_code=404, detail=f"Dataset {current_dataset_id} not found during replay")
+
+            try:
+                result = DataTransformationService.execute_transformation(
+                    current_dataset_id, user_id, transformation, db
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=422, detail=f"Step {idx} failed: {exc}")
+
+            # For immediate (non-large) datasets, result["result"]["outputDataset"]["id"]
+            inner = result.get("result") or {}
+            output_ds = inner.get("outputDataset") or {}
+            new_dataset_id = output_ds.get("id") or current_dataset_id
+            row_count = output_ds.get("rowCount")
+
+            replayed.append({
+                "step_index": idx,
+                "input_dataset_id": current_dataset_id,
+                "output_dataset_id": new_dataset_id,
+                "row_count": row_count,
+                "skipped": False,
+            })
+            current_dataset_id = new_dataset_id
+
+        final_dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_dataset_id).first()
+        return {
+            "replayed_steps": replayed,
+            "final_dataset_id": current_dataset_id,
+            "final_row_count": int(final_dataset.row_count or 0) if final_dataset else None,
+        }

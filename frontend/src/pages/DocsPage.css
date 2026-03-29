@@ -197,6 +197,11 @@
   max-width: 780px;
   width: 100%;
   min-width: 0;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2e2e3a transparent;
+  box-sizing: border-box;
 }
 
 /* ── Article typography ── */
@@ -592,6 +597,8 @@ kbd {
 
   .docs-content {
     padding: 24px 20px 48px;
+    height: auto;
+    overflow-y: visible;
   }
 
   .docs-prevnext {

@@ -11,6 +11,8 @@ Current production stack:
 - **SQL analytics engine:** in-process DuckDB
 - **Object storage:** Amazon S3 (default storage provider)
 - **LLM provider:** Groq (`llama-3.3-70b-versatile`) via httpx — AI agent, NL pipeline editing
+- **Fuzzy string matching:** rapidfuzz ≥ 3.5.0 — used by `fuzzy_deduplicate` pipeline operation
+- **CSV parsing:** Python stdlib `csv.Sniffer` — auto-detects delimiter (`,` / `\t` / `;` / `|` / `:`) and chardet for encoding conversion
 - **Transactional email:** Resend — pipeline complete, usage warnings, weekly digest, feedback notifications
 - **Rate limiting:** slowapi (Redis-backed) — per-IP, per-endpoint limits
 - **Billing:** Razorpay — subscription plans, HMAC-verified webhooks
@@ -39,6 +41,8 @@ Current production stack:
 ### DuckDB (embedded in backend)
 - Executes analytical SQL against dataset Parquet files.
 - Uses `httpfs` and storage credentials to query S3-backed data.
+- **QueryFoldOptimizer** (`backend/app/services/pipeline_engine.py`) collapses adjacent compatible pipeline steps (filter, select, sort, etc.) into a single DuckDB SQL query, reducing round-trips.
+- **Write-back** (`POST /api/pipelines/{id}/write-back`): pipeline output is issued as DML against the source connector using encrypted credentials stored in Postgres.
 
 ### S3 Object Storage
 - Stores uploaded dataset Parquet artifacts.
@@ -110,7 +114,7 @@ Entry point: `context_loader`. Terminal: `responder → END`.
 - **Authentication:** Supabase JWT (configurable OIDC).
 - **Authorisation:** backend-enforced RBAC (viewer/editor/admin).
 - **Rate limiting:** slowapi — per-IP limits on all endpoints; stricter limits on upload and LLM routes.
-- **File validation:** format allowlist, MIME check, content sniff on every upload.
+- **File validation:** format allowlist, MIME check, content sniff on every upload; `csv.Sniffer` for delimiter detection; chardet for encoding detection and UTF-8 conversion.
 - **Audit trail:** all POST/PUT/DELETE events captured; per-user audit log API + settings UI.
 - **Observability:** `/metrics` (Prometheus); optional Grafana stack.
 

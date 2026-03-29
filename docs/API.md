@@ -18,6 +18,7 @@ All endpoints are protected by slowapi rate limiting.
 ## Datasets
 - POST /datasets/upload (multipart; validates format, size, and content)
 - GET /datasets
+- GET /datasets/compare-schemas?ids=id1,id2 — compare column schemas between two datasets (exact matches, column-only-in-A, column-only-in-B, fuzzy suggestions via rapidfuzz, alignment score 0-1)
 - GET /datasets/{dataset_id}/lineage
 - GET /datasets/{dataset_id}/suggest-columns?query=...&limit=...
 - DELETE /datasets/{dataset_id} (requires editor)
@@ -134,6 +135,9 @@ NL edit request body:
 ```
 The endpoint bumps the pipeline version_number and writes an audit log entry on success.
 
+Supported NL-addressable operations (30+):
+`fill_nulls`, `filter_nulls`, `drop_null_columns`, `cast_column_type`, `add_calculated_column`, `generate_id`, `drop_duplicates`, `deduplicate_by_column`, `fuzzy_deduplicate`, `trim_string_columns`, `rename_snake_case`, `filter_rows`, `filter_outliers`, `normalize_column`, `round_numeric`, `encode_categorical`, `parse_dates`, `sort_by_column`, `group_by_sum`, `group_by_count`, `group_by_mean`, `pivot_table`, `resample_timeseries`, `detect_date_gaps`, `normalize_timezone`, `validate_rules`, `sentiment`, `keywords`, `anomaly_detection`, `custom`
+
 ### Create Pipeline (Example)
 ```json
 {
@@ -243,6 +247,15 @@ UPDATE reviews SET approved = true WHERE id = '<id>';
 - GET /webhooks
 - POST /jobs?name=...&cron=...&action=... (requires editor)
 - GET /jobs
+
+## File Import
+- POST /import/upload — upload a file to create a new dataset
+  - Form fields: `file` (required), `dataset_name` (optional), `sheet` (optional, Excel only)
+  - CSV: delimiter is auto-detected via `csv.Sniffer`; non-UTF-8 encodings are auto-converted
+  - Excel: if `sheet` is omitted the first sheet is used
+- POST /import/excel-sheets — list sheet names in an Excel file
+  - Form field: `file` (required)
+  - Returns: `{ "sheets": ["Sheet1", "Summary", ...] }`
 
 ## Connectors
 - GET /connectors

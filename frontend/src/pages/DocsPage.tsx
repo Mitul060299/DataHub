@@ -28,6 +28,7 @@ const SECTIONS: Section[] = [
     pages: [
       { id: "projects", label: "Projects" },
       { id: "pipelines", label: "Pipelines" },
+      { id: "data-ops", label: "AI Data Operations" },
       { id: "artifacts", label: "Artifacts" },
       { id: "canvases", label: "Canvases" },
       { id: "visualizations", label: "Visualizations Library" },
@@ -220,7 +221,7 @@ function KeyConcepts() {
         <div className="docs-glossary__item">
           <dt>Data source</dt>
           <dd>
-            A registered file or database connection that pipelines can read from. Supported sources include CSV, Excel, Parquet, JSON, and (coming soon)
+            A registered file or database connection that pipelines can read from. Supported sources include CSV, Excel, Parquet, JSON, and
             PostgreSQL, MySQL, SQLite, MSSQL, Oracle (Professional+), Snowflake, Redshift, BigQuery (Team+).
           </dd>
         </div>
@@ -320,38 +321,36 @@ function WhatIsPipeline() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td><code>filter</code></td>
-              <td>Keep rows matching a condition</td>
-            </tr>
-            <tr>
-              <td><code>select</code></td>
-              <td>Choose or rename columns</td>
-            </tr>
-            <tr>
-              <td><code>aggregate</code></td>
-              <td>Group by and compute metrics (sum, count, avg…)</td>
-            </tr>
-            <tr>
-              <td><code>join</code></td>
-              <td>Combine two datasets on matching keys</td>
-            </tr>
-            <tr>
-              <td><code>sort</code></td>
-              <td>Order rows by one or more columns</td>
-            </tr>
-            <tr>
-              <td><code>enrich</code></td>
-              <td>Add derived columns or call an external enrichment</td>
-            </tr>
-            <tr>
-              <td><code>summarise</code></td>
-              <td>Save a <code>CREATE TABLE AS SELECT</code> result as an artifact</td>
-            </tr>
-            <tr>
-              <td><code>validate</code></td>
-              <td>Assert data quality rules and surface failures</td>
-            </tr>
+            <tr><td><code>fill_nulls</code></td><td>Fill missing values — mean / median / mode / zero / ffill / bfill / literal value</td></tr>
+            <tr><td><code>filter_nulls</code></td><td>Drop rows where a specific column is null</td></tr>
+            <tr><td><code>drop_null_columns</code></td><td>Drop columns with more than a threshold % of nulls</td></tr>
+            <tr><td><code>cast_column_type</code></td><td>Change a column's type to int / float / str / datetime / bool</td></tr>
+            <tr><td><code>add_calculated_column</code></td><td>Add a new column using a df.eval formula</td></tr>
+            <tr><td><code>generate_id</code></td><td>Add a surrogate key — rownum / uuid4 / md5-hash</td></tr>
+            <tr><td><code>drop_duplicates</code></td><td>Remove exact duplicate rows (keep first or last)</td></tr>
+            <tr><td><code>deduplicate_by_column</code></td><td>Drop duplicates based on a single column subset</td></tr>
+            <tr><td><code>fuzzy_deduplicate</code></td><td>Merge near-duplicate string values using rapidfuzz similarity threshold</td></tr>
+            <tr><td><code>trim_string_columns</code></td><td>Strip leading/trailing whitespace from all string columns</td></tr>
+            <tr><td><code>rename_snake_case</code></td><td>Normalise all column names to snake_case</td></tr>
+            <tr><td><code>filter_rows</code></td><td>Keep rows matching a condition — operators: == != &gt; &gt;= &lt; &lt;= contains startswith endswith</td></tr>
+            <tr><td><code>filter_outliers</code></td><td>Remove rows where a numeric column exceeds a zscore threshold</td></tr>
+            <tr><td><code>normalize_column</code></td><td>Scale a column with min-max normalisation or z-score standardisation</td></tr>
+            <tr><td><code>round_numeric</code></td><td>Round a numeric column to N decimal places</td></tr>
+            <tr><td><code>encode_categorical</code></td><td>One-hot or label-encode a categorical column</td></tr>
+            <tr><td><code>parse_dates</code></td><td>Auto-detect and parse date/datetime strings into proper datetime types</td></tr>
+            <tr><td><code>sort_by_column</code></td><td>Sort rows by a column — ascending or descending</td></tr>
+            <tr><td><code>group_by_sum</code></td><td>Group by column(s) and sum a metric column</td></tr>
+            <tr><td><code>group_by_count</code></td><td>Group by column(s) and count rows</td></tr>
+            <tr><td><code>group_by_mean</code></td><td>Group by column(s) and average a metric column</td></tr>
+            <tr><td><code>pivot_table</code></td><td>Reshape data — specify index, columns, values, and aggregation function</td></tr>
+            <tr><td><code>resample_timeseries</code></td><td>Resample a time-series to a lower frequency (D/W/M) with an aggregation function</td></tr>
+            <tr><td><code>detect_date_gaps</code></td><td>Reindex a date column to a complete range and fill gaps with ffill or bfill</td></tr>
+            <tr><td><code>normalize_timezone</code></td><td>Localise timestamps to a source timezone then convert to a target timezone</td></tr>
+            <tr><td><code>validate_rules</code></td><td>Assert quality rules (not_null / &gt; / &gt;= / &lt; / &lt;= / == / unique / regex / min_length) with flag / drop / report mode</td></tr>
+            <tr><td><code>sentiment</code></td><td>AI-classify text column as positive / negative / neutral (Groq-backed with fallback)</td></tr>
+            <tr><td><code>keywords</code></td><td>Extract top-k keywords from a text column by frequency</td></tr>
+            <tr><td><code>anomaly_detection</code></td><td>Flag statistical outliers per numeric column using zscore</td></tr>
+            <tr><td><code>custom</code></td><td>Write raw DuckDB SQL — reference your dataset with <code>&#123;&#123;dataset&#125;&#125;</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -454,7 +453,10 @@ function WhatIsDashboard() {
           <strong>Data table</strong> — searchable, sortable tabular view.
         </li>
         <li>
-          <strong>KPI card</strong> — single metric with optional delta and sparkline.
+          <strong>KPI card</strong> — single metric connected to a real dataset column. Choose an aggregation (SUM / COUNT / AVG / MIN / MAX) and the value is computed live.
+        </li>
+        <li>
+          <strong>Slicer tile</strong> — interactive filter connected to a dataset column. Selecting a value cross-filters other cards on the canvas.
         </li>
         <li>
           <strong>Text / Markdown card</strong> — add context, headings, or section breaks.
@@ -577,6 +579,12 @@ function GuideUpload() {
             Drag and drop a file or click to browse. Supported formats: <code>.csv</code>, <code>.xlsx</code>, <code>.xls</code>, <code>.parquet</code>,{" "}
             <code>.json</code>. Maximum file size depends on your plan (50 MB on Free, 1 GB on paid plans).
           </p>
+          <p>
+            <strong>CSV:</strong> Delimiter (comma / tab / semicolon / pipe / colon) and encoding are detected automatically — no configuration needed.
+          </p>
+          <p>
+            <strong>Excel:</strong> If your workbook has multiple sheets, DataHub will prompt you to pick one before importing.
+          </p>
         </div>
       </div>
       <div className="docs-step">
@@ -599,12 +607,12 @@ function GuideDatabase() {
   return (
     <article className="docs-article">
       <h1>Connect a database</h1>
-      <p className="docs-lead">Database connectors let you query live data from PostgreSQL, MySQL, and more — without exporting to CSV first.</p>
-      <div className="docs-callout docs-callout--warn">
-        <strong>Coming soon.</strong> Database connectors are not yet live. CSV and Excel uploads are available today. PostgreSQL, MySQL, SQLite, MSSQL, and Oracle connectors are
-        planned for the Professional plan; Snowflake, Redshift, and BigQuery for Team; Custom connectors for Business.
+      <p className="docs-lead">Database connectors let you query live data from PostgreSQL, MySQL, Snowflake, and more — without exporting to CSV first.</p>
+      <div className="docs-callout docs-callout--info">
+        <strong>Live now.</strong> Professional plan: PostgreSQL, MySQL, SQLite, MSSQL, Oracle. Team plan: adds Snowflake, Redshift, BigQuery.
+        CSV and Excel uploads are available on all plans.
       </div>
-      <h2>Connector roadmap</h2>
+      <h2>Connector availability</h2>
       <div className="docs-table-wrap">
         <table className="docs-table">
           <thead>
@@ -627,58 +635,58 @@ function GuideDatabase() {
             <tr>
               <td>PostgreSQL</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>MySQL</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>SQLite</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>MSSQL</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>Oracle</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>Snowflake</td>
               <td>—</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>Redshift</td>
               <td>—</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>BigQuery</td>
               <td>—</td>
               <td>—</td>
-              <td>🔜</td>
-              <td>🔜</td>
+              <td>✅</td>
+              <td>✅</td>
             </tr>
             <tr>
               <td>Custom</td>
@@ -690,9 +698,37 @@ function GuideDatabase() {
           </tbody>
         </table>
       </div>
+      <h2>How to connect</h2>
+      <div className="docs-step">
+        <div className="docs-step__number">1</div>
+        <div className="docs-step__body">
+          <h3>Open a project and click “Add data source”</h3>
+          <p>Select <strong>Connect database</strong> from the data source type picker.</p>
+        </div>
+      </div>
+      <div className="docs-step">
+        <div className="docs-step__number">2</div>
+        <div className="docs-step__body">
+          <h3>Choose your connector</h3>
+          <p>Pick the database type (e.g. PostgreSQL). Enter the connection string and credential fields.</p>
+        </div>
+      </div>
+      <div className="docs-step">
+        <div className="docs-step__number">3</div>
+        <div className="docs-step__body">
+          <h3>Select a table or write a query</h3>
+          <p>Enter a table name or a <code>SELECT</code> statement. DataHub will preview the first 100 rows.</p>
+        </div>
+      </div>
+      <div className="docs-step">
+        <div className="docs-step__number">4</div>
+        <div className="docs-step__body">
+          <h3>Confirm &amp; import</h3>
+          <p>Click <strong>Import dataset</strong>. The data is fetched, stored as Parquet in S3, and available to pipelines and dashboards.</p>
+        </div>
+      </div>
       <p>
-        Want to be notified when a specific connector ships?{" "}
-        <a href="mailto:hello@datahub.org.in">Email us</a> or use the feedback form on the home page.
+        Questions? <a href="mailto:hello@datahub.org.in">Email us</a> or use the feedback form on the home page.
       </p>
     </article>
   );
@@ -1017,7 +1053,7 @@ function PlanLimits() {
             <tr><td>Public sharing</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
             <tr><td>Audit log</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
             <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>🔜</td></tr>
-            <tr><td>DB connections</td><td>CSV, Excel</td><td>PG, MySQL, SQLite, MSSQL, Oracle 🔜</td><td>+ Snowflake, Redshift, BigQuery 🔜</td><td>+ Custom 🔜</td></tr>
+            <tr><td>DB connections</td><td>CSV, Excel</td><td>PG, MySQL, SQLite, MSSQL, Oracle ✅</td><td>+ Snowflake, Redshift, BigQuery ✅</td><td>+ Custom 🔜</td></tr>
             <tr><td>Support</td><td>Community</td><td>Email</td><td>Priority email</td><td>24/7 dedicated</td></tr>
           </tbody>
         </table>
@@ -1064,9 +1100,9 @@ function FileFormats() {
             </tr>
           </thead>
           <tbody>
-            <tr><td><code>.csv</code></td><td>Comma-separated values</td><td>UTF-8 and common encodings auto-detected</td></tr>
+            <tr><td><code>.csv</code></td><td>Comma-separated values</td><td>Delimiter auto-detected (comma / tab / semicolon / pipe / colon); encoding auto-converted to UTF-8</td></tr>
             <tr><td><code>.tsv</code></td><td>Tab-separated values</td><td>Treated same as CSV with tab delimiter</td></tr>
-            <tr><td><code>.xlsx</code></td><td>Excel workbook</td><td>First sheet loaded by default; multi-sheet support planned</td></tr>
+            <tr><td><code>.xlsx</code></td><td>Excel workbook</td><td>Multi-sheet supported — UI prompts sheet selection; <code>POST /import/excel-sheets</code> lists sheets via API</td></tr>
             <tr><td><code>.xls</code></td><td>Legacy Excel</td><td>Converted server-side; large files may be slow</td></tr>
             <tr><td><code>.parquet</code></td><td>Apache Parquet</td><td>Recommended for large datasets — fastest ingest</td></tr>
             <tr><td><code>.json</code></td><td>JSON / NDJSON</td><td>Newline-delimited JSON preferred; nested objects flattened</td></tr>
@@ -1075,13 +1111,14 @@ function FileFormats() {
       </div>
       <h2>Encoding &amp; delimiter detection</h2>
       <p>
-        CSV files are automatically probed for delimiter (comma, semicolon, pipe, tab) and encoding (UTF-8, Latin-1, Windows-1252). If auto-detection fails,
-        you can override the delimiter in the upload dialog.
+        CSV files are automatically probed for delimiter (comma, semicolon, pipe, tab, colon) via Python’s <code>csv.Sniffer</code>. Non-UTF-8
+        encodings (Latin-1, Windows-1252, etc.) are detected with chardet and re-encoded to UTF-8 during ingest — no manual action needed.
       </p>
       <h2>Multi-sheet Excel</h2>
       <p>
-        Currently only the first sheet of an Excel workbook is loaded. Multi-sheet support is on the roadmap. As a workaround, export each sheet as a
-        separate CSV.
+        When you upload a <code>.xlsx</code> or <code>.xls</code> file with more than one sheet, DataHub shows a sheet-picker before confirming the
+        import. You can also retrieve the list of sheets programmatically using <code>POST /import/excel-sheets</code> and pass the sheet name as the
+        <code>sheet</code> field on <code>POST /import/upload</code>.
       </p>
     </article>
   );
@@ -1144,6 +1181,158 @@ function Shortcuts() {
 }
 
 // ── Content router ─────────────────────────────────────────────
+function DataOps() {
+  return (
+    <article className="docs-article">
+      <h1>AI Data Operations</h1>
+      <p className="docs-lead">
+        DataHub includes 30+ built-in transformation operations — each addressable by name in the visual pipeline builder and the AI edit panel.
+        Describe what you want in plain English and the AI maps it to the right operation automatically.
+      </p>
+
+      <h2>Null handling</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>fill_nulls</code></td><td>Fill missing values using: <em>mean / median / mode / zero / ffill / bfill / literal value</em></td></tr>
+            <tr><td><code>filter_nulls</code></td><td>Drop rows where a specified column is null</td></tr>
+            <tr><td><code>drop_null_columns</code></td><td>Remove columns where the null percentage exceeds a threshold</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Type casting &amp; enrichment</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>cast_column_type</code></td><td>Convert a column to int / float / str / datetime / bool</td></tr>
+            <tr><td><code>add_calculated_column</code></td><td>Add a new column from a <code>df.eval</code> expression (e.g. <code>revenue * 0.9</code>)</td></tr>
+            <tr><td><code>generate_id</code></td><td>Add a surrogate key column — <em>rownum</em>, <em>uuid4</em>, or <em>md5-hash</em> of selected columns</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Cleaning &amp; deduplication</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>drop_duplicates</code></td><td>Remove exact duplicate rows, keeping first or last occurrence</td></tr>
+            <tr><td><code>deduplicate_by_column</code></td><td>Keep one row per unique value in a specified column</td></tr>
+            <tr><td><code>fuzzy_deduplicate</code></td><td>Merge near-duplicate strings using rapidfuzz similarity — set a threshold (0–100)</td></tr>
+            <tr><td><code>trim_string_columns</code></td><td>Strip leading/trailing whitespace from all string columns</td></tr>
+            <tr><td><code>rename_snake_case</code></td><td>Normalise all column names to lowercase snake_case</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Filtering &amp; outlier removal</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>filter_rows</code></td><td>Keep rows matching a condition — operators: <code>== != &gt; &gt;= &lt; &lt;=</code> and string ops <code>contains / startswith / endswith</code></td></tr>
+            <tr><td><code>filter_outliers</code></td><td>Drop rows where a numeric column's zscore exceeds a threshold</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Normalisation &amp; encoding</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>normalize_column</code></td><td>Min-max scale (0–1) or z-score standardise a numeric column</td></tr>
+            <tr><td><code>round_numeric</code></td><td>Round a numeric column to N decimal places</td></tr>
+            <tr><td><code>encode_categorical</code></td><td>One-hot or label-encode a categorical column (expands or replaces)</td></tr>
+            <tr><td><code>parse_dates</code></td><td>Auto-detect and convert date/datetime string columns to proper datetime type</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Sorting &amp; aggregation</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>sort_by_column</code></td><td>Order rows by a column — ascending or descending</td></tr>
+            <tr><td><code>group_by_sum</code></td><td>Group by column(s) and compute the sum of a metric column</td></tr>
+            <tr><td><code>group_by_count</code></td><td>Group by column(s) and count rows</td></tr>
+            <tr><td><code>group_by_mean</code></td><td>Group by column(s) and compute the mean of a metric column</td></tr>
+            <tr><td><code>pivot_table</code></td><td>Reshape data — set index, column headers, values, and aggregation function</td></tr>
+            <tr><td><code>resample_timeseries</code></td><td>Downsample a time-series to a lower frequency (D / W / M) with an aggregation function</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Time-series &amp; temporal</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>detect_date_gaps</code></td><td>Reindex a date column to a complete date range; fill newly-introduced nulls with ffill or bfill</td></tr>
+            <tr><td><code>normalize_timezone</code></td><td>Localise naive timestamps to a source timezone, then convert to a target timezone</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Validation rule engine</h2>
+      <p>
+        <code>validate_rules</code> applies quality assertions to any column. Configure multiple rules at once — each rule specifies a column, an
+        operator, and a threshold.
+      </p>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operator</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>not_null</code></td><td>Column must contain no null values</td></tr>
+            <tr><td><code>&gt;</code> <code>&gt;=</code> <code>&lt;</code> <code>&lt;=</code> <code>==</code></td><td>Numeric comparison against a threshold</td></tr>
+            <tr><td><code>unique</code></td><td>All values in the column must be distinct</td></tr>
+            <tr><td><code>regex</code></td><td>String values must match a regular expression</td></tr>
+            <tr><td><code>min_length</code></td><td>String values must be at least N characters long</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Failure handling modes:</p>
+      <ul>
+        <li><strong>flag</strong> — add a boolean column marking failing rows (non-destructive)</li>
+        <li><strong>drop</strong> — remove failing rows from the dataset</li>
+        <li><strong>report</strong> — same as flag, with a custom column name</li>
+      </ul>
+
+      <h2>AI transforms</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>sentiment</code></td><td>Classify a text column as positive / negative / neutral using Groq LLM (keyword fallback when no API key)</td></tr>
+            <tr><td><code>keywords</code></td><td>Extract top-k keywords from a text column by frequency</td></tr>
+            <tr><td><code>anomaly_detection</code></td><td>Flag statistical outliers in every numeric column using zscore</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Custom SQL</h2>
+      <p>
+        Use <code>custom</code> to run any DuckDB SQL. Reference your current dataset as <code>&#123;&#123;dataset&#125;&#125;</code> in the query.
+        The result of the <code>SELECT</code> statement becomes the new dataset for the next step.
+      </p>
+      <pre className="docs-codeblock">{`SELECT *, revenue / total_revenue AS pct_share
+FROM {{dataset}}
+WHERE region = 'APAC'`}</pre>
+
+      <div className="docs-callout docs-callout--info">
+        <strong>NL pipeline editing:</strong> In the pipeline builder, click <strong>AI edit</strong> and type what you want in plain English — e.g.
+        <em>"fill nulls in the revenue column with the median, then remove outliers"</em>. The AI matches your intent to the correct operations and
+        rewrites the pipeline steps automatically.
+      </div>
+    </article>
+  );
+}
+
+// ── Content router ─────────────────────────────────────────────
 function DocContent({ page }: { page: string }) {
   switch (page) {
     case "welcome":      return <Welcome />;
@@ -1151,6 +1340,7 @@ function DocContent({ page }: { page: string }) {
     case "concepts":     return <KeyConcepts />;
     case "projects":     return <WhatIsProject />;
     case "pipelines":    return <WhatIsPipeline />;
+    case "data-ops":     return <DataOps />;
     case "artifacts":    return <WhatIsArtifact />;
     case "dashboards":     // legacy alias
     case "canvases":       return <WhatIsDashboard />;

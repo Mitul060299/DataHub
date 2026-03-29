@@ -4,13 +4,29 @@
 
 ### Messy Data Handling
 - AI-assisted profiling, auto-cleaning of missing/invalid values.
-- Schema repair, smart type inference, outlier detection.
+- Schema repair, smart type inference, outlier detection, pseudo-null detection.
 - User feedback loop to correct/confirm fixes.
-- Chart-ready profiling summaries available per column.
+- Chart-ready profiling summaries available per column (column stats, outlier counts, top values, duplicate %, null %).
 - Dataset listing and CSV export for downstream usage.
-- Dataset metadata persisted in Supabase Postgres.
-- Dataset rows stored as JSONB and chunked for larger datasets.
-- CSV export streams from chunks without loading full datasets in memory.
+- CSV delimiter auto-detected via `csv.Sniffer` (comma / tab / semicolon / pipe / colon).
+- Non-UTF-8 CSV files are automatically re-encoded to UTF-8 on upload (chardet detection).
+- Multi-sheet Excel: UI lists sheets before upload; `POST /import/excel-sheets` to retrieve sheet names programmatically.
+
+### 30+ Pipeline Transformation Operations
+All operations are addressable by name in the NL pipeline editor and visual step builder:
+- **Null handling:** `fill_nulls` (mean/median/mode/zero/ffill/bfill/value), `filter_nulls`, `drop_null_columns`
+- **Type casting:** `cast_column_type`, `add_calculated_column`, `generate_id` (rownum/uuid/hash)
+- **Deduplication:** `drop_duplicates`, `deduplicate_by_column`, `fuzzy_deduplicate` (rapidfuzz)
+- **Filtering:** `filter_rows` (8 operators), `filter_outliers` (zscore)
+- **Normalisation:** `normalize_column` (minmax/zscore), `round_numeric`, `encode_categorical` (onehot/label)
+- **Aggregation:** `sort_by_column`, `group_by_sum/count/mean`, `pivot_table`, `resample_timeseries`
+- **Time-series:** `detect_date_gaps` (reindex + fill), `normalize_timezone`
+- **Validation:** `validate_rules` (9 operators; flag/drop/report modes)
+- **AI transforms:** `sentiment`, `keywords`, `anomaly_detection`
+- **Custom:** raw DuckDB SQL with `{{dataset}}` placeholder
+
+### Schema Alignment
+- `GET /datasets/compare-schemas?ids=id1,id2` returns exact matches, unmatched columns per side, fuzzy column suggestions (rapidfuzz), and an alignment score 0–1.
 
 ### Proactive, Autonomous AI Agents
 - LLM-assisted suggestions supported via Groq API when configured.
@@ -29,6 +45,8 @@
 - Dashboard CRUD and widget configuration are available.
 - Dashboards are persisted in Supabase Postgres.
 - Exports and shared read-only views are supported.
+- **Canvas v2.1:** text/markdown tiles, KPI tiles (data-connected aggregations: SUM/COUNT/AVG/MIN/MAX), and slicer tiles (interactive column filter).
+- Share links with expiry, scopes, and optional cryptographic signing.
 
 ### Open Ecosystem & Integration
 - Plugin interface and plugin listing endpoint are available.

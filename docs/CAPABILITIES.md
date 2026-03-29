@@ -5,13 +5,21 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 ## 1. Data Ingestion & Connectivity
 - CSV upload ✅
 - Inline CSV connector ✅
-- Excel/Google Sheets/DB/SaaS APIs 🟡 (excel, google_sheets, sql_query, http_csv, supabase)
+- Excel (single-sheet) ✅
+- Excel (multi-sheet) ✅ — sheet list endpoint + `sheet_name` param on upload
+- CSV delimiter auto-sniffing ✅ — `csv.Sniffer` detects `,` / `\t` / `;` / `|` / `:`
+- Non-UTF-8 CSV auto-conversion ✅ — chardet detects encoding, re-encodes to UTF-8 before parse
+- JSON / Parquet upload ✅
+- DB connectors — PostgreSQL, MySQL, SQLite, MSSQL, Oracle ✅ (Professional tier)
+- DB connectors — Snowflake, BigQuery, Redshift ✅ (Team tier)
+- SaaS API connectors (Salesforce) ✅ (Enterprise tier)
+- Live dataset federation ✅ — query DB/API connector in real time; result cached with TTL
 - Batch imports 🟡 (CSV upload)
 - Incremental imports 🟡 (sql_query updated_at)
 - Schema/type inference ✅ (pandas inference)
 - Connector/plugin system ✅ (registry + load/enable/disable)
 - Import UI ✅
-- File format validation ✅ (whitelist: CSV, Excel, JSON, Parquet; MIME check; content sniff)
+- File format validation ✅ (allowlist: CSV, Excel, JSON, Parquet; MIME check; magic-byte sniff)
 - File size enforcement ✅ (configurable per-plan upload limit)
 - File upload preview ✅ (column/row preview before confirming upload)
 - Dataset version history ✅ (version_number, version_note columns; upload-version endpoint; UI list)
@@ -20,16 +28,72 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - Profiling (missing, outliers, types) ✅
 - Smart type inference ✅
 - Auto-clean suggestions ✅ (rule-based + LLM optional)
-- “Did you mean?” suggestions ✅
-- Versioned cleaning/undo 🟡 (recipe history in-memory)
+- Complete data profile computation ✅ — column stats, outlier counts, top values, duplicate %, null %
+- Pseudo-null detection ✅ — strings like "N/A", "null", "" treated as nulls in profiling
+- "Did you mean?" suggestions ✅
+- Versioned cleaning / undo ✅ — surgical mid-pipeline step undo; recipe history
+- NL pipeline editing ✅ — POST /api/pipelines/{id}/nl-edit rewrites steps from plain English (Groq JSON-mode)
+- Schema alignment & JOIN assistance ✅ — GET /datasets/compare-schemas; exact/fuzzy column matching; alignment score
 
-## 3. Business Context & Memory
+## 3. Data Transformation Engine — Pipeline Operations
+All operations available via NL pipeline editing and the visual step builder:
+
+### Null handling
+- `fill_nulls` ✅ — strategies: mean / median / mode / zero / ffill / bfill / literal value
+- `filter_nulls` ✅ — drop rows where a column is null
+- `drop_null_columns` ✅ — drop columns with >threshold% nulls
+
+### Type casting & enrichment
+- `cast_column_type` ✅ — int / float / str / datetime / bool
+- `add_calculated_column` ✅ — arbitrary df.eval formula
+- `generate_id` ✅ — surrogate key modes: rownum / uuid4 / md5-hash
+
+### Cleaning & deduplication
+- `drop_duplicates` ✅ — exact dedup (keep first / last)
+- `deduplicate_by_column` ✅ — subset dedup on a single column
+- `fuzzy_deduplicate` ✅ — rapidfuzz ratio threshold; graceful fallback to exact dedup
+- `trim_string_columns` ✅ — strip leading/trailing whitespace
+- `rename_snake_case` ✅ — normalise all column names to snake_case
+
+### Filtering & outlier removal
+- `filter_rows` ✅ — operators: `== != > >= < <=` and `contains / startswith / endswith`
+- `filter_outliers` ✅ — zscore threshold; applied per numeric column
+- `filter_nulls` ✅ — drop rows where column is null
+
+### Normalisation & encoding
+- `normalize_column` ✅ — min-max scaling or z-score standardisation
+- `round_numeric` ✅ — round to N decimal places
+- `encode_categorical` ✅ — one-hot or label encoding
+- `parse_dates` ✅ — auto-detect and parse date columns
+
+### Sorting & aggregation
+- `sort_by_column` ✅ — ascending / descending
+- `group_by_sum` / `group_by_count` / `group_by_mean` ✅
+- `pivot_table` ✅ — index / columns / values / aggfunc
+- `resample_timeseries` ✅ — freq (D/W/M) + aggregation function
+
+### Time-series & temporal
+- `detect_date_gaps` ✅ — reindex to complete date range; gap fill with ffill / bfill
+- `normalize_timezone` ✅ — `tz_localize` source TZ → `tz_convert` target TZ
+
+### Validation
+- `validate_rules` ✅ — rule engine with operators: `not_null / > / >= / < / <= / == / unique / regex / min_length`; modes: `flag` (add boolean column) / `drop` (remove failing rows) / `report` (flag with custom column name)
+
+### AI transforms
+- `sentiment` ✅ — Groq LLM batch (with keyword-based fallback)
+- `keywords` ✅ — top-k frequency extraction
+- `anomaly_detection` ✅ — zscore-based, per numeric column
+
+### Custom
+- `custom` ✅ — raw DuckDB SQL with `{{dataset}}` placeholder
+
+## 5. Business Context & Memory
 - Glossary/rules API ✅
 - Persistence ✅ (Postgres + Chroma optional)
 - Context-aware agents ✅
 - Versioned context ✅ (versions list + revert)
 
-## 4. AI Agents & Intelligence
+## 6. AI Agents & Intelligence
 - Suggestions/insights ✅ (rule-based + optional LLM via Groq)
 - Anomaly detection ✅ (outliers, duplicates, cardinality)
 - Explainable insights ✅ (quality score + rationale)
@@ -38,20 +102,18 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - Auto-apply recipes ✅
 - Learn from feedback 🟡 (feedback collection API)
 - Conversational interface ✅ (dataset chat endpoint + UI)
-- NL pipeline editing ✅ (POST /api/pipelines/{id}/nl-edit via Groq; rewrites steps from plain English)
+- NL pipeline editing ✅ — 30+ supported operations; schema-aware; auto-retry on LLM parse failure
+- LangGraph agent state machine ✅ — 8-node graph (context_loader → intent_classifier → planner → plan_presenter → execute_step → reflect → pipeline_recorder → responder)
 
-## 5. Transformation & Wrangling
-- Recipes API ✅
-- Apply recipes ✅
-- Auditable/reversible ✅
-- Advanced transforms (joins/pivots/formulas) ✅
-- Dataset lineage/provenance ✅ (parent dataset tracking + lineage API)
-
-## 6. Analytics & Visualizations
+## 7. Analytics & Visualizations
 - Summary charts ✅
 - Dashboards CRUD ✅
 - Widget system ✅
-- Drag/drop builder 🟡
+- Canvas v2 ✅ — text/markdown tiles, KPI tiles, data slicer tiles, share link
+- Canvas v2.1 ✅ — inline KPI/slicer editing, text formatting, multi-row tile placement
+- KPI tiles connected to real dataset aggregations ✅ (SUM / COUNT / AVG / MIN / MAX)
+- Slicer tiles connected to dataset column values ✅ (interactive cross-filter)
+- Drag/drop builder ✅
 - Export PDF/SVG/PNG ✅
 - Usage analytics ✅ (audit-based summary)
 - Correlation insights ✅
@@ -61,7 +123,11 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - Widget theming ✅
 - Dashboard comments ✅ (GET/POST/DELETE /api/dashboards/{id}/comments with auth)
 
-## 7. Collaboration & Automation
+## 8. Query Folding & Write-Back
+- Query folding ✅ — QueryFoldOptimizer collapses compatible pipeline steps into fewer DuckDB SQL queries
+- Write-back ✅ — POST /api/pipelines/{id}/write-back; encrypted connector credentials; DML execution
+
+## 9. Collaboration & Automation
 - Webhooks ✅
 - Scheduled jobs 🟡 (database-backed store; no runner yet)
 - Approval workflows ✅
@@ -84,13 +150,14 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - Notification preferences ✅ (GET/PUT /users/me/notification-preferences; 3 toggles)
 - Projects ✅ (user-scoped project grouping for pipelines, dashboards, data sources)
 
-## 8. Extensibility & Integration
+## 10. Extensibility & Integration
 - REST API ✅
 - Plugin framework ✅
 - External connectors ✅ (Supabase, SQL, Sheets, Excel, HTTP CSV)
 - Two-way sync ✅
+- Schema comparison API ✅ — GET /datasets/compare-schemas?ids=id1,id2
 
-## 9. Security & Compliance
+## 11. Security & Compliance
 - Audit viewer UI ✅ (settings page with pagination + filter)
 - Per-user audit log API ✅ (GET /users/me/audit-log; paginated, filterable)
 - Role-based access ✅ (viewer/editor/admin)
@@ -99,20 +166,20 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - File upload validation ✅ (format allowlist, MIME check, content sniff)
 - Usage enforcement ✅ (hard limits per plan; 429 on exceed)
 
-## 10. Billing & Monetisation
+## 12. Billing & Monetisation
 - Pricing tiers ✅ (Free / Professional / Team / Business / Enterprise)
 - Razorpay integration ✅ (plans, subscriptions, HMAC-verified webhooks)
 - Usage tracking ✅ (user_usage table, monthly period buckets)
 - Plan limit enforcement ✅ (API calls, pipeline runs, datasets, storage)
 - Usage UI ✅ (settings page usage panel with progress bars)
 
-## 11. Community & Feedback
+## 13. Community & Feedback
 - Homepage feedback form ✅ (POST /feedback; name, email, subject, message)
 - Feedback email notifications ✅ (sent to owner via Resend on submission)
 - User reviews ✅ (POST /api/reviews; star rating 1–5; owner-approved before display)
 - Reviews homepage section ✅ (public display of approved reviews + submit form)
 
-## 12. Deployment & DevOps
+## 14. Deployment & DevOps
 - Docker Compose ✅
 - Helm placeholders ✅
 - CI build ✅
@@ -122,6 +189,10 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - Query caching ✅ (profiling/summary cache + invalidation)
 - Startup schema safety-net ✅ (DDL guards in main.py; bypasses stalled Alembic migrations)
 
-## 11. Supabase Integration
+## 15. Supabase Integration
 - Supabase connector ✅
 - Supabase JWT validation ✅
+
+## 16. Test Coverage
+- 134 automated tests ✅ — 40 original + 94 workstream tests
+- Covers: all 30+ pipeline operations, DB connectors, file ingestion, NL editing, profiling, validation rules, schema comparison, and security hardening

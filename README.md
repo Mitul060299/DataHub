@@ -9,11 +9,16 @@ Modern, AI-assisted data analytics and transformation platform.
 - Cache: Redis (typically Upstash in managed deployments)
 - SQL analytics engine: DuckDB (embedded in backend)
 - Object storage: Amazon S3 (default storage provider)
+- LLM provider: Groq (`llama-3.3-70b-versatile`) — AI agent + NL pipeline editing
+- Fuzzy matching: rapidfuzz ≥ 3.5.0
 - Optional context memory: Chroma
 
 ## Current Scope
-- FastAPI backend with dataset import, profiling, transformation recipes, dashboards, sharing, and governance endpoints.
-- React frontend for auth, dataset exploration, transformations, insights, and dashboard workflows.
+- FastAPI backend with dataset import (CSV auto-delimiter-sniff, multi-sheet Excel, encoding auto-fix), profiling, 30+ transformation operations, pipeline NL editing (Groq), dashboards (Canvas v2.1 with KPI/slicer tiles), sharing, governance, billing (Razorpay), and 134-test suite.
+- React frontend for auth, dataset exploration, pipeline builder, AI edit panel, insights, dashboard canvas, and settings (usage meter, audit log, billing).
+- DB connectors live: PostgreSQL, MySQL, SQLite, MSSQL, Oracle (Professional); Snowflake, Redshift, BigQuery (Team).
+- Schema comparison API (`GET /datasets/compare-schemas`) for exact/fuzzy column alignment.
+- Query folding optimiser and write-back capability.
 - Docker Compose support for local development with Postgres + Redis + optional Chroma.
 - Sample dataset for onboarding.
 

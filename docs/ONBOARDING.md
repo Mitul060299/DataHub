@@ -6,10 +6,28 @@ Use the sample CSV in samples/customers.csv to test uploads and profiling.
 ## Quick Steps
 1. Start services.
 2. Upload the sample CSV from the UI.
-3. Review profile results in the API or future UI.
+3. Review profile results in the Dataset page.
+4. Run a pipeline to clean and transform the data.
+5. Build a dashboard with KPI and visualisation widgets.
+
+## Uploading a CSV
+- Delimiters are **auto-detected** (comma, tab, semicolon, pipe, colon) — no manual selection required.
+- Non-UTF-8 files are re-encoded automatically.
+
+## Uploading Excel (Multi-Sheet)
+1. Click **Upload** and select your `.xlsx` / `.xls` file.
+2. If the file contains multiple sheets the UI will prompt you to choose one.
+3. Alternatively, `POST /import/excel-sheets` with `file` form field to retrieve sheet names programmatically, then `POST /import/upload` with `file` + `sheet` fields.
 
 ## Inline Import
 - Use the Inline Import panel to paste CSV text and create a dataset instantly.
+
+## Pipeline Operations (30+)
+- Open the Pipeline Builder, add a step, and choose from 30+ operation types.
+- Or use the **AI edit** panel: type a plain-English instruction like *"fill null values in revenue with the median"* and the pipeline steps are rewritten automatically.
+
+## Schema Comparison
+- On the Datasets page, select two datasets and click **Compare Schemas** to see matching and mismatched columns with fuzzy suggestions.
 
 ## Preview Filters
 - Use the Dataset Preview panel to filter and sort rows for quick inspection.
@@ -22,6 +40,8 @@ Use the sample CSV in samples/customers.csv to test uploads and profiling.
 
 ## Dashboard Widgets
 - Create dashboards and add summary widgets tied to a dataset/column.
+- **KPI tiles**: connect to a dataset column and choose SUM / COUNT / AVG / MIN / MAX.
+- **Slicer tiles**: connect to a dataset column to add an interactive filter that cross-filters other tiles.
 - Edit widget title/column or delete widgets from the Widgets panel.
 - Use Up/Down controls to reorder widgets.
 - Choose Summary or Table widget types.
@@ -33,7 +53,7 @@ Use the sample CSV in samples/customers.csv to test uploads and profiling.
 - Run migrations with Alembic when you are ready to manage schema versions.
 
 ## LLM Suggestions (Optional)
-- Set LLM_PROVIDER=groq and GROQ_API_KEY in .env to enable LLM suggestions.
+- Set LLM_PROVIDER=groq and GROQ_API_KEY in .env to enable LLM suggestions and NL pipeline editing.
 
 ## RBAC (Scaffold)
 - Use /auth/login?username=...&role=editor to get a token for editor actions.

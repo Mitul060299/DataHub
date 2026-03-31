@@ -14,6 +14,8 @@ import { SourcesPage } from "./pages/SourcesPage";
 import { WorkspaceHomePage } from "./pages/WorkspaceHomePage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { DocsPage } from "./pages/DocsPage";
+import { TermsPage } from "./pages/TermsPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -36,6 +38,8 @@ export function App() {
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
       <Route path="/dashboard/share/:token" element={<PublicDashboardPage />} />
       <Route path="/docs" element={<DocsPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<HomePage />} />

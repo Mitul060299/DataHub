@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useIsIndian } from "../hooks/useIsIndian";
 import {
   PLAN_FEATURES,
   cancelSubscription,
@@ -57,6 +58,7 @@ export function BillingSettings() {
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+  const isIndian = useIsIndian();
 
   const load = async () => {
     setLoading(true);
@@ -216,7 +218,12 @@ export function BillingSettings() {
                   </p>
                 </div>
                 <div style={{ display: "inline-flex", gap: 8 }}>
-                  <button className="btn btn-primary" onClick={() => setShowSelector((v) => !v)}>
+                  <button
+                    className="btn btn-primary"
+                    disabled={!isIndian}
+                    title={!isIndian ? "International billing coming soon. We'll notify you when available in your region." : undefined}
+                    onClick={() => setShowSelector((v) => !v)}
+                  >
                     {showSelector ? "Hide Upgrade" : "Upgrade"}
                   </button>
                   <button className="btn" onClick={() => void handleCancel()}>
@@ -228,7 +235,12 @@ export function BillingSettings() {
           ) : (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <p style={{ color: "var(--tx0)", fontWeight: 600 }}>You’re on the Free plan.</p>
-              <button className="btn btn-primary" onClick={() => setShowSelector(true)}>
+              <button
+                className="btn btn-primary"
+                disabled={!isIndian}
+                title={!isIndian ? "International billing coming soon. We'll notify you when available in your region." : undefined}
+                onClick={() => setShowSelector(true)}
+              >
                 Upgrade
               </button>
             </div>
@@ -251,7 +263,24 @@ export function BillingSettings() {
               const monthlyEquivalent = getDisplayPrice(plan, "monthly").replace("/user/month", "");
 
               return (
-                <article key={plan} style={{ border: `1px solid ${isCurrent ? TIER_COLOR[plan] : "var(--bd2)"}`, borderRadius: 8, padding: 10, display: "grid", gap: 8 }}>
+                <article key={plan} style={{ border: `1px solid ${isCurrent ? TIER_COLOR[plan] : "var(--bd2)"}`, borderRadius: 8, padding: 10, display: "grid", gap: 8, position: "relative" }}>
+                  {!isIndian && (
+                    <span style={{
+                      position: "absolute",
+                      top: 6,
+                      right: 6,
+                      background: "#2A2D3A",
+                      color: "#8B8FA8",
+                      fontSize: 9,
+                      fontWeight: 600,
+                      padding: "2px 5px",
+                      borderRadius: 4,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                    }}>
+                      Coming Soon
+                    </span>
+                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <h3 style={{ fontSize: 14 }}>{titleCase(plan)}</h3>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: TIER_COLOR[plan] }} />
@@ -276,7 +305,8 @@ export function BillingSettings() {
                     <button
                       className="btn btn-primary"
                       onClick={() => void handleSelectPlan(plan)}
-                      disabled={Boolean(busyPlan) || !canUpgrade}
+                      disabled={Boolean(busyPlan) || !canUpgrade || !isIndian}
+                      title={!isIndian ? "International billing coming soon. We'll notify you when available in your region." : undefined}
                     >
                       {busyPlan === plan ? "Processing..." : `Select ${titleCase(plan)}`}
                     </button>

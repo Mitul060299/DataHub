@@ -12,6 +12,7 @@ export function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"analyst" | "engineer" | "manager" | "admin">("analyst");
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const navigate = useNavigate();
 
@@ -26,6 +27,11 @@ export function SignupPage() {
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    if (!termsAccepted) {
+      setErrorMessage("Please accept the Terms of Service and Privacy Policy to continue.");
+      setLoading(false);
+      return;
+    }
     const { error } = await signUpWithPassword(email, password, name, role);
     setLoading(false);
     if (error) {
@@ -72,8 +78,28 @@ export function SignupPage() {
           </select>
         </div>
 
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
+          <input
+            id="terms"
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            style={{ marginTop: 2, accentColor: "#5B6AF0", width: 15, height: 15, flexShrink: 0, cursor: "pointer" }}
+          />
+          <label htmlFor="terms" style={{ fontSize: 12, color: "var(--tx1)", lineHeight: 1.5, cursor: "pointer" }}>
+            I agree to DataHub&apos;s{" "}
+            <a href="/terms" target="_blank" rel="noreferrer" style={{ color: "#5B6AF0", textDecoration: "underline" }} onClick={(e) => e.stopPropagation()}>
+              Terms of Service
+            </a>
+            {" "}and{" "}
+            <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: "#5B6AF0", textDecoration: "underline" }} onClick={(e) => e.stopPropagation()}>
+              Privacy Policy
+            </a>
+          </label>
+        </div>
+
         <div className="auth-actions">
-          <button className="btn btn-primary" disabled={loading} type="submit">{loading ? "Creating account..." : "Create account"}</button>
+          <button className="btn btn-primary" disabled={loading || !termsAccepted} type="submit">{loading ? "Creating account..." : "Create account"}</button>
           <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
           <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
         </div>

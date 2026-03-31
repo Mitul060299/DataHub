@@ -1394,3 +1394,11 @@ export async function fetchTileData(
   });
   return res.data as TileDataResult;
 }
+
+export async function joinWaitlist(data: {
+  email: string;
+  plan: string;
+  region?: string;
+}): Promise<void> {
+  await api.post("/waitlist", data);
+}

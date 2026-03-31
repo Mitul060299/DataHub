@@ -24,6 +24,7 @@ def _json_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
 from .routers import ml_routes, full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
+from .routers import waitlist
 from .routers import dashboard_access
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
@@ -262,6 +263,15 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS connector_credential_id TEXT",
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS import_mode TEXT NOT NULL DEFAULT 'cached'",
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS connector_config JSONB",
+        # 0041 — international waitlist
+        """CREATE TABLE IF NOT EXISTS waitlist_entries (
+            id         TEXT PRIMARY KEY,
+            email      TEXT NOT NULL,
+            plan       TEXT NOT NULL,
+            region     TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_email_unique ON waitlist_entries (email)",
     ]
     try:
         from sqlalchemy import text as _text
@@ -414,3 +424,4 @@ app.include_router(workspace_recent_router)
 app.include_router(artifacts_router)
 app.include_router(saved_visualizations_router)
 app.include_router(canvas_router)
+app.include_router(waitlist.router)

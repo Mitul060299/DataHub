@@ -1,3 +1,4 @@
+import uuid
 from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
 from sqlalchemy import DateTime
 from sqlalchemy.sql import func
@@ -874,3 +875,12 @@ class CanvasLayoutDB(Base):
         Index("idx_canvas_layouts_workspace", "workspace_id"),
         Index("idx_canvas_layouts_project", "project_id"),
     )
+
+
+class WaitlistEntryDB(Base):
+    __tablename__ = "waitlist_entries"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, nullable=False, unique=True)
+    plan = Column(String, nullable=False)
+    region = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

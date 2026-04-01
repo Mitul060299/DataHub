@@ -467,7 +467,7 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
     return df
 
 
-@router.get("/", response_model=list[DatasetMeta])
+@router.get("", response_model=list[DatasetMeta])
 def list_datasets(
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),

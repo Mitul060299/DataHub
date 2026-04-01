@@ -25,7 +25,7 @@ from ..services.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/artifacts", tags=["artifacts"])
+router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

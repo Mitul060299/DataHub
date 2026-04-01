@@ -708,7 +708,7 @@ class ArtifactDB(Base):
     row_count = Column(Integer, nullable=True)
     column_schema = Column(JSONB, nullable=True, default=list)
     type = Column(String, nullable=False, default="auto")   # 'auto' | 'export'
-    format = Column(String, nullable=False, default="parquet")
+    format = Column(String, nullable=True, default="parquet")
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (

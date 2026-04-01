@@ -272,6 +272,30 @@ def _apply_startup_ddl() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_email_unique ON waitlist_entries (email)",
+        # 0042 — agent artifacts table (persisted Parquet snapshots from pipeline write-ops)
+        """CREATE TABLE IF NOT EXISTS artifacts (
+            id              TEXT PRIMARY KEY,
+            user_id         TEXT NOT NULL,
+            session_id      TEXT,
+            pipeline_run_id TEXT REFERENCES pipeline_runs_v2(id) ON DELETE SET NULL,
+            step_id         TEXT,
+            name            TEXT NOT NULL,
+            description     TEXT,
+            s3_key          TEXT NOT NULL,
+            row_count       INTEGER,
+            column_schema   JSONB DEFAULT '[]',
+            type            TEXT NOT NULL DEFAULT 'auto',
+            format          TEXT NOT NULL DEFAULT 'parquet',
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_artifacts_user_id ON artifacts (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_artifacts_session_id ON artifacts (session_id)",
+        "CREATE INDEX IF NOT EXISTS idx_artifacts_pipeline_run_id ON artifacts (pipeline_run_id)",
+        # 0042 — backfill missing columns on existing artifacts tables
+        "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS format TEXT NOT NULL DEFAULT 'parquet'",
+        "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS description TEXT",
+        "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS step_id TEXT",
+        "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS pipeline_run_id TEXT REFERENCES pipeline_runs_v2(id) ON DELETE SET NULL",
     ]
     try:
         from sqlalchemy import text as _text

@@ -90,19 +90,23 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     const metricOps = new Set(["aggregate", "bin_values"]);
     const variableOps = new Set(["create_column", "split_column", "merge_columns", "change_type", "rename_columns", "replace_values"]);
 
+    // Show all leaf datasets that have a known parent — i.e. outputs the agent
+    // (or any pipeline step) produced from an uploaded dataset.  We deliberately
+    // do NOT restrict by workflowLeafOutputIds here: that set is only populated
+    // when the frontend has seen the agent.done event in this session.  Relying
+    // on it causes artifacts to disappear on page reload or when the pipeline
+    // recorder fails to persist steps cleanly.
     const parentIds = new Set(
       datasets
         .map((dataset) => dataset.parentId)
         .filter((parentId): parentId is string => Boolean(parentId))
     );
-    const hasTrackedOutputs = workflowLeafOutputIds.size > 0;
 
     const derived = datasets
       .filter((dataset) => Boolean(
         dataset.parentId
         && datasetsById.has(dataset.parentId)
         && !parentIds.has(dataset.id)
-        && (!hasTrackedOutputs || workflowLeafOutputIds.has(dataset.id))
       ))
       .map((dataset) => {
         const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
@@ -120,7 +124,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     const lowered = searchQuery.trim().toLowerCase();
     if (!lowered) return derived;
     return derived.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
-  }, [datasets, datasetsById, operationByOutputDataset, workflowLeafOutputIds, searchQuery]);
+  }, [datasets, datasetsById, operationByOutputDataset, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
     const cacheKey = `dh_ds_${workspaceId}_${activeProject?.id ?? "all"}`;

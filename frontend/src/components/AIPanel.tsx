@@ -476,9 +476,10 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               content: `✓ Saved: ${tableName} (${label})`,
             },
           ]);
-          // Refresh ArtifactsSection so the new artifact appears immediately
-          onDatasetMutated?.();
         }
+        // Always refresh — both export URLs and S3-key artifacts should
+        // update the ArtifactsSection and dataset list immediately.
+        onDatasetMutated?.();
         break;
       }
       case "agent.query_results": {

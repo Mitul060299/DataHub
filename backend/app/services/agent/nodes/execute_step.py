@@ -506,6 +506,10 @@ async def execute_step(state: AgentState) -> dict:
                                 "artifact S3 upload failed for %s: %s",
                                 output_table, _upload_exc,
                             )
+                            # Even without S3, mark key as sentinel so ArtifactDB
+                            # is still created and appears in the artifacts list.
+                            if artifact_s3_key is None:
+                                artifact_s3_key = f"local/{session_id or 'nosession'}/{output_table}.parquet"
                         # Fetch inline preview rows for the chat table card
                         try:
                             preview_rows = execute_in_session(

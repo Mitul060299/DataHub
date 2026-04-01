@@ -476,6 +476,8 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               content: `✓ Saved: ${tableName} (${label})`,
             },
           ]);
+          // Refresh ArtifactsSection so the new artifact appears immediately
+          onDatasetMutated?.();
         }
         break;
       }

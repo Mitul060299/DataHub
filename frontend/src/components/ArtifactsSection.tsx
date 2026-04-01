@@ -135,7 +135,10 @@ export function ArtifactsSection({
     }
   };
 
-  const totalCount = artifacts.length + stored.length;
+  // Deduplicate: hide in-session entries that already have a matching stored artifact
+  const storedNames = new Set(stored.map((a) => a.name));
+  const dedupedArtifacts = artifacts.filter((a) => !storedNames.has(a.name));
+  const totalCount = dedupedArtifacts.length + stored.length;
 
   return (
     <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10 }}>
@@ -161,7 +164,7 @@ export function ArtifactsSection({
       {open ? (
         <div style={{ display: "grid", gap: 4 }}>
           {/* ── In-Session Tables ─────────────────────────────────────── */}
-          {artifacts.map((artifact) => {
+          {dedupedArtifacts.map((artifact) => {
             const active = activeDatasetId === artifact.id;
             const KindIcon = kindIcon[artifact.kind];
             return (
@@ -319,7 +322,7 @@ export function ArtifactsSection({
           )}
 
           {/* Empty state */}
-          {!artifacts.length && !stored.length && !storedLoading ? (
+          {!dedupedArtifacts.length && !stored.length && !storedLoading ? (
             <p style={{ color: "var(--tx2)", fontSize: 12 }}>
               No artifacts yet. Run transformations to create them.
             </p>

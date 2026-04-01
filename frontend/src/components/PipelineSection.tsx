@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
-import { IconChevronDown, IconClock, IconCopy, IconDownload, IconPlay, IconTrash, IconX } from "./Icons";
-import { usePipelineContext } from "../contexts/PipelineContext";
+import { useEffect, useRef, useState } from "react";
+import { IconChevronDown, IconClock, IconCopy, IconDownload, IconPlay, IconTrash, IconUpload, IconX } from "./Icons";
+import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
 import { api } from "../api";
 import { TemplatePickerModal } from "./modals/TemplatePickerModal";
-import { ImportPipelineModal } from "./modals/ImportPipelineModal";
 
 const FLAT_FILE_FORMATS = new Set(["csv", "xlsx", "xls", "excel", "json", "parquet", "txt", "tsv"]);
 
@@ -60,7 +59,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactData, setArtifactData] = useState<PipelineRunArtifact | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
-  const [importPipelineOpen, setImportPipelineOpen] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [nlPrompt, setNlPrompt] = useState("");
   const [nlApplying, setNlApplying] = useState(false);
   const [nlFeedback, setNlFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -386,6 +385,33 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     }
   };
 
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as { steps?: unknown[] };
+        const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
+        if (!rawSteps.length) { setWorkflowMessage("No steps found in file."); return; }
+        const mapped: PipelineStep[] = rawSteps.map((s, i) => ({
+          ...(s as Partial<PipelineStep>),
+          id: crypto.randomUUID(),
+          stepNumber: i + 1,
+          operation: (s as Partial<PipelineStep>).operation ?? "custom_sql",
+          description: (s as Partial<PipelineStep>).description ?? `Step ${i + 1}`,
+          appliedAt: new Date(),
+        } as PipelineStep));
+        replaceSteps(mapped);
+        setWorkflowMessage(`Imported ${mapped.length} step${mapped.length !== 1 ? "s" : ""}.`);
+      } catch {
+        setWorkflowMessage("Failed to parse pipeline JSON.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleDownloadArtifactJson = () => {
     if (!artifactData) {
       setWorkflowMessage("Load a run artifact before downloading.");
@@ -578,11 +604,11 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             <button
               className="btn"
               style={{ width: 26, padding: 0 }}
-              onClick={() => setImportPipelineOpen(true)}
+              onClick={() => importFileRef.current?.click()}
               aria-label="Import pipeline"
-              title="Import a saved pipeline into this project"
+              title="Import pipeline from .json file"
             >
-              <IconCopy size={14} />
+              <IconUpload size={14} />
             </button>
             <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps" title="Clear all steps">
               <IconTrash size={14} />
@@ -858,34 +884,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
       {open && (steps.length || activeDataset?.id) ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8, display: "grid", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>WORKFLOW TEMPLATE</div>
-              <button
-                className="btn"
-                style={{ fontSize: 11, padding: "3px 8px" }}
-                onClick={() => setTemplatePickerOpen(true)}
-              >
-                Browse Templates
-              </button>
-            </div>
-            <select
-              value={selectedTemplateId}
-              onChange={(event) => setSelectedTemplateId(event.target.value)}
-              style={{
-                width: "100%",
-                height: 34,
-                background: "#111113",
-                border: "1px solid #27272a",
-                borderRadius: 6,
-                padding: "7px 10px",
-                color: selectedTemplateId ? "#d4d4d8" : "#52525b",
-              }}
-            >
-              <option value="">Select a workflow template…</option>
-              {workflowTemplates.map((template) => (
-                <option key={template.id} value={template.id}>{template.name}</option>
-              ))}
-            </select>
+
             {pipelineWorkflowId.trim() ? (
               <div style={{ display: "grid", gap: 6, borderTop: "1px solid #1e1e24", paddingTop: 8, marginTop: 2 }}>
                 <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>EDIT WITH AI</div>
@@ -1140,7 +1139,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             {undoing ? "Undoing..." : "Undo Last"}
           </button>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
             <button
               className="btn"
               onClick={canSchedule ? onSchedule : undefined}
@@ -1151,6 +1150,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
               Schedule
             </button>
             <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
+            <button className="btn" onClick={() => importFileRef.current?.click()}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconUpload size={14} />Import</span></button>
           </div>
 
           {scheduleInfo ? (
@@ -1173,15 +1173,12 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           setWorkflowMessage(`Pipeline created from template. Ready to run.`);
         }}
       />
-      <ImportPipelineModal
-        open={importPipelineOpen}
-        workspaceId={activeProject?.workspaceId ?? "default"}
-        onClose={() => setImportPipelineOpen(false)}
-        onCloned={(pipelineId, pipelineName) => {
-          setSelectedTemplateId(pipelineId);
-          setPipelineWorkflowId(pipelineId);
-          setWorkflowMessage(`Pipeline "${pipelineName}" cloned. Ready to run.`);
-        }}
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".json"
+        style={{ display: "none" }}
+        onChange={handleImportFile}
       />
     </section>
   );

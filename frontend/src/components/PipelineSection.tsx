@@ -5,6 +5,7 @@ import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
 import { api } from "../api";
 import { TemplatePickerModal } from "./modals/TemplatePickerModal";
+import { WORKFLOW_TEMPLATES } from "../lib/workflowTemplates";
 
 const FLAT_FILE_FORMATS = new Set(["csv", "xlsx", "xls", "excel", "json", "parquet", "txt", "tsv"]);
 
@@ -13,7 +14,7 @@ interface PipelineSectionProps {
   onExport: () => void;
 }
 
-type WorkflowTemplate = {
+type ServerWorkflowTemplate = {
   id: string;
   name: string;
 };
@@ -37,7 +38,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingStepName, setEditingStepName] = useState("");
 
-  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([]);
+  const [workflowTemplates, setWorkflowTemplates] = useState<ServerWorkflowTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [pipelineWorkflowId, setPipelineWorkflowId] = useState("");
   const [runtimeParametersText, setRuntimeParametersText] = useState("{}");
@@ -59,6 +60,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [artifactData, setArtifactData] = useState<PipelineRunArtifact | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [builtInPickerOpen, setBuiltInPickerOpen] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [nlPrompt, setNlPrompt] = useState("");
   const [nlApplying, setNlApplying] = useState(false);
@@ -596,7 +598,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             <button
               className="btn"
               style={{ fontSize: 11, padding: "3px 8px" }}
-              onClick={() => setTemplatePickerOpen(true)}
+              onClick={() => setBuiltInPickerOpen(true)}
               title="Browse pipeline templates"
             >
               Templates
@@ -1152,6 +1154,68 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             </div>
           ) : null}
         </footer>
+      ) : null}
+
+      {builtInPickerOpen ? (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setBuiltInPickerOpen(false)}
+        >
+          <div
+            style={{ background: "var(--bg1)", border: "1px solid var(--bd2)", borderRadius: 12, width: 560, maxHeight: "80vh", overflowY: "auto", padding: 20 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Quick-start Templates</span>
+              <button onClick={() => setBuiltInPickerOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--tx1)", padding: 4 }}>
+                <IconX size={16} />
+              </button>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--tx2)", marginBottom: 14 }}>
+              Load a template to pre-fill the pipeline steps. You can edit any step before running.
+            </p>
+            <div style={{ display: "grid", gap: 10 }}>
+              {WORKFLOW_TEMPLATES.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  style={{ border: "1px solid var(--bd2)", borderRadius: 8, padding: "10px 12px", background: "var(--bg2)" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{tpl.icon} {tpl.name}</div>
+                      <div style={{ color: "var(--tx2)", fontSize: 12, marginTop: 2 }}>{tpl.description}</div>
+                      <div style={{ color: "var(--tx2)", fontSize: 11, marginTop: 4 }}>
+                        {tpl.steps.length} steps &nbsp;·&nbsp; {tpl.hints[0]}
+                      </div>
+                    </div>
+                    <button
+                      className="btn"
+                      style={{ fontSize: 11, padding: "4px 12px", whiteSpace: "nowrap" }}
+                      onClick={() => {
+                        replaceSteps(
+                          tpl.steps.map((s) => ({
+                            ...s,
+                            id: crypto.randomUUID(),
+                            appliedAt: new Date(),
+                          }))
+                        );
+                        setBuiltInPickerOpen(false);
+                      }}
+                    >
+                      Use template
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              style={{ marginTop: 16, background: "none", border: "none", color: "#5B6AF0", fontSize: 12, cursor: "pointer", padding: 0 }}
+              onClick={() => { setBuiltInPickerOpen(false); setTemplatePickerOpen(true); }}
+            >
+              Browse saved pipeline templates →
+            </button>
+          </div>
+        </div>
       ) : null}
 
       <TemplatePickerModal

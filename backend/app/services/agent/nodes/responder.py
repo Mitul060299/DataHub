@@ -57,6 +57,25 @@ async def responder(state: AgentState) -> dict:
             if failed:
                 final += f"\n\n⚠️ {len(failed)} step(s) could not be completed after retrying."
 
+            # Append outlier callout if any successful step reported outliers
+            total_outliers = sum(
+                int(r.get("outlier_count", 0))
+                for r in successful
+                if isinstance(r.get("outlier_count"), (int, float))
+            )
+            if total_outliers > 0 and "outlier" not in final.lower():
+                final += f"\n\n⚠️ {total_outliers} outlier value{'s' if total_outliers != 1 else ''} were detected — want me to flag or remove them?"
+
+            # Surface join suggestion if context_loader found overlapping columns
+            join_suggestions: list[dict] = state.get("join_suggestions", [])  # type: ignore[assignment]
+            if join_suggestions:
+                js = join_suggestions[0]
+                final += (
+                    f"\n\n🔗 I noticed **{js.get('secondary_name', 'another dataset')}** shares "
+                    f"column **{js.get('on_column', 'a key')}** with your data — "
+                    f"want me to join them?"
+                )
+
     elif intent == "visualise":
         results = state.get("execution_results", [])
         # Find the first successful visualise step with tile_created
@@ -105,11 +124,30 @@ async def responder(state: AgentState) -> dict:
         else:
             final = "Done."
 
+        # Append outlier callout if any step reported outliers
+        total_outliers = sum(
+            int(r.get("outlier_count", 0))
+            for r in successful
+            if isinstance(r.get("outlier_count"), (int, float))
+        )
+        if total_outliers > 0 and "outlier" not in final.lower():
+            final += f"\n\n⚠️ {total_outliers} outlier value{'s' if total_outliers != 1 else ''} were detected — want me to flag or remove them?"
+
         # Scan for KPI candidates across reconcile/summarise steps
         kpi_candidates = state.get("kpi_candidates", [])
         if kpi_candidates:
             labels = ", ".join(c.get("label", "") for c in kpi_candidates[:3])
             final += f"\n\n💡 Key metrics found: **{labels}**. Pin them as metric tiles?"
+
+        # Surface join suggestions if context_loader detected overlapping columns
+        join_suggestions: list[dict] = state.get("join_suggestions", [])  # type: ignore[assignment]
+        if join_suggestions:
+            js = join_suggestions[0]
+            final += (
+                f"\n\n🔗 I noticed **{js.get('secondary_name', 'another dataset')}** shares "
+                f"column **{js.get('on_column', 'a key')}** with your data — "
+                f"want me to join them?"
+            )
 
     else:
         final = "Done."

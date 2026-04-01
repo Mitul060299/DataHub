@@ -1,8 +1,14 @@
 import { capture } from "../lib/posthog";
 
+export interface ColSchema {
+  name: string;
+  type: string;
+}
+
 interface SuggestionChipsProps {
   onSelect: (suggestion: string) => void;
   datasetName?: string;
+  columnSchema?: ColSchema[];
 }
 
 const DEFAULT_SUGGESTIONS = [
@@ -38,7 +44,48 @@ const EMPLOYEE_SUGGESTIONS = [
   "What is the average tenure?",
 ];
 
-function getSuggestions(datasetName?: string): string[] {
+const NUMERIC_TYPES = new Set([
+  // SQL / DuckDB names
+  "integer", "int", "bigint", "smallint", "tinyint", "hugeint",
+  "float", "double", "numeric", "decimal", "real", "number",
+  // pandas / pyarrow names stored in schema_json
+  "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64",
+  "float32", "float64",
+]);
+const DATE_TYPES = new Set([
+  "date", "timestamp", "datetime", "time", "timestamptz", "timestamp with time zone",
+]);
+
+function getSuggestions(datasetName?: string, columnSchema?: ColSchema[]): string[] {
+  // Schema-aware suggestions when column info is available
+  if (columnSchema && columnSchema.length > 0) {
+    const numeric = columnSchema.filter((c) => NUMERIC_TYPES.has(c.type.toLowerCase().split("(")[0]));
+    const dates = columnSchema.filter((c) => DATE_TYPES.has(c.type.toLowerCase().split("(")[0]));
+    const categories = columnSchema.filter((c) => !NUMERIC_TYPES.has(c.type.toLowerCase().split("(")[0]) && !DATE_TYPES.has(c.type.toLowerCase().split("(")[0]));
+
+    const chips: string[] = [];
+
+    if (dates.length > 0 && numeric.length > 0) {
+      chips.push(`Show me ${numeric[0].name} trend over time by ${dates[0].name}`);
+    }
+    if (categories.length > 0 && numeric.length > 0) {
+      chips.push(`Compare ${numeric[0].name} by ${categories[0].name}`);
+    }
+    if (numeric.length > 1) {
+      chips.push(`What is the total and average ${numeric[0].name}?`);
+    }
+    chips.push("Are there any missing values or duplicates?");
+    chips.push("Show me the top 10 rows by value");
+    if (categories.length > 0) {
+      chips.push(`Show a chart of ${numeric.length > 0 ? numeric[0].name : "counts"} by ${categories[0].name}`);
+    } else {
+      chips.push("Show me a summary of this dataset");
+    }
+
+    return chips.slice(0, 5);
+  }
+
+  // Fallback: name-based suggestions
   if (!datasetName) return DEFAULT_SUGGESTIONS;
   const name = datasetName.toLowerCase();
   if (name.includes("journal") || name.includes("account") || name.includes("gl")) {
@@ -53,8 +100,8 @@ function getSuggestions(datasetName?: string): string[] {
   return DEFAULT_SUGGESTIONS;
 }
 
-export const SuggestionChips = ({ onSelect, datasetName }: SuggestionChipsProps) => {
-  const suggestions = getSuggestions(datasetName);
+export const SuggestionChips = ({ onSelect, datasetName, columnSchema }: SuggestionChipsProps) => {
+  const suggestions = getSuggestions(datasetName, columnSchema);
 
   return (
     <div className="suggestion-chips" role="list" aria-label="Suggested questions">

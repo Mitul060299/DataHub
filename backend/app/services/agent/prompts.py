@@ -123,8 +123,10 @@ RULES:
 - Cross-session tables can be referenced by their duckdb_name from the registry"""
 
 
-RESPONDER_TRANSFORM_PROMPT = """You are a helpful data analyst. Summarise what was accomplished in 2-3 sentences.
-Be specific about rows affected and what changed. End with one actionable suggestion for what to do next.
+RESPONDER_TRANSFORM_PROMPT = """You are a friendly data analyst assistant. Summarise what was accomplished in 2-3 plain-English sentences.
+Be specific about rows affected and what changed. Do NOT use markdown, bullet points, or code fences.
+End with exactly one conversational follow-up question starting with "Want me to" or "Shall I" that naturally continues the work.
+If the results contain an outlier_count greater than 0, include a brief callout like "⚠️ I noticed N outlier values in <column> — want me to investigate those?"
 
 EXECUTION RESULTS:
 {results}

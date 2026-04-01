@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { useChatSession, type AgentEvent, type ConversationMessage, type PlanStep, type TransformationPayload } from "../hooks/useChatSession";
@@ -10,6 +10,7 @@ import { EChartsRenderer } from "./EChartsRenderer";
 import { api, saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
 import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
+import { type ColSchema } from "./SuggestionChips";
 import { capture } from "../lib/posthog";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 
@@ -44,6 +45,53 @@ interface DataProfile {
   duplicate_rows: number;
   duplicate_pct: number;
   columns: Record<string, ColProfile>;
+}
+
+function buildFollowUpChips(
+  intent: string,
+  pipelineSteps: Array<Record<string, unknown>>,
+  dataset: Dataset | null,
+): string[] {
+  const name = dataset?.name ?? "dataset";
+  const ops = pipelineSteps.map((s) => String(s.operation ?? "")).filter(Boolean);
+  const hasClean = ops.some((o) => ["fill_nulls", "drop_nulls", "dedup", "filter"].includes(o));
+  const hasAgg = ops.some((o) => ["aggregate", "group_by"].includes(o));
+  const hasJoin = ops.some((o) => o === "join");
+
+  if (intent === "visualise") {
+    return [
+      `Show me a different chart type for ${name}`,
+      `Add this chart to a dashboard`,
+      `What are the top 5 values?`,
+    ];
+  }
+  if (hasJoin) {
+    return [
+      `Show me a summary of the joined data`,
+      `Visualise the combined dataset`,
+      `Export the joined result`,
+    ];
+  }
+  if (hasClean) {
+    return [
+      `Show me the data quality report now`,
+      `Visualise the cleaned ${name}`,
+      `Export the cleaned data`,
+    ];
+  }
+  if (hasAgg) {
+    return [
+      `Visualise these results as a chart`,
+      `Sort by the largest values`,
+      `Export the summary`,
+    ];
+  }
+  // Generic transform / converse fallback
+  return [
+    `Show me a preview of the results`,
+    `Create a chart from this data`,
+    `Export the output`,
+  ];
 }
 
 function DataProfileCard({ profile }: { profile: DataProfile }) {
@@ -139,6 +187,7 @@ type Message = ConversationMessage & {
   artifactUrl?: string;
   queryResults?: Array<Record<string, unknown>>;
   dataProfile?: DataProfile;
+  followUpChips?: string[];
 };
 
 interface AIPanelProps {
@@ -160,6 +209,17 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   const [savingVizIds, setSavingVizIds] = useState<Set<string>>(new Set());
   const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
   const [analyzingDataset, setAnalyzingDataset] = useState(false);
+  const [columnSchema, setColumnSchema] = useState<ColSchema[]>([]);
+
+  // Fetch typed column schema whenever the active dataset changes
+  useEffect(() => {
+    if (!dataset?.id) { setColumnSchema([]); return; }
+    let cancelled = false;
+    api.get<{ columns: ColSchema[] }>(`/api/datasets/${dataset.id}/schema`)
+      .then((r) => { if (!cancelled) setColumnSchema(r.data.columns ?? []); })
+      .catch(() => { if (!cancelled) setColumnSchema([]); });
+    return () => { cancelled = true; };
+  }, [dataset?.id]);
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
 
@@ -341,6 +401,10 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           }
         }
 
+        // Build context-aware follow-up chips based on THIS run's completed steps only
+        const doneIntent = typeof event.intent === "string" ? event.intent : "transform";
+        const followUpChips = buildFollowUpChips(doneIntent, sortedCompletedSteps, dataset);
+
         setMessages((previous) => [
           ...previous,
           {
@@ -348,6 +412,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             role: "assistant",
             content: responseText,
             tileCreated: tileCreatedData,
+            followUpChips,
           },
         ]);
         break;
@@ -709,6 +774,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           <EmptyStateChatPanel
             hasDataset
             datasetName={dataset.name}
+            columnSchema={columnSchema}
             onSuggestionSelect={(s) => { setInput(s); void handleSend(s); }}
             onUploadClick={() => {}}
           />
@@ -846,6 +912,30 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               ) : null}
               {message.dataProfile ? (
                 <DataProfileCard profile={message.dataProfile} />
+              ) : null}
+              {message.followUpChips && message.followUpChips.length > 0 && !sending ? (
+                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {message.followUpChips.map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => { void handleSend(chip); }}
+                      style={{
+                        background: "var(--bg1)",
+                        border: "1px solid var(--bd2)",
+                        borderRadius: 16,
+                        color: "var(--tx2)",
+                        cursor: "pointer",
+                        fontSize: 11,
+                        padding: "3px 10px",
+                        transition: "border-color 0.15s",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#5B6AF0"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
               ) : null}
             </div>
             )}

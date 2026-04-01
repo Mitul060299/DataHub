@@ -239,4 +239,28 @@ async def context_loader(state: AgentState) -> dict:
     }
     if secondary_schemas:
         base["secondary_schemas"] = secondary_schemas
+
+        # Detect overlapping columns between primary and secondary datasets
+        # and populate join_suggestions for the responder to surface.
+        primary_cols = set(schema.keys())
+        join_suggestions: list[dict] = []
+        for alias, info in secondary_schemas.items():
+            sec_cols_raw = info.get("columns") or []
+            sec_col_names = {c if isinstance(c, str) else str(c) for c in sec_cols_raw}
+            overlapping = primary_cols & sec_col_names
+            if overlapping:
+                # Prefer short column names as join keys (id-like columns first)
+                best_col = next(
+                    (c for c in sorted(overlapping) if "id" in c.lower() or "key" in c.lower()),
+                    next(iter(sorted(overlapping))),
+                )
+                join_suggestions.append({
+                    "secondary_id": info.get("dataset_id", alias),
+                    "secondary_name": alias,
+                    "on_column": best_col,
+                    "all_overlapping": sorted(overlapping),
+                })
+        if join_suggestions:
+            base["join_suggestions"] = join_suggestions
+
     return base

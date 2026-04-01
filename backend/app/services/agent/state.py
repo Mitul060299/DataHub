@@ -86,3 +86,4 @@ class AgentState(TypedDict):
     chart_config: Optional[dict]   # legacy; prefer execution_results[].tile_created
     query_results: Optional[list]
     kpi_candidates: NotRequired[list[dict]]  # [{label, value, trend}] offered to user
+    join_suggestions: NotRequired[list[dict]]  # [{secondary_id, secondary_name, on_column}] from context_loader

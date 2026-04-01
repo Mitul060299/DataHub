@@ -945,6 +945,29 @@ def export_dataset(
     return StreamingResponse(row_iter(), media_type="text/csv")
 
 
+@router.get("/{dataset_id}/schema")
+def get_dataset_schema(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return column names and types for a dataset (lightweight, no row scan)."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    raw_schema = DuckDBService.get_schema(dataset_id)
+    # schema values may be a nested dict {"type": "int64", "nullable": True}
+    # (from DataConversionService) or a plain string (from _infer_schema_from_rows)
+    def _extract_type(v: object) -> str:
+        if isinstance(v, dict):
+            return str(v.get("type", "string"))
+        return str(v) if v is not None else "string"
+    columns = [{"name": col, "type": _extract_type(col_type)} for col, col_type in raw_schema.items()]
+    return {"columns": columns}
+
+
 @router.get("/{dataset_id}/preview", response_model=DatasetPage)
 def preview_dataset(
     dataset_id: str,

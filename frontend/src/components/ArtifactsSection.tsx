@@ -30,6 +30,7 @@ interface StoredArtifact {
   session_id?: string | null;
   created_at?: string | null;
   download_url?: string | null;    // presigned URL for parquet directly
+  dataset_id?: string | null;      // DatasetMetaDB id — present when artifact has a loaded dataset
 }
 
 interface ArtifactsSectionProps {
@@ -265,6 +266,21 @@ export function ArtifactsSection({
                       }}
                       style={{ flex: 1, height: 20, fontSize: 12, background: "var(--bg3)", border: "1px solid var(--ac)", borderRadius: 4, color: "var(--tx0)", padding: "0 5px" }}
                     />
+                  ) : artifact.dataset_id ? (
+                    <button
+                      className="btn"
+                      style={{ flex: 1, minWidth: 0, height: 20, padding: 0, borderColor: "transparent", background: "transparent", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center" }}
+                      title={`Load ${artifact.name}`}
+                      onClick={() => onSelect({ id: artifact.dataset_id!, name: artifact.name, rows: artifact.row_count ?? 0 })}
+                    >
+                      <span
+                        className="mono"
+                        style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ac)" }}
+                        title={artifact.name}
+                      >
+                        {artifact.name}
+                      </span>
+                    </button>
                   ) : (
                     <span
                       className="mono"

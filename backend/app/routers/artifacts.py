@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import CurrentUser, get_current_user
-from ..models_db import ArtifactDB
+from ..models_db import ArtifactDB, DatasetMetaDB
 from ..services.object_storage import StorageService
 from ..services.duckdb_session import register_table_from_sql
 from ..services.rate_limiter import limiter
@@ -41,7 +41,7 @@ def _get_artifact_or_404(artifact_id: str, user_id: str, db: Session) -> Artifac
     return row
 
 
-def _serialize(artifact: ArtifactDB, download_url: Optional[str] = None) -> dict:
+def _serialize(artifact: ArtifactDB, download_url: Optional[str] = None, dataset_id: Optional[str] = None) -> dict:
     return {
         "id": artifact.id,
         "name": artifact.name,
@@ -55,6 +55,7 @@ def _serialize(artifact: ArtifactDB, download_url: Optional[str] = None) -> dict
         "session_id": artifact.session_id,
         "created_at": artifact.created_at.isoformat() if artifact.created_at else None,
         "download_url": download_url,
+        "dataset_id": dataset_id,
     }
 
 
@@ -75,6 +76,17 @@ def list_artifacts(
 
     artifacts = q.order_by(ArtifactDB.created_at.desc()).all()
 
+    # Bulk-resolve dataset_id via storage_path == s3_key
+    s3_keys = [art.s3_key for art in artifacts if art.s3_key]
+    datasets_by_key: dict[str, str] = {}
+    if s3_keys:
+        ds_rows = (
+            db.query(DatasetMetaDB.id, DatasetMetaDB.storage_path)
+            .filter(DatasetMetaDB.storage_path.in_(s3_keys))
+            .all()
+        )
+        datasets_by_key = {row.storage_path: str(row.id) for row in ds_rows}
+
     result = []
     for art in artifacts:
         download_url: Optional[str] = None
@@ -82,7 +94,8 @@ def list_artifacts(
             download_url = StorageService.get_signed_url(art.s3_key, expires_in=3600)
         except Exception as exc:
             logger.warning("Could not generate signed URL for artifact %s: %s", art.id, exc)
-        result.append(_serialize(art, download_url))
+        dataset_id = datasets_by_key.get(art.s3_key) if art.s3_key else None
+        result.append(_serialize(art, download_url, dataset_id=dataset_id))
 
     return result
 

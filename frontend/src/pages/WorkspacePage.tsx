@@ -12,7 +12,6 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
-import { usePipeline } from "../hooks/usePipeline";
 import { capture } from "../lib/posthog";
 
 const workspaceId = "default";
@@ -26,7 +25,6 @@ export function WorkspacePage() {
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
   const { runPipeline, steps } = usePipelineContext();
-  const { exportPipeline } = usePipeline();
   const { data, loading, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -131,7 +129,6 @@ export function WorkspacePage() {
         calculatedColumns={data?.calculatedColumns ?? []}
         lastAction={steps.length ? steps[steps.length - 1].operation : "Idle"}
         onImport={() => setImportOpen(true)}
-        onExport={() => exportPipeline(steps)}
         onColumnsChanged={() => {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();

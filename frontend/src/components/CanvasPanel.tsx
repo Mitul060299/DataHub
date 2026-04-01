@@ -18,11 +18,30 @@ interface CanvasPanelProps {
   calculatedColumns: CalculatedColumn[];
   lastAction: string;
   onImport: () => void;
-  onExport: () => void;
   onColumnsChanged: () => void;
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onExport, onColumnsChanged }: CanvasPanelProps) {
+function exportDataAsCsv(columns: string[], rows: Record<string, unknown>[], filename: string) {
+  const escape = (val: unknown) => {
+    const str = val == null ? "" : String(val);
+    return str.includes(",") || str.includes('"') || str.includes("\n")
+      ? `"${str.replace(/"/g, '""')}"`
+      : str;
+  };
+  const lines = [
+    columns.map(escape).join(","),
+    ...rows.map((row) => columns.map((col) => escape(row[col])).join(",")),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged }: CanvasPanelProps) {
   const { steps } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
 
@@ -41,7 +60,14 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns,
           </span>
         </div>
         <div style={{ display: "inline-flex", gap: 6 }}>
-          <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
+          <button
+            className="btn"
+            title="Export current data as CSV"
+            disabled={!columns.length}
+            onClick={() => exportDataAsCsv(columns, rows, dataset?.name ?? "data")}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export CSV</span>
+          </button>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>

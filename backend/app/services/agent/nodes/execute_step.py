@@ -374,6 +374,15 @@ async def execute_step(state: AgentState) -> dict:
                         # Plain SELECT — just execute and return rows directly
                         rows = execute_in_session(session_id, step_sql) if session_id else []
 
+                    # Sentinel: ensure artifact_s3_key_sv is always set so that
+                    # ArtifactDB rows are created regardless of S3 availability.
+                    if result_table and not artifact_s3_key_sv:
+                        # CREATE TABLE succeeded but S3 upload failed — use local sentinel
+                        artifact_s3_key_sv = f"local/{session_id or 'nosession'}/{result_table}.parquet"
+                    elif not result_table and rows:
+                        # Plain SELECT returned rows — materialise a local sentinel
+                        artifact_s3_key_sv = f"local/{session_id or 'nosession'}/{intent_key}_{step['step_number']}.parquet"
+
                     result_dict: dict = {
                         "step_number": step["step_number"],
                         "operation": intent_key,
@@ -712,6 +721,26 @@ async def execute_step(state: AgentState) -> dict:
             if isinstance(output, dict) and isinstance(output.get("row_count"), int):
                 rows_affected = int(output.get("row_count"))
 
+        # Ensure ArtifactDB is always created for pipeline-engine steps (show/
+        # analyze/query ops).  Use the output dataset's real storage path when
+        # available, otherwise fall back to a local sentinel so the row still
+        # lands in the artifacts table and appears in the sidebar.
+        _engine_artifact_key: str | None = None
+        try:
+            if output_dataset_id and output_dataset_id != str(state.get("dataset_id") or ""):
+                _engine_out_ds = db.query(DatasetMetaDB).filter(
+                    DatasetMetaDB.id == output_dataset_id
+                ).first()
+                if _engine_out_ds and _engine_out_ds.storage_path:
+                    _engine_artifact_key = _engine_out_ds.storage_path
+        except Exception:
+            pass
+        if not _engine_artifact_key:
+            _engine_artifact_key = (
+                f"local/agent/{state.get('session_id') or 'nosession'}"
+                f"/{step.get('operation', 'step')}_{step['step_number']}.parquet"
+            )
+
         execution_result: ExecutionResult = {
             "step_number": step["step_number"],
             "operation": step["operation"],
@@ -721,6 +750,7 @@ async def execute_step(state: AgentState) -> dict:
             "output_dataset_id": output_dataset_id,
             "sql": engine_sql,
             "error": None,
+            "artifact_s3_key": _engine_artifact_key,
         }
         return {
             "execution_results": [*state.get("execution_results", []), execution_result],

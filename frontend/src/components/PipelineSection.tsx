@@ -601,15 +601,6 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             >
               Templates
             </button>
-            <button
-              className="btn"
-              style={{ width: 26, padding: 0 }}
-              onClick={() => importFileRef.current?.click()}
-              aria-label="Import pipeline"
-              title="Import pipeline from .json file"
-            >
-              <IconUpload size={14} />
-            </button>
             <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps" title="Clear all steps">
               <IconTrash size={14} />
             </button>

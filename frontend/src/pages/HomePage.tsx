@@ -123,7 +123,7 @@ const plans: PricingPlan[] = [
       "2 projects",
       "50 AI messages/month",
       "50 MB file size",
-      "1 GB storage",
+      "100 MB storage",
       "1 team member",
       "0 scheduled pipelines",
       "2 canvases",

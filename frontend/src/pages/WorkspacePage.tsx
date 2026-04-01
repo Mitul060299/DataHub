@@ -8,10 +8,12 @@ import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
 import { WelcomeModal } from "../components/WelcomeModal";
 import { OnboardingProgress } from "../components/OnboardingProgress";
+import { TourTooltip, STEPS } from "../components/TourTooltip";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
+import { useTour } from "../hooks/useTour";
 import { capture } from "../lib/posthog";
 
 const workspaceId = "default";
@@ -36,6 +38,7 @@ export function WorkspacePage() {
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
+  const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // Show welcome modal on first visit
   useEffect(() => {
@@ -48,6 +51,15 @@ export function WorkspacePage() {
       }
     }
   }, [hasCompletedOnboarding]);
+
+  // Auto-start tooltip tour for first-time visitors (1 s delay so layout settles)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      if (!isTourDone()) startTour();
+    }, 1000);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Mark onboarding complete when all steps done
   useEffect(() => {
@@ -172,7 +184,23 @@ export function WorkspacePage() {
               capture("onboarding_progress_dismissed");
             }}
           />
+          {!tourActive && (
+            <button
+              className="btn"
+              style={{ marginTop: 6, width: "100%", fontSize: 12 }}
+              onClick={() => { startTour(); }}
+            >
+              🗺 Take a tour
+            </button>
+          )}
         </div>
+      )}
+      {tourActive && (
+        <TourTooltip
+          step={currentStep}
+          onNext={() => nextStep(STEPS.length)}
+          onSkip={skipTour}
+        />
       )}
     </main>
     </>

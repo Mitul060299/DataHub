@@ -49,7 +49,7 @@ export default function PlanCard({
       </div>
 
       {pending ? (
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div data-tour="approve-button" style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button className="btn" onClick={onApprove}>
             ✓ Approve & Run
           </button>

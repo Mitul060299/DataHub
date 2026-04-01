@@ -291,6 +291,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             <style>{`@keyframes dh-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
           </div>
         ) : (
+        <div data-tour="data-section">
         <DataSection
           datasets={sourceDatasets}
           activeDatasetId={activeDataset?.id}
@@ -303,11 +304,14 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             void loadDatasets();
           }}
         />
+        </div>
         )}
+        <div data-tour="pipeline-section">
         <PipelineSection
           onSchedule={() => setScheduleModalOpen(true)}
           onExport={() => exportPipeline(steps)}
         />
+        </div>
         <ArtifactsSection
           artifacts={artifacts}
           activeDatasetId={activeDataset?.id}
@@ -320,7 +324,9 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           }}
         />
 
+        <div data-tour="viz-section">
         <VisualizationsSection />
+        </div>
 
       </div>
 

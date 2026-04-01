@@ -27,7 +27,7 @@ DataHub is priced in **USD** with INR equivalents shown in brackets. All plans a
 | Projects | 2 |
 | AI messages | 50 / month |
 | File size limit | 50 MB |
-| Storage | 1 GB |
+| Storage | 100 MB |
 | Team members | 1 |
 | Scheduled pipelines | 0 |
 | Canvases | 2 |
@@ -132,7 +132,7 @@ Enforces per-upload file size, total storage, dataset count, workspace count, al
 
 | Plan | Max file size | Max storage | Scheduling | SSO |
 |---|---|---|---|---|
-| Free | 50 MB | 1 GB | ❌ | ❌ |
+| Free | 50 MB | 100 MB | ❌ | ❌ |
 | Professional | 1 GB | 20 GB | ✅ | ❌ |
 | Team | 1 GB | 100 GB | ✅ | ❌ |
 | Business | 1 GB | 500 GB | ✅ | ✅ |

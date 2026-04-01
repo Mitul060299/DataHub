@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from ..db import SessionLocal
 from ..models_db import WaitlistEntryDB
 
@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 class WaitlistRequest(BaseModel):
-    email: EmailStr
+    email: str
     plan: str  # "professional" | "team" | "business"
     region: str | None = None
 

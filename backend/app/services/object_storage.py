@@ -171,6 +171,61 @@ class StorageService:
         return f"local://{key}"
 
     @classmethod
+    def generate_presigned_put_url(
+        cls,
+        user_id: str,
+        dataset_id: str,
+        file_name: str,
+        expires_in: int = 3600,
+    ) -> tuple[str, str]:
+        """Generate a presigned PUT URL so the browser can upload directly to S3/R2.
+
+        Returns ``(presigned_url, storage_path)`` where *storage_path* is the
+        canonical path to store in ``DatasetMetaDB`` once the upload completes.
+
+        Only S3 and R2 are supported.  GCS and Azure use different presigned-PUT
+        APIs and are not yet wired up — callers should fall back to the standard
+        ``/import/upload`` route for those providers.
+        """
+        provider = (settings.storage_provider or "local").lower()
+        if provider not in ("s3", "r2"):
+            raise NotImplementedError(
+                f"Presigned PUT upload is not supported for provider '{provider}'. "
+                "Use the standard /import/upload route instead."
+            )
+
+        safe_name = os.path.basename(file_name.replace("\\", "/")) or "data.parquet"
+        key = f"{user_id}/{dataset_id}/{safe_name}"
+
+        if provider == "r2":
+            client = cls._r2_client()
+            bucket = settings.r2_bucket_name
+            if not bucket:
+                raise ValueError("R2_BUCKET_NAME is not configured")
+            storage_path = f"r2://{bucket}/{key}"
+        else:  # s3
+            client = cls._s3_client()
+            bucket = settings.s3_bucket_name
+            if not bucket:
+                raise ValueError("S3_BUCKET_NAME is not configured")
+            storage_path = f"s3://{bucket}/{key}"
+
+        presigned_url = client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": bucket,
+                "Key": key,
+                "ContentType": "application/octet-stream",
+            },
+            ExpiresIn=expires_in,
+        )
+        logger.info(
+            "presigned_put_url_generated storage_path=%s ttl_seconds=%d",
+            storage_path, expires_in,
+        )
+        return presigned_url, storage_path
+
+    @classmethod
     def get_signed_url(cls, storage_path: str, expires_in: int = 900) -> str:
         """Return a short-lived pre-signed URL (default: 15 min / 900 s).
 

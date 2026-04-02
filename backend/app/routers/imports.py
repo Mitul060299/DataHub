@@ -319,6 +319,181 @@ async def test_connection(
         return {"success": False, "error": str(e)}
 
 
+# ── Track B: presigned direct-to-S3 upload ────────────────────────────────────
+
+@router.post("/presign")
+async def presign_upload(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Step 1 of the two-step large-file upload flow.
+
+    Validates plan limits and returns a presigned S3/R2 PUT URL.  The browser
+    then PUTs the file *directly* to that URL — Render never sees the bytes,
+    eliminating the RAM bottleneck for large uploads.
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+
+    filename = str(payload.get("filename") or "").strip()
+    file_size_bytes = int(payload.get("file_size_bytes") or 0)
+    dataset_name = str(payload.get("dataset_name") or "").strip() or filename
+
+    if not filename:
+        raise HTTPException(status_code=400, detail="filename is required")
+    if file_size_bytes <= 0:
+        raise HTTPException(status_code=400, detail="file_size_bytes must be positive")
+
+    try:
+        source_format = FileParserService.detect_file_format(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_file_constraints(
+        plan=user_plan,
+        workspace_id=workspace_id or "default",
+        file_format=source_format,
+        upload_size_bytes=file_size_bytes,
+        db=db,
+    )
+
+    dataset_id = str(uuid.uuid4())
+    safe_name = os.path.basename(filename.replace("\\", "/")) or "data"
+    file_base = re.sub(r"[^\w\-.]", "_", os.path.splitext(safe_name)[0]) or "dataset"
+    parquet_name = f"{file_base}.parquet"
+
+    try:
+        presigned_url, storage_path = StorageService.generate_presigned_put_url(
+            user_id=user_id,
+            dataset_id=dataset_id,
+            file_name=parquet_name,
+            expires_in=3600,
+        )
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+    # Create a pending row so /finalize can look it up and only the owner can finalize it
+    db.add(DatasetMetaDB(
+        id=dataset_id,
+        user_id=user_id,
+        workspace_id=workspace_id or "default",
+        name=dataset_name,
+        columns=[],
+        row_count=0,
+        status="pending",
+        source_type="file_upload",
+        storage_provider=settings.storage_provider,
+        storage_path=storage_path,
+        file_format=source_format,
+        file_size_bytes=file_size_bytes,
+        access_tier="hot",
+    ))
+    db.commit()
+
+    return {
+        "dataset_id": dataset_id,
+        "presigned_url": presigned_url,
+        "storage_path": storage_path,
+        "expires_in": 3600,
+    }
+
+
+@router.post("/finalize")
+async def finalize_upload(
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Step 2 of the two-step large-file upload flow.
+
+    Called after the browser has PUT the Parquet file directly to S3/R2.
+    Reads Parquet schema + row count via DuckDB (only the file footer — not all
+    row data), updates ``DatasetMetaDB``, and creates an ``ImportTableDB``
+    record so the dataset appears in the workspace.
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+
+    dataset_id = str(payload.get("dataset_id") or "").strip()
+    filename = str(payload.get("filename") or "").strip()
+
+    if not dataset_id:
+        raise HTTPException(status_code=400, detail="dataset_id is required")
+
+    meta = (
+        db.query(DatasetMetaDB)
+        .filter(DatasetMetaDB.id == dataset_id, DatasetMetaDB.user_id == user_id)
+        .first()
+    )
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found or not owned by user")
+    if meta.status != "pending":
+        raise HTTPException(status_code=409, detail="Dataset already finalized")
+
+    # Read schema + stats from the Parquet file via DuckDB.
+    # DuckDB fetches only the row-group footer metadata, not the full dataset.
+    from ..services.duckdb_service import DuckDBService
+    try:
+        query_path = StorageService.get_query_path(meta.storage_path)
+        conn = DuckDBService._ensure_db()
+        # Schema: column names + types
+        schema_rows = conn.execute(
+            f"DESCRIBE SELECT * FROM read_parquet('{query_path}') LIMIT 0"
+        ).fetchall()
+        columns = [{"name": r[0], "type": r[1]} for r in schema_rows]
+        # Row count via Parquet statistics (no full scan needed for most writers)
+        count_result = conn.execute(
+            f"SELECT COUNT(*) FROM read_parquet('{query_path}')"
+        ).fetchone()
+        row_count = int(count_result[0]) if count_result else 0
+    except Exception as exc:
+        logger.error("DuckDB metadata extraction failed for dataset %s: %s", dataset_id, exc)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not read the uploaded Parquet file: {exc}",
+        ) from exc
+
+    initial_tier = storage_tier_service.assign_initial_tier(
+        file_size_bytes=meta.file_size_bytes or 0,
+        row_count=row_count,
+    )
+
+    meta.columns = columns
+    meta.row_count = row_count
+    meta.status = "ready"
+    meta.access_tier = initial_tier
+
+    display_name = filename or meta.name or "dataset"
+    table_name = _ensure_unique_table_name(db, _sanitize_table_name(display_name))
+    table_id = str(uuid.uuid4())
+    db.add(ImportTableDB(
+        id=table_id,
+        name=table_name,
+        dataset_id=dataset_id,
+        workspace_id=workspace_id or "default",
+        source_type="file",
+        source_name=display_name,
+        size_bytes=meta.file_size_bytes or 0,
+    ))
+    db.commit()
+
+    return {
+        "success": True,
+        "datasetId": dataset_id,
+        "tableName": table_name,
+        "rowCount": row_count,
+        "columns": len(columns),
+        "storagePath": meta.storage_path,
+    }
+
+
+
 @router.post("/connector-import")
 async def connector_import(
     payload: dict,

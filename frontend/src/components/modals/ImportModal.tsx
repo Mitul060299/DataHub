@@ -31,6 +31,7 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
   const fileRef = useRef<HTMLInputElement>(null);
   const { markFirstUpload } = useUser();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isValidating, setIsValidating] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [datasetName, setDatasetName] = useState("");
@@ -74,20 +75,83 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
     if (!selectedFile || isUploading) return;
     setErrorText(null);
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    if (datasetName.trim()) {
-      formData.append("dataset_name", datasetName.trim());
-    }
+    setUploadProgress(0);
+
+    const extraHeaders = workspaceId ? { "X-Workspace-Id": workspaceId } : {};
+
+    // Files larger than 50 MB use the presigned direct-to-S3 flow so that
+    // the Render server never buffers the bytes in RAM.
+    const PRESIGN_THRESHOLD = 50 * 1024 * 1024;
+
     try {
-      await api.post("/import/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
-        },
-        timeout: 300000,
+      if (selectedFile.size > PRESIGN_THRESHOLD) {
+        // ── Step 1: obtain presigned PUT URL ────────────────────────────────
+        const presignRes = await api.post(
+          "/import/presign",
+          {
+            filename: selectedFile.name,
+            file_size_bytes: selectedFile.size,
+            ...(datasetName.trim() ? { dataset_name: datasetName.trim() } : {}),
+          },
+          { headers: extraHeaders },
+        );
+        const { dataset_id, presigned_url } = presignRes.data as {
+          dataset_id: string;
+          presigned_url: string;
+        };
+
+        // ── Step 2: PUT directly to S3/R2 with progress ─────────────────────
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", presigned_url);
+          xhr.setRequestHeader("Content-Type", "application/octet-stream");
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              // Reserve the last 10 % for finalize round-trip
+              setUploadProgress(Math.round((e.loaded / e.total) * 90));
+            }
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`S3 PUT failed with status ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error("Network error during S3 upload"));
+          xhr.send(selectedFile);
+        });
+
+        // ── Step 3: finalize (schema extraction + DB records) ────────────────
+        setUploadProgress(92);
+        await api.post(
+          "/import/finalize",
+          { dataset_id, filename: selectedFile.name },
+          { headers: extraHeaders },
+        );
+        setUploadProgress(100);
+      } else {
+        // ── Small files: server-side upload (existing path) ──────────────────
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        if (datasetName.trim()) {
+          formData.append("dataset_name", datasetName.trim());
+        }
+        await api.post("/import/upload", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            ...extraHeaders,
+          },
+          timeout: 300000,
+        });
+      }
+
+      capture("file_uploaded", {
+        type: selectedFile.type,
+        size: selectedFile.size,
+        workspace_id: workspaceId,
+        presigned: selectedFile.size > PRESIGN_THRESHOLD,
       });
-      capture("file_uploaded", { type: selectedFile.type, size: selectedFile.size, workspace_id: workspaceId });
       markFirstUpload();
       onImported();
       onClose();
@@ -98,11 +162,14 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
         setErrorText((detail as Record<string, unknown>).message as string);
       } else if (typeof detail === "string") {
         setErrorText(detail);
+      } else if (error instanceof Error) {
+        setErrorText(error.message);
       } else {
         setErrorText("Upload failed. Please try again.");
       }
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       if (fileRef.current) {
         fileRef.current.value = "";
       }
@@ -193,7 +260,24 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
           ))}
         </div>
         {errorText ? <p style={{ marginTop: 10, color: "var(--rd)", fontSize: 12 }}>{errorText}</p> : null}
-        {isUploading ? <p style={{ marginTop: 10, color: "var(--tx2)", fontSize: 12 }}>Uploading...</p> : null}
+        {isUploading ? (
+          <div style={{ marginTop: 10 }}>
+            <p style={{ color: "var(--tx2)", fontSize: 12, marginBottom: 4 }}>
+              {uploadProgress < 90 ? `Uploading… ${uploadProgress}%` : uploadProgress < 100 ? "Finalising…" : "Done!"}
+            </p>
+            <div style={{ height: 4, background: "var(--bd2)", borderRadius: 2, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${uploadProgress}%`,
+                  background: "var(--ac)",
+                  borderRadius: 2,
+                  transition: "width 0.15s ease",
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
           <button className="btn btn-primary" onClick={() => void uploadFile()} disabled={!selectedFile || !filePreview || isUploading || isValidating} style={{ marginRight: 8 }}>
             {isUploading ? "Uploading..." : isValidating ? "Validating…" : filePreview ? "Upload File" : "Select a file first"}

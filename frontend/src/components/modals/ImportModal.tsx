@@ -92,8 +92,15 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
       onImported();
       onClose();
     } catch (error: unknown) {
-      const maybeError = error as { response?: { data?: { detail?: string } } };
-      setErrorText(maybeError.response?.data?.detail ?? "Upload failed. Please try again.");
+      const maybeError = error as { response?: { data?: { detail?: unknown } } };
+      const detail = maybeError.response?.data?.detail;
+      if (detail && typeof detail === "object" && (detail as Record<string, unknown>).error === "file_too_large") {
+        setErrorText((detail as Record<string, unknown>).message as string);
+      } else if (typeof detail === "string") {
+        setErrorText(detail);
+      } else {
+        setErrorText("Upload failed. Please try again.");
+      }
     } finally {
       setIsUploading(false);
       if (fileRef.current) {

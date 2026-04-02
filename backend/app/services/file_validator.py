@@ -55,15 +55,9 @@ def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
     size_mb = round(len(file_bytes) / (1024 * 1024), 2)
     result = ValidationResult(valid=False, file_size_mb=size_mb)
 
-    # ── 1. File size ──────────────────────────────────────────────────────────
-    if size_mb > MAX_FILE_SIZE_MB:
-        result.error = (
-            f"This file is {size_mb}MB. Maximum is {MAX_FILE_SIZE_MB}MB. "
-            "Try splitting it into smaller files."
-        )
-        return result
-
-    # ── 2. File type ──────────────────────────────────────────────────────────
+    # ── 1. File type ──────────────────────────────────────────────────────────
+    # NOTE: File size is NOT checked here — it is a plan-tier concern enforced
+    # by the upload route after resolving the user's plan limits.
     if ext not in ALLOWED_EXTENSIONS:
         display_ext = ext or "(no extension)"
         result.error = (

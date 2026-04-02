@@ -200,13 +200,31 @@ async def upload_dataset(
     content = await file.read()
     # ── File validation: extension, magic bytes, size, encoding ──────────────
     from ..services.file_validator import validate_upload as _validate_upload
-    _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+    from ..services.plan_guard import limits_for_plan as _limits_for_plan
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="File is empty.")
-    if len(content) > _MAX_UPLOAD_BYTES:
+    _plan_limits = _limits_for_plan(user_plan)
+    _max_bytes = _plan_limits.max_file_size_bytes  # -1 means unlimited (Enterprise)
+    if _max_bytes > 0 and len(content) > _max_bytes:
+        _file_mb = round(len(content) / (1024 * 1024), 1)
+        _cap = _max_bytes
+        _limit_label = (
+            f"{_cap // (1024 ** 3)} GB" if _cap >= 1024 ** 3
+            else f"{round(_cap / (1024 * 1024))} MB"
+        )
         raise HTTPException(
             status_code=413,
-            detail=f"File exceeds the 50 MB limit ({len(content) // (1024 * 1024)} MB uploaded). Split the file and retry.",
+            detail={
+                "error": "file_too_large",
+                "message": (
+                    f"Your file is {_file_mb} MB. The {user_plan} plan supports "
+                    f"files up to {_limit_label}. For large files, Parquet format is 5\u201310\u00d7 "
+                    "smaller than CSV \u2014 convert with: df.to_parquet('file.parquet')"
+                ),
+                "file_size_mb": _file_mb,
+                "limit_label": _limit_label,
+                "plan": user_plan,
+            },
         )
     _vr = _validate_upload(content, file.filename or "")
     if not _vr.valid:
@@ -989,20 +1007,55 @@ def preview_dataset(
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # ── Live federation: query source DB, not stored rows ─────────────────
+    # ── Fast path: DuckDB reads only the requested page from Parquet ──────────
+    # This avoids loading all rows into RAM regardless of dataset size.
+    if meta.storage_path and getattr(meta, "import_mode", "cached") != "live":
+        try:
+            page_rows, total = DuckDBService.preview_page(
+                meta.storage_path,
+                offset=offset,
+                limit=limit,
+                allowed_columns=list(meta.columns or []),
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+                filter_col=filter_col,
+                filter_op=filter_op,
+                filter_val=filter_val,
+            )
+            # Avoid a full COUNT scan when no filter is active — use stored metadata
+            if not filter_col:
+                total = meta.row_count or total
+            return DatasetPage(
+                dataset_id=dataset_id,
+                columns=meta.columns,
+                offset=offset,
+                limit=limit,
+                rows=page_rows,
+                total_rows=total,
+            )
+        except Exception as exc:
+            logger.warning(
+                "DuckDB preview_page failed for %s, falling back to chunk path: %s",
+                dataset_id, exc,
+            )
+            # Fall through to chunk/live paths below
+
+    # ── Live federation path ───────────────────────────────────────────────────
     if getattr(meta, "import_mode", "cached") == "live":
         try:
             from ..services.live_dataset import LiveDatasetService
-            live_df = LiveDatasetService.get_live_data(meta, db)
-            df = live_df
+            df = LiveDatasetService.get_live_data(meta, db)
         except Exception as exc:
             raise HTTPException(
                 status_code=503,
                 detail=f"Source database unavailable for live dataset: {exc}",
             ) from exc
     else:
+        # ── Chunk / DB fallback — hard cap at 10K rows to prevent OOM ─────────
         df = get_dataset_from_db(dataset_id, db)
-    rows: list[dict] = df.to_dict(orient="records")
+
+    _PREVIEW_RAM_CAP = 10_000
+    rows: list[dict] = df.to_dict(orient="records")[:_PREVIEW_RAM_CAP]
 
     if filter_col and filter_op and filter_val is not None:
         def _matches(row: dict) -> bool:

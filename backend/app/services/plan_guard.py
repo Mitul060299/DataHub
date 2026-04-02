@@ -166,9 +166,25 @@ def enforce_file_constraints(
         )
 
     if limits.max_file_size_bytes > 0 and upload_size_bytes > limits.max_file_size_bytes:
+        _file_mb = round(upload_size_bytes / (1024 * 1024), 1)
+        _cap = limits.max_file_size_bytes
+        _limit_label = (
+            f"{_cap // (1024 ** 3)} GB" if _cap >= 1024 ** 3
+            else f"{round(_cap / (1024 * 1024))} MB"
+        )
         raise HTTPException(
             status_code=413,
-            detail=f"Upload size exceeds {normalize_plan(plan)} plan file limit.",
+            detail={
+                "error": "file_too_large",
+                "message": (
+                    f"Your file is {_file_mb} MB. The {normalize_plan(plan)} plan supports "
+                    f"files up to {_limit_label}. For large files, Parquet format is 5\u201310\u00d7 "
+                    "smaller than CSV \u2014 convert with: df.to_parquet('file.parquet')"
+                ),
+                "file_size_mb": _file_mb,
+                "limit_label": _limit_label,
+                "plan": plan,
+            },
         )
 
     dataset_count = (

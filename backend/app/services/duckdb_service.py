@@ -83,7 +83,80 @@ class DuckDBService:
         return {"rows": rows, "columns": columns}
 
     @classmethod
-    def query_rows(cls, rows: list[dict[str, Any]], query: str, dataset_id: str | None = None) -> list[dict[str, Any]]:
+    def preview_page(
+        cls,
+        storage_path: str,
+        offset: int,
+        limit: int,
+        allowed_columns: list[str] | None = None,
+        sort_by: str | None = None,
+        sort_dir: str = "asc",
+        filter_col: str | None = None,
+        filter_op: str | None = None,
+        filter_val: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """
+        Return (page_rows, total_matching_rows) for a Parquet file via DuckDB.
+
+        Column name inputs are validated against allowed_columns before being
+        embedded in SQL.  Filter values are passed via DuckDB parameter binding
+        (never interpolated) to prevent injection.  At most `limit` rows ever
+        reach Python memory.
+        """
+        import duckdb as _duckdb  # noqa: PLC0415
+        connection = cls._ensure_db()
+        file_path = StorageService.get_query_path(storage_path)
+
+        # Validate column names — strip any quoting/special chars, then check
+        # against the known schema so nothing untrusted reaches the SQL string.
+        def _safe_col(name: str | None) -> str | None:
+            if not name:
+                return None
+            clean = re.sub(r'["\';\\]', "", name)
+            if allowed_columns is not None and clean not in allowed_columns:
+                return None
+            return clean
+
+        safe_filter_col = _safe_col(filter_col)
+        safe_sort_col = _safe_col(sort_by)
+
+        # Build parameterised WHERE clause
+        where_sql = ""
+        params: list[Any] = []
+        if safe_filter_col and filter_op and filter_val is not None:
+            col_expr = f'"{safe_filter_col}"'
+            if filter_op == "contains":
+                where_sql = f"WHERE LOWER(CAST({col_expr} AS VARCHAR)) LIKE LOWER(?)"
+                params.append(f"%{filter_val}%")
+            elif filter_op == "eq":
+                where_sql = f"WHERE CAST({col_expr} AS VARCHAR) = ?"
+                params.append(str(filter_val))
+            elif filter_op == "gt":
+                where_sql = f"WHERE TRY_CAST({col_expr} AS DOUBLE) > ?"
+                params.append(float(filter_val))
+            elif filter_op == "lt":
+                where_sql = f"WHERE TRY_CAST({col_expr} AS DOUBLE) < ?"
+                params.append(float(filter_val))
+
+        order_sql = ""
+        if safe_sort_col:
+            direction = "DESC" if (sort_dir or "asc").lower() == "desc" else "ASC"
+            order_sql = f'ORDER BY "{safe_sort_col}" {direction} NULLS LAST'
+
+        base_from = f"FROM read_parquet('{file_path}') {where_sql}"
+        guarded_from = guard_duckdb_sql_paths(base_from, allowed_paths=[file_path])
+
+        # Count (only when filtering; caller should pass meta.row_count otherwise)
+        count_result = connection.execute(f"SELECT COUNT(*) {guarded_from}", params).fetchone()
+        total = int(count_result[0]) if count_result else 0
+
+        # Data page
+        data_sql = f"SELECT * {guarded_from} {order_sql} LIMIT ? OFFSET ?"
+        result = connection.execute(data_sql, params + [int(limit), int(offset)])
+        columns = [col[0] for col in result.description]
+        rows = [dict(zip(columns, row)) for row in result.fetchall()]
+
+        return rows, total
         connection = cls._ensure_db()
         dataset_df = pd.DataFrame(rows or [])
         view_name = "dataset_rows"

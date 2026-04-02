@@ -134,10 +134,13 @@ class LiveDatasetService:
                     raise ValueError(
                         f"Live dataset {dataset_meta.id} has no table or query in connector_config"
                     )
+                # Cap preview fetches — the fold optimizer handles analytical
+                # pipeline queries via pushdown, so this cap only affects the
+                # raw table preview shown in the grid.
                 if schema and connector_type not in ("sqlite",):
-                    sql = f"SELECT * FROM {schema}.{table}"
+                    sql = f'SELECT * FROM "{schema}"."{table}" LIMIT 10000'
                 else:
-                    sql = f"SELECT * FROM {table}"
+                    sql = f'SELECT * FROM "{table}" LIMIT 10000'
 
         # --- Execute against source ---
         logger.info(

@@ -14,6 +14,7 @@ interface PlanCardProps {
   pending: boolean;
   approved?: boolean;
   rejected?: boolean;
+  sending?: boolean;
   onApprove: () => void;
   onReject: () => void;
 }
@@ -23,6 +24,7 @@ export default function PlanCard({
   pending,
   approved,
   rejected,
+  sending,
   onApprove,
   onReject,
 }: PlanCardProps) {
@@ -78,10 +80,10 @@ export default function PlanCard({
 
       {pending ? (
         <div data-tour="approve-button" style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button className="btn" onClick={onApprove}>
-            ✓ Approve & Run
+          <button className="btn" onClick={onApprove} disabled={sending} style={sending ? { opacity: 0.6, cursor: "not-allowed" } : undefined}>
+            {sending ? "Running…" : "✓ Approve & Run"}
           </button>
-          <button className="btn" onClick={onReject}>
+          <button className="btn" onClick={onReject} disabled={sending}>
             ✕ Reject
           </button>
         </div>

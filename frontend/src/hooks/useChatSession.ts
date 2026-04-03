@@ -62,6 +62,7 @@ export function useChatSession() {
     onEvent?: (event: AgentEvent) => void;
     onRunCompleted?: (runId: string | null) => void;
   }) => {
+    if (sending) return;
     setSending(true);
     try {
       const sid = sessionId || crypto.randomUUID();

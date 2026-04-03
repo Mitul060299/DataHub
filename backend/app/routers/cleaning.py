@@ -45,7 +45,7 @@ def analyze_dataset(
 
 
 @router.post("/datasets/{dataset_id}/chat", response_class=StreamingResponse)
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 async def process_command(
     request: Request,
     dataset_id: str,

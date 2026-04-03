@@ -667,6 +667,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   };
 
   const approvePlan = () => {
+    if (sending) return;
     const latestUserPrompt = [...messages]
       .reverse()
       .find((message) => message.role === "user")
@@ -906,6 +907,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                   pending={Boolean(message.planPending)}
                   approved={message.planApproved}
                   rejected={message.planRejected}
+                  sending={sending}
                   onApprove={approvePlan}
                   onReject={rejectPlan}
                 />

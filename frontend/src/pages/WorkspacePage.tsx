@@ -32,9 +32,10 @@ export function WorkspacePage() {
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [sampleUrl, setSampleUrl] = useState<string | undefined>(undefined);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
   const [explorerSearchFocusNonce, setExplorerSearchFocusNonce] = useState(0);
-  const [explorerWidth, setExplorerWidth] = useState(280);
+  const [explorerWidth, setExplorerWidth] = useState(() => Number(localStorage.getItem("explorerWidth") ?? 280));
   const [resizingExplorer, setResizingExplorer] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -80,6 +81,7 @@ export function WorkspacePage() {
       const activityBarWidth = 52;
       const nextWidth = Math.max(minWidth, Math.min(maxWidth, event.clientX - activityBarWidth));
       setExplorerWidth(nextWidth);
+      localStorage.setItem("explorerWidth", String(nextWidth));
     };
 
     const stopResizing = () => setResizingExplorer(false);
@@ -166,7 +168,7 @@ export function WorkspacePage() {
           setDatasetRefreshNonce((value) => value + 1);
         }}
       />
-      <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />
+      <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
@@ -177,8 +179,9 @@ export function WorkspacePage() {
       {welcomeOpen && (
         <WelcomeModal
           onClose={() => { setWelcomeOpen(false); }}
-          onUploadSample={(_url) => {
+          onUploadSample={(url) => {
             setWelcomeOpen(false);
+            setSampleUrl(url);
             setImportOpen(true);
           }}
         />

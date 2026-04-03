@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { useChatSession, type AgentEvent, type ConversationMessage, type PlanStep, type TransformationPayload } from "../hooks/useChatSession";
@@ -13,6 +14,7 @@ import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
 import { type ColSchema } from "./SuggestionChips";
 import { capture } from "../lib/posthog";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
+import { notify } from "../utils/notify";
 
 interface TileCreatedData {
   chart_id: string;
@@ -202,7 +204,9 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   const { addStep, steps } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
-  const { sendMessage, sending, resetSession } = useChatSession();
+  const { sendMessage, sending, resetSession, cancelMessage } = useChatSession();
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -220,6 +224,19 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
       .catch(() => { if (!cancelled) setColumnSchema([]); });
     return () => { cancelled = true; };
   }, [dataset?.id]);
+
+  // Press "/" anywhere (when not typing in an input) to focus the AI input
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "/") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      textareaRef.current?.focus();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
 
@@ -792,7 +809,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               />
             ) : (
             <div style={{ border: "1px solid var(--bd2)", background: message.role === "user" ? "var(--acg)" : "var(--bg2)", borderRadius: "var(--r8)", padding: 8 }}>
-              <p>{message.content}</p>
+              <div className="ai-message-body"><ReactMarkdown>{message.content}</ReactMarkdown></div>
               {message.transformation ? (
                 <StepCard
                   operation={message.transformation.operation}
@@ -840,7 +857,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                             setSavedVizIds((prev) => new Set([...prev, chartId]));
                             window.dispatchEvent(new CustomEvent("datahub:visualizations:refresh"));
                           } catch {
-                            // silently allow retry
+                            notify.error("Failed to save chart. Please try again.");
                           } finally {
                             setSavingVizIds((prev) => { const n = new Set(prev); n.delete(chartId); return n; });
                           }
@@ -942,23 +959,47 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
           </div>
         ))}
         {sending ? (
-          <div style={{ display: "inline-flex", gap: 4, alignItems: "center", color: "var(--tx1)" }}>
+          <div style={{ display: "inline-flex", gap: 8, alignItems: "center", color: "var(--tx1)" }}>
             <span>Thinking</span>
             <span className="dot-bounce" />
             <span className="dot-bounce" style={{ animationDelay: "0.14s" }} />
             <span className="dot-bounce" style={{ animationDelay: "0.28s" }} />
             <style>{`.dot-bounce{width:6px;height:6px;border-radius:99px;background:var(--tx1);display:inline-block;animation:dotBounce 0.8s infinite ease-in-out;}@keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-4px);opacity:1}}`}</style>
+            <button
+              onClick={cancelMessage}
+              title="Stop generation"
+              style={{
+                marginLeft: 6,
+                background: "transparent",
+                border: "1px solid var(--bd2)",
+                borderRadius: 6,
+                color: "var(--tx2)",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "2px 8px",
+                lineHeight: 1.4,
+              }}
+            >
+              ■ Stop
+            </button>
           </div>
         ) : null}
       </div>
 
       <div style={{ borderTop: "1px solid var(--bd)", padding: 10 }}>
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="Ask the AI agent..."
-          rows={2}
-          style={{ width: "100%", resize: "none", border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8 }}
+          placeholder="Ask the AI agent… (press / to focus)"
+          rows={1}
+          style={{ width: "100%", resize: "none", border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8, minHeight: 36, maxHeight: 160, overflowY: "auto", boxSizing: "border-box" }}
+          onInput={(event) => {
+            const el = event.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();

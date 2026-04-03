@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api, validateFile } from "../../api";
 import { capture } from "../../lib/posthog";
 import { useUser } from "../../contexts/UserContext";
@@ -8,6 +8,7 @@ interface ImportModalProps {
   workspaceId?: string;
   onClose: () => void;
   onImported: () => void;
+  preloadUrl?: string;
 }
 
 type SourceType = "file";
@@ -27,7 +28,7 @@ interface FilePreview {
 }
 
 
-export function ImportModal({ open, workspaceId, onClose, onImported }: ImportModalProps) {
+export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl }: ImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const { markFirstUpload } = useUser();
   const [isUploading, setIsUploading] = useState(false);
@@ -38,6 +39,40 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [sourceType] = useState<SourceType>("file");
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
+
+  // Auto-load a sample file when preloadUrl is provided
+  useEffect(() => {
+    if (!preloadUrl || !open) return;
+    void (async () => {
+      try {
+        const res = await fetch(preloadUrl);
+        if (!res.ok) throw new Error("Failed to fetch sample");
+        const blob = await res.blob();
+        const filename = preloadUrl.split("/").pop() ?? "sample.csv";
+        const file = new File([blob], filename, { type: blob.type || "text/csv" });
+        setSelectedFile(file);
+        setFilePreview(null);
+        setErrorText(null);
+        setDatasetName(filename.replace(/\.[^/.]+$/, "") || filename);
+        setIsValidating(true);
+        try {
+          const preview = await validateFile(file);
+          setFilePreview(preview);
+        } catch (err: unknown) {
+          const maybeErr = err as { response?: { data?: { detail?: { message?: string } | string } } };
+          const raw = maybeErr?.response?.data?.detail;
+          const msg = raw && typeof raw === "object" ? raw.message : (typeof raw === "string" ? raw : "File validation failed.");
+          setErrorText(msg ?? "File validation failed.");
+          setSelectedFile(null);
+        } finally {
+          setIsValidating(false);
+        }
+      } catch {
+        setErrorText("Failed to load sample file.");
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preloadUrl, open]);
 
   if (!open) return null;
 

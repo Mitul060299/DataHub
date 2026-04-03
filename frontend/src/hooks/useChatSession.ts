@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getAuthToken } from "../utils/auth";
 
 export type ConversationMessage = {
@@ -47,6 +47,7 @@ export function useChatSession() {
   const [sessionId, setSessionId] = useState<string>("");
   const [sending, setSending] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = async (payload: {
     message: string;
@@ -66,6 +67,9 @@ export function useChatSession() {
       const token = getAuthToken();
       if (!sessionId) setSessionId(sid);
 
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const response = await fetch(`/api/cleaning/datasets/${payload.dataset_id}/chat`, {
         method: "POST",
         headers: {
@@ -73,6 +77,7 @@ export function useChatSession() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(payload.workspace_id ? { "X-Workspace-Id": payload.workspace_id } : {}),
         },
+        signal: controller.signal,
         body: JSON.stringify({
           message: payload.message,
           session_id: sid,
@@ -117,7 +122,14 @@ export function useChatSession() {
       const suppressPlanEvents = Boolean(payload.plan_approved);
 
       while (true) {
-        const { done, value } = await reader.read();
+        let done: boolean;
+        let value: Uint8Array | undefined;
+        try {
+          ({ done, value } = await reader.read());
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") break;
+          throw err;
+        }
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -172,7 +184,12 @@ export function useChatSession() {
       } satisfies ChatResponsePayload;
     } finally {
       setSending(false);
+      abortRef.current = null;
     }
+  };
+
+  const cancelMessage = () => {
+    abortRef.current?.abort();
   };
 
   const resetSession = () => {
@@ -180,5 +197,5 @@ export function useChatSession() {
     setRunId(null);
   };
 
-  return { sessionId, runId, sending, sendMessage, resetSession };
+  return { sessionId, runId, sending, sendMessage, resetSession, cancelMessage };
 }

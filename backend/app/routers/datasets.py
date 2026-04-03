@@ -148,6 +148,28 @@ def _ensure_dataset_meta_schema(db: Session) -> None:
 
 # ── File validation endpoint ──────────────────────────────────────────────────
 
+@router.get("/export/sheets-config")
+def get_sheets_export_config(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Return the Google service-account email so the frontend can show a 'share with' hint.
+    The full JSON secret is never exposed — only the client_email field."""
+    require_role("viewer", get_current_role(authorization))
+    email = settings.google_service_account_email
+    if not email and settings.google_service_account_json:
+        # Parse the email from the JSON if an explicit override is not set
+        import json, base64 as _b64  # noqa: E401
+        try:
+            try:
+                sa_info = json.loads(settings.google_service_account_json)
+            except json.JSONDecodeError:
+                sa_info = json.loads(_b64.b64decode(settings.google_service_account_json).decode("utf-8"))
+            email = sa_info.get("client_email", "")
+        except Exception:
+            email = ""
+    return {"service_account_email": email}
+
+
 @router.post("/validate")
 @limiter.limit("30/minute")
 async def validate_file(

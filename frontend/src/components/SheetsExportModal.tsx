@@ -10,7 +10,7 @@
  *  - Success state with a "Connect Looker Studio" hint
  */
 import { useState, useEffect } from "react";
-import { exportDatasetToSheets } from "../api";
+import { exportDatasetToSheets, getSheetsExportConfig } from "../api";
 
 interface Props {
   datasetId: string;
@@ -29,6 +29,16 @@ export function SheetsExportModal({ datasetId, datasetName, serviceAccountEmail,
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ rows_written: number; spreadsheet_url: string; sheet_name: string } | null>(null);
+  const [saEmail, setSaEmail] = useState<string>(serviceAccountEmail ?? "");
+
+  // Fetch SA email from backend config on first open (prop takes priority)
+  useEffect(() => {
+    if (!serviceAccountEmail) {
+      getSheetsExportConfig()
+        .then((cfg) => { if (cfg.service_account_email) setSaEmail(cfg.service_account_email); })
+        .catch(() => { /* non-fatal */ });
+    }
+  }, [serviceAccountEmail]);
 
   // Persist URL per dataset
   useEffect(() => {
@@ -163,7 +173,7 @@ export function SheetsExportModal({ datasetId, datasetName, serviceAccountEmail,
         ) : (
           /* ── Form state ── */
           <form onSubmit={(e) => void handleSubmit(e)}>
-            {serviceAccountEmail && (
+            {saEmail && (
               <div style={{
                 background: "#111320",
                 border: "1px solid #2a2d3a",
@@ -173,7 +183,7 @@ export function SheetsExportModal({ datasetId, datasetName, serviceAccountEmail,
               }}>
                 <p style={{ margin: 0, fontSize: 12, color: "#9898b0" }}>
                   Share your Google Sheet with{" "}
-                  <strong style={{ color: "#e8e8f0", wordBreak: "break-all" }}>{serviceAccountEmail}</strong>
+                  <strong style={{ color: "#e8e8f0", wordBreak: "break-all" }}>{saEmail}</strong>
                   {" "}(Editor access required).
                 </p>
               </div>

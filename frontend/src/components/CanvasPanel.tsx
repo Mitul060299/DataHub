@@ -75,7 +75,9 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns,
     }
   }, [dataset]);
 
-  const rowCount = dataset?.row_count;
+  // dataset.rows is the authoritative count (always set by setActiveDataset callers)
+  // dataset.row_count is the new optional field; fall back to rows if not present
+  const rowCount = dataset?.rows ?? dataset?.row_count ?? null;
 
   return (
     <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>

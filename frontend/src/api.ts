@@ -584,6 +584,11 @@ export async function exportDatasetToSheets(
   return response.data as { rows_written: number; spreadsheet_url: string; sheet_name: string };
 }
 
+export async function getSheetsExportConfig(): Promise<{ service_account_email: string }> {
+  const response = await api.get("/datasets/export/sheets-config");
+  return response.data as { service_account_email: string };
+}
+
 export async function fetchDatasetPage(
   datasetId: string,
   offset: number,

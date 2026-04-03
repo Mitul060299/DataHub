@@ -155,6 +155,8 @@ class Settings(BaseModel):
     live_dataset_ttl_seconds: int = int(os.getenv("LIVE_DATASET_TTL_SECONDS", "300"))
     # Google service-account JSON for Sheets sync (base64-encoded or raw JSON string)
     google_service_account_json: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    # Explicit SA email override — if blank, the email is parsed from the JSON at runtime
+    google_service_account_email: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
 
 
 settings = Settings()

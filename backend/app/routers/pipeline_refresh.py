@@ -10,7 +10,6 @@ NOTE: POST /{pipeline_id}/run and GET /{pipeline_id}/runs are handled
 by pipeline_workflows.py (registered earlier with same prefix) and are
 not duplicated here.
 """
-from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

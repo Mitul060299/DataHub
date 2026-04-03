@@ -1,5 +1,4 @@
 """Reviews router — public POST to submit, public GET to read approved reviews."""
-from __future__ import annotations
 
 import logging
 

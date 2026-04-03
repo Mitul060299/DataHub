@@ -6,7 +6,6 @@ CRUD + download + session-load endpoints for persisted pipeline artifacts.
 All endpoints are user-scoped (filter by user_id from JWT).
 Presigned URLs are generated fresh on every response — never stored.
 """
-from __future__ import annotations
 
 import io
 import logging

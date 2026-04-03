@@ -6,7 +6,6 @@ CRUD endpoints for user-scoped projects, plus a workspace-recent feed.
 All endpoints are protected by get_current_user and filter by user_id —
 consistent with every other router in the codebase (no Postgres RLS).
 """
-from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

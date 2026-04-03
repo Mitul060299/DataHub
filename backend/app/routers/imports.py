@@ -1,4 +1,3 @@
-from __future__ import annotations
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse

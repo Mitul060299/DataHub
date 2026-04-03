@@ -4,7 +4,6 @@ Charts are only persisted when the user explicitly clicks "Save to Visualization
 in the AI Agent panel. Ephemeral charts (not saved) are never written here.
 """
 
-from __future__ import annotations
 
 import uuid
 from typing import Any

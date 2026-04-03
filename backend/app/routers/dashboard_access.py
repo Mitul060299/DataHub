@@ -1,5 +1,4 @@
 """Router for dashboard access control, sharing, and audit views."""
-from __future__ import annotations
 
 import secrets
 from datetime import datetime, timezone

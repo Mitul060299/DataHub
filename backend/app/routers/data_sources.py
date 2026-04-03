@@ -11,7 +11,6 @@ DELETE /api/sources/{id}        — soft delete (is_active=False)
 POST   /api/sources/{id}/test   — validate connection, return 5-row preview
 GET    /api/sources/{id}/pipelines — pipelines that reference this source
 """
-from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

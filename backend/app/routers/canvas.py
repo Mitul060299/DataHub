@@ -4,7 +4,6 @@ Canvas layouts belong to a project and are counted against the per-plan limit.
 Visualizations (saved charts) are unlimited; only layouts are gated.
 """
 
-from __future__ import annotations
 
 import uuid
 from typing import Any

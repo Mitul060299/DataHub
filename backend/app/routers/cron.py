@@ -6,7 +6,6 @@ Protected by X-Cron-Secret header (not user auth).
 
 GET /api/cron/run-scheduled-pipelines
 """
-from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone

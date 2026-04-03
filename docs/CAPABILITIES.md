@@ -101,9 +101,19 @@ All operations available via NL pipeline editing and the visual step builder:
 - Auto-actions from insights ✅ (missing + duplicates fixes)
 - Auto-apply recipes ✅
 - Learn from feedback 🟡 (feedback collection API)
-- Conversational interface ✅ (dataset chat endpoint + UI)
+- Conversational interface ✅ (streaming SSE chat + Markdown rendering)
 - NL pipeline editing ✅ — 30+ supported operations; schema-aware; auto-retry on LLM parse failure
 - LangGraph agent state machine ✅ — 8-node graph (context_loader → intent_classifier → planner → plan_presenter → execute_step → reflect → pipeline_recorder → responder)
+- Multi-turn conversation memory ✅ — full `conversation_history` threaded through the agent stack; LangChain `HumanMessage`/`AIMessage` history prepended to every request
+- Live per-step streaming progress ✅ — `agent.step.start` SSE event emitted before each `execute_step` node; frontend shows "Step N/M: operation" in real time
+- Schema-aware converse ✅ — `converse` intent receives active dataset schema so questions like “what columns do I have?” get accurate answers
+- Cheaper intent classifier ✅ — `llama-3.1-8b-instant` (via `GROQ_INTENT_MODEL`) used for single-token intent classification; 70B only used for planning/execution
+- Richer SQL repair ✅ — `reflect` node receives column stats + failed operation name alongside schema for more targeted SQL rewrites
+- Secondary dataset picker ✅ — UI “＋ Join” button lets users select additional datasets; `secondary_dataset_ids` forwarded to the agent for JOIN/UNION steps
+- Expand query results ✅ — query result tables show first 20 rows with a “Show all / Show less” toggle
+- Copy SQL from plan steps ✅ — each step in the execution plan has a “Copy” button with a ✓ confirmation flash
+- Stop generation ✅ — “■ Stop” button aborts the SSE stream via `AbortController`
+- Rate-limited chat ✅ — `/cleaning/datasets/{id}/chat` limited to 20 requests/minute per user
 
 ## 7. Analytics & Visualizations
 - Summary charts ✅
@@ -123,11 +133,26 @@ All operations available via NL pipeline editing and the visual step builder:
 - Widget theming ✅
 - Dashboard comments ✅ (GET/POST/DELETE /api/dashboards/{id}/comments with auth)
 
-## 8. Query Folding & Write-Back
+## 8. AI Chat UX
+- Streaming SSE chat with live typing indicator ✅
+- Markdown rendering in AI responses (bold, lists, code blocks) ✅
+- Auto-grow textarea (expands up to 160 px, no manual resize) ✅
+- Stop generation button (aborts SSE stream via `AbortController`) ✅
+- Live per-step progress indicator while agent executes (shows "Step N/M: operation") ✅
+- Secondary dataset picker — "＋ Join" header button pre-loads datasets for JOIN steps ✅
+- Query result tables with "Show all / Show less" toggle (default: first 20 rows) ✅
+- Copy SQL button on each plan step with ✓ confirmation flash ✅
+- Follow-up suggestion chips after each AI response ✅
+- Data quality report inline in chat ✅
+- Chart rendering inline in chat (with ☁ Save to Visualizations button) ✅
+- `/` keyboard shortcut focuses AI chat input from anywhere on the page ✅
+- Explorer panel width drag-to-resize persisted to `localStorage` ✅
+
+## 9. Query Folding & Write-Back
 - Query folding ✅ — QueryFoldOptimizer collapses compatible pipeline steps into fewer DuckDB SQL queries
 - Write-back ✅ — POST /api/pipelines/{id}/write-back; encrypted connector credentials; DML execution
 
-## 9. Collaboration & Automation
+## 10. Collaboration & Automation
 - Webhooks ✅
 - Scheduled jobs 🟡 (database-backed store; no runner yet)
 - Approval workflows ✅
@@ -150,14 +175,14 @@ All operations available via NL pipeline editing and the visual step builder:
 - Notification preferences ✅ (GET/PUT /users/me/notification-preferences; 3 toggles)
 - Projects ✅ (user-scoped project grouping for pipelines, dashboards, data sources)
 
-## 10. Extensibility & Integration
+## 11. Extensibility & Integration
 - REST API ✅
 - Plugin framework ✅
 - External connectors ✅ (Supabase, SQL, Sheets, Excel, HTTP CSV)
 - Two-way sync ✅
 - Schema comparison API ✅ — GET /datasets/compare-schemas?ids=id1,id2
 
-## 11. Security & Compliance
+## 12. Security & Compliance
 - Audit viewer UI ✅ (settings page with pagination + filter)
 - Per-user audit log API ✅ (GET /users/me/audit-log; paginated, filterable)
 - Role-based access ✅ (viewer/editor/admin)
@@ -166,20 +191,20 @@ All operations available via NL pipeline editing and the visual step builder:
 - File upload validation ✅ (format allowlist, MIME check, content sniff)
 - Usage enforcement ✅ (hard limits per plan; 429 on exceed)
 
-## 12. Billing & Monetisation
+## 13. Billing & Monetisation
 - Pricing tiers ✅ (Free / Professional / Team / Business / Enterprise)
 - Razorpay integration ✅ (plans, subscriptions, HMAC-verified webhooks)
 - Usage tracking ✅ (user_usage table, monthly period buckets)
 - Plan limit enforcement ✅ (API calls, pipeline runs, datasets, storage)
 - Usage UI ✅ (settings page usage panel with progress bars)
 
-## 13. Community & Feedback
+## 14. Community & Feedback
 - Homepage feedback form ✅ (POST /feedback; name, email, subject, message)
 - Feedback email notifications ✅ (sent to owner via Resend on submission)
 - User reviews ✅ (POST /api/reviews; star rating 1–5; owner-approved before display)
 - Reviews homepage section ✅ (public display of approved reviews + submit form)
 
-## 14. Deployment & DevOps
+## 15. Deployment & DevOps
 - Docker Compose ✅
 - Helm placeholders ✅
 - CI build ✅

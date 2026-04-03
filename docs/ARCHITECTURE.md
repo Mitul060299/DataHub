@@ -10,7 +10,9 @@ Current production stack:
 - **Cache:** Redis (Upstash in managed deployments via `REDIS_URL`)
 - **SQL analytics engine:** in-process DuckDB
 - **Object storage:** Amazon S3 (default storage provider)
-- **LLM provider:** Groq (`llama-3.3-70b-versatile`) via httpx — AI agent, NL pipeline editing
+- **LLM provider:** Groq — two models in use:
+  - `llama-3.3-70b-versatile` (default, `GROQ_MODEL`) — planner, executor, responder, reflect
+  - `llama-3.1-8b-instant` (default, `GROQ_INTENT_MODEL`) — intent classifier (single-token output, cost-optimised)
 - **Fuzzy string matching:** rapidfuzz ≥ 3.5.0 — used by `fuzzy_deduplicate` pipeline operation
 - **CSV parsing:** Python stdlib `csv.Sniffer` — auto-detects delimiter (`,` / `\t` / `;` / `|` / `:`) and chardet for encoding conversion
 - **Transactional email:** Resend — pipeline complete, usage warnings, weekly digest, feedback notifications
@@ -49,9 +51,10 @@ Current production stack:
 - Serves signed URLs for query/read operations.
 
 ### Groq LLM (via httpx)
-- Powers the AI chat agent (`POST /agents/chat/{dataset_id}`).
+- Powers the AI chat agent (`POST /cleaning/datasets/{dataset_id}/chat` — streaming SSE).
 - Powers NL pipeline editing (`POST /api/pipelines/{id}/nl-edit`): accepts a plain-English prompt and returns rewritten pipeline steps (JSON-mode, rate-limited 15/min).
-- Model: `llama-3.3-70b-versatile`.
+- Main model: `llama-3.3-70b-versatile` (env: `GROQ_MODEL`).
+- Intent classifier model: `llama-3.1-8b-instant` (env: `GROQ_INTENT_MODEL`) — cheaper single-token classification.
 
 ### AI Agent — LangGraph State Machine
 The agent is a compiled LangGraph `StateGraph` defined in `backend/app/services/agent/graph.py`.
@@ -61,13 +64,15 @@ The agent is a compiled LangGraph `StateGraph` defined in `backend/app/services/
 | Node | File | Role |
 |---|---|---|
 | `context_loader` | `nodes/context_loader.py` | Entry point — loads dataset schema, glossary, and workspace context into state |
-| `intent_classifier` | `nodes/intent_classifier.py` | Classifies the user turn into one of: `clean`, `filter`, `transform`, `add_column`, `pivot`, `union`, `join`, `reconcile`, `sql_query`, `visualise`, `export`, `validate`, `summarise`, `converse` |
+| `intent_classifier` | `nodes/intent_classifier.py` | Classifies the user turn into one of 14 intents using `llama-3.1-8b-instant` |
 | `planner` | `nodes/planner.py` | Generates an ordered plan of execution steps from the intent + context |
 | `plan_presenter` | `nodes/plan_presenter.py` | Presents the plan to the user and awaits approval (gate) |
-| `execute_step` | `nodes/execute_step.py` | Executes one step of the plan via DuckDB / pandas |
-| `reflect` | `nodes/reflect.py` | Reviews execution output; decides to retry, continue, or abort |
+| `execute_step` | `nodes/execute_step.py` | Executes one step of the plan via DuckDB / pandas; emits `agent.step.start` SSE before each step |
+| `reflect` | `nodes/reflect.py` | On SQL failure: receives schema, column stats, operation name, and error to rewrite the SQL |
 | `pipeline_recorder` | `nodes/pipeline_recorder.py` | Persists the completed pipeline steps to `pipelines_v2` |
-| `responder` | `nodes/responder.py` | Formats the final response sent to the client |
+| `responder` | `nodes/responder.py` | Formats the final response; `converse` intent includes active dataset schema so column questions get accurate answers |
+
+**Conversation memory:** `conversation_history` (list of `{role, content}` turns) is sent by the frontend, threaded through `CleaningController` and `AgentGraphService`, and prepended to the LangGraph `messages` state as `HumanMessage`/`AIMessage` objects before each request.
 
 **Conditional edge routers** (in `edges.py`):
 
@@ -113,7 +118,11 @@ Entry point: `context_loader`. Terminal: `responder → END`.
 ## Security and Operations
 - **Authentication:** Supabase JWT (configurable OIDC).
 - **Authorisation:** backend-enforced RBAC (viewer/editor/admin).
-- **Rate limiting:** slowapi — per-IP limits on all endpoints; stricter limits on upload and LLM routes.
+- **Rate limiting:** slowapi — per-user (JWT sub) or per-IP fallback; stricter limits on upload, LLM, and AI chat routes.
+  - Default: 60/min
+  - Upload: 10/min
+  - NL pipeline edit: 15/min
+  - AI chat SSE (`/cleaning/datasets/{id}/chat`): 20/min
 - **File validation:** format allowlist, MIME check, content sniff on every upload; `csv.Sniffer` for delimiter detection; chardet for encoding detection and UTF-8 conversion.
 - **Audit trail:** all POST/PUT/DELETE events captured; per-user audit log API + settings UI.
 - **Observability:** `/metrics` (Prometheus); optional Grafana stack.

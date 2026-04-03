@@ -52,8 +52,24 @@ Use the sample CSV in samples/customers.csv to test uploads and profiling.
 - Users, workspaces, dashboards, contexts, and dataset metadata are stored in Postgres.
 - Run migrations with Alembic when you are ready to manage schema versions.
 
-## LLM Suggestions (Optional)
-- Set LLM_PROVIDER=groq and GROQ_API_KEY in .env to enable LLM suggestions and NL pipeline editing.
+## AI Chat Agent
+The AI Agent panel is available on every dataset page. Type a request in plain English and the agent will classify your intent, generate an execution plan, and execute it step by step.
+
+**Tips:**
+- Press `/` anywhere on the page (not in an input) to instantly focus the AI chat input.
+- The agent remembers your conversation history within a session — you can follow up naturally (e.g. “now filter those results”).
+- The live step indicator shows “Step N/M: operation” as each step runs so you know what the agent is doing.
+- When a plan is shown, review it and click **✓ Approve & Run** to execute, or **✕ Reject** to discard it.
+- Click **Copy** on any plan step’s SQL block to copy it to your clipboard.
+- Click **■ Stop** at any time to abort the current stream.
+- For JOIN or UNION queries, click **‚Äú Join** in the header to select additional datasets to make available to the agent.
+- Query result tables show the first 20 rows; click **Show all** to expand.
+- AI responses support Markdown formatting.
+
+## LLM Configuration
+- Set `GROQ_API_KEY` in `.env` to enable the AI agent and NL pipeline editing.
+- `GROQ_MODEL` — model used for planning, execution, and responses. Default: `llama-3.3-70b-versatile`.
+- `GROQ_INTENT_MODEL` — model used for intent classification only. Default: `llama-3.1-8b-instant` (faster and cheaper than the 70B model).
 
 ## RBAC (Scaffold)
 - Use /auth/login?username=...&role=editor to get a token for editor actions.

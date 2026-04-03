@@ -47,9 +47,21 @@
 - **Live dataset federation** — LiveDatasetService queries DB/API connectors in real time; results cached with TTL
 - **DB connectors live** — PostgreSQL, MySQL, SQLite, MSSQL, Oracle (Professional); Snowflake, Redshift, BigQuery (Team)
 - **Surgical mid-pipeline step undo** — individual step removal preserves surrounding steps and re-runs lineage
-- **134 automated tests** — 40 original + 94 new workstream tests; 100% passing
+- **308 automated tests** — 100% passing
 
-## Phase 7 - Enterprise Hardening ➕ Planned
+## Phase 7 - AI Agent Enrichment ✅ Complete
+- **Multi-turn conversation memory** — full `conversation_history` list threaded through the entire stack (router → controller → service → LangGraph state); prior turns prepended as `HumanMessage`/`AIMessage` objects
+- **Live per-step streaming** — `agent.step.start` SSE event emitted before every `execute_step` node with step number, operation, and total steps; frontend shows live progress indicator
+- **Schema-aware converse** — `converse` intent includes active dataset schema in the system prompt so column questions are answered accurately
+- **Rate-limited AI chat** — `/cleaning/datasets/{id}/chat` protected at 20 requests/minute per user (slowapi)
+- **Cost-optimised intent classifier** — `llama-3.1-8b-instant` (`GROQ_INTENT_MODEL`) for single-token intent classification; 70B model reserved for planning and execution
+- **Richer SQL reflection** — `reflect` node includes column statistics and failed operation name in the repair prompt for more targeted SQL rewrites
+- **Secondary dataset picker** — “＋ Join” button in AI panel header; workspace datasets loaded and rendered as chip toggle; `secondary_dataset_ids` sent to the agent
+- **Expand query results** — result tables default to 20 rows with “Show all / Show less” toggle
+- **Copy SQL** — copy button on each plan step’s SQL block with ✓ confirmation flash
+- **UX polish** — stop button (AbortController), auto-grow textarea, Markdown rendering, `/` shortcut to focus input, explorer width persistence, chart save error toast
+
+## Phase 8 - Enterprise Hardening ➕ Planned
 - SSO / SAML (OIDC partially scaffolded)
 - On-premise / air-gapped deployment
 - Advanced data lineage and compliance packs (SOC2, GDPR)

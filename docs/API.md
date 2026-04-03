@@ -4,10 +4,11 @@
 - Swagger UI is available at /docs
 
 ## Rate Limiting
-All endpoints are protected by slowapi rate limiting.
-- Default: 60 requests/minute per IP for authenticated endpoints
-- File upload: 10 uploads/minute per IP
-- NL pipeline edit: 15 requests/minute per IP
+All endpoints are protected by slowapi rate limiting. Limits are keyed per authenticated user (JWT `sub` claim) with IP fallback for unauthenticated routes.
+- Default: 60 requests/minute per user
+- File upload: 10 uploads/minute per user
+- NL pipeline edit: 15 requests/minute per user
+- AI chat SSE (`POST /cleaning/datasets/{id}/chat`): 20 requests/minute per user
 - Returns `429 Too Many Requests` with a `Retry-After` header when exceeded
 
 ## Auth
@@ -34,9 +35,42 @@ All endpoints are protected by slowapi rate limiting.
 - GET /insights/{dataset_id}?workspace_id=...
 - GET /insights/{dataset_id}/actions
 
-## AI Agents
+## AI Chat (Streaming)
+- `POST /cleaning/datasets/{dataset_id}/chat` — SSE streaming endpoint; rate-limited 20/min per user
+
+Request body (`CommandRequest`):
+```json
+{
+  "message": "Remove duplicate rows",
+  "session_id": "uuid",
+  "workspace_id": "uuid",
+  "pipeline_steps": [],
+  "plan_approved": false,
+  "pending_plan": [],
+  "conversation_history": [
+    {"role": "user", "content": "Previous question"},
+    {"role": "assistant", "content": "Previous answer"}
+  ],
+  "secondary_dataset_ids": []
+}
+```
+
+SSE event types emitted:
+- `agent.thinking` — node began processing
+- `agent.plan` — plan ready for user approval; contains `plan[]`
+- `agent.step.start` — step about to execute; contains `step_number`, `operation`, `description`, `total_steps`
+- `agent.step.done` — step completed; contains row counts and execution time
+- `agent.step.error` — step failed after reflect/retry
+- `agent.query_results` — read-only SQL results; contains `results[]`
+- `column_added` — calculated column created
+- `tile_created` — chart tile created on a dashboard
+- `agent.artifact` — CSV/Parquet/Excel export ready
+- `agent.done` — run complete; contains `response`, `run_id`, `pipeline_steps[]`
+- `agent.error` — unrecoverable error
+
+## AI Agents (legacy non-streaming)
 - GET /agents/suggest/{dataset_id}?workspace_id=...
-- POST /agents/chat/{dataset_id}?workspace_id=...
+- POST /agents/chat/{dataset_id}?workspace_id=... *(non-streaming; prefer `/cleaning/datasets/{id}/chat`)*
 - POST /agents/feedback
 
 ## Transformations

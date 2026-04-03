@@ -29,7 +29,11 @@ All operations are addressable by name in the NL pipeline editor and visual step
 - `GET /datasets/compare-schemas?ids=id1,id2` returns exact matches, unmatched columns per side, fuzzy column suggestions (rapidfuzz), and an alignment score 0–1.
 
 ### Proactive, Autonomous AI Agents
-- LLM-assisted suggestions supported via Groq API when configured.
+- LangGraph state machine (8 nodes) with streaming SSE output.
+- Multi-turn conversation memory — prior turns sent as `conversation_history` and prepended to each LangGraph request.
+- Live step progress — `agent.step.start` events streamed before each execution step.
+- Schema-aware `converse` mode — answers column questions accurately using the active dataset schema.
+- Two Groq models: `llama-3.1-8b-instant` for intent classification; `llama-3.3-70b-versatile` for planning, execution, and responses.
 - Fallback rule-based suggestions if no LLM is configured.
 
 ### Business Context Memory
@@ -77,10 +81,10 @@ All operations are addressable by name in the NL pipeline editor and visual step
 | Data Cleaning & Profiling | Pandas, pyjanitor, AI/LLM agents |
 | Auto Insight/Trends | Rule-based insights + optional Groq-backed generation |
 | Context/Memory | Supabase Postgres + optional Chroma |
-| AI Agents/Autowrangling | FastAPI orchestration + DuckDB SQL execution |
-| Visualization | React + charting libraries |
+| AI Agents/Autowrangling | LangGraph state machine + DuckDB SQL execution + Groq LLM |
+| Visualization | React + ECharts |
 | API + Connectors | FastAPI, REST, plugins/adapters |
-| Permissions & Security | Supabase JWT, RBAC, audit logging |
+| Permissions & Security | Supabase JWT, RBAC, audit logging, slowapi rate limiting |
 | Deployment | Vercel + Render + Supabase + Upstash + S3 |
 
 ## 4. Typical User Workflow

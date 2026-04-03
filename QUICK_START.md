@@ -36,62 +36,50 @@ npm run dev
 ```bash
 # Check that .env has these:
 export GROQ_API_KEY=gsk_...
-export GROQ_MODEL=llama-3.1-70b-versatile
+export GROQ_MODEL=llama-3.3-70b-versatile
+export GROQ_INTENT_MODEL=llama-3.1-8b-instant
 export DATABASE_URL=postgresql+psycopg://...
 
 # Verify migrations applied:
 python -m alembic current
 # Expected output: (head)
-
-# Verify tables exist:
-psql $DATABASE_URL -c "SELECT * FROM chat_sessions LIMIT 1;"
 ```
 
 ---
 
 ## 🧪 Quick Test Flow
 
-### 1. Create Chat Session (Backend)
+### 1. Verify Health
 ```bash
-curl -X POST http://localhost:8000/api/chat/sessions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"dataset_id":"test_data","workspace_id":"default"}'
-
-# Expected:
-{
-  "success": true,
-  "data": {
-    "id": "uuid-here",
-    "title": "Chat Session",
-    "status": "active",
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
+curl http://localhost:8000/health
+# Expected: {"status":"ok"}
 ```
 
 ### 2. Send Chat Message (SSE Streaming)
 ```bash
-# Keep terminal open and stream events:
-curl -X POST http://localhost:8000/api/chat/sessions/{session_id}/messages \
+# Stream events from the AI agent:
+curl -X POST http://localhost:8000/api/cleaning/datasets/{dataset_id}/chat \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"content":"Remove duplicate rows"}' \
+  -d '{"message":"Remove duplicate rows","session_id":"test-session","workspace_id":"default","pipeline_steps":[],"plan_approved":false,"conversation_history":[]}' \
   -N
 
-# Watch for events like:
-# data: {"type":"thinking","content":"..."}
-# data: {"type":"plan","data":{"steps":[...]}}
+# SSE events you will see:
+# data: {"type":"agent.thinking","message":"Loading dataset context..."}
+# data: {"type":"agent.plan","plan":[{"step_number":1,"operation":"clean",...}]}
+# data: {"type":"agent.step.start","step_number":1,"operation":"clean","total_steps":1}
+# data: {"type":"agent.step.done","step":1,"row_count_before":500,"row_count_after":492}
+# data: {"type":"agent.done","response":"Removed 8 duplicate rows...","run_id":"..."}
 ```
 
 ### 3. Open Frontend (Browser)
 ```
 Open: http://localhost:5173/app
-- Click "Workspaces" → Create project
-- Click project → Chat interface appears
-- Type message in left panel
-- Watch steps appear in right panel
-- View data table in center
+- Select a workspace and upload a CSV.
+- The AI Agent panel opens on the right.
+- Type a message (or press / to focus the input from anywhere).
+- Review the plan, click Approve & Run.
+- Watch per-step progress in the thinking indicator.
 ```
 
 ---
@@ -103,10 +91,10 @@ Open: http://localhost:5173/app
 SELECT version_num FROM alembic_version;
 
 -- View key tables
-\dt chat_sessions pipelines_v2 pipeline_runs_v2 transformation_steps
+\dt datasets workspaces users pipeline_runs_v2 transformation_steps
 
 -- Sample queries:
-SELECT id, user_id, status FROM chat_sessions LIMIT 5;
+SELECT id, name, status FROM datasets LIMIT 5;
 SELECT id, name, version FROM pipelines_v2 LIMIT 5;
 SELECT status, COUNT(*) FROM pipeline_runs_v2 GROUP BY status;
 ```
@@ -115,17 +103,15 @@ SELECT status, COUNT(*) FROM pipeline_runs_v2 GROUP BY status;
 
 ## 🔧 Troubleshooting
 
-### Issue: "No module named 'app.routers.chat_sessions'"
-**Solution**: Verify file exists at `backend/app/routers/chat_sessions.py`
-```bash
-ls -la backend/app/routers/chat_sessions.py
-```
-
 ### Issue: "SSE stream not connecting"
 **Solution**: Check browser DevTools → Network tab
-- Look for request to `/api/chat/sessions/{id}/messages`
-- Status should be 200, not 304 or 500
+- Look for request to `/api/cleaning/datasets/{id}/chat`
+- Status should be 200 (SSE stays open)
 - Content-Type should be `text/event-stream`
+
+### Issue: "Rate limit exceeded on chat"
+**Solution**: The AI chat endpoint is limited to **20 requests/minute** per user.
+Wait 60 seconds before retrying, or reduce the message frequency.
 
 ### Issue: "Database migration failed"
 **Solution**: Check migration status
@@ -140,16 +126,11 @@ python -m alembic downgrade -1
 python -m alembic upgrade head
 ```
 
-### Issue: "Rate limiting not triggered for Free tier"
-**Solution**: Currently hardcoded `user_plan='free'` in routers
-- Edit: `backend/app/routers/chat_sessions.py` line ~40
-- Change: `user_plan = 'free'` to `user_plan = current_user.plan`
-
 ### Issue: "Chat interface shows no messages"
 **Solution**: Check browser console for errors
-- Verify AuthToken is in localStorage
-- Check API response has 200 status
-- Verify EventSource is created (DevTools → Network)
+- Verify Auth token is present (localStorage → `auth_token`)
+- Check that the POST to `/api/cleaning/datasets/{id}/chat` returns 200
+- Open DevTools → Network → filter by `EventStream` to see SSE events
 
 ---
 
@@ -157,20 +138,19 @@ python -m alembic upgrade head
 
 ### Query Performance
 ```sql
--- Session retrieval (should be <10ms)
+-- Dataset listing (should be <10ms)
 EXPLAIN ANALYZE
-SELECT * FROM chat_sessions WHERE user_id = 'user-id' LIMIT 10;
+SELECT * FROM datasets WHERE workspace_id = 'workspace-id' LIMIT 20;
 
--- Rate limit check (should be <5ms)
+-- User plan check (should be <5ms)
 EXPLAIN ANALYZE
-SELECT COUNT(*) FROM chat_sessions WHERE user_id = 'user-id' 
-AND created_at > NOW() - INTERVAL '1 month';
+SELECT plan FROM users WHERE id = 'user-id';
 ```
 
 ### API Latency
 ```bash
-# Time a request
-time curl -X GET http://localhost:8000/api/chat/sessions \
+# Time a dataset list request
+time curl -X GET http://localhost:8000/api/datasets \
   -H "Authorization: Bearer $TOKEN"
 
 # Expected: <100ms
@@ -178,23 +158,22 @@ time curl -X GET http://localhost:8000/api/chat/sessions \
 
 ### Frontend Rendering
 - DevTools → Performance tab
-- Record loading a session
-- Chat interface should render in <500ms
+- Record loading the app
+- Explorer + AI panel should render in <500ms
 
 ---
 
 ## 📚 Key File Locations
 
-| Component | File | Lines |
-|-----------|------|-------|
-| Database | backend/alembic/versions/0020_chat_pipelines.py | 280 |
-| Chat Service | backend/app/services/chat_engine.py | 250 |
-| Pipeline Service | backend/app/services/pipeline_engine.py | 340 |
-| Chat Router | backend/app/routers/chat_sessions.py | 350 |
-| Pipeline Router | backend/app/routers/pipelines_v2.py | 310 |
-| Chat UI | frontend/src/components/ChatInterface.tsx | 300 |
-| Steps UI | frontend/src/components/StepsPanel.tsx | 200 |
-| Layout | frontend/src/components/ChatWorkspaceContent.tsx | 200 |
+| Component | File |
+|-----------|------|
+| AI Agent (LangGraph) | `backend/app/services/agent_graph.py` |
+| Cleaning Router | `backend/app/routers/cleaning.py` |
+| AI Controller | `backend/app/controllers/agent_controller.py` |
+| AI Panel (Frontend) | `frontend/src/components/AIPanel.tsx` |
+| Chat Session Hook | `frontend/src/hooks/useChatSession.ts` |
+| Dataset Explorer | `frontend/src/components/DatasetExplorer.tsx` |
+| Alembic Migrations | `backend/alembic/versions/` |
 
 ---
 
@@ -258,17 +237,18 @@ curl https://api.yourdomain.com/api/datasets \
   -H "Authorization: Bearer $TOKEN"
 
 # 3. Frontend loads
-curl https://yourdomain.com | grep "ChatWorkspaceContent"
+curl https://yourdomain.com | grep "DataHub"
 
-# 4. SSE works
-curl -N https://api.yourdomain.com/api/chat/sessions/test-id/messages \
+# 4. AI chat SSE works
+curl -N https://api.yourdomain.com/api/cleaning/datasets/{dataset_id}/chat \
   -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
   -X POST \
-  -d '{"content":"test"}'
+  -d '{"message":"test","session_id":"smoke-test","workspace_id":"default","pipeline_steps":[],"plan_approved":false,"conversation_history":[]}'
 ```
 
 ---
 
-**Last Updated**: January 2024
-**Version**: 0.1 (MVP)
-**Status**: Ready for Production (Except LLM Integration)
+**Last Updated**: Phase 7 (AI Agent Enrichment)
+**Version**: 2.0
+**Status**: Production-ready with LLM integration

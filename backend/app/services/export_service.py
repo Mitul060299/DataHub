@@ -139,3 +139,214 @@ class ExportService:
             return int(rows[0]["n"]) if rows else 0
         except Exception:
             return 0
+
+    @staticmethod
+    def _load_df_for_dataset(dataset_id: str, db) -> "pd.DataFrame":
+        """Load the full dataset as a DataFrame — uses DuckDB read_parquet on stored artifact.
+        Falls back to DatasetChunkDB chunks for legacy datasets with no storage_path."""
+        import pandas as pd
+        from ..models_db import DatasetChunkDB
+        from .duckdb_service import DuckDBService
+
+        meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+        if not meta:
+            raise ValueError(f"Dataset '{dataset_id}' not found")
+
+        if meta.storage_path:
+            query_path = StorageService.get_query_path(meta.storage_path)
+            conn = DuckDBService._ensure_db()
+            df = conn.execute(f"SELECT * FROM read_parquet('{query_path}')").df()
+        else:
+            # Legacy fallback: reconstruct from chunk table
+            chunks = (
+                db.query(DatasetChunkDB)
+                .filter(DatasetChunkDB.dataset_id == dataset_id)
+                .order_by(DatasetChunkDB.chunk_index.asc())
+                .all()
+            )
+            rows: list[dict] = []
+            for chunk in chunks:
+                rows.extend(chunk.rows or [])
+            if not rows:
+                raise ValueError(f"Dataset '{dataset_id}' has no data")
+            df = pd.DataFrame(rows)
+        return df
+
+    @staticmethod
+    def export_powerbi(dataset_id: str, display_name: str, db) -> bytes:
+        """Export full dataset as a Power BI-ready .xlsx file (openpyxl, no LIMIT)."""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+
+        df = ExportService._load_df_for_dataset(dataset_id, db)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        safe_sheet = display_name[:31].replace("/", "-").replace("\\", "-").replace("*", "").replace("?", "").replace("[", "").replace("]", "")
+        ws.title = safe_sheet or "Data"
+
+        headers = list(df.columns)
+        date_cols = {h for h in headers if any(kw in h.lower() for kw in ("date", "_at", "_on"))}
+
+        header_fill = PatternFill("solid", fgColor="D9D9D9")
+        header_font = Font(bold=True)
+        for col_idx, h in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+        for row_idx, row in enumerate(df.itertuples(index=False), start=2):
+            for col_idx, (h, val) in enumerate(zip(headers, row), start=1):
+                # Convert numpy/pandas scalars to Python natives for openpyxl
+                try:
+                    import numpy as np
+                    if isinstance(val, (np.integer,)):
+                        val = int(val)
+                    elif isinstance(val, (np.floating,)):
+                        val = None if np.isnan(val) else float(val)
+                    elif isinstance(val, (np.bool_,)):
+                        val = bool(val)
+                except ImportError:
+                    pass
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                if h in date_cols and val is not None:
+                    cell.number_format = "DD/MM/YYYY"
+
+        ws.freeze_panes = "A2"
+        for col_idx, h in enumerate(headers, start=1):
+            col_letter = get_column_letter(col_idx)
+            # Sample up to 1000 rows for column width calculation to avoid O(n) on huge datasets
+            sample = df[h].astype(str).head(1000)
+            max_len = sample.str.len().max() if not sample.empty else 0
+            ws.column_dimensions[col_letter].width = min(max(len(h), int(max_len or 0)) + 2, 40)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.read()
+
+    @staticmethod
+    def export_tableau(dataset_id: str, display_name: str, db) -> tuple[bytes, str]:
+        """Export full dataset as a Tableau .hyper file (pantab).
+        Returns (file_bytes, mime_type).  Falls back to CSV if pantab is unavailable."""
+        df = ExportService._load_df_for_dataset(dataset_id, db)
+
+        try:
+            import pantab
+            import tableauhyperapi as tab_api
+
+            # Map DuckDB/pandas dtypes to Tableau SqlType
+            def _hyper_type(dtype_str: str):
+                d = dtype_str.lower()
+                if "int" in d:
+                    return tab_api.SqlType.big_int()
+                if "float" in d or "double" in d:
+                    return tab_api.SqlType.double()
+                if "bool" in d:
+                    return tab_api.SqlType.bool()
+                if "date" in d and "time" not in d:
+                    return tab_api.SqlType.date()
+                if "timestamp" in d or "datetime" in d:
+                    return tab_api.SqlType.timestamp()
+                return tab_api.SqlType.text()
+
+            table_def = tab_api.TableDefinition(
+                table_name=tab_api.TableName("Extract", "Extract"),
+                columns=[
+                    tab_api.TableDefinition.Column(
+                        name=col,
+                        type=_hyper_type(str(df[col].dtype)),
+                        nullability=tab_api.NULLABLE,
+                    )
+                    for col in df.columns
+                ],
+            )
+
+            buf = io.BytesIO()
+            pantab.frame_to_hyper(df, buf, table=tab_api.TableName("Extract", "Extract"))
+            return buf.getvalue(), "application/octet-stream"
+
+        except Exception:
+            # Fallback: return CSV
+            csv_buf = io.StringIO()
+            df.to_csv(csv_buf, index=False)
+            return csv_buf.getvalue().encode("utf-8"), "text/csv"
+
+    @staticmethod
+    def export_sheets(
+        dataset_id: str,
+        spreadsheet_url: str,
+        sheet_name: str,
+        mode: str,
+        db,
+    ) -> dict:
+        """Sync full dataset to a Google Sheet via a service-account credential.
+        mode='replace' clears the sheet first; mode='append' adds below last row.
+        Returns {rows_written, spreadsheet_url, sheet_name}.
+        """
+        import json
+        import gspread
+        from google.oauth2.service_account import Credentials
+        from ..config import settings
+
+        sa_json = settings.google_service_account_json
+        if not sa_json:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON is not configured on this server")
+
+        # Accept raw JSON string or base64-encoded JSON
+        try:
+            sa_info = json.loads(sa_json)
+        except json.JSONDecodeError:
+            import base64
+            sa_info = json.loads(base64.b64decode(sa_json).decode("utf-8"))
+
+        scopes = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
+        gc = gspread.authorize(creds)
+
+        df = ExportService._load_df_for_dataset(dataset_id, db)
+
+        spreadsheet = gc.open_by_url(spreadsheet_url)
+        try:
+            ws = spreadsheet.worksheet(sheet_name)
+        except gspread.WorksheetNotFound:
+            ws = spreadsheet.add_worksheet(title=sheet_name, rows=str(len(df) + 10), cols=str(len(df.columns) + 2))
+
+        if mode == "replace":
+            ws.clear()
+            start_row = 1
+        else:
+            existing = ws.get_all_values()
+            start_row = len(existing) + 1  # append after last row
+
+        # Write header only for replace (or empty sheet on append)
+        rows_to_write: list[list] = []
+        if mode == "replace" or start_row == 1:
+            rows_to_write.append(list(df.columns))
+
+        # Convert df rows to plain Python lists (gspread needs JSON-serialisable values)
+        for _, row in df.iterrows():
+            rows_to_write.append([
+                (None if (hasattr(v, "__class__") and v.__class__.__name__ in ("float", "float64") and str(v) == "nan") else
+                 (bool(v) if hasattr(v, "__class__") and v.__class__.__name__ == "bool_" else
+                  str(v) if not isinstance(v, (int, float, str, bool, type(None))) else v))
+                for v in row
+            ])
+
+        # Batch write in 10K-row chunks to respect Sheets API limits
+        CHUNK = 10_000
+        for i in range(0, len(rows_to_write), CHUNK):
+            chunk = rows_to_write[i : i + CHUNK]
+            ws.append_rows(chunk, value_input_option="RAW")
+
+        rows_written = len(df)
+        return {
+            "rows_written": rows_written,
+            "spreadsheet_url": spreadsheet_url,
+            "sheet_name": sheet_name,
+        }

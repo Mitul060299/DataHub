@@ -60,3 +60,10 @@ cryptography>=42.0.0
 
 # TTL cache (live dataset federation)
 cachetools>=5.3.0
+
+# BI integrations — Power BI / Tableau / Google Sheets exports
+pantab>=3.0.0
+tableauhyperapi>=0.0.19231
+gspread>=6.0.0
+google-auth>=2.28.0
+google-auth-oauthlib>=1.2.0

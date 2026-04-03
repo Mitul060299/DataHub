@@ -562,6 +562,28 @@ export async function exportDatasetCsv(datasetId: string, params?: Record<string
   return response.data;
 }
 
+export async function exportDatasetPowerBI(datasetId: string): Promise<Blob> {
+  const response = await api.get(`/datasets/${datasetId}/export/powerbi`, {
+    responseType: "blob",
+  });
+  return response.data as Blob;
+}
+
+export async function exportDatasetTableau(datasetId: string): Promise<Blob> {
+  const response = await api.get(`/datasets/${datasetId}/export/tableau`, {
+    responseType: "blob",
+  });
+  return response.data as Blob;
+}
+
+export async function exportDatasetToSheets(
+  datasetId: string,
+  payload: { spreadsheet_url: string; sheet_name: string; mode: "replace" | "append" }
+): Promise<{ rows_written: number; spreadsheet_url: string; sheet_name: string }> {
+  const response = await api.post(`/datasets/${datasetId}/export/sheets`, payload);
+  return response.data as { rows_written: number; spreadsheet_url: string; sheet_name: string };
+}
+
 export async function fetchDatasetPage(
   datasetId: string,
   offset: number,

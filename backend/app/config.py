@@ -153,6 +153,8 @@ class Settings(BaseModel):
     connector_encryption_key: str = os.getenv("CONNECTOR_ENCRYPTION_KEY", "")
     # Live dataset federation — TTL (in seconds) for the per-dataset in-process result cache
     live_dataset_ttl_seconds: int = int(os.getenv("LIVE_DATASET_TTL_SECONDS", "300"))
+    # Google service-account JSON for Sheets sync (base64-encoded or raw JSON string)
+    google_service_account_json: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 
 
 settings = Settings()

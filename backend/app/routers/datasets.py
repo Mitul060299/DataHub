@@ -911,6 +911,7 @@ def export_dataset(
     filter_val: str | None = None,
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
+    """Export full dataset as CSV — reads from stored Parquet artifact (no LIMIT)."""
     role = get_current_role(authorization)
     require_role("viewer", role)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
@@ -918,49 +919,157 @@ def export_dataset(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     def row_iter():
-        yield ",".join(meta.columns) + "\n"
-        chunks = (
-            db.query(DatasetChunkDB)
-            .filter(DatasetChunkDB.dataset_id == dataset_id)
-            .order_by(DatasetChunkDB.chunk_index.asc())
-            .all()
-        )
-        rows: list[dict] = []
-        for chunk in chunks:
-            rows.extend(chunk.rows or [])
+        if meta.storage_path:
+            query_path = StorageService.get_query_path(meta.storage_path)
+            conn = DuckDBService._ensure_db()
 
-        if filter_col and filter_op and filter_val is not None:
-            def _matches(row: dict) -> bool:
-                value = row.get(filter_col)
+            # Build optional WHERE / ORDER BY clauses
+            conditions: list[str] = []
+            if filter_col and filter_op and filter_val is not None:
+                col_q = filter_col.replace('"', '""')
+                val_q = filter_val.replace("'", "''")
                 if filter_op == "contains":
-                    return str(filter_val).lower() in str(value).lower()
-                if filter_op == "eq":
-                    return str(value) == str(filter_val)
-                if filter_op == "gt":
-                    try:
-                        return float(value) > float(filter_val)
-                    except Exception:
-                        return False
-                if filter_op == "lt":
-                    try:
-                        return float(value) < float(filter_val)
-                    except Exception:
-                        return False
-                return True
+                    conditions.append(f'LOWER("{col_q}") LIKE \'%{val_q.lower()}%\'')
+                elif filter_op == "eq":
+                    conditions.append(f'"{col_q}" = \'{val_q}\'')
+                elif filter_op == "gt":
+                    conditions.append(f'TRY_CAST("{col_q}" AS DOUBLE) > {float(filter_val)!r}')
+                elif filter_op == "lt":
+                    conditions.append(f'TRY_CAST("{col_q}" AS DOUBLE) < {float(filter_val)!r}')
 
-            rows = [row for row in rows if _matches(row)]
+            where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+            order = ""
+            if sort_by:
+                sb_q = sort_by.replace('"', '""')
+                direction = "DESC" if sort_dir.lower() == "desc" else "ASC"
+                order = f' ORDER BY "{sb_q}" {direction}'
 
-        if sort_by:
-            rows.sort(key=lambda r: (r.get(sort_by) is None, r.get(sort_by)))
-            if sort_dir.lower() == "desc":
-                rows.reverse()
-
-        for row in rows:
-            values = [str(row.get(col, "")) for col in meta.columns]
-            yield ",".join(values) + "\n"
+            sql = f"SELECT * FROM read_parquet('{query_path}'){where}{order}"
+            result = conn.execute(sql)
+            col_names = [desc[0] for desc in result.description]
+            yield ",".join(col_names) + "\n"
+            for batch in result.fetch_arrow_reader(1000):
+                for row in batch.to_pylist():
+                    yield ",".join(str(row.get(c, "") or "") for c in col_names) + "\n"
+        else:
+            # Legacy fallback: reconstruct from DatasetChunkDB chunks
+            col_names_raw = meta.columns or []
+            # meta.columns may be list[str] or list[dict]
+            if col_names_raw and isinstance(col_names_raw[0], dict):
+                col_names = [c.get("name", "") for c in col_names_raw]
+            else:
+                col_names = list(col_names_raw)
+            yield ",".join(col_names) + "\n"
+            chunks = (
+                db.query(DatasetChunkDB)
+                .filter(DatasetChunkDB.dataset_id == dataset_id)
+                .order_by(DatasetChunkDB.chunk_index.asc())
+                .all()
+            )
+            rows: list[dict] = []
+            for chunk in chunks:
+                rows.extend(chunk.rows or [])
+            for row in rows:
+                yield ",".join(str(row.get(c, "") or "") for c in col_names) + "\n"
 
     emit_event("dataset.exported", {"dataset_id": dataset_id})
-    return StreamingResponse(row_iter(), media_type="text/csv")
+    display_name = (meta.name or dataset_id).replace('"', "")
+    headers = {"Content-Disposition": f'attachment; filename="{display_name}.csv"'}
+    return StreamingResponse(row_iter(), media_type="text/csv", headers=headers)
+
+
+@router.get("/{dataset_id}/export/powerbi")
+def export_dataset_powerbi(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Export full dataset as a Power BI-ready .xlsx file."""
+    from ..services.export_service import ExportService
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    try:
+        xlsx_bytes = ExportService.export_powerbi(dataset_id, meta.name or dataset_id, db)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Export failed: {exc}") from exc
+    emit_event("dataset.exported_powerbi", {"dataset_id": dataset_id})
+    safe_name = (meta.name or dataset_id).replace('"', "")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}.xlsx"',
+    }
+    return StreamingResponse(
+        iter([xlsx_bytes]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@router.get("/{dataset_id}/export/tableau")
+def export_dataset_tableau(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Export full dataset as a Tableau .hyper file (CSV fallback if pantab unavailable)."""
+    from ..services.export_service import ExportService
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    try:
+        file_bytes, mime_type = ExportService.export_tableau(dataset_id, meta.name or dataset_id, db)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Export failed: {exc}") from exc
+    emit_event("dataset.exported_tableau", {"dataset_id": dataset_id})
+    safe_name = (meta.name or dataset_id).replace('"', "")
+    ext = "csv" if mime_type == "text/csv" else "hyper"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}.{ext}"',
+    }
+    return StreamingResponse(iter([file_bytes]), media_type=mime_type, headers=headers)
+
+
+class SheetsExportPayload(dict):
+    pass
+
+
+@router.post("/{dataset_id}/export/sheets")
+def export_dataset_to_sheets(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Sync full dataset to a Google Sheet via service-account credentials."""
+    from ..services.export_service import ExportService
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    spreadsheet_url = payload.get("spreadsheet_url", "")
+    sheet_name = payload.get("sheet_name", "Sheet1")
+    mode = payload.get("mode", "replace")
+
+    if not spreadsheet_url:
+        raise HTTPException(status_code=422, detail="spreadsheet_url is required")
+    if mode not in ("replace", "append"):
+        raise HTTPException(status_code=422, detail="mode must be 'replace' or 'append'")
+
+    try:
+        result = ExportService.export_sheets(dataset_id, spreadsheet_url, sheet_name, mode, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Google Sheets sync failed: {exc}") from exc
+
+    emit_event("dataset.exported_sheets", {"dataset_id": dataset_id, "rows_written": result.get("rows_written", 0)})
+    return result
 
 
 @router.get("/{dataset_id}/schema")

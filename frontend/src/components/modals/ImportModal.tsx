@@ -82,9 +82,12 @@ export function ImportModal({ open, workspaceId, onClose, onImported }: ImportMo
     // Files larger than 50 MB use the presigned direct-to-S3 flow so that
     // the Render server never buffers the bytes in RAM.
     const PRESIGN_THRESHOLD = 50 * 1024 * 1024;
+    // Only Parquet files can use direct-to-S3 upload.
+    // CSV/Excel/JSON must go through the server for conversion.
+    const isParquet = /\.parquet$/i.test(selectedFile.name);
 
     try {
-      if (selectedFile.size > PRESIGN_THRESHOLD) {
+      if (selectedFile.size > PRESIGN_THRESHOLD && isParquet) {
         // ── Step 1: obtain presigned PUT URL ────────────────────────────────
         const presignRes = await api.post(
           "/import/presign",

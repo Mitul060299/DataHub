@@ -6,6 +6,7 @@ import { AIPanel } from "../components/AIPanel";
 import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
+import { SheetsExportModal } from "../components/SheetsExportModal";
 import { WelcomeModal } from "../components/WelcomeModal";
 import { OnboardingProgress } from "../components/OnboardingProgress";
 import { TourTooltip, STEPS } from "../components/TourTooltip";
@@ -38,6 +39,7 @@ export function WorkspacePage() {
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
+  const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // Show welcome modal on first visit
@@ -140,6 +142,7 @@ export function WorkspacePage() {
         rows={data?.rows ?? []}
         calculatedColumns={data?.calculatedColumns ?? []}
         lastAction={steps.length ? steps[steps.length - 1].operation : "Idle"}
+        onSheetsExport={() => setSheetsExportOpen(true)}
         onImport={() => setImportOpen(true)}
         onColumnsChanged={() => {
           setDatasetRefreshNonce((value) => value + 1);
@@ -164,6 +167,13 @@ export function WorkspacePage() {
         }}
       />
       <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void refetch()} />
+      {sheetsExportOpen && activeDataset && (
+        <SheetsExportModal
+          datasetId={activeDataset.id}
+          datasetName={activeDataset.name}
+          onClose={() => setSheetsExportOpen(false)}
+        />
+      )}
       {welcomeOpen && (
         <WelcomeModal
           onClose={() => { setWelcomeOpen(false); }}

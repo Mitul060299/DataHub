@@ -627,6 +627,62 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* ── Integrations / Works-with section ── */}
+      <section className="home-section" style={{ background: "#0d0e15" }}>
+        <div className="home-inner">
+          <p className="section-label" style={{ textAlign: "center" }}>Integrations</p>
+          <h2 className="section-title" style={{ textAlign: "center" }}>
+            Export to the tools your team already uses
+          </h2>
+          <p className="section-subtitle" style={{ textAlign: "center" }}>
+            One-click exports to Power BI, Tableau, Google Sheets, and Excel — no connectors, no code.
+          </p>
+
+          <div style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 16,
+            justifyContent: "center",
+            marginTop: 40,
+          }}>
+            {[
+              { name: "Power BI", desc: "Download ready-to-open .xlsx", accent: "#F2C811", symbol: "⚡" },
+              { name: "Tableau", desc: "Native .hyper extract", accent: "#E97627", symbol: "◈" },
+              { name: "Google Sheets", desc: "Live sync + Looker Studio", accent: "#34A853", symbol: "⬡" },
+              { name: "Looker Studio", desc: "Connect via Google Sheets", accent: "#4285F4", symbol: "◉" },
+              { name: "Excel", desc: "Formatted .xlsx download", accent: "#217346", symbol: "▦" },
+            ].map((tool) => (
+              <div
+                key={tool.name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  background: "#13151f",
+                  border: "1px solid #1e2030",
+                  borderRadius: 12,
+                  padding: "16px 22px",
+                  minWidth: 200,
+                  flex: "1 1 200px",
+                  maxWidth: 260,
+                }}
+              >
+                <span style={{
+                  fontSize: 26,
+                  color: tool.accent,
+                  lineHeight: 1,
+                  flexShrink: 0,
+                }}>{tool.symbol}</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e8e8f0" }}>{tool.name}</p>
+                  <p style={{ margin: "3px 0 0", fontSize: 12, color: "#6668a0" }}>{tool.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="pricing" className="home-section">
         <div className="home-inner">
           <p className="section-label">Pricing</p>

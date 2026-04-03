@@ -25,6 +25,7 @@ export interface Dataset {
   id: string;
   name: string;
   rows: number;
+  row_count?: number | null;
   format?: string | null;
   parentId?: string | null;
 }

@@ -19,6 +19,8 @@ from ..services.data_conversion import DataConversionService
 from ..services.object_storage import StorageService
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_file_constraints, enforce_connector_access
+from ..services.duckdb_service import DuckDBService
+from ..services.usage_service import increment_usage
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, ImportTableDB, ImportConnectionDB
 from .datasets import save_dataset, get_dataset_from_db
 from ..config import settings
@@ -352,6 +354,20 @@ async def presign_upload(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # Only Parquet files can be stored and queried by the rest of the pipeline
+    # (DuckDBService.query_parquet, get_preview, etc. all use read_parquet).
+    # For CSV/Excel/JSON, users should use the standard /import/upload route which
+    # converts the file to Parquet server-side.
+    if source_format != "parquet":
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                "Direct upload only supports Parquet files (.parquet). "
+                "For CSV, Excel or JSON files, use the standard upload route. "
+                "To convert: df.to_parquet('file.parquet')"
+            ),
+        )
+
     user_plan = resolve_user_plan(db, authorization)
     enforce_file_constraints(
         plan=user_plan,
@@ -362,15 +378,15 @@ async def presign_upload(
     )
 
     dataset_id = str(uuid.uuid4())
-    safe_name = os.path.basename(filename.replace("\\", "/")) or "data"
+    safe_name = os.path.basename(filename.replace("\\", "/")) or "data.parquet"
     file_base = re.sub(r"[^\w\-.]", "_", os.path.splitext(safe_name)[0]) or "dataset"
-    parquet_name = f"{file_base}.parquet"
+    storage_filename = f"{file_base}.parquet"  # always parquet, validated above
 
     try:
         presigned_url, storage_path = StorageService.generate_presigned_put_url(
             user_id=user_id,
             dataset_id=dataset_id,
-            file_name=parquet_name,
+            file_name=storage_filename,
             expires_in=3600,
         )
     except NotImplementedError as exc:
@@ -436,18 +452,21 @@ async def finalize_upload(
     if meta.status != "pending":
         raise HTTPException(status_code=409, detail="Dataset already finalized")
 
-    # Read schema + stats from the Parquet file via DuckDB.
-    # DuckDB fetches only the row-group footer metadata, not the full dataset.
-    from ..services.duckdb_service import DuckDBService
+    # Read schema + row count from the uploaded Parquet file via DuckDB.
+    # DuckDB fetches only the row-group footer metadata — no full data scan.
+    # Only Parquet is accepted (validated in /presign), so read_parquet is safe.
     try:
         query_path = StorageService.get_query_path(meta.storage_path)
         conn = DuckDBService._ensure_db()
-        # Schema: column names + types
+        # Schema: column names + types from the Parquet footer
         schema_rows = conn.execute(
-            f"DESCRIBE SELECT * FROM read_parquet('{query_path}') LIMIT 0"
+            f"DESCRIBE SELECT * FROM read_parquet('{query_path}')"
         ).fetchall()
         columns = [{"name": r[0], "type": r[1]} for r in schema_rows]
-        # Row count via Parquet statistics (no full scan needed for most writers)
+        if not columns:
+            raise ValueError("Parquet file has no columns — file may be empty or corrupt")
+        # Row count: DuckDB reads row-group statistics from the footer (no full scan
+        # needed when the Parquet file was written with statistics, e.g. by pyarrow/pandas)
         count_result = conn.execute(
             f"SELECT COUNT(*) FROM read_parquet('{query_path}')"
         ).fetchone()
@@ -483,6 +502,8 @@ async def finalize_upload(
     ))
     db.commit()
 
+    increment_usage(user_id, "datasets_uploaded", db)
+
     return {
         "success": True,
         "datasetId": dataset_id,
@@ -491,7 +512,6 @@ async def finalize_upload(
         "columns": len(columns),
         "storagePath": meta.storage_path,
     }
-
 
 
 @router.post("/connector-import")

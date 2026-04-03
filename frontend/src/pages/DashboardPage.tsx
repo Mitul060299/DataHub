@@ -462,7 +462,7 @@ export function DashboardPage() {
         </div>
 
         {/* Comments thread */}
-        <DashboardComments dashboardId={id} />
+        {id && <DashboardComments dashboardId={id} />}
       </main>
 
       {showSettings && (

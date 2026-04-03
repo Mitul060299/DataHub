@@ -725,12 +725,14 @@ class PipelineRunStatus(BaseModel):
 
 
 class TableSnapshotResponse(BaseModel):
+    model_config = {"populate_by_name": True}
+
     id: str
     pipeline_run_id: str
     table_name: str
     snapshot_url: str
     row_count: Optional[int] = None
-    schema: dict
+    table_schema: dict = Field(alias="schema")
     created_at: str
 
 

@@ -135,7 +135,7 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
               >
                 {editingId === dataset.id ? (
                   <>
-                    <IconDatabase size={14} style={{ flexShrink: 0 }} />
+                    <span style={{ flexShrink: 0, display: "inline-flex" }}><IconDatabase size={14} /></span>
                     <input
                       ref={inputRef}
                       value={editingName}

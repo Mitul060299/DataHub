@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..db import SessionLocal, get_db
 from ..models_db import PipelineRunV2DB
 from ..controllers.cleaning_controller import CleaningController
+from ..services.rate_limiter import limiter
 
 router = APIRouter(prefix="/cleaning", tags=["cleaning"])
 
@@ -45,7 +46,9 @@ def analyze_dataset(
 
 
 @router.post("/datasets/{dataset_id}/chat")
+@limiter.limit("20/minute")
 async def process_command(
+    request: Request,
     dataset_id: str,
     payload: CommandRequest,
     authorization: str | None = Header(default=None),
@@ -63,6 +66,7 @@ async def process_command(
                 workspace_id=payload.workspace_id,
                 authorization=authorization,
                 secondary_dataset_ids=payload.secondary_dataset_ids or [],
+                conversation_history=payload.conversation_history or [],
             )
             async for event in stream:
                 if isinstance(event, dict):

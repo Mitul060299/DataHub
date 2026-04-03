@@ -106,6 +106,11 @@ REFLECT_PROMPT = """You are a DuckDB SQL expert. A query failed with an error. R
 DATASET SCHEMA:
 {schema}
 
+COLUMN STATISTICS (nulls, min, max, unique counts):
+{stats}
+
+FAILED OPERATION: {operation}
+
 SESSION TABLE REGISTRY (all available tables/views):
 {table_registry}
 
@@ -138,6 +143,10 @@ USER'S ORIGINAL GOAL:
 RESPONDER_CONVERSE_PROMPT = """You are a helpful assistant for DataHub, a data cleaning and analytics platform.
 Answer the user's question concisely. If they ask what you can do, mention: cleaning data, running SQL queries,
 building charts, joining datasets, and building reproducible pipelines.
+
+ACTIVE DATASET: {dataset_name}
+DATASET SCHEMA (column name → data type):
+{schema}
 
 USER MESSAGE: {message}"""
 

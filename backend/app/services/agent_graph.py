@@ -5,7 +5,7 @@ import uuid as _uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy.orm import Session
 
 from .agent.graph import agent_graph
@@ -22,9 +22,22 @@ class AgentGraphService:
         workspace_id: str,
         session_id: str = "",
         secondary_dataset_ids: list[str] | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        # Build LangChain messages from the prior conversation turns
+        history_messages: list = []
+        for turn in (conversation_history or []):
+            role = turn.get("role", "")
+            content = str(turn.get("content", ""))
+            if not content:
+                continue
+            if role == "user":
+                history_messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                history_messages.append(AIMessage(content=content))
+        current_message = [HumanMessage(content=message)] if message else []
         state: dict[str, Any] = {
-            "messages": [HumanMessage(content=message)] if message else [],
+            "messages": history_messages + current_message,
             "root_dataset_id": dataset_id,
             "dataset_id": dataset_id,
             "user_id": user_id,
@@ -68,6 +81,7 @@ class AgentGraphService:
         workspace_id: str,
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         config = {"configurable": {"thread_id": session_id}}
         if plan_approved:
@@ -131,6 +145,7 @@ class AgentGraphService:
                 workspace_id=workspace_id,
                 session_id=session_id,
                 secondary_dataset_ids=secondary_dataset_ids or [],
+                conversation_history=conversation_history or [],
             )
 
         try:
@@ -138,6 +153,22 @@ class AgentGraphService:
                 event_name = event.get("event", "")
                 node_name = event.get("name", "")
                 data = event.get("data", {})
+
+                # Emit per-step progress before execution starts
+                if event_name == "on_chain_start" and node_name == "execute_step":
+                    input_state = data.get("input", {})
+                    plan = input_state.get("plan", [])
+                    idx = int(input_state.get("current_step_index", 0))
+                    if idx < len(plan):
+                        step = plan[idx]
+                        yield {
+                            "type": "agent.step.start",
+                            "step_number": step.get("step_number", idx + 1),
+                            "operation": step.get("operation", ""),
+                            "description": step.get("description", ""),
+                            "total_steps": len(plan),
+                        }
+                    continue
 
                 if event_name != "on_chain_end":
                     continue

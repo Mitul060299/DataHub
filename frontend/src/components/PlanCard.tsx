@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface PlanStep {
   step_number: number;
   operation: string;
@@ -25,6 +27,14 @@ export default function PlanCard({
   onReject,
 }: PlanCardProps) {
   const borderColor = approved ? "var(--gr)" : rejected ? "var(--rd)" : "var(--yl)";
+  const [copiedStep, setCopiedStep] = useState<number | null>(null);
+
+  function copySQL(stepNumber: number, sql: string) {
+    navigator.clipboard.writeText(sql).then(() => {
+      setCopiedStep(stepNumber);
+      setTimeout(() => setCopiedStep(null), 1500);
+    });
+  }
 
   return (
     <div style={{ borderLeft: `4px solid ${borderColor}`, border: "1px solid var(--bd2)", borderRadius: "var(--r8)", padding: 10, marginTop: 8 }}>
@@ -40,8 +50,26 @@ export default function PlanCard({
             <div>{step.description}</div>
             <div style={{ color: "var(--tx1)", fontSize: 12 }}>~{step.estimated_rows}</div>
             {step.sql ? (
-              <div style={{ marginTop: 6, background: "var(--bg1)", borderRadius: 6, padding: 6, overflowX: "auto" }}>
-                <code>{step.sql}</code>
+              <div style={{ marginTop: 6, background: "var(--bg1)", borderRadius: 6, padding: 6, overflowX: "auto", position: "relative" }}>
+                <button
+                  onClick={() => copySQL(step.step_number, step.sql!)}
+                  title="Copy SQL"
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: 4,
+                    background: "var(--bg2)",
+                    border: "1px solid var(--bd)",
+                    borderRadius: 4,
+                    padding: "2px 6px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    color: copiedStep === step.step_number ? "var(--gr)" : "var(--tx1)",
+                  }}
+                >
+                  {copiedStep === step.step_number ? "✓" : "Copy"}
+                </button>
+                <code style={{ paddingRight: 40, display: "block" }}>{step.sql}</code>
               </div>
             ) : null}
           </div>

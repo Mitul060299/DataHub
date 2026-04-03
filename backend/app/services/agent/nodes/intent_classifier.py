@@ -8,7 +8,7 @@ from ..prompts import INTENT_CLASSIFIER_PROMPT
 from ..state import AgentState
 
 _llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model=os.getenv("GROQ_INTENT_MODEL", "llama-3.1-8b-instant"),
     temperature=0,
     groq_api_key=os.getenv("GROQ_API_KEY"),
 )

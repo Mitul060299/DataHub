@@ -21,6 +21,8 @@ async def reflect(state: AgentState) -> dict:
 
     prompt = REFLECT_PROMPT.format(
         schema=json.dumps(state.get("schema", {}), indent=2),
+        stats=json.dumps(state.get("stats", {}), indent=2),
+        operation=failed_step.get("operation", ""),
         table_registry=json.dumps(state.get("table_registry", {}), indent=2),
         failed_sql=failed_step["sql"],
         error=error_msg,

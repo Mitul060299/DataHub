@@ -38,7 +38,13 @@ async def responder(state: AgentState) -> dict:
     user_goal = messages[-1].content if messages else ""
 
     if intent == "converse":
-        prompt = RESPONDER_CONVERSE_PROMPT.format(message=user_goal)
+        schema_str = json.dumps(state.get("schema", {}), indent=2)
+        dataset_name = str(state.get("dataset_id", "your dataset"))
+        prompt = RESPONDER_CONVERSE_PROMPT.format(
+            message=user_goal,
+            schema=schema_str,
+            dataset_name=dataset_name,
+        )
         final = await _invoke_llm([HumanMessage(content=prompt)])
 
     elif intent in ("transform", "sql_query", "join"):

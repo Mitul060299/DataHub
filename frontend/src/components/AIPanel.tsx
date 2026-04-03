@@ -214,6 +214,11 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
   const [analyzingDataset, setAnalyzingDataset] = useState(false);
   const [columnSchema, setColumnSchema] = useState<ColSchema[]>([]);
+  const [currentStepInfo, setCurrentStepInfo] = useState<{ stepNumber: number; operation: string; totalSteps: number } | null>(null);
+  const [secondaryDatasetIds, setSecondaryDatasetIds] = useState<string[]>([]);
+  const [showAllRowsIds, setShowAllRowsIds] = useState<Set<string>>(new Set());
+  const [workspaceDatasets, setWorkspaceDatasets] = useState<Array<{ id: string; name: string }>>([]);
+  const [joinPickerOpen, setJoinPickerOpen] = useState(false);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -224,6 +229,27 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
       .catch(() => { if (!cancelled) setColumnSchema([]); });
     return () => { cancelled = true; };
   }, [dataset?.id]);
+
+  // Load workspace datasets for secondary dataset (join) picker
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    api.get<Array<Record<string, unknown>>>("/datasets", {
+      headers: { "X-Workspace-Id": workspaceId },
+    })
+      .then((r) => {
+        if (!cancelled) {
+          setWorkspaceDatasets(
+            (r.data ?? []).map((item) => ({
+              id: String(item.id ?? item.dataset_id ?? ""),
+              name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
+            })).filter((ds) => ds.id)
+          );
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [workspaceId]);
 
   // Press "/" anywhere (when not typing in an input) to focus the AI input
   useEffect(() => {
@@ -258,6 +284,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         break;
       }
       case "agent.done": {
+        setCurrentStepInfo(null);
         const responseText = typeof event.response === "string" ? event.response : "Done.";
 
         const runId = typeof event.run_id === "string" ? event.run_id : null;
@@ -582,6 +609,14 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         }
         break;
       }
+      case "agent.step.start": {
+        setCurrentStepInfo({
+          stepNumber: Number(event.step_number ?? 0),
+          operation: typeof event.operation === "string" ? event.operation : "",
+          totalSteps: Number(event.total_steps ?? 0),
+        });
+        break;
+      }
       default:
         break;
     }
@@ -616,6 +651,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         })),
         plan_approved: approvePlan ?? false,
         pending_plan: pendingPlan,
+        secondary_dataset_ids: secondaryDatasetIds,
         onEvent: handleAgentEvent,
       });
     } catch (error: unknown) {
@@ -774,11 +810,52 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
               {analyzingDataset ? "Analyzing…" : "📊 Quality"}
             </button>
           ) : null}
+          {dataset && workspaceDatasets.filter((ds) => ds.id !== dataset.id).length > 0 ? (
+            <button
+              className="btn"
+              style={{ fontSize: 10, padding: "2px 7px", background: joinPickerOpen ? "var(--acg)" : undefined }}
+              onClick={() => setJoinPickerOpen((o) => !o)}
+              title="Join an additional dataset"
+            >
+              ＋ Join{secondaryDatasetIds.length > 0 ? ` (${secondaryDatasetIds.length})` : ""}
+            </button>
+          ) : null}
           <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { setMessages([]); resetSession(); }}>
             <IconRefresh size={14} />
           </button>
         </span>
       </header>
+      {joinPickerOpen ? (
+        <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--bd)", background: "var(--bg1)", fontSize: 11 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--tx2)" }}>Select datasets to join:</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {workspaceDatasets
+              .filter((ds) => ds.id !== dataset?.id)
+              .map((ds) => {
+                const selected = secondaryDatasetIds.includes(ds.id);
+                return (
+                  <button
+                    key={ds.id}
+                    onClick={() => setSecondaryDatasetIds((prev) =>
+                      selected ? prev.filter((id) => id !== ds.id) : [...prev, ds.id]
+                    )}
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: 12,
+                      border: `1px solid ${selected ? "var(--ac)" : "var(--bd2)"}`,
+                      background: selected ? "var(--acg)" : "var(--bg2)",
+                      cursor: "pointer",
+                      color: selected ? "var(--ac)" : "var(--tx2)",
+                    }}
+                  >
+                    {selected ? "✓ " : ""}{ds.name}
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      ) : null}
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
         {!dataset ? (
@@ -909,7 +986,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                       </tr>
                     </thead>
                     <tbody>
-                      {message.queryResults.slice(0, 20).map((row, ri) => (
+                      {message.queryResults.slice(0, showAllRowsIds.has(message.id) ? undefined : 20).map((row, ri) => (
                         <tr key={ri}>
                           {Object.values(row).map((val, ci) => (
                             <td key={ci} style={{ border: "1px solid var(--bd)", padding: "2px 8px" }}>
@@ -921,9 +998,23 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                     </tbody>
                   </table>
                   {message.queryResults.length > 20 ? (
-                    <p style={{ marginTop: 4, fontSize: 11, color: "var(--tx1)" }}>
-                      Showing first 20 of {message.queryResults.length} rows.
-                    </p>
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, color: "var(--tx1)" }}>
+                        {showAllRowsIds.has(message.id)
+                          ? `All ${message.queryResults.length} rows`
+                          : `Showing first 20 of ${message.queryResults.length} rows`}
+                      </span>
+                      <button
+                        onClick={() => setShowAllRowsIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(message.id)) next.delete(message.id); else next.add(message.id);
+                          return next;
+                        })}
+                        style={{ fontSize: 11, background: "none", border: "1px solid var(--bd2)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "var(--tx2)" }}
+                      >
+                        {showAllRowsIds.has(message.id) ? "Show less" : "Show all"}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -960,7 +1051,11 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         ))}
         {sending ? (
           <div style={{ display: "inline-flex", gap: 8, alignItems: "center", color: "var(--tx1)" }}>
-            <span>Thinking</span>
+            <span>
+              {currentStepInfo && currentStepInfo.totalSteps > 0
+                ? `Step ${currentStepInfo.stepNumber}/${currentStepInfo.totalSteps}: ${currentStepInfo.operation.replace(/_/g, " ")}`
+                : "Thinking"}
+            </span>
             <span className="dot-bounce" />
             <span className="dot-bounce" style={{ animationDelay: "0.14s" }} />
             <span className="dot-bounce" style={{ animationDelay: "0.28s" }} />

@@ -105,12 +105,38 @@ def register_table_from_sql(session_id: str, table_name: str, sql: str) -> int:
     return int(result[0]) if result else 0
 
 
+def _coerce(value: object) -> object:
+    """Convert DuckDB native C-extension types to plain Python JSON-safe types.
+
+    DuckDB returns int64/uint64/Decimal/date/timestamp as non-standard objects
+    that may pass isinstance(x, int) but still fail json.dumps on some builds.
+    Coerce them all to plain Python primitives here so every caller is safe.
+    """
+    if value is None:
+        return None
+    t = type(value).__name__
+    if t in ("int", "int8", "int16", "int32", "int64",
+             "uint8", "uint16", "uint32", "uint64", "hugeint"):
+        return int(value)
+    if t in ("float", "float32", "float64", "double", "Decimal"):
+        import math as _math
+        v = float(value)
+        return None if (_math.isnan(v) or _math.isinf(v)) else v
+    if t in ("date", "time", "datetime", "timestamp", "timedelta", "interval"):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return [_coerce(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _coerce(v) for k, v in value.items()}
+    return value
+
+
 def execute_in_session(session_id: str, sql: str) -> list[dict]:
     """Run *sql* on the session connection and return rows as list[dict]."""
     conn = get_connection(session_id)
     rel = conn.execute(sql)
     columns = [desc[0] for desc in rel.description]
-    return [dict(zip(columns, row)) for row in rel.fetchall()]
+    return [{col: _coerce(val) for col, val in zip(columns, row)} for row in rel.fetchall()]
 
 
 def table_exists(session_id: str, name: str) -> bool:

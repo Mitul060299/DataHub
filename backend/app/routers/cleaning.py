@@ -116,7 +116,7 @@ async def process_command(
 
 
 def _sse(data: dict[str, Any]) -> str:
-    return f"data: {json.dumps(data)}\n\n"
+    return f"data: {json.dumps(data, default=str)}\n\n"
 
 
 @router.post("/datasets/{dataset_id}/transform")

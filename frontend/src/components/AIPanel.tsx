@@ -506,6 +506,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
         break;
       }
       case "agent.error": {
+        setCurrentStepInfo(null);
         // Use the raw backend message for agent.error events — they are already
         // concise server-side strings. Only fall through humaniseError for
         // network-layer errors (handled in the catch block below).
@@ -628,6 +629,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
     if (!content && !approvePlan) return;
 
     if (content && !approvePlan) {
+      setCurrentStepInfo(null);
       setMessages((previous) => [
         ...previous,
         { id: crypto.randomUUID(), role: "user", content },

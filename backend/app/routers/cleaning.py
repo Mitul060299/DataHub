@@ -45,14 +45,14 @@ def analyze_dataset(
     return CleaningController.analyze_dataset(dataset_id, authorization, db)
 
 
-@router.post("/datasets/{dataset_id}/chat")
+@router.post("/datasets/{dataset_id}/chat", response_class=StreamingResponse)
 @limiter.limit("20/minute")
 async def process_command(
     request: Request,
     dataset_id: str,
     payload: CommandRequest,
     authorization: str | None = Header(default=None),
-) -> StreamingResponse:
+):
     async def event_stream():
         last_run_id: str | None = None
         try:

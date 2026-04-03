@@ -776,12 +776,12 @@ async def delete_table(
     return {"success": True}
 
 
-@router.post("/tables/{table_name}/export")
+@router.post("/tables/{table_name}/export", response_class=StreamingResponse)
 async def export_table(
     table_name: str,
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
-) -> StreamingResponse:
+):
     query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
     if workspace_id:
         query = query.filter(ImportTableDB.workspace_id == workspace_id)

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchWorkspaceRecent } from "../api";
+import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import type { Project } from "../contexts/WorkspaceContext";
@@ -42,11 +42,15 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects } = useWorkspaceContext();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
+  const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setRecentLoading(true);
@@ -62,12 +66,40 @@ export function WorkspaceHomePage() {
 
   const handleOpenProject = (project: Project) => {
     setActiveProject(project);
-    navigate(`/workspace/project/${project.id}`);
+    navigate(`/workspace/project/${project.id}/pipeline/new`);
   };
 
   const handleProjectCreated = (project: Project) => {
     setActiveProject(project);
-    navigate(`/workspace/project/${project.id}`);
+    navigate(`/workspace/project/${project.id}/pipeline/new`);
+  };
+
+  const handleDeleteProject = async (project: Project) => {
+    setMenuProjectId(null);
+    if (!window.confirm(`Delete project "${project.name}"? Pipelines and dashboards will not be deleted, but they will be unlinked.`)) return;
+    setActionLoading(true);
+    try {
+      await deleteProject(project.id);
+      await refreshProjects();
+    } catch {
+      alert("Failed to delete project.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameModal || !renameModal.value.trim()) return;
+    setActionLoading(true);
+    try {
+      await updateProject(renameModal.projectId, { name: renameModal.value.trim() });
+      await refreshProjects();
+      setRenameModal(null);
+    } catch {
+      alert("Failed to rename project.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
@@ -157,6 +189,7 @@ export function WorkspaceHomePage() {
                     gap: 8,
                     transition: "border-color 0.15s, background 0.15s",
                     borderLeft: `3px solid ${p.colour}`,
+                    position: "relative",
                   }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg3)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg2)"; }}
@@ -164,7 +197,44 @@ export function WorkspaceHomePage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontSize: 22 }}>{p.icon}</span>
                     <span style={{ fontWeight: 600, fontSize: 14, color: "var(--tx0)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMenuProjectId(menuProjectId === p.id ? null : p.id); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      title="Project options"
+                      style={{ background: "none", border: "none", color: "var(--tx2, #888)", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px", borderRadius: 4, flexShrink: 0, opacity: 0.7 }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.background = "var(--bg4)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                    >⋯</button>
                   </div>
+                  {menuProjectId === p.id && (
+                    <>
+                      {/* Backdrop — closes menu without triggering tile click */}
+                      <div
+                        style={{ position: "fixed", inset: 0, zIndex: 99 }}
+                        onClick={(e) => { e.stopPropagation(); setMenuProjectId(null); }}
+                      />
+                      <div style={{
+                        position: "absolute", top: 44, right: 8, zIndex: 100,
+                        background: "var(--bg2)", border: "1px solid var(--bd2)",
+                        borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+                        minWidth: 140, overflow: "hidden",
+                      }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRenameModal({ projectId: p.id, value: p.name }); setMenuProjectId(null); }}
+                          style={{ display: "block", width: "100%", padding: "9px 14px", textAlign: "left", background: "none", border: "none", color: "var(--tx0)", fontSize: 13, cursor: "pointer" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg3)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                        >Rename</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); void handleDeleteProject(p); }}
+                          disabled={actionLoading}
+                          style={{ display: "block", width: "100%", padding: "9px 14px", textAlign: "left", background: "none", border: "none", color: "#fca5a5", fontSize: 13, cursor: "pointer" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg3)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                        >Delete</button>
+                      </div>
+                    </>
+                  )}
                   {p.description && (
                     <p style={{ margin: 0, fontSize: 12, color: "var(--tx1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.description}</p>
                   )}
@@ -301,6 +371,41 @@ export function WorkspaceHomePage() {
           )}
         </section>
       </div>
+
+      {renameModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)" }}
+          onClick={() => setRenameModal(null)}
+        >
+          <div style={{ background: "var(--bg1)", border: "1px solid var(--bd2)", borderRadius: 12, padding: "24px 28px", minWidth: 340, display: "flex", flexDirection: "column", gap: 16 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--tx0)" }}>Rename project</h3>
+            <input
+              ref={renameInputRef}
+              autoFocus
+              value={renameModal.value}
+              onChange={(e) => setRenameModal((prev) => prev ? { ...prev, value: e.target.value } : null)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleRenameSubmit();
+                if (e.key === "Escape") setRenameModal(null);
+              }}
+              placeholder="Project name"
+              style={{ background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 8, padding: "8px 12px", fontSize: 14, color: "var(--tx0)", outline: "none", width: "100%", boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setRenameModal(null)}
+                style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid var(--bd2)", background: "var(--bg3)", color: "var(--tx1)", fontSize: 13, cursor: "pointer" }}
+              >Cancel</button>
+              <button
+                onClick={() => void handleRenameSubmit()}
+                disabled={actionLoading || !renameModal.value.trim()}
+                style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: "var(--ac)", color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (actionLoading || !renameModal.value.trim()) ? 0.6 : 1 }}
+              >{actionLoading ? "Saving…" : "Save"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <NewProjectModal
         open={newProjectOpen}

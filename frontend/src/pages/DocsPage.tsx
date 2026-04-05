@@ -325,11 +325,11 @@ function WhatIsPipeline() {
             <tr><td><code>filter_nulls</code></td><td>Drop rows where a specific column is null</td></tr>
             <tr><td><code>drop_null_columns</code></td><td>Drop columns with more than a threshold % of nulls</td></tr>
             <tr><td><code>cast_column_type</code></td><td>Change a column's type to int / float / str / datetime / bool</td></tr>
-            <tr><td><code>add_calculated_column</code></td><td>Add a new column using a df.eval formula</td></tr>
+            <tr><td><code>add_calculated_column</code></td><td>Add a new column using a formula expression (e.g. <code>revenue * 0.9</code>)</td></tr>
             <tr><td><code>generate_id</code></td><td>Add a surrogate key — rownum / uuid4 / md5-hash</td></tr>
             <tr><td><code>drop_duplicates</code></td><td>Remove exact duplicate rows (keep first or last)</td></tr>
             <tr><td><code>deduplicate_by_column</code></td><td>Drop duplicates based on a single column subset</td></tr>
-            <tr><td><code>fuzzy_deduplicate</code></td><td>Merge near-duplicate string values using rapidfuzz similarity threshold</td></tr>
+            <tr><td><code>fuzzy_deduplicate</code></td><td>Merge near-duplicate string values using a fuzzy similarity threshold</td></tr>
             <tr><td><code>trim_string_columns</code></td><td>Strip leading/trailing whitespace from all string columns</td></tr>
             <tr><td><code>rename_snake_case</code></td><td>Normalise all column names to snake_case</td></tr>
             <tr><td><code>filter_rows</code></td><td>Keep rows matching a condition — operators: == != &gt; &gt;= &lt; &lt;= contains startswith endswith</td></tr>
@@ -347,10 +347,10 @@ function WhatIsPipeline() {
             <tr><td><code>detect_date_gaps</code></td><td>Reindex a date column to a complete range and fill gaps with ffill or bfill</td></tr>
             <tr><td><code>normalize_timezone</code></td><td>Localise timestamps to a source timezone then convert to a target timezone</td></tr>
             <tr><td><code>validate_rules</code></td><td>Assert quality rules (not_null / &gt; / &gt;= / &lt; / &lt;= / == / unique / regex / min_length) with flag / drop / report mode</td></tr>
-            <tr><td><code>sentiment</code></td><td>AI-classify text column as positive / negative / neutral (Groq-backed with fallback)</td></tr>
+            <tr><td><code>sentiment</code></td><td>AI-classify text column as positive / negative / neutral (with keyword-based fallback)</td></tr>
             <tr><td><code>keywords</code></td><td>Extract top-k keywords from a text column by frequency</td></tr>
             <tr><td><code>anomaly_detection</code></td><td>Flag statistical outliers per numeric column using zscore</td></tr>
-            <tr><td><code>custom</code></td><td>Write raw DuckDB SQL — reference your dataset with <code>&#123;&#123;dataset&#125;&#125;</code></td></tr>
+            <tr><td><code>custom</code></td><td>Write raw SQL — reference your dataset with <code>&#123;&#123;dataset&#125;&#125;</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -760,7 +760,7 @@ function GuidePipeline() {
           <h3>Describe a transformation in plain English</h3>
           <p>
             In the AI chat panel, type what you want to do — e.g. <em>"Filter to rows where region = APAC, then group by month and sum revenue"</em>. The AI
-            generates DuckDB SQL for each step.
+            generates and executes SQL for each step.
           </p>
         </div>
       </div>
@@ -974,7 +974,7 @@ function Faq() {
     },
     {
       q: "What SQL dialect does DataHub use internally?",
-      a: "DataHub uses DuckDB as its in-process query engine. It supports most ANSI SQL plus DuckDB-specific extensions like COLUMNS(), LIST aggregates, and friendly JSON functions. You don't need to know SQL — the AI handles query generation.",
+      a: "DataHub executes analytical SQL against your data using an in-process columnar SQL engine. It supports most ANSI SQL plus extensions for JSON, arrays, and time-series. You don't need to know SQL — the AI handles query generation for you.",
     },
     {
       q: "Is my data secure?",
@@ -1111,8 +1111,7 @@ function FileFormats() {
       </div>
       <h2>Encoding &amp; delimiter detection</h2>
       <p>
-        CSV files are automatically probed for delimiter (comma, semicolon, pipe, tab, colon) via Python’s <code>csv.Sniffer</code>. Non-UTF-8
-        encodings (Latin-1, Windows-1252, etc.) are detected with chardet and re-encoded to UTF-8 during ingest — no manual action needed.
+        CSV files are automatically probed to detect the delimiter (comma, semicolon, pipe, tab, colon). Non-UTF-8 encodings (Latin-1, Windows-1252, etc.) are detected automatically and re-encoded to UTF-8 during ingest — no manual action needed.
       </p>
       <h2>Multi-sheet Excel</h2>
       <p>
@@ -1208,7 +1207,7 @@ function DataOps() {
           <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
           <tbody>
             <tr><td><code>cast_column_type</code></td><td>Convert a column to int / float / str / datetime / bool</td></tr>
-            <tr><td><code>add_calculated_column</code></td><td>Add a new column from a <code>df.eval</code> expression (e.g. <code>revenue * 0.9</code>)</td></tr>
+            <tr><td><code>add_calculated_column</code></td><td>Add a new column from a formula expression (e.g. <code>revenue * 0.9</code>)</td></tr>
             <tr><td><code>generate_id</code></td><td>Add a surrogate key column — <em>rownum</em>, <em>uuid4</em>, or <em>md5-hash</em> of selected columns</td></tr>
           </tbody>
         </table>
@@ -1221,7 +1220,7 @@ function DataOps() {
           <tbody>
             <tr><td><code>drop_duplicates</code></td><td>Remove exact duplicate rows, keeping first or last occurrence</td></tr>
             <tr><td><code>deduplicate_by_column</code></td><td>Keep one row per unique value in a specified column</td></tr>
-            <tr><td><code>fuzzy_deduplicate</code></td><td>Merge near-duplicate strings using rapidfuzz similarity — set a threshold (0–100)</td></tr>
+            <tr><td><code>fuzzy_deduplicate</code></td><td>Merge near-duplicate strings using a fuzzy similarity score — set a threshold (0–100)</td></tr>
             <tr><td><code>trim_string_columns</code></td><td>Strip leading/trailing whitespace from all string columns</td></tr>
             <tr><td><code>rename_snake_case</code></td><td>Normalise all column names to lowercase snake_case</td></tr>
           </tbody>
@@ -1307,7 +1306,7 @@ function DataOps() {
         <table className="docs-table">
           <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>sentiment</code></td><td>Classify a text column as positive / negative / neutral using Groq LLM (keyword fallback when no API key)</td></tr>
+            <tr><td><code>sentiment</code></td><td>AI-classify a text column as positive / negative / neutral (with keyword-based fallback)</td></tr>
             <tr><td><code>keywords</code></td><td>Extract top-k keywords from a text column by frequency</td></tr>
             <tr><td><code>anomaly_detection</code></td><td>Flag statistical outliers in every numeric column using zscore</td></tr>
           </tbody>
@@ -1316,7 +1315,7 @@ function DataOps() {
 
       <h2>Custom SQL</h2>
       <p>
-        Use <code>custom</code> to run any DuckDB SQL. Reference your current dataset as <code>&#123;&#123;dataset&#125;&#125;</code> in the query.
+        Use <code>custom</code> to run any SQL against your dataset. Reference your current dataset as <code>&#123;&#123;dataset&#125;&#125;</code> in the query.
         The result of the <code>SELECT</code> statement becomes the new dataset for the next step.
       </p>
       <pre className="docs-codeblock">{`SELECT *, revenue / total_revenue AS pct_share

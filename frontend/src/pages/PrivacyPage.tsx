@@ -26,7 +26,7 @@ export function PrivacyPage() {
 
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Privacy Policy</h1>
       <p style={{ color: "var(--tx1)", fontSize: 13, marginBottom: 40 }}>
-        Last updated: March 29, 2026 · Effective: April 1, 2026
+        Last updated: April 5, 2026 · Effective: April 5, 2026
       </p>
 
       <Section title="1. Introduction">
@@ -96,8 +96,21 @@ export function PrivacyPage() {
       </Section>
 
       <Section title="9. International Data Transfers">
-        Your data may be transferred to and processed in India and the United States. For EU users, we
-        ensure appropriate safeguards are in place in accordance with GDPR requirements.
+        Your data is stored primarily on AWS S3 in the Asia Pacific (Mumbai, India) region
+        (ap-south-1). Indian users' data remaining in India is fully consistent with India's Digital
+        Personal Data Protection Act 2023 (DPDP).<br /><br />
+        Application servers run on Render.com (United States). Authentication and database services run
+        on Supabase (United States). AI inference is handled by Groq (United States). These providers
+        are bound by data processing agreements.<br /><br />
+        <strong>For EU/UK users (GDPR):</strong> Transfers to India and the United States are made
+        under appropriate safeguards. AWS has Standard Contractual Clauses (SCCs) in place covering
+        all regions including Mumbai. Our other US-based processors (Supabase, Render, Groq) operate
+        under Standard Contractual Clauses. EU-region storage is on our roadmap for enterprise
+        customers who require contractual data residency guarantees. To request a Data Processing
+        Agreement (DPA), contact hello@datahub.org.in.<br /><br />
+        <strong>For California users (CCPA):</strong> We do not sell your personal information. No US
+        law requires your data to remain within the United States for SaaS products. Your rights under
+        CCPA are described in Section 7.
       </Section>
 
       <Section title="10. Changes to This Policy">

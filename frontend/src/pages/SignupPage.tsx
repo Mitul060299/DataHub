@@ -42,6 +42,10 @@ export function SignupPage() {
   };
 
   const handleProvider = async (provider: "google" | "github") => {
+    if (!termsAccepted) {
+      setErrorMessage("Please accept the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
     setLoading(true);
     const { error } = await signInWithProvider(provider);
     setLoading(false);
@@ -100,8 +104,8 @@ export function SignupPage() {
 
         <div className="auth-actions">
           <button className="btn btn-primary" disabled={loading || !termsAccepted} type="submit">{loading ? "Creating account..." : "Create account"}</button>
-          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
-          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
+          <button className="btn" disabled={loading || !termsAccepted} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
+          <button className="btn" disabled={loading || !termsAccepted} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
         </div>
 
         <div className="auth-row" style={{ marginTop: 12 }}>

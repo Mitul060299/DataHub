@@ -26,7 +26,7 @@ export function TermsPage() {
 
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Terms of Service</h1>
       <p style={{ color: "var(--tx1)", fontSize: 13, marginBottom: 40 }}>
-        Last updated: March 29, 2026 · Effective: April 1, 2026
+        Last updated: April 5, 2026 · Effective: April 5, 2026
       </p>
 
       <Section title="1. Agreement to Terms">
@@ -136,7 +136,49 @@ export function TermsPage() {
         14 days before they take effect. Continued use after the effective date constitutes acceptance.
       </Section>
 
-      <Section title="14. Contact">
+      <Section title="14. Disclaimer of Warranties">
+        THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, WE DISCLAIM ALL WARRANTIES,
+        INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+        NON-INFRINGEMENT, AND ACCURACY OF DATA. We do not warrant that (a) the Service will meet your
+        specific requirements; (b) the Service will be uninterrupted, timely, secure, or error-free;
+        (c) the results obtained from use of the Service will be accurate or reliable; or (d) any
+        errors in the Service will be corrected. Some jurisdictions do not allow the exclusion of
+        implied warranties, so the above exclusion may not apply to you.
+      </Section>
+
+      <Section title="15. Service Availability">
+        We do not guarantee any specific uptime or service availability. We may perform maintenance,
+        updates, or experience outages at any time without notice. We are not liable for any loss or
+        damage caused by unavailability of the Service. We will make reasonable efforts to notify you
+        of planned downtime in advance. No SLA (Service Level Agreement) is provided unless expressly
+        agreed in a separate written Enterprise agreement.
+      </Section>
+
+      <Section title="16. Force Majeure">
+        We shall not be liable for any delay or failure to perform our obligations under these Terms
+        where such delay or failure results from causes beyond our reasonable control, including but
+        not limited to acts of God, natural disasters, war, terrorism, riots, embargoes, acts of civil
+        or military authorities, fire, floods, accidents, pandemics, network infrastructure failures,
+        or acts or omissions of third-party service providers (including AWS, Supabase, Render, or
+        Groq).
+      </Section>
+
+      <Section title="17. Severability and Entire Agreement">
+        <strong>Severability:</strong> If any provision of these Terms is found to be unenforceable
+        or invalid by a court of competent jurisdiction, that provision shall be limited or eliminated
+        to the minimum extent necessary so that the remaining Terms shall continue in full force and
+        effect.<br /><br />
+        <strong>Entire Agreement:</strong> These Terms, together with our Privacy Policy, constitute
+        the entire agreement between you and DataHub regarding use of the Service and supersede all
+        prior agreements, understandings, or representations. No waiver of any term shall be deemed a
+        further or continuing waiver of that term or any other term.<br /><br />
+        <strong>Assignment:</strong> You may not assign or transfer your rights under these Terms
+        without our prior written consent. We may assign our rights and obligations under these Terms
+        without restriction.
+      </Section>
+
+      <Section title="18. Contact">
         For questions about these Terms, email us at{" "}
         <a href="mailto:mitul.srivastava000@gmail.com" style={{ color: "#5B6AF0" }}>
           mitul.srivastava000@gmail.com

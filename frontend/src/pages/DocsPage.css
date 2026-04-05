@@ -614,3 +614,27 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Legal link button ── */
+.docs-legal-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+  padding: 10px 20px;
+  background: rgba(91, 106, 240, 0.1);
+  border: 1px solid rgba(91, 106, 240, 0.35);
+  border-radius: 8px;
+  color: #818cf8;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.docs-legal-link:hover {
+  background: rgba(91, 106, 240, 0.18);
+  border-color: #5B6AF0;
+  color: #a5b4fc;
+  text-decoration: none;
+}

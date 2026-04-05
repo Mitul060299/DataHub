@@ -56,6 +56,13 @@ const SECTIONS: Section[] = [
       { id: "shortcuts", label: "Keyboard shortcuts" },
     ],
   },
+  {
+    label: "LEGAL",
+    pages: [
+      { id: "legal-terms", label: "Terms of Service" },
+      { id: "legal-privacy", label: "Privacy Policy" },
+    ],
+  },
 ];
 
 const FLAT_PAGES: Page[] = SECTIONS.flatMap((s) => s.pages);
@@ -1331,6 +1338,102 @@ WHERE region = 'APAC'`}</pre>
   );
 }
 
+function LegalTerms() {
+  return (
+    <article className="docs-article">
+      <h1>Terms of Service</h1>
+      <p className="docs-lead">
+        By using DataHub you agree to our Terms of Service. These terms cover acceptable use, subscription billing, data ownership,
+        intellectual property, termination, liability limits, and more.
+      </p>
+      <h2>Key sections at a glance</h2>
+      <dl className="docs-glossary">
+        <div className="docs-glossary__item">
+          <dt>Your data</dt>
+          <dd>You retain full ownership of all data you upload or generate. We do not sell or share your data with third parties.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Acceptable use</dt>
+          <dd>DataHub may not be used for illegal activity, malicious automation, or scraping other services. Violations result in immediate termination.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Subscriptions &amp; billing</dt>
+          <dd>Subscriptions are billed monthly. You may cancel at any time; access continues until the end of the billing period.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Liability</dt>
+          <dd>The service is provided "as is". Our liability is limited to the amount you paid in the 12 months preceding a claim.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Governing law</dt>
+          <dd>These terms are governed by the laws of India. Disputes are subject to the exclusive jurisdiction of courts in India.</dd>
+        </div>
+      </dl>
+      <div className="docs-callout docs-callout--info">
+        This is a summary only. Read the full Terms of Service for all details.
+      </div>
+      <a
+        href="/terms"
+        target="_blank"
+        rel="noreferrer"
+        className="docs-legal-link"
+      >
+        Read full Terms of Service →
+      </a>
+    </article>
+  );
+}
+
+function LegalPrivacy() {
+  return (
+    <article className="docs-article">
+      <h1>Privacy Policy</h1>
+      <p className="docs-lead">
+        Your privacy matters. Our Privacy Policy explains what data we collect, how we use it, where it is stored, and your rights
+        as a data subject under GDPR, CCPA, and India's DPDP Act 2023.
+      </p>
+      <h2>Key points at a glance</h2>
+      <dl className="docs-glossary">
+        <div className="docs-glossary__item">
+          <dt>What we collect</dt>
+          <dd>Account details (email, name), usage data (pipeline runs, API calls), and the data files you upload for processing.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>How we use it</dt>
+          <dd>To provide the service, send transactional notifications (with your consent), enforce plan limits, and improve the product. We never sell your data.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Where data is stored</dt>
+          <dd>All data is stored on AWS infrastructure in the Asia Pacific (Mumbai) region. Data is encrypted in transit and at rest.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Your rights</dt>
+          <dd>You may access, correct, export, or delete your personal data at any time. Contact us at <a href="mailto:mitul.srivastava000@gmail.com">mitul.srivastava000@gmail.com</a> to exercise your rights.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Cookies</dt>
+          <dd>We use essential session cookies only. No advertising or tracking cookies are used.</dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Third-party services</dt>
+          <dd>We use Supabase (auth &amp; database), AWS S3 (storage), Razorpay (billing), and Resend (email). Each provider has their own privacy policy.</dd>
+        </div>
+      </dl>
+      <div className="docs-callout docs-callout--info">
+        This is a summary only. Read the full Privacy Policy for all details.
+      </div>
+      <a
+        href="/privacy"
+        target="_blank"
+        rel="noreferrer"
+        className="docs-legal-link"
+      >
+        Read full Privacy Policy →
+      </a>
+    </article>
+  );
+}
+
 // ── Content router ─────────────────────────────────────────────
 function DocContent({ page }: { page: string }) {
   switch (page) {
@@ -1356,6 +1459,8 @@ function DocContent({ page }: { page: string }) {
     case "limits":       return <PlanLimits />;
     case "formats":      return <FileFormats />;
     case "shortcuts":    return <Shortcuts />;
+    case "legal-terms":  return <LegalTerms />;
+    case "legal-privacy": return <LegalPrivacy />;
     default:             return <Welcome />;
   }
 }

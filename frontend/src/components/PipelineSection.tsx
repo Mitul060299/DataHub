@@ -3,6 +3,7 @@ import { IconChevronDown, IconClock, IconCopy, IconDownload, IconPlay, IconTrash
 import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
+import { useUser } from "../contexts/UserContext";
 import { api } from "../api";
 import { TemplatePickerModal } from "./modals/TemplatePickerModal";
 import { WORKFLOW_TEMPLATES } from "../lib/workflowTemplates";
@@ -29,6 +30,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
+  const { limits } = useUser();
 
   const [open, setOpen] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -66,10 +68,17 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [nlApplying, setNlApplying] = useState(false);
   const [nlFeedback, setNlFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const canSchedule = Boolean(
+  const planAllowsScheduling = limits.features.scheduledPipelines;
+  const isFlatFile = Boolean(
     activeDataset?.format &&
-    !FLAT_FILE_FORMATS.has(activeDataset.format.toLowerCase()),
+    FLAT_FILE_FORMATS.has(activeDataset.format.toLowerCase()),
   );
+  const canSchedule = planAllowsScheduling && !isFlatFile;
+  const scheduleDisabledReason = !planAllowsScheduling
+    ? "Upgrade to Professional or higher to enable pipeline scheduling."
+    : isFlatFile
+    ? "Scheduling is only available for database connections, not flat files (CSV, Excel, etc.)."
+    : "";
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -1137,7 +1146,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
               className="btn"
               onClick={canSchedule ? onSchedule : undefined}
               disabled={!canSchedule}
-              title={canSchedule ? "Schedule pipeline" : "Scheduling is only available for database connections, not flat files (CSV, Excel, etc.)"}
+              title={canSchedule ? "Schedule pipeline" : scheduleDisabledReason}
               style={{ opacity: canSchedule ? 1 : 0.35, cursor: canSchedule ? "pointer" : "not-allowed" }}
             >
               Schedule

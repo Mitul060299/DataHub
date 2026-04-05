@@ -1,11 +1,12 @@
 # Data Residency Strategy
 
+> **INTERNAL — NOT FOR PUBLIC DISTRIBUTION**
+
 ## Current State (April 2026)
 
 **One bucket — AWS S3 ap-south-1 (Mumbai). This is correct for the current stage.**
 
 All user data is stored in a single AWS S3 bucket in the Mumbai (ap-south-1) region.
-This is the right call for a 0–50 user India-first launch.
 
 ---
 
@@ -47,11 +48,11 @@ This is the right call for a 0–50 user India-first launch.
 - Noticeable above 50MB file uploads
 - Not a concern at current file size limits
 
-### Trigger 3 — YC / investor due diligence
+### Trigger 3 — Investor due diligence
 - Have the 3-region architecture plan ready as a scaling answer:
-  > "Currently Mumbai for Indian launch. Plan to add eu-west-1 and us-east-1 when we have
+  > "Currently Mumbai for Indian launch. Plan to add EU and US regions when we have
   > paying users in those regions."
-- This answer is fully acceptable at Series A and earlier
+- This answer is fully acceptable at early stages
 
 ---
 
@@ -59,9 +60,9 @@ This is the right call for a 0–50 user India-first launch.
 
 ```
 3 buckets:
-  datahub-ap-south-1   →  Mumbai      (India / Asia-Pacific)
-  datahub-eu-west-1    →  Ireland     (EU / UK)
-  datahub-us-east-1    →  N. Virginia (US / Americas)
+  <name>-ap-south-1   →  Mumbai      (India / Asia-Pacific)
+  <name>-eu-west-1    →  Ireland     (EU / UK)
+  <name>-us-east-1    →  N. Virginia (US / Americas)
 
 Geo-routing:
   1. Detect user country at signup (from IP or billing address)
@@ -94,7 +95,7 @@ The 5% who need contractual guarantees are enterprise clients not targeted at th
 | **Today** | Nothing — Mumbai is correct |
 | First EU user asks about data residency | Note their email; reply with roadmap statement above |
 | 3+ EU users ask, or first EU enterprise signup | Create `eu-west-1` bucket; add geo-routing; update Privacy Policy |
-| YC acceptance / Series A due diligence | Present 3-region scaling plan |
+| Investor due diligence | Present 3-region scaling plan |
 | US healthcare/government vertical (future) | Evaluate HIPAA-compliant storage separately |
 
 ---

@@ -98,7 +98,7 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 | Table | Key Columns | Notes |
 |---|---|---|
 | `feedback` | id (UUID), name, email, subject, message, created_at | Homepage contact/feedback form |
-| `reviews` | id (UUID), name, role, rating (1–5), body, approved (bool, default false), created_at | Homepage user reviews; publish by setting `approved=true` |
+| `reviews` | id (UUID), name, role, rating (1–5), body, approved, created_at | Homepage user reviews |
 
 ### Billing
 | Table | Key Columns | Notes |

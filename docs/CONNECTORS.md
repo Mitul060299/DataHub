@@ -530,7 +530,7 @@ S3_BUCKET_NAME=my-datahub-bucket
 - Server-side encryption (AES256)
 - Signed URLs for secure downloads (1 hour expiry)
 - Automatic archival to Glacier (optional)
-- Direct query using DuckDB httpfs extension
+- Direct query using DuckDB S3 integration
 
 ---
 

@@ -1,14 +1,7 @@
 # API
 
-- OpenAPI schema is available at /openapi.json
-- Swagger UI is available at /docs
-
 ## Rate Limiting
-All endpoints are protected by slowapi rate limiting. Limits are keyed per authenticated user (JWT `sub` claim) with IP fallback for unauthenticated routes.
-- Default: 60 requests/minute per user
-- File upload: 10 uploads/minute per user
-- NL pipeline edit: 15 requests/minute per user
-- AI chat SSE (`POST /cleaning/datasets/{id}/chat`): 20 requests/minute per user
+All endpoints are protected by rate limiting keyed per authenticated user (JWT `sub` claim) with IP fallback for unauthenticated routes.
 - Returns `429 Too Many Requests` with a `Retry-After` header when exceeded
 
 ## Auth
@@ -19,7 +12,7 @@ All endpoints are protected by slowapi rate limiting. Limits are keyed per authe
 ## Datasets
 - POST /datasets/upload (multipart; validates format, size, and content)
 - GET /datasets
-- GET /datasets/compare-schemas?ids=id1,id2 — compare column schemas between two datasets (exact matches, column-only-in-A, column-only-in-B, fuzzy suggestions via rapidfuzz, alignment score 0-1)
+- GET /datasets/compare-schemas?ids=id1,id2 — compare column schemas between two datasets (exact matches, column-only-in-A, column-only-in-B, fuzzy column suggestions, alignment score 0-1)
 - GET /datasets/{dataset_id}/lineage
 - GET /datasets/{dataset_id}/suggest-columns?query=...&limit=...
 - DELETE /datasets/{dataset_id} (requires editor)
@@ -258,12 +251,12 @@ Supported NL-addressable operations (30+):
 
 ## Cron Jobs
 - POST /api/cron/weekly-digest — trigger weekly digest emails for all opted-in users
-  - Requires header `X-Cron-Secret: <CRON_SECRET>` (set in Render environment)
-  - Intended for Render Cron Jobs or external schedulers (e.g. cron-job.org)
+  - Requires a pre-shared authorization header (value configured via `CRON_SECRET` environment variable)
+  - Intended for external schedulers
   - Respects each user's `weekly_digest` notification preference
 
 ## Reviews (homepage)
-- POST /api/reviews — submit a review `{name, role?, rating (1-5), body}`; saved as `approved=false`
+- POST /api/reviews — submit a review `{name, role?, rating (1-5), body}`; pending moderation
 - GET /api/reviews — return all approved reviews
 
 To publish a review in Supabase:
@@ -285,7 +278,7 @@ UPDATE reviews SET approved = true WHERE id = '<id>';
 ## File Import
 - POST /import/upload — upload a file to create a new dataset
   - Form fields: `file` (required), `dataset_name` (optional), `sheet` (optional, Excel only)
-  - CSV: delimiter is auto-detected via `csv.Sniffer`; non-UTF-8 encodings are auto-converted
+  - CSV: delimiter and encoding are auto-detected; non-UTF-8 encodings are auto-converted
   - Excel: if `sheet` is omitted the first sheet is used
 - POST /import/excel-sheets — list sheet names in an Excel file
   - Form field: `file` (required)
@@ -311,7 +304,7 @@ UPDATE reviews SET approved = true WHERE id = '<id>';
 
 ## Metrics & Health
 - GET /health — health check
-- GET /metrics — Prometheus metrics (requires `METRICS_BEARER_TOKEN` if set)
+- GET /metrics — Prometheus metrics endpoint (token-protected)
 
 ## Deprecated Endpoints (removed in v0.2.0)
 - ~~POST /dashboards~~ → use `POST /visualizations/dashboards`

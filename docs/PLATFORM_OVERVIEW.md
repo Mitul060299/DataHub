@@ -8,15 +8,15 @@
 - User feedback loop to correct/confirm fixes.
 - Chart-ready profiling summaries available per column (column stats, outlier counts, top values, duplicate %, null %).
 - Dataset listing and CSV export for downstream usage.
-- CSV delimiter auto-detected via `csv.Sniffer` (comma / tab / semicolon / pipe / colon).
-- Non-UTF-8 CSV files are automatically re-encoded to UTF-8 on upload (chardet detection).
+- CSV delimiter auto-detected (comma / tab / semicolon / pipe / colon).
+- Non-UTF-8 CSV files are automatically re-encoded to UTF-8 on upload.
 - Multi-sheet Excel: UI lists sheets before upload; `POST /import/excel-sheets` to retrieve sheet names programmatically.
 
 ### 30+ Pipeline Transformation Operations
 All operations are addressable by name in the NL pipeline editor and visual step builder:
 - **Null handling:** `fill_nulls` (mean/median/mode/zero/ffill/bfill/value), `filter_nulls`, `drop_null_columns`
 - **Type casting:** `cast_column_type`, `add_calculated_column`, `generate_id` (rownum/uuid/hash)
-- **Deduplication:** `drop_duplicates`, `deduplicate_by_column`, `fuzzy_deduplicate` (rapidfuzz)
+- **Deduplication:** `drop_duplicates`, `deduplicate_by_column`, `fuzzy_deduplicate`
 - **Filtering:** `filter_rows` (8 operators), `filter_outliers` (zscore)
 - **Normalisation:** `normalize_column` (minmax/zscore), `round_numeric`, `encode_categorical` (onehot/label)
 - **Aggregation:** `sort_by_column`, `group_by_sum/count/mean`, `pivot_table`, `resample_timeseries`
@@ -26,14 +26,14 @@ All operations are addressable by name in the NL pipeline editor and visual step
 - **Custom:** raw DuckDB SQL with `{{dataset}}` placeholder
 
 ### Schema Alignment
-- `GET /datasets/compare-schemas?ids=id1,id2` returns exact matches, unmatched columns per side, fuzzy column suggestions (rapidfuzz), and an alignment score 0–1.
+- `GET /datasets/compare-schemas?ids=id1,id2` returns exact matches, unmatched columns per side, fuzzy column suggestions, and an alignment score 0–1.
 
 ### Proactive, Autonomous AI Agents
-- LangGraph state machine (8 nodes) with streaming SSE output.
-- Multi-turn conversation memory — prior turns sent as `conversation_history` and prepended to each LangGraph request.
-- Live step progress — `agent.step.start` events streamed before each execution step.
-- Schema-aware `converse` mode — answers column questions accurately using the active dataset schema.
-- Two Groq models: `llama-3.1-8b-instant` for intent classification; `llama-3.3-70b-versatile` for planning, execution, and responses.
+- Multi-node AI state machine with streaming SSE output.
+- Multi-turn conversation memory — prior context is carried across turns.
+- Live step progress — streamed to the client before each execution step.
+- Schema-aware mode — answers column questions accurately using the active dataset schema.
+- Two LLM models: a lightweight model for intent routing; a large model for planning, execution, and responses.
 - Fallback rule-based suggestions if no LLM is configured.
 
 ### Business Context Memory
@@ -81,10 +81,10 @@ All operations are addressable by name in the NL pipeline editor and visual step
 | Data Cleaning & Profiling | Pandas, pyjanitor, AI/LLM agents |
 | Auto Insight/Trends | Rule-based insights + optional Groq-backed generation |
 | Context/Memory | Supabase Postgres + optional Chroma |
-| AI Agents/Autowrangling | LangGraph state machine + DuckDB SQL execution + Groq LLM |
+| AI Agents/Autowrangling | Multi-node AI state machine + SQL execution engine + LLM |
 | Visualization | React + ECharts |
 | API + Connectors | FastAPI, REST, plugins/adapters |
-| Permissions & Security | Supabase JWT, RBAC, audit logging, slowapi rate limiting |
+| Permissions & Security | Supabase JWT, RBAC, audit logging, rate limiting |
 | Deployment | Vercel + Render + Supabase + Upstash + S3 |
 
 ## 4. Typical User Workflow

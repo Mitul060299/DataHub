@@ -59,7 +59,7 @@
 **Cron**
 | Variable | Description |
 |---|---|
-| `CRON_SECRET` | Checked in `X-Cron-Secret` header for `/api/cron/weekly-digest` |
+| `CRON_SECRET` | Authorization secret for the scheduled digest endpoint |
 
 **Optional / Security**
 | Variable | Description |
@@ -98,7 +98,7 @@ A startup safety-net in `main.py` also applies all DDL idempotently on every dep
 	`docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build`
 - Run migrations:
 	`docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head`
-- Verify: `https://app.datahub.org.in/api/health`
+- Verify the backend health endpoint is reachable after deploy
 
 ## Helm (Kubernetes)
 - Chart lives in `infra/helm/datahub`; use `values-prod.yaml` as a starting point
@@ -125,9 +125,9 @@ A startup safety-net in `main.py` also applies all DDL idempotently on every dep
 - Grafana auto-provisions the Prometheus datasource via `infra/monitoring/grafana/provisioning`
 
 ## Weekly Digest Cron
-Configure via Render Cron Jobs or an external scheduler (e.g. cron-job.org):
+Configure via an external scheduler:
 - URL: `POST https://<render-backend>/api/cron/weekly-digest`
-- Header: `X-Cron-Secret: <CRON_SECRET>`
+- Header: a pre-shared secret (value from `CRON_SECRET` environment variable)
 - Recommended schedule: every Monday 08:00 UTC
 
 ## Beta Deployment Smoke Checklist

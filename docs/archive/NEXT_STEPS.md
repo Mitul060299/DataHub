@@ -75,7 +75,7 @@ Generate steps for: {user_message}
 Return ONLY the JSON array, no markdown."""
 
         response = client.messages.create(
-            model="llama-3.1-70b-versatile",
+            model=os.environ["GROQ_MODEL"],
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1024,
             temperature=0.3

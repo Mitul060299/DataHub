@@ -68,8 +68,8 @@ The AI Agent panel is available on every dataset page. Type a request in plain E
 
 ## LLM Configuration
 - Set `GROQ_API_KEY` in `.env` to enable the AI agent and NL pipeline editing.
-- `GROQ_MODEL` — model used for planning, execution, and responses. Default: `llama-3.3-70b-versatile`.
-- `GROQ_INTENT_MODEL` — model used for intent classification only. Default: `llama-3.1-8b-instant` (faster and cheaper than the 70B model).
+- `GROQ_MODEL` — model used for planning, execution, and responses.
+- `GROQ_INTENT_MODEL` — model used for intent classification only (a lightweight, faster model).
 
 ## RBAC (Scaffold)
 - Use /auth/login?username=...&role=editor to get a token for editor actions.

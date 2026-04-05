@@ -7,8 +7,8 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - Inline CSV connector ✅
 - Excel (single-sheet) ✅
 - Excel (multi-sheet) ✅ — sheet list endpoint + `sheet_name` param on upload
-- CSV delimiter auto-sniffing ✅ — `csv.Sniffer` detects `,` / `\t` / `;` / `|` / `:`
-- Non-UTF-8 CSV auto-conversion ✅ — chardet detects encoding, re-encodes to UTF-8 before parse
+- CSV delimiter auto-sniffing ✅ — auto-detects `,` / `\t` / `;` / `|` / `:`
+- Non-UTF-8 CSV auto-conversion ✅ — auto-detects encoding and re-encodes to UTF-8 before parse
 - JSON / Parquet upload ✅
 - DB connectors — PostgreSQL, MySQL, SQLite, MSSQL, Oracle ✅ (Professional tier)
 - DB connectors — Snowflake, BigQuery, Redshift ✅ (Team tier)
@@ -51,7 +51,7 @@ All operations available via NL pipeline editing and the visual step builder:
 ### Cleaning & deduplication
 - `drop_duplicates` ✅ — exact dedup (keep first / last)
 - `deduplicate_by_column` ✅ — subset dedup on a single column
-- `fuzzy_deduplicate` ✅ — rapidfuzz ratio threshold; graceful fallback to exact dedup
+- `fuzzy_deduplicate` ✅ — fuzzy similarity threshold; graceful fallback to exact dedup
 - `trim_string_columns` ✅ — strip leading/trailing whitespace
 - `rename_snake_case` ✅ — normalise all column names to snake_case
 
@@ -103,17 +103,17 @@ All operations available via NL pipeline editing and the visual step builder:
 - Learn from feedback 🟡 (feedback collection API)
 - Conversational interface ✅ (streaming SSE chat + Markdown rendering)
 - NL pipeline editing ✅ — 30+ supported operations; schema-aware; auto-retry on LLM parse failure
-- LangGraph agent state machine ✅ — 8-node graph (context_loader → intent_classifier → planner → plan_presenter → execute_step → reflect → pipeline_recorder → responder)
-- Multi-turn conversation memory ✅ — full `conversation_history` threaded through the agent stack; LangChain `HumanMessage`/`AIMessage` history prepended to every request
-- Live per-step streaming progress ✅ — `agent.step.start` SSE event emitted before each `execute_step` node; frontend shows "Step N/M: operation" in real time
+- AI agent state machine ✅ — 8-node pipeline (context loading → intent classification → planning → approval gate → execution → reflection → recording → response)
+- Multi-turn conversation memory ✅ — full conversation history threaded through the agent stack; prior turns included in every request
+- Live per-step streaming progress ✅ — a progress event is emitted before each execution step; frontend shows “Step N/M: operation” in real time
 - Schema-aware converse ✅ — `converse` intent receives active dataset schema so questions like “what columns do I have?” get accurate answers
-- Cheaper intent classifier ✅ — `llama-3.1-8b-instant` (via `GROQ_INTENT_MODEL`) used for single-token intent classification; 70B only used for planning/execution
+- Cheaper intent classifier ✅ — a lightweight model is used for single-token intent classification; the large model is reserved for planning/execution
 - Richer SQL repair ✅ — `reflect` node receives column stats + failed operation name alongside schema for more targeted SQL rewrites
 - Secondary dataset picker ✅ — UI “＋ Join” button lets users select additional datasets; `secondary_dataset_ids` forwarded to the agent for JOIN/UNION steps
 - Expand query results ✅ — query result tables show first 20 rows with a “Show all / Show less” toggle
 - Copy SQL from plan steps ✅ — each step in the execution plan has a “Copy” button with a ✓ confirmation flash
 - Stop generation ✅ — “■ Stop” button aborts the SSE stream via `AbortController`
-- Rate-limited chat ✅ — `/cleaning/datasets/{id}/chat` limited to 20 requests/minute per user
+- Rate-limited chat ✅ — AI chat endpoint is rate-limited per user
 
 ## 7. Analytics & Visualizations
 - Summary charts ✅
@@ -149,7 +149,7 @@ All operations available via NL pipeline editing and the visual step builder:
 - Explorer panel width drag-to-resize persisted to `localStorage` ✅
 
 ## 9. Query Folding & Write-Back
-- Query folding ✅ — QueryFoldOptimizer collapses compatible pipeline steps into fewer DuckDB SQL queries
+- Query folding ✅ — a query optimization layer collapses compatible pipeline steps into fewer SQL queries
 - Write-back ✅ — POST /api/pipelines/{id}/write-back; encrypted connector credentials; DML execution
 
 ## 10. Collaboration & Automation
@@ -187,7 +187,7 @@ All operations available via NL pipeline editing and the visual step builder:
 - Per-user audit log API ✅ (GET /users/me/audit-log; paginated, filterable)
 - Role-based access ✅ (viewer/editor/admin)
 - OIDC SSO 🟡 (requires configuration)
-- Rate limiting ✅ (slowapi; per-IP, per-endpoint limits; 429 + Retry-After)
+- Rate limiting ✅ (per-IP, per-endpoint limits; 429 + Retry-After)
 - File upload validation ✅ (format allowlist, MIME check, content sniff)
 - Usage enforcement ✅ (hard limits per plan; 429 on exceed)
 

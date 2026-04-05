@@ -1,0 +1,327 @@
+.team-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.team-panel {
+  width: 420px;
+  background: #0f1117;
+  border-left: 1px solid #1e293b;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ── Header ── */
+.team-panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e2e8f0;
+  flex: 1;
+}
+
+.team-panel-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.team-close-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 2px;
+  transition: color 0.15s;
+}
+
+.team-close-btn:hover {
+  color: #e2e8f0;
+}
+
+/* ── Body ── */
+.team-panel-body {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Invite section ── */
+.team-invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.team-invite-row {
+  display: flex;
+  gap: 8px;
+}
+
+.team-invite-input {
+  flex: 1;
+  height: 36px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 0 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.team-invite-input::placeholder {
+  color: #475569;
+}
+
+.team-invite-input:focus {
+  border-color: var(--ac, #5b6af0);
+}
+
+.team-role-select {
+  height: 36px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 0 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.team-role-select-sm {
+  height: 28px;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.team-invite-btn {
+  height: 36px;
+  background: var(--ac, #5b6af0);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.team-invite-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.team-invite-btn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.team-error {
+  color: var(--rd, #ef4444);
+  font-size: 12px;
+}
+
+.team-divider {
+  height: 1px;
+  background: #1e293b;
+}
+
+/* ── Legend ── */
+.team-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.team-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Role badges ── */
+.team-role-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.team-role-admin {
+  background: rgba(91, 106, 240, 0.18);
+  color: var(--ac, #5b6af0);
+}
+
+.team-role-editor {
+  background: rgba(167, 139, 250, 0.18);
+  color: var(--pu, #a78bfa);
+}
+
+.team-role-viewer {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+}
+
+/* ── Status badges ── */
+.team-status-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-status-active {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--gr, #22c55e);
+}
+
+.team-status-pending {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+/* ── Member list ── */
+.team-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.team-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #1e293b;
+}
+
+.team-member-pending {
+  opacity: 0.75;
+}
+
+.team-member-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--acg, #2a3050);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.team-online-dot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gr, #22c55e);
+  border: 1.5px solid #0f1117;
+}
+
+.team-member-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-member-email {
+  font-size: 13px;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-member-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.team-invited-by {
+  font-size: 10px;
+  color: #475569;
+}
+
+.team-member-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.team-remove-btn {
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 16px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.team-remove-btn:hover {
+  border-color: var(--rd, #ef4444);
+  color: var(--rd, #ef4444);
+}
+
+.team-empty {
+  color: #475569;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* ── Toast ── */
+.team-toast {
+  position: sticky;
+  bottom: 16px;
+  margin: 0 20px 16px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #e2e8f0;
+  text-align: center;
+  pointer-events: none;
+}

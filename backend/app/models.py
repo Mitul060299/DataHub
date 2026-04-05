@@ -505,6 +505,29 @@ class WorkspaceOut(BaseModel):
     share_scope: Optional[str] = None
 
 
+# ── Workspace membership models ───────────────────────────────────────────────
+
+class WorkspaceMemberInvite(BaseModel):
+    email: str
+    role: Literal["admin", "editor", "viewer"] = "viewer"
+
+
+class WorkspaceMemberUpdate(BaseModel):
+    role: Literal["admin", "editor", "viewer"]
+
+
+class WorkspaceMemberOut(BaseModel):
+    id: str
+    workspace_id: str
+    user_id: Optional[str] = None
+    email: str
+    role: str
+    status: str          # pending | active
+    invited_by: str
+    created_at: str
+    accepted_at: Optional[str] = None
+
+
 class BusinessRule(BaseModel):
     key: str
     description: str

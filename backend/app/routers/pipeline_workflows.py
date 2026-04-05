@@ -197,11 +197,14 @@ async def list_pipelines(
 
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
+    from ..services.workspace_access import get_visible_user_ids
+    visible = get_visible_user_ids(db, current_user_id, workspace_id or "default")
     pipelines, total = engine.list_pipelines(
         workspace_id=workspace_id,
         status=status,
         limit=limit,
         offset=offset,
+        visible_user_ids=visible,
     )
 
     return {

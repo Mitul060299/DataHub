@@ -26,6 +26,7 @@ from .routers import ml_routes, full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
 from .routers import waitlist
 from .routers import dashboard_access
+from .routers.workspace_members import router as workspace_members_router, invite_router as workspace_invite_router
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
 from .routers.saved_visualizations import router as saved_visualizations_router
@@ -272,6 +273,24 @@ def _apply_startup_ddl() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_email_unique ON waitlist_entries (email)",
+        # 0041 — workspace_members for team collaboration
+        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS owner_id TEXT",
+        """CREATE TABLE IF NOT EXISTS workspace_members (
+            id              TEXT PRIMARY KEY,
+            workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            user_id         TEXT,
+            email           TEXT NOT NULL,
+            role            TEXT NOT NULL DEFAULT 'viewer',
+            status          TEXT NOT NULL DEFAULT 'pending',
+            invite_token    TEXT UNIQUE,
+            invited_by      TEXT NOT NULL,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            accepted_at     TIMESTAMPTZ
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_wm_workspace_id ON workspace_members (workspace_id)",
+        "CREATE INDEX IF NOT EXISTS idx_wm_user_id ON workspace_members (user_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_wm_invite_token ON workspace_members (invite_token) WHERE invite_token IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_wm_workspace_email ON workspace_members (workspace_id, email)",
         # 0042 — agent artifacts table (persisted Parquet snapshots from pipeline write-ops)
         """CREATE TABLE IF NOT EXISTS artifacts (
             id              TEXT PRIMARY KEY,
@@ -448,3 +467,5 @@ app.include_router(artifacts_router)
 app.include_router(saved_visualizations_router)
 app.include_router(canvas_router)
 app.include_router(waitlist.router)
+app.include_router(workspace_members_router, prefix="/workspaces")
+app.include_router(workspace_invite_router)

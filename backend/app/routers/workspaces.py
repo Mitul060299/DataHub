@@ -4,14 +4,15 @@ from sqlalchemy.orm import Session
 import uuid
 from ..db import get_db
 from ..models import WorkspaceCreate, WorkspaceOut
-from ..models_db import Workspace
-from ..security import get_current_role, require_role
+from ..models_db import Workspace, WorkspaceMemberDB
+from ..security import get_current_role, get_current_subject, require_role
 from ..config import settings
 from ..services.rate_limit import FixedWindowRateLimiter
 from ..services.share_tokens import sign_token, verify_token
 from ..services.audit import audit_store
 from ..models import AuditEntry
 from ..services.plan_guard import resolve_user_plan, enforce_workspace_limit, enforce_min_plan
+from ..dependencies import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 _shared_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
@@ -28,7 +29,15 @@ def create_workspace(
     user_plan = resolve_user_plan(db, authorization)
     existing_count = db.query(Workspace).count()
     enforce_workspace_limit(user_plan, existing_count)
-    workspace = Workspace(id=str(uuid.uuid4()), name=payload.name, is_shared=False, share_token=None, share_expires_at=None)
+    owner_id = get_current_subject(authorization)  # email / user identifier
+    workspace = Workspace(
+        id=str(uuid.uuid4()),
+        name=payload.name,
+        is_shared=False,
+        share_token=None,
+        share_expires_at=None,
+        owner_id=owner_id,
+    )
     db.add(workspace)
     try:
         db.commit()
@@ -36,6 +45,26 @@ def create_workspace(
         db.rollback()
         raise HTTPException(status_code=400, detail="Workspace already exists")
     db.refresh(workspace)
+
+    # Seed creator as active admin member so the members list is consistent
+    if owner_id:
+        member = WorkspaceMemberDB(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace.id,
+            user_id=owner_id,
+            email=owner_id,
+            role="admin",
+            status="active",
+            invite_token=None,
+            invited_by=owner_id,
+            accepted_at=datetime.now(timezone.utc),
+        )
+        db.add(member)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()  # non-fatal — workspace was created successfully
+
     return WorkspaceOut(
         id=workspace.id,
         name=workspace.name,

@@ -1247,6 +1247,47 @@ export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
   return response.data;
 }
 
+// ── Workspace Members ────────────────────────────────────────────────────────
+
+export interface WorkspaceMemberOut {
+  id: string;
+  workspace_id: string;
+  user_id: string | null;
+  email: string;
+  role: "admin" | "editor" | "viewer";
+  status: "pending" | "active";
+  invited_by: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
+export async function fetchWorkspaceMembers(workspaceId: string): Promise<WorkspaceMemberOut[]> {
+  const response = await api.get(`/workspaces/${workspaceId}/members`);
+  return response.data;
+}
+
+export async function inviteMember(
+  workspaceId: string,
+  email: string,
+  role: "admin" | "editor" | "viewer",
+): Promise<WorkspaceMemberOut> {
+  const response = await api.post(`/workspaces/${workspaceId}/members`, { email, role });
+  return response.data;
+}
+
+export async function updateMemberRole(
+  workspaceId: string,
+  memberId: string,
+  role: "admin" | "editor" | "viewer",
+): Promise<WorkspaceMemberOut> {
+  const response = await api.put(`/workspaces/${workspaceId}/members/${memberId}`, { role });
+  return response.data;
+}
+
+export async function removeMember(workspaceId: string, memberId: string): Promise<void> {
+  await api.delete(`/workspaces/${workspaceId}/members/${memberId}`);
+}
+
 // ── Reviews ─────────────────────────────────────────────────────────────────
 
 export interface ReviewOut {

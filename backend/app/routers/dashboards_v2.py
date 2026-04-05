@@ -16,6 +16,7 @@ from ..services.rate_limit import FixedWindowRateLimiter
 from ..db import get_db
 from ..models_db import DashboardViewDB, DashboardCommentDB
 from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
+from ..services.workspace_access import get_visible_user_ids
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards-v2"])
 public_router = APIRouter(prefix="/api/public/dashboards", tags=["dashboards-public"])
@@ -26,11 +27,15 @@ _public_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
 def list_dashboards(
     workspace_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ) -> list[DashboardV2Out]:
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_subject(authorization)
-    return DashboardsV2Service.list_dashboards(user_id=user_id, workspace_id=workspace_id)
+    visible = get_visible_user_ids(db, user_id, workspace_id or "default")
+    return DashboardsV2Service.list_dashboards(
+        user_id=user_id, workspace_id=workspace_id, visible_user_ids=visible
+    )
 
 
 @router.post("", response_model=DashboardV2Out)

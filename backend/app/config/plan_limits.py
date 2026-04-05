@@ -13,6 +13,7 @@ class UsageLimits(TypedDict):
     pipeline_runs_per_month: int  # Pipeline executions
     datasets_per_month: int       # New dataset uploads this month
     storage_bytes: int            # Cumulative storage cap (-1 = unlimited)
+    max_team_members: int         # Max workspace members (-1 = unlimited)
 
 
 USAGE_LIMITS: dict[str, UsageLimits] = {
@@ -21,30 +22,35 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "pipeline_runs_per_month": 10,
         "datasets_per_month": 3,
         "storage_bytes": 100 * 1024 * 1024,          # 100 MB
+        "max_team_members": 1,
     },
     "Professional": {
         "api_calls_per_month": 2_000,
         "pipeline_runs_per_month": 200,
         "datasets_per_month": 50,
         "storage_bytes": 10 * 1024 * 1024 * 1024,    # 10 GB
+        "max_team_members": 1,
     },
     "Team": {
         "api_calls_per_month": 10_000,
         "pipeline_runs_per_month": 1_000,
         "datasets_per_month": -1,
         "storage_bytes": 100 * 1024 * 1024 * 1024,   # 100 GB
+        "max_team_members": 10,
     },
     "Business": {
         "api_calls_per_month": -1,
         "pipeline_runs_per_month": -1,
         "datasets_per_month": -1,
         "storage_bytes": -1,
+        "max_team_members": 50,
     },
     "Enterprise": {
         "api_calls_per_month": -1,
         "pipeline_runs_per_month": -1,
         "datasets_per_month": -1,
         "storage_bytes": -1,
+        "max_team_members": -1,
     },
 }
 

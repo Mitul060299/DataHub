@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { createProject as apiCreateProject, fetchProjects } from "../api";
+import { createProject as apiCreateProject, fetchProjects, fetchWorkspaceMembers, type WorkspaceMemberOut } from "../api";
 import type { ProjectOut } from "../api";
 import { useAuth } from "./AuthContext";
 
@@ -49,6 +49,8 @@ export interface WorkspaceContextValue {
   setActiveDataset: (dataset: Dataset | null) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
+  workspaceMembers: WorkspaceMemberOut[];
+  refreshMembers: (workspaceId: string) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
@@ -79,6 +81,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [activeDataset, setActiveDataset] = useState<Dataset | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberOut[]>([]);
+
+  const refreshMembers = useCallback(async (workspaceId: string) => {
+    if (!session || !workspaceId || workspaceId === "default") return;
+    try {
+      const data = await fetchWorkspaceMembers(workspaceId);
+      setWorkspaceMembers(data);
+    } catch {
+      // non-fatal
+    }
+  }, [session]);
 
   const refreshProjects = useCallback(async () => {
     if (!session) {
@@ -133,8 +146,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveDataset,
       members,
       setMembers,
+      workspaceMembers,
+      refreshMembers,
     }),
-    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, members],
+    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, members, workspaceMembers, refreshMembers],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

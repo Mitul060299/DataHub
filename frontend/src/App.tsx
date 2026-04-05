@@ -16,6 +16,7 @@ import { WorkspacePage } from "./pages/WorkspacePage";
 import { DocsPage } from "./pages/DocsPage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
+import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function App() {
       <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
       <Route path="/dashboard/share/:token" element={<PublicDashboardPage />} />
       <Route path="/docs" element={<DocsPage />} />
@@ -53,6 +55,7 @@ export function App() {
         <Route path="settings/billing" element={<SettingsPage section="billing" />} />
         <Route path="settings/usage" element={<SettingsPage section="usage" />} />
         <Route path="settings/audit" element={<SettingsPage section="audit" />} />
+        <Route path="settings/team" element={<SettingsPage section="team" />} />
         <Route path="sources" element={<SourcesPage />} />
         <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>

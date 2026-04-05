@@ -8,7 +8,7 @@ import { VisualizationsSection } from "./VisualizationsSection";
 import { DataSection } from "./DataSection";
 
 import { PipelineSection } from "./PipelineSection";
-import { MembersModal } from "./modals/MembersModal";
+import { TeamPanel } from "./TeamPanel";
 import { ProjectModal } from "./modals/ProjectModal";
 import { ImportModal } from "./modals/ImportModal";
 import { ScheduleModal } from "./modals/ScheduleModal";
@@ -23,13 +23,13 @@ interface ExplorerPanelProps {
 }
 
 export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
-  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, projectsLoading } = useWorkspaceContext();
+  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, workspaceMembers, refreshMembers, projectsLoading } = useWorkspaceContext();
   const { steps, setScheduleInfo } = usePipelineContext();
   const { exportPipeline, schedule } = usePipeline();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
-  const [membersModalOpen, setMembersModalOpen] = useState(false);
+  const [teamPanelOpen, setTeamPanelOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
@@ -233,13 +233,33 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
 
       <div className="members-strip" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "inline-flex", alignItems: "center" }}>
-          {members.map((member, index) => (
-            <div key={member.id} title={member.name} style={{ width: 22, height: 22, borderRadius: 999, border: "1px solid var(--bg1)", background: "var(--acg)", display: "grid", placeItems: "center", marginLeft: index ? -5 : 0, fontSize: 11 }}>
-              {member.name.slice(0, 1).toUpperCase()}
-            </div>
-          ))}
+          {(() => {
+            const active = workspaceMembers.filter((m) => m.status === "active");
+            const legacy = members;
+            const displayList = active.length > 0 ? active : legacy;
+            const shown = displayList.slice(0, 4);
+            const overflow = displayList.length - shown.length;
+            return (
+              <>
+                {shown.map((member, index) => (
+                  <div
+                    key={"id" in member ? member.id : member.id}
+                    title={"email" in member ? member.email : member.name}
+                    style={{ width: 22, height: 22, borderRadius: 999, border: "1px solid var(--bg1)", background: "var(--acg)", display: "grid", placeItems: "center", marginLeft: index ? -5 : 0, fontSize: 11 }}
+                  >
+                    {("email" in member ? member.email : member.name).slice(0, 1).toUpperCase()}
+                  </div>
+                ))}
+                {overflow > 0 && (
+                  <div style={{ width: 22, height: 22, borderRadius: 999, border: "1px solid var(--bg1)", background: "var(--bg3)", display: "grid", placeItems: "center", marginLeft: -5, fontSize: 10, color: "var(--tx1)" }}>
+                    +{overflow}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
-        <button className="btn" onClick={() => setMembersModalOpen(true)} style={{ height: 24, fontSize: 11 }}>
+        <button className="btn" onClick={() => { setTeamPanelOpen(true); void refreshMembers(workspaceId); }} style={{ height: 24, fontSize: 11 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconTeam size={13} />+ Invite</span>
         </button>
       </div>
@@ -334,7 +354,9 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
 
       </div>
 
-      <MembersModal open={membersModalOpen} workspaceId={workspaceId} onClose={() => setMembersModalOpen(false)} />
+      {teamPanelOpen && (
+        <TeamPanel workspaceId={workspaceId} onClose={() => setTeamPanelOpen(false)} />
+      )}
       <ProjectModal
         open={projectModalOpen}
         workspaceId={workspaceId}

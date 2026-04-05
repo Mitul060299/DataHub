@@ -38,6 +38,7 @@ from ..models_db import (
     PipelineV2DB,
     ProjectDB,
 )
+from ..services.workspace_access import get_visible_user_ids
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 recent_router = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -91,9 +92,10 @@ def list_projects(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> List[ProjectOut]:
+    visible = get_visible_user_ids(db, current_user.id, "default")
     projects = (
         db.query(ProjectDB)
-        .filter(ProjectDB.user_id == current_user.id)
+        .filter(ProjectDB.user_id.in_(visible))
         .order_by(ProjectDB.updated_at.desc())
         .all()
     )

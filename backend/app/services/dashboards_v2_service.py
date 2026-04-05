@@ -53,10 +53,16 @@ class DashboardsV2Service:
         )
 
     @classmethod
-    def list_dashboards(cls, user_id: str, workspace_id: str | None = None) -> list[DashboardV2Out]:
+    def list_dashboards(
+        cls,
+        user_id: str,
+        workspace_id: str | None = None,
+        visible_user_ids: list[str] | None = None,
+    ) -> list[DashboardV2Out]:
         db = SessionLocal()
         try:
-            query = db.query(DashboardV2DB).filter(DashboardV2DB.user_id == user_id)
+            ids_to_query = visible_user_ids if visible_user_ids else [user_id]
+            query = db.query(DashboardV2DB).filter(DashboardV2DB.user_id.in_(ids_to_query))
             if workspace_id:
                 query = query.filter(DashboardV2DB.workspace_id == workspace_id)
             dashboards = query.order_by(DashboardV2DB.created_at.desc()).all()

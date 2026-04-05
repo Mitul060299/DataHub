@@ -626,12 +626,13 @@ class PipelineEngine:
         status: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
+        visible_user_ids: Optional[List[str]] = None,
     ) -> tuple:
         """List user's pipelines"""
-        
+        user_ids = visible_user_ids if visible_user_ids else [self.user_id]
         query = self.db.query(PipelineV2DB).filter(
             PipelineV2DB.workspace_id == workspace_id,
-            PipelineV2DB.user_id == self.user_id
+            PipelineV2DB.user_id.in_(user_ids)
         )
         
         if status:

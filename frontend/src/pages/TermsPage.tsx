@@ -120,7 +120,7 @@ export function TermsPage() {
         <strong>For users outside India:</strong> These Terms are governed by the laws of the State of
         Delaware, United States. Disputes shall be resolved by binding arbitration under the rules of
         the American Arbitration Association, conducted in English.<br /><br />
-        Before initiating any formal dispute, you agree to contact us at hello@datahub.org.in and
+        Before initiating any formal dispute, you agree to contact us at mitul.srivastava000@gmail.com and
         attempt informal resolution for at least 30 days.
       </Section>
 
@@ -138,8 +138,8 @@ export function TermsPage() {
 
       <Section title="14. Contact">
         For questions about these Terms, email us at{" "}
-        <a href="mailto:hello@datahub.org.in" style={{ color: "#5B6AF0" }}>
-          hello@datahub.org.in
+        <a href="mailto:mitul.srivastava000@gmail.com" style={{ color: "#5B6AF0" }}>
+          mitul.srivastava000@gmail.com
         </a>
         .
       </Section>

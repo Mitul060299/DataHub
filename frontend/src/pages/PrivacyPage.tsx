@@ -87,7 +87,7 @@ export function PrivacyPage() {
         obligation.<br /><br />
         <strong>California users (CCPA):</strong> We do not sell personal information. You have the
         right to know what data is collected and request its deletion.<br /><br />
-        To exercise any rights, contact hello@datahub.org.in.
+        To exercise any rights, contact mitul.srivastava000@gmail.com.
       </Section>
 
       <Section title="8. Children's Privacy">
@@ -107,7 +107,7 @@ export function PrivacyPage() {
         all regions including Mumbai. Our other US-based processors (Supabase, Render, Groq) operate
         under Standard Contractual Clauses. EU-region storage is on our roadmap for enterprise
         customers who require contractual data residency guarantees. To request a Data Processing
-        Agreement (DPA), contact hello@datahub.org.in.<br /><br />
+        Agreement (DPA), contact mitul.srivastava000@gmail.com.<br /><br />
         <strong>For California users (CCPA):</strong> We do not sell your personal information. No US
         law requires your data to remain within the United States for SaaS products. Your rights under
         CCPA are described in Section 7.
@@ -119,8 +119,8 @@ export function PrivacyPage() {
 
       <Section title="11. Contact">
         For privacy questions or to exercise your rights, email{" "}
-        <a href="mailto:hello@datahub.org.in" style={{ color: "#5B6AF0" }}>
-          hello@datahub.org.in
+        <a href="mailto:mitul.srivastava000@gmail.com" style={{ color: "#5B6AF0" }}>
+          mitul.srivastava000@gmail.com
         </a>
         . EU/UK users may also contact their local data protection authority.
       </Section>

@@ -119,7 +119,7 @@ CTA: **Start free trial**
 | On-premise deploy | ✅ |
 | Support | Dedicated account manager |
 
-CTA: **Contact sales** → hello@datahub.org.in
+CTA: **Contact sales** → mitul.srivastava000@gmail.com
 
 ---
 

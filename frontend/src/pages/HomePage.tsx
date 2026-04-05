@@ -296,7 +296,7 @@ export function HomePage() {
 
   const handlePlanCta = (action: "trial" | "contact") => {
     if (action === "contact") {
-      window.location.href = "mailto:hello@datahub.org.in";
+      window.location.href = "mailto:mitul.srivastava000@gmail.com";
       return;
     }
     navigate(session ? "/workspace" : "/signup");
@@ -330,7 +330,7 @@ export function HomePage() {
       setSubject("");
       setMessage("");
     } catch {
-      setRequestError("Something went wrong. Email us directly at hello@datahub.org.in");
+      setRequestError("Something went wrong. Email us directly at mitul.srivastava000@gmail.com");
     } finally {
       setIsSubmitting(false);
     }
@@ -722,7 +722,7 @@ export function HomePage() {
                   </ul>
 
                   {plan.action === "contact" ? (
-                    <a className={buttonClass} href="mailto:hello@datahub.org.in">
+                    <a className={buttonClass} href="mailto:mitul.srivastava000@gmail.com">
                       {plan.buttonLabel}
                     </a>
                   ) : plan.action === "checkout" ? (
@@ -907,7 +907,7 @@ export function HomePage() {
             { href: "/docs", label: "Documentation" },
             { href: "/terms", label: "Terms of Service" },
             { href: "/privacy", label: "Privacy Policy" },
-            { href: "mailto:hello@datahub.org.in", label: "Contact" },
+            { href: "mailto:mitul.srivastava000@gmail.com", label: "Contact" },
           ] as { href: string; label: string }[]).map(({ href, label }) => (
             <a
               key={label}

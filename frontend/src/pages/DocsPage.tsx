@@ -728,7 +728,7 @@ function GuideDatabase() {
         </div>
       </div>
       <p>
-        Questions? <a href="mailto:hello@datahub.org.in">Email us</a> or use the feedback form on the home page.
+        Questions? <a href="mailto:mitul.srivastava000@gmail.com">Email us</a> or use the feedback form on the home page.
       </p>
     </article>
   );
@@ -960,7 +960,7 @@ function GuideExport() {
       <h2>Export via API</h2>
       <p>
         The DataHub REST API exposes artifact download endpoints. See <a href="/docs?page=faq">the FAQ</a> for API access details, or{" "}
-        <a href="mailto:hello@datahub.org.in">email us</a> for Enterprise API documentation.
+        <a href="mailto:mitul.srivastava000@gmail.com">email us</a> for Enterprise API documentation.
       </p>
     </article>
   );
@@ -986,7 +986,7 @@ function Faq() {
     },
     {
       q: "Is there an API?",
-      a: "A REST API is available for Business and Enterprise plans. Contact hello@datahub.org.in for documentation and API keys.",
+      a: "A REST API is available for Business and Enterprise plans. Contact mitul.srivastava000@gmail.com for documentation and API keys.",
     },
     {
       q: "Can I export my data if I cancel?",

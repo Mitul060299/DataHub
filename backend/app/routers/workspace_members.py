@@ -254,7 +254,7 @@ def update_member_role(
     return _member_out(member)
 
 
-@router.delete("/{workspace_id}/members/{member_id}", status_code=204)
+@router.delete("/{workspace_id}/members/{member_id}", status_code=204, response_model=None)
 def remove_member(
     workspace_id: str,
     member_id: str,

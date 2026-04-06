@@ -7,6 +7,7 @@ interface PlanStep {
   sql?: string;
   estimated_rows: string;
   reversible: boolean;
+  depends_on?: number[];
 }
 
 interface PlanCardProps {

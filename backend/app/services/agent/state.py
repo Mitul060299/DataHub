@@ -27,6 +27,7 @@ class PlanStep(TypedDict):
     template_id: Optional[str]
     estimated_rows: str
     reversible: bool
+    depends_on: NotRequired[list[int]]  # step_numbers this step depends on; [] = linear (depends on previous)
 
 
 class ExecutionResult(TypedDict):
@@ -81,6 +82,8 @@ class AgentState(TypedDict):
     run_id: Optional[str]
     output_dataset_id: Optional[str]
     run_steps: list[dict]
+    completed_step_numbers: NotRequired[list[int]]  # step_numbers that have finished executing
+    plan_type: NotRequired[str]  # "linear" | "dag"
 
     final_response: str
     chart_config: Optional[dict]   # legacy; prefer execution_results[].tile_created

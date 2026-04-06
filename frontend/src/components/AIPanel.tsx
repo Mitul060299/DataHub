@@ -6,6 +6,7 @@ import { useChatSession, type AgentEvent, type ConversationMessage, type PlanSte
 import { usePipeline } from "../hooks/usePipeline";
 import { IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
+import PlanDAG from "./PlanDAG";
 import { StepCard } from "./StepCard";
 import { EChartsRenderer } from "./EChartsRenderer";
 import { api, saveVisualization } from "../api";
@@ -182,6 +183,7 @@ type Message = ConversationMessage & {
   transformation?: TransformationPayload;
   stepStatus?: "pending" | "applying" | "applied" | "discarded";
   plan?: PlanStep[];
+  planType?: "linear" | "dag";
   planPending?: boolean;
   planApproved?: boolean;
   planRejected?: boolean;
@@ -270,6 +272,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
     switch (event.type) {
       case "agent.plan": {
         const plan = (event.plan as PlanStep[] | undefined) || [];
+        const planType = (event.plan_type as "linear" | "dag" | undefined) ?? "linear";
         setMessages((previous) => [
           ...previous,
           {
@@ -277,6 +280,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
             role: "assistant",
             content: "Here's my plan:",
             plan,
+            planType,
             planPending: true,
             planApproved: false,
           },
@@ -902,15 +906,27 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
                 />
               ) : null}
               {message.plan ? (
-                <PlanCard
-                  steps={message.plan}
-                  pending={Boolean(message.planPending)}
-                  approved={message.planApproved}
-                  rejected={message.planRejected}
-                  sending={sending}
-                  onApprove={approvePlan}
-                  onReject={rejectPlan}
-                />
+                message.planType === "dag" ? (
+                  <PlanDAG
+                    steps={message.plan}
+                    pending={Boolean(message.planPending)}
+                    approved={message.planApproved}
+                    rejected={message.planRejected}
+                    sending={sending}
+                    onApprove={approvePlan}
+                    onReject={rejectPlan}
+                  />
+                ) : (
+                  <PlanCard
+                    steps={message.plan}
+                    pending={Boolean(message.planPending)}
+                    approved={message.planApproved}
+                    rejected={message.planRejected}
+                    sending={sending}
+                    onApprove={approvePlan}
+                    onReject={rejectPlan}
+                  />
+                )
               ) : null}
               {message.tileCreated?.echarts_config ? (
                 <div style={{ marginTop: 8 }}>

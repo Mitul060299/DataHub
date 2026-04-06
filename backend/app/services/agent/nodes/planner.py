@@ -76,6 +76,7 @@ async def planner(state: AgentState) -> dict:
                     "template_id": str(step.get("template_id")) if step.get("template_id") else None,
                     "estimated_rows": str(step.get("estimated_rows") or "Estimated rows unavailable"),
                     "reversible": bool(step.get("reversible", True)),
+                    "depends_on": [int(d) for d in step.get("depends_on", [])] if step.get("depends_on") else [],
                 }
             )
     except json.JSONDecodeError:

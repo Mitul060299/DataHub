@@ -182,9 +182,11 @@ class AgentGraphService:
 
                 elif node_name == "planner":
                     plan = data.get("output", {}).get("plan", [])
+                    plan_type = "dag" if any(step.get("depends_on") for step in plan) else "linear"
                     yield {
                         "type": "agent.plan",
                         "plan": plan,
+                        "plan_type": plan_type,
                         "message": "Plan ready for approval",
                     }
 

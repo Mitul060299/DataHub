@@ -18,6 +18,31 @@ from ...echarts_builder import build_echarts_config, infer_chart_type
 from ...object_storage import StorageService
 
 
+def _resolve_input_table(step: dict, state: AgentState) -> str:
+    """Return the DuckDB table name that this step should read from.
+
+    For branching steps (depends_on is set), find the most-recently registered
+    table_registry entry whose pipeline_step_number is in depends_on.
+    Falls back to "dataset" (the source view) when no match is found.
+    For sequential steps (depends_on absent or empty), also returns "dataset"
+    so the existing linear behaviour is preserved.
+    """
+    depends_on: list[int] = step.get("depends_on") or []
+    if not depends_on:
+        return "dataset"
+    table_registry: dict = dict(state.get("table_registry") or {})
+    # Prefer entries whose step number is the highest in depends_on
+    # (the most derived predecessor) as the default input table.
+    best: str | None = None
+    best_step = -1
+    for entry in table_registry.values():
+        sn = entry.get("pipeline_step_number", -1)
+        if sn in depends_on and sn > best_step:
+            best = entry["duckdb_name"]
+            best_step = sn
+    return best if best else "dataset"
+
+
 async def execute_step(state: AgentState) -> dict:
     idx = state["current_step_index"]
     plan = state["plan"]
@@ -78,6 +103,7 @@ async def execute_step(state: AgentState) -> dict:
                 "current_step_index": idx + 1,
                 "retry_count": 0,
                 "error": None,
+                "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
             }
 
         if operation in {"create_chart", "visualise"} or state.get("intent") == "visualise":
@@ -115,8 +141,9 @@ async def execute_step(state: AgentState) -> dict:
             # "dataset" is always registered as a view by context_loader —
             # use it as the fallback so a raw table scan works even when
             # the planner didn't supply an explicit source_table.
+            # For branching plans, _resolve_input_table picks the correct predecessor.
             if not source_table or source_table not in table_registry:
-                source_table = "dataset"
+                source_table = _resolve_input_table(step, state)
 
             if not step_sql:
                 import logging as _logging
@@ -215,6 +242,7 @@ async def execute_step(state: AgentState) -> dict:
                 "current_step_index": idx + 1,
                 "retry_count": 0,
                 "error": None,
+                "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
             }
 
         from ...pipeline_engine import PipelineEngine
@@ -261,6 +289,7 @@ async def execute_step(state: AgentState) -> dict:
                         "retry_count": 0,
                         "error": None,
                         "table_registry": table_registry,
+                        "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
                     }
 
                 elif intent_key in {"validate", "summarise"}:
@@ -428,6 +457,7 @@ async def execute_step(state: AgentState) -> dict:
                         "error": None,
                         "query_results": rows,
                         "table_registry": table_registry,
+                        "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
                     }
 
                 else:
@@ -609,6 +639,7 @@ async def execute_step(state: AgentState) -> dict:
                         "error": None,
                         "query_results": preview_rows,
                         "table_registry": table_registry,
+                        "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
                     }
 
             except SessionExpiredError as exc:
@@ -728,6 +759,7 @@ async def execute_step(state: AgentState) -> dict:
             "current_step_index": idx + 1,
             "retry_count": 0,
             "error": None,
+            "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
         }
 
     except Exception as exc:

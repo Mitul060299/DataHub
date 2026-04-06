@@ -15,6 +15,7 @@ export type PlanStep = {
   template_id?: string | null;
   estimated_rows: string;
   reversible: boolean;
+  depends_on?: number[];
 };
 
 export type AgentEvent = {

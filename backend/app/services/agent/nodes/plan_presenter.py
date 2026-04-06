@@ -3,6 +3,11 @@ from langchain_core.messages import AIMessage
 from ..state import AgentState
 
 
+def _is_branching(plan: list) -> bool:
+    """Return True if any step has a non-empty depends_on list (DAG plan)."""
+    return any(step.get("depends_on") for step in plan)
+
+
 async def plan_presenter(state: AgentState) -> dict:
     plan = state.get("plan", [])
 
@@ -12,15 +17,26 @@ async def plan_presenter(state: AgentState) -> dict:
             "final_response": "Could not generate a plan.",
         }
 
-    lines = ["Here's what I'll do:\n"]
+    branching = _is_branching(plan)
+
+    if branching:
+        lines = ["Here's my branching pipeline — steps can have multiple independent paths:\n"]
+    else:
+        lines = ["Here's what I'll do:\n"]
+
     for step in plan:
+        deps_note = ""
+        if step.get("depends_on"):
+            dep_labels = ", ".join(f"Step {d}" for d in step["depends_on"])
+            deps_note = f"\n*Depends on: {dep_labels}*"
         lines.append(
             f"**Step {step['step_number']}: {step['operation'].replace('_', ' ').title()}**\n"
             f"{step['description']}\n"
-            f"*Estimated: {step['estimated_rows']}*\n"
+            f"*Estimated: {step['estimated_rows']}*{deps_note}\n"
         )
     lines.append("\nShall I proceed? Click **Approve** to run all steps, or **Reject** to cancel.")
 
     return {
         "messages": [AIMessage(content="\n".join(lines))],
+        "plan_type": "dag" if branching else "linear",
     }

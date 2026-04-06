@@ -235,19 +235,20 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         <div style={{ display: "inline-flex", alignItems: "center" }}>
           {(() => {
             const active = workspaceMembers.filter((m) => m.status === "active");
-            const legacy = members;
-            const displayList = active.length > 0 ? active : legacy;
-            const shown = displayList.slice(0, 4);
-            const overflow = displayList.length - shown.length;
+            const normalized: Array<{ id: string; label: string }> = active.length > 0
+              ? active.map((m) => ({ id: m.id, label: m.email }))
+              : members.map((m) => ({ id: m.id, label: m.name }));
+            const shown = normalized.slice(0, 4);
+            const overflow = normalized.length - shown.length;
             return (
               <>
                 {shown.map((member, index) => (
                   <div
-                    key={"id" in member ? member.id : member.id}
-                    title={"email" in member ? member.email : member.name}
+                    key={member.id}
+                    title={member.label}
                     style={{ width: 22, height: 22, borderRadius: 999, border: "1px solid var(--bg1)", background: "var(--acg)", display: "grid", placeItems: "center", marginLeft: index ? -5 : 0, fontSize: 11 }}
                   >
-                    {("email" in member ? member.email : member.name).slice(0, 1).toUpperCase()}
+                    {member.label.slice(0, 1).toUpperCase()}
                   </div>
                 ))}
                 {overflow > 0 && (

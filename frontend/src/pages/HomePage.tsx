@@ -1,6 +1,6 @@
 import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, useInView } from "framer-motion";
+import { motion, useScroll } from "framer-motion";
 import {
   IconBrain,
   IconCheck,
@@ -235,9 +235,19 @@ const plans: PricingPlan[] = [
 
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
 
+const metricsStrip = [
+  { number: "10+", label: "Countries" },
+  { number: "Free", label: "Forever tier" },
+  { number: "0", label: "Lines of code" },
+  { number: "100%", label: "Audit trail" },
+];
+
 export function HomePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
+
+  const mainRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ container: mainRef });
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -389,7 +399,11 @@ export function HomePage() {
   };
 
   return (
-    <main className="app-page home-page">
+    <main className="app-page home-page" ref={mainRef}>
+      <motion.div
+        className="scroll-progress-bar"
+        style={{ scaleX: scrollYProgress }}
+      />
       <section className="home-section home-hero-section">
         <div className="home-hero-overlay" />
         <div className="home-inner home-hero-grid">
@@ -467,7 +481,12 @@ export function HomePage() {
             >No credit card required · Free tier forever</motion.p>
           </div>
 
-          <div className="hero-window-wrap">
+          <motion.div
+            className="hero-window-wrap"
+            initial={{ opacity: 0, y: 36 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div
               style={{
                 background: "#111115",
@@ -634,25 +653,76 @@ export function HomePage() {
               </div>
             </div>
 
-            <div className="hero-status-badge hero-status-cleaned">
+            <motion.div
+              className="hero-status-badge hero-status-cleaned"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.7 }}
+              style={{ y: 0 }}
+              whileInView={{ y: [0, -7, 0] }}
+              viewport={{ once: false }}
+            >
               <span className="hero-badge-dot hero-badge-dot-green" />
               847 rows cleaned
-            </div>
-            <div className="hero-status-badge hero-status-recorded">
+            </motion.div>
+            <motion.div
+              className="hero-status-badge hero-status-recorded"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
+            >
               <span className="hero-badge-dot hero-badge-dot-indigo" />
               3 steps recorded · replayable
-            </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="metrics-strip-section" aria-hidden="true">
+        <div className="home-inner">
+          <div className="metrics-strip">
+            {metricsStrip.map((item, i) => (
+              <motion.div
+                key={item.label}
+                className="metrics-item"
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.09 }}
+              >
+                <span className="metrics-number">{item.number}</span>
+                <span className="metrics-label">{item.label}</span>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
 
       <section id="how" className="home-section">
         <div className="home-inner">
-          <p className="section-label">How it works</p>
-          <h2 className="section-title">From messy data to decisions in four steps</h2>
-          <p className="section-subtitle">
+          <motion.p
+            className="section-label"
+            initial={{ opacity: 0, x: -18 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.38, ease: "easeOut" }}
+          >How it works</motion.p>
+          <motion.h2
+            className="section-title"
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+          >From messy data to decisions in four steps</motion.h2>
+          <motion.p
+            className="section-subtitle"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.16, ease: "easeOut" }}
+          >
             No SQL. No Python. No BI team needed. Just describe what you want — the agent handles the rest, with a full audit trail.
-          </p>
+          </motion.p>
 
           <div className="how-grid">
             {howSteps.map((step, i) => (
@@ -679,11 +749,29 @@ export function HomePage() {
 
       <section className="home-section">
         <div className="home-inner">
-          <p className="section-label">Features</p>
-          <h2 className="section-title">Everything your data team needs</h2>
-          <p className="section-subtitle">
+          <motion.p
+            className="section-label"
+            initial={{ opacity: 0, x: -18 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.38, ease: "easeOut" }}
+          >Features</motion.p>
+          <motion.h2
+            className="section-title"
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+          >Everything your data team needs</motion.h2>
+          <motion.p
+            className="section-subtitle"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.16, ease: "easeOut" }}
+          >
             Built for analysts who want the power of a data engineer without writing a single line of code.
-          </p>
+          </motion.p>
 
           <div className="features-grid">
             {features.map((feature, i) => (
@@ -711,13 +799,31 @@ export function HomePage() {
       {/* ── Branching Pipeline DAG section ── */}
       <section className="home-section" style={{ background: "#08080d" }}>
         <div className="home-inner">
-          <p className="section-label">Branching Pipelines</p>
-          <h2 className="section-title">Multi-stream pipelines, not just a list</h2>
-          <p className="section-subtitle">
+          <motion.p
+            className="section-label"
+            initial={{ opacity: 0, x: -18 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.38, ease: "easeOut" }}
+          >Branching Pipelines</motion.p>
+          <motion.h2
+            className="section-title"
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+          >Multi-stream pipelines, not just a list</motion.h2>
+          <motion.p
+            className="section-subtitle"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.16, ease: "easeOut" }}
+          >
             When your analysis splits into parallel streams, DataHub visualises it as a dependency graph —
             just like GitHub Actions workflows. Independent branches run as soon as their inputs are ready;
             join steps wait for all upstream branches automatically.
-          </p>
+          </motion.p>
           <div className="pipeline-dag-demo">
             <div className="dag-demo-query">
               &ldquo;Clean the data, then branch — segment customers by region AND calculate monthly revenue trends, finally merge into one summary report.&rdquo;
@@ -775,12 +881,30 @@ export function HomePage() {
 
       <section id="pricing" className="home-section">
         <div className="home-inner">
-          <p className="section-label">Pricing</p>
-          <h2 className="section-title">Start free, scale when ready</h2>
-          <p className="section-subtitle">No credit card required. Upgrade when your team needs more.</p>
+          <motion.p
+            className="section-label"
+            initial={{ opacity: 0, x: -18 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.38, ease: "easeOut" }}
+          >Pricing</motion.p>
+          <motion.h2
+            className="section-title"
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+          >Start free, scale when ready</motion.h2>
+          <motion.p
+            className="section-subtitle"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.16 }}
+          >No credit card required. Upgrade when your team needs more.</motion.p>
 
           <div className="pricing-grid">
-            {plans.map((plan) => {
+            {plans.map((plan, planIdx) => {
               const buttonClass = [
                 "pricing-button",
                 plan.buttonStyle === "primary"
@@ -795,10 +919,15 @@ export function HomePage() {
               ].join(" ");
 
               return (
-                <article
+                <motion.article
                   key={plan.tier}
                   className={`pricing-card ${plan.tier === "Team" ? "pricing-card-team" : ""}`}
                   style={{ "--plan-color": plan.color } as CSSProperties}
+                  initial={{ opacity: 0, y: 22 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.42, delay: planIdx * 0.07, ease: "easeOut" }}
+                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
                 >
                   {plan.popular ? <span className="pricing-popular">Popular</span> : null}
                   <p className="pricing-tier">{plan.tier}</p>
@@ -828,7 +957,7 @@ export function HomePage() {
                       {plan.buttonLabel}
                     </button>
                   )}
-                </article>
+                </motion.article>
               );
             })}
           </div>
@@ -838,8 +967,20 @@ export function HomePage() {
       {/* ── Bottom CTA ──────────────────────────────────────────────────── */}
       <section className="home-cta-section">
         <div className="home-inner home-cta-inner">
-          <h2 className="home-cta-title">Start analysing your data in 60 seconds</h2>
-          <p className="home-cta-sub">Upload a CSV, ask a question, get results. No setup. No SQL. No BI team required.</p>
+          <motion.h2
+            className="home-cta-title"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+          >Start analysing your data in 60 seconds</motion.h2>
+          <motion.p
+            className="home-cta-sub"
+            initial={{ opacity: 0, y: 14 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
+          >Upload a CSV, ask a question, get results. No setup. No SQL. No BI team required.</motion.p>
           <motion.button
             type="button" className="home-cta-btn" onClick={handleGetStarted}
             whileHover={{ scale: 1.04, backgroundColor: "#4b59dc" }}
@@ -856,17 +997,43 @@ export function HomePage() {
           <div className="reviews-layout">
             {/* Left — display cards */}
             <div>
-              <p className="section-label">User reviews</p>
-              <h2 className="reviews-heading">What our users say</h2>
-              <p className="reviews-subheading">
+              <motion.p
+                className="section-label"
+                initial={{ opacity: 0, x: -18 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.38, ease: "easeOut" }}
+              >User reviews</motion.p>
+              <motion.h2
+                className="reviews-heading"
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+              >What our users say</motion.h2>
+              <motion.p
+                className="reviews-subheading"
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: 0.16, ease: "easeOut" }}
+              >
                 Real feedback from teams using DataHub every day.
-              </p>
+              </motion.p>
               {approvedReviews.length === 0 ? (
                 <p className="reviews-empty">No reviews yet — be the first!</p>
               ) : (
                 <div className="reviews-cards">
-                  {approvedReviews.map((r) => (
-                    <div key={r.id} className="review-card">
+                  {approvedReviews.map((r, rIdx) => (
+                    <motion.div
+                      key={r.id}
+                      className="review-card"
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "-40px" }}
+                      transition={{ duration: 0.42, delay: rIdx * 0.1, ease: "easeOut" }}
+                      whileHover={{ borderColor: "rgba(91,106,240,0.5)", transition: { duration: 0.15 } }}
+                    >
                       <div className="review-stars">
                         {Array.from({ length: 5 }, (_, i) => (
                           <span key={i} className={i < r.rating ? "star-filled" : "star-empty"}>★</span>
@@ -877,7 +1044,7 @@ export function HomePage() {
                         <strong>{r.name}</strong>
                         {r.role ? <span className="review-role"> · {r.role}</span> : null}
                       </p>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               )}

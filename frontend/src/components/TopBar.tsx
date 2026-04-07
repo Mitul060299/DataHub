@@ -15,7 +15,19 @@ export function TopBar() {
   const navigate = useNavigate();
   const { session, user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const isHomePath = location.pathname === "/" || location.pathname.startsWith("/home");
+
+  useEffect(() => {
+    if (!isHomePath) { setScrolled(false); return; }
+    const mainEl = document.querySelector<HTMLElement>(".app-page");
+    if (!mainEl) return;
+    const onScroll = () => setScrolled(mainEl.scrollTop > 44);
+    mainEl.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => mainEl.removeEventListener("scroll", onScroll);
+  }, [isHomePath]);
 
   const activeTab = useMemo(() => {
     const match = tabs.find((tab) => location.pathname.startsWith(tab.path));
@@ -58,7 +70,27 @@ export function TopBar() {
   };
 
   return (
-    <header className="topbar" style={{ height: "var(--th)", borderBottom: "1px solid #22222a", background: "#111115", display: "grid", gridTemplateColumns: "280px 1fr 280px", alignItems: "center", padding: "0 14px", gap: 12, flexShrink: 0 }}>
+    <header
+      className="topbar"
+      style={{
+        height: "var(--th)",
+        borderBottom: `1px solid ${isHomePath && !scrolled ? "transparent" : "#22222a"}`,
+        background: isHomePath && !scrolled
+          ? "transparent"
+          : isHomePath
+          ? "rgba(13,13,17,0.9)"
+          : "#111115",
+        backdropFilter: isHomePath && scrolled ? "blur(18px) saturate(180%)" : "none",
+        WebkitBackdropFilter: isHomePath && scrolled ? "blur(18px) saturate(180%)" : "none",
+        display: "grid",
+        gridTemplateColumns: "280px 1fr 280px",
+        alignItems: "center",
+        padding: "0 14px",
+        gap: 12,
+        flexShrink: 0,
+        transition: "background 0.35s ease, border-color 0.35s ease, backdrop-filter 0.35s ease",
+      }}
+    >
       <button
         type="button"
         onClick={() => navigate("/home")}

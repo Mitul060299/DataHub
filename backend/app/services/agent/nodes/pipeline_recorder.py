@@ -103,8 +103,9 @@ async def pipeline_recorder(state: AgentState) -> dict:
 
                 artifact_id: str | None = None
                 artifact_s3_key = result.get("artifact_s3_key")
-                # Only persist real S3/GCS/R2/Azure keys — skip local sentinels
-                if artifact_s3_key and not str(artifact_s3_key).startswith("local/"):
+                # Persist for both cloud keys and local sentinels — local sentinels
+                # allow the artifact to appear in the list even when S3 is unavailable
+                if artifact_s3_key:
                     artifact_id = str(uuid.uuid4())
                     artifact_row = ArtifactDB(
                         id=artifact_id,

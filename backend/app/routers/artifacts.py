@@ -133,6 +133,12 @@ def download_artifact(
     s3_key = artifact.s3_key
     safe_name = (artifact.name or "artifact").replace(" ", "_")
 
+    if s3_key and str(s3_key).startswith("local/"):
+        raise HTTPException(
+            status_code=503,
+            detail="This artifact was generated without cloud storage configured and cannot be downloaded.",
+        )
+
     if fmt == "parquet":
         # Return a redirect to a fresh presigned URL
         try:

@@ -226,7 +226,7 @@ export function AIPanel({ dataset, workspaceId, projectId, onStepApplied, onData
   useEffect(() => {
     if (!dataset?.id) { setColumnSchema([]); return; }
     let cancelled = false;
-    api.get<{ columns: ColSchema[] }>(`/api/datasets/${dataset.id}/schema`)
+    api.get<{ columns: ColSchema[] }>(`/datasets/${dataset.id}/schema`)
       .then((r) => { if (!cancelled) setColumnSchema(r.data.columns ?? []); })
       .catch(() => { if (!cancelled) setColumnSchema([]); });
     return () => { cancelled = true; };

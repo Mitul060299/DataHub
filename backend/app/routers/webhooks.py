@@ -38,3 +38,21 @@ def list_hooks(
     enforce_webhooks(user_plan)
     rows = db.query(WebhookDB).order_by(WebhookDB.created_at.desc()).all()
     return [WebhookRegistration(hook_id=row.id, target_url=row.target_url, event=row.event) for row in rows]
+
+
+@router.delete("/{hook_id}", status_code=204)
+def delete_hook(
+    hook_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> None:
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_plan = resolve_user_plan(db, authorization)
+    enforce_webhooks(user_plan)
+    hook = db.query(WebhookDB).filter(WebhookDB.id == hook_id).first()
+    if not hook:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    db.delete(hook)
+    db.commit()

@@ -144,6 +144,7 @@ class DatasetMetaDB(Base):
     parent_id = Column(String, nullable=True)
     version_number = Column(Integer, nullable=False, default=1)
     version_note = Column(Text, nullable=True)
+    uploaded_by = Column(String, nullable=True)
     # Query-folding / write-back / live federation
     connector_credential_id = Column(String, nullable=True)  # FK to connector_credentials.id
     import_mode = Column(String, nullable=False, server_default="cached")  # 'cached' | 'live'

@@ -87,7 +87,7 @@ const features = [
     color: "#a78bfa",
     icon: <IconTeam size={18} color="#a78bfa" />,
     description:
-      "Share workspaces, co-edit pipelines, assign roles. Version history shows who changed what and when.",
+      "Share workspaces, collaborate on pipelines, assign roles. Version history shows who changed what and when.",
   },
   {
     title: "Audit & Governance",

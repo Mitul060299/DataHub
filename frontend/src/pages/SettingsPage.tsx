@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, listWebhooks, registerWebhook, deleteWebhook } from "../api";
 import { BillingSettings } from "../components/BillingSettings";
 import { TeamSettings } from "../components/TeamSettings";
 import { useAuth } from "../contexts/AuthContext";
 import { formatFileSize, useUser } from "../contexts/UserContext";
 import { billingEnabled } from "../utils/featureFlags";
 
-type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team";
+type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team" | "webhooks";
 
 interface SettingsPageProps {
   section: SettingsSection;
@@ -123,6 +123,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
           {section === "usage" ? <UsagePanel /> : null}
           {section === "audit" ? <AuditPanel /> : null}
           {section === "team" ? <TeamSettings /> : null}
+          {section === "webhooks" ? <WebhooksPanel plan={plan} /> : null}
         </div>
       </div>
     </div>
@@ -197,6 +198,17 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      key: "webhooks" as SettingsSection,
+      label: "Webhooks",
+      path: "/settings/webhooks",
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
       ),
     },
@@ -856,6 +868,215 @@ function AuditPanel() {
           >
             Next →
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const WEBHOOK_EVENTS = [
+  { value: "pipeline.run", label: "Pipeline Run" },
+  { value: "dataset.upload", label: "Dataset Upload" },
+  { value: "dataset.delete", label: "Dataset Delete" },
+  { value: "pipeline.approved", label: "Pipeline Approved" },
+];
+
+interface Webhook {
+  id: string;
+  target_url: string;
+  event: string;
+  created_at?: string;
+}
+
+function WebhooksPanel({ plan }: { plan: string }) {
+  const [hooks, setHooks] = useState<Webhook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [url, setUrl] = useState("");
+  const [event, setEvent] = useState("pipeline.run");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isBusinessPlus = ["business", "enterprise"].includes(plan?.toLowerCase() ?? "");
+
+  useEffect(() => {
+    if (!isBusinessPlus) { setLoading(false); return; }
+    listWebhooks()
+      .then(setHooks)
+      .catch(() => setError("Failed to load webhooks"))
+      .finally(() => setLoading(false));
+  }, [isBusinessPlus]);
+
+  const handleAdd = async () => {
+    if (!url.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const hook = await registerWebhook(url.trim(), event);
+      setHooks((prev) => [...prev, hook]);
+      setUrl("");
+    } catch {
+      setError("Failed to register webhook.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteWebhook(id);
+      setHooks((prev) => prev.filter((h) => h.id !== id));
+    } catch {
+      setError("Failed to delete webhook.");
+    }
+  };
+
+  if (!isBusinessPlus) {
+    return (
+      <div style={{ display: "grid", gap: 12 }}>
+        <h2 style={{ fontSize: 18, color: "#e8e8f0", margin: 0 }}>Webhooks</h2>
+        <div
+          style={{
+            background: "#111115",
+            border: "1px solid #22222a",
+            borderRadius: 10,
+            padding: "20px 24px",
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          <p style={{ color: "#8888a0", fontSize: 13, margin: 0 }}>
+            Webhooks are available on the <strong style={{ color: "#e8e8f0" }}>Business</strong> plan and above.
+          </p>
+          <a href="/pricing" style={{ color: "#5b6af0", fontSize: 13 }}>Upgrade →</a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <h2 style={{ fontSize: 18, color: "#e8e8f0", margin: 0 }}>Webhooks</h2>
+      <p style={{ color: "#8888a0", fontSize: 13, margin: 0 }}>
+        Receive HTTP POST notifications when events occur in your workspace.
+      </p>
+
+      {/* Add webhook form */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto auto",
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
+        <input
+          type="url"
+          placeholder="https://your-server.com/webhook"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          style={{
+            background: "#0d0d10",
+            border: "1px solid #2a2a38",
+            borderRadius: 8,
+            padding: "8px 12px",
+            color: "#e8e8f0",
+            fontSize: 13,
+          }}
+        />
+        <select
+          value={event}
+          onChange={(e) => setEvent(e.target.value)}
+          style={{
+            background: "#0d0d10",
+            border: "1px solid #2a2a38",
+            borderRadius: 8,
+            padding: "8px 12px",
+            color: "#e8e8f0",
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          {WEBHOOK_EVENTS.map((ev) => (
+            <option key={ev.value} value={ev.value}>{ev.label}</option>
+          ))}
+        </select>
+        <button
+          className="btn btn-primary"
+          disabled={saving || !url.trim()}
+          onClick={handleAdd}
+          style={{ fontSize: 13, padding: "8px 16px" }}
+        >
+          {saving ? "Adding…" : "Add"}
+        </button>
+      </div>
+
+      {error ? <p style={{ color: "#e05a5a", fontSize: 13, margin: 0 }}>{error}</p> : null}
+
+      {/* Webhook list */}
+      {loading ? (
+        <p style={{ color: "#8888a0", fontSize: 13 }}>Loading…</p>
+      ) : hooks.length === 0 ? (
+        <p style={{ color: "#8888a0", fontSize: 13 }}>No webhooks configured yet.</p>
+      ) : (
+        <div style={{ display: "grid", gap: 6 }}>
+          {hooks.map((hook) => (
+            <div
+              key={hook.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#0d0d10",
+                border: "1px solid #22222a",
+                borderRadius: 8,
+                padding: "10px 14px",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#5b6af0",
+                    fontFamily: "monospace",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {hook.target_url}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#8888a0",
+                    background: "#1a1a22",
+                    borderRadius: 4,
+                    padding: "1px 6px",
+                    width: "fit-content",
+                  }}
+                >
+                  {hook.event}
+                </span>
+              </div>
+              <button
+                onClick={() => handleDelete(hook.id)}
+                style={{
+                  background: "transparent",
+                  border: "1px solid #3a2a2a",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  color: "#e05a5a",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>

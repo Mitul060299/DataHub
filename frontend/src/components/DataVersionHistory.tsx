@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { fetchDatasetLineageGraph } from "../api";
+import type { LineageNode, LineageEdge } from "./DataLineageGraph";
+import { DataLineageGraph } from "./DataLineageGraph";
 
 interface Version {
   id: string;
@@ -11,6 +14,7 @@ interface Version {
   created_at: string | null;
   parent_id: string | null;
   is_current: boolean;
+  uploaded_by?: string | null;
 }
 
 interface DataVersionHistoryProps {
@@ -23,6 +27,11 @@ export function DataVersionHistory({ datasetId, onSwitchVersion }: DataVersionHi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [tab, setTab] = useState<"history" | "lineage">("history");
+  const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([]);
+  const [lineageEdges, setLineageEdges] = useState<LineageEdge[]>([]);
+  const [lineageLoading, setLineageLoading] = useState(false);
+  const [lineageError, setLineageError] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -39,24 +48,57 @@ export function DataVersionHistory({ datasetId, onSwitchVersion }: DataVersionHi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
 
+  useEffect(() => {
+    if (tab !== "lineage" || !datasetId) return;
+    setLineageLoading(true);
+    setLineageError(null);
+    fetchDatasetLineageGraph(datasetId)
+      .then((data) => {
+        setLineageNodes(data.nodes);
+        setLineageEdges(data.edges);
+      })
+      .catch(() => setLineageError("Lineage data unavailable. Upgrade to Team plan or above."))
+      .finally(() => setLineageLoading(false));
+  }, [tab, datasetId]);
+
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      {/* Header */}
+      {/* Header with tabs */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tx1)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          Version History
-        </span>
-        <button
-          className="btn"
-          style={{ fontSize: 11, padding: "3px 8px" }}
-          onClick={() => setUploadOpen((o) => !o)}
-        >
-          + New Version
-        </button>
+        <div style={{ display: "flex", gap: 2 }}>
+          {(["history", "lineage"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                background: tab === t ? "var(--acl)" : "transparent",
+                border: `1px solid ${tab === t ? "var(--ac)" : "var(--bd)"}`,
+                borderRadius: 6,
+                padding: "3px 10px",
+                fontSize: 11,
+                fontWeight: 600,
+                color: tab === t ? "var(--ac)" : "var(--tx2)",
+                cursor: "pointer",
+                textTransform: "capitalize",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        {tab === "history" && (
+          <button
+            className="btn"
+            style={{ fontSize: 11, padding: "3px 8px" }}
+            onClick={() => setUploadOpen((o) => !o)}
+          >
+            + New Version
+          </button>
+        )}
       </div>
 
       {/* Upload new version panel */}
-      {uploadOpen ? (
+      {uploadOpen && tab === "history" ? (
         <UploadVersionPanel
           datasetId={datasetId}
           onUploaded={() => {
@@ -68,22 +110,39 @@ export function DataVersionHistory({ datasetId, onSwitchVersion }: DataVersionHi
       ) : null}
 
       {/* Version list */}
-      {loading ? (
-        <p style={{ color: "var(--tx2)", fontSize: 12 }}>Loading…</p>
-      ) : error ? (
-        <p style={{ color: "var(--rd)", fontSize: 12 }}>{error}</p>
-      ) : versions.length === 0 ? (
-        <p style={{ color: "var(--tx2)", fontSize: 12 }}>No versions found.</p>
-      ) : (
-        <div style={{ display: "grid", gap: 6 }}>
-          {[...versions].reverse().map((v) => (
-            <VersionRow
-              key={v.id}
-              version={v}
-              onSwitch={onSwitchVersion ? () => onSwitchVersion(v.id) : undefined}
-            />
-          ))}
-        </div>
+      {tab === "history" && (
+        loading ? (
+          <p style={{ color: "var(--tx2)", fontSize: 12 }}>Loading…</p>
+        ) : error ? (
+          <p style={{ color: "var(--rd)", fontSize: 12 }}>{error}</p>
+        ) : versions.length === 0 ? (
+          <p style={{ color: "var(--tx2)", fontSize: 12 }}>No versions found.</p>
+        ) : (
+          <div style={{ display: "grid", gap: 6 }}>
+            {[...versions].reverse().map((v) => (
+              <VersionRow
+                key={v.id}
+                version={v}
+                onSwitch={onSwitchVersion ? () => onSwitchVersion(v.id) : undefined}
+              />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Lineage graph */}
+      {tab === "lineage" && (
+        lineageLoading ? (
+          <p style={{ color: "var(--tx2)", fontSize: 12 }}>Loading lineage…</p>
+        ) : lineageError ? (
+          <p style={{ color: "var(--rd)", fontSize: 12 }}>{lineageError}</p>
+        ) : (
+          <DataLineageGraph
+            currentDatasetId={datasetId}
+            nodes={lineageNodes}
+            edges={lineageEdges}
+          />
+        )
       )}
     </div>
   );
@@ -147,6 +206,7 @@ function VersionRow({
         ) : null}
         <p style={{ margin: 0, fontSize: 11, color: "var(--tx2)" }}>
           {version.row_count.toLocaleString()} rows · {version.columns.length} cols · {date}
+          {version.uploaded_by ? ` · by ${version.uploaded_by}` : ""}
         </p>
       </div>
       {!version.is_current && onSwitch ? (

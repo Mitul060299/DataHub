@@ -56,6 +56,7 @@ export function App() {
         <Route path="settings/usage" element={<SettingsPage section="usage" />} />
         <Route path="settings/audit" element={<SettingsPage section="audit" />} />
         <Route path="settings/team" element={<SettingsPage section="team" />} />
+        <Route path="settings/webhooks" element={<SettingsPage section="webhooks" />} />
         <Route path="sources" element={<SourcesPage />} />
         <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>

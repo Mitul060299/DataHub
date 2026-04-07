@@ -535,6 +535,14 @@ export async function fetchDatasetLineage(datasetId: string) {
   return response.data;
 }
 
+export async function fetchDatasetLineageGraph(datasetId: string): Promise<{
+  nodes: Array<{ dataset_id: string; name: string | null; file_format: string | null; source_type: string | null; row_count: number; created_at: string | null }>;
+  edges: Array<{ from_dataset_id: string; to_dataset_id: string; relationship: string }>;
+}> {
+  const response = await api.get(`/datasets/${datasetId}/lineage/graph`);
+  return response.data;
+}
+
 export async function fetchColumnSuggestions(datasetId: string, query: string, limit = 5) {
   const response = await api.get(`/datasets/${datasetId}/suggest-columns`, {
     params: { query, limit }
@@ -930,6 +938,10 @@ export async function registerWebhook(target_url: string, event: string) {
     params: { target_url, event }
   });
   return response.data;
+}
+
+export async function deleteWebhook(hookId: string): Promise<void> {
+  await api.delete(`/webhooks/${hookId}`);
 }
 
 export async function listJobs() {

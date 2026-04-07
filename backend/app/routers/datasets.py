@@ -615,6 +615,7 @@ def list_dataset_versions(
                 "created_at": v.created_at.isoformat() if v.created_at else None,
                 "parent_id": v.parent_id,
                 "is_current": v.id == dataset_id,
+                "uploaded_by": getattr(v, "uploaded_by", None),
             }
             for v in sorted(all_versions, key=lambda x: getattr(x, "version_number", 1))
         ],
@@ -668,6 +669,7 @@ async def upload_new_version(
             parent_id=dataset_id,
             version_number=next_version,
             version_note=version_note or None,
+            uploaded_by=user_id,
         )
     )
     rows = df.to_dict(orient="records")

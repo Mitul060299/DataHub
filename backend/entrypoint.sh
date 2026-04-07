@@ -55,10 +55,16 @@ PYDEDUP
 		if grep -qE "already exists|DuplicateTable|DuplicateColumn" /tmp/_alembic_out.txt; then
 			echo "[entrypoint] Duplicate schema objects detected — stamping alembic_version to head and retrying once"
 			alembic stamp head
-			if ! _run_alembic; then
+			set +e
+			_run_alembic > /tmp/_alembic_out2.txt 2>&1
+			_stamp_retry_status=$?
+			set -e
+			cat /tmp/_alembic_out2.txt
+			if [ "${_stamp_retry_status}" != "0" ] && ! grep -qE "already exists|DuplicateTable|DuplicateColumn" /tmp/_alembic_out2.txt; then
 				echo "[entrypoint] Migration still failing after stamp+retry — aborting"
 				exit 1
 			fi
+			echo "[entrypoint] Schema is consistent after stamp — continuing"
 		elif grep -qE "LockNotAvailable|lock timeout|canceling statement due to lock" /tmp/_alembic_out.txt; then
 			# Retry up to 2 times with increasing delays to let the blocking
 			# connection from the previous Render instance drain.

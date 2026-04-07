@@ -1,5 +1,6 @@
 import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, useInView } from "framer-motion";
 import {
   IconBrain,
   IconCheck,
@@ -414,28 +415,56 @@ export function HomePage() {
               Beta Live - Help us Improve
             </div>
 
-            <h1 className="hero-title">
+            <motion.h1
+              className="hero-title"
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
+            >
               Your data,
               <br />
               <span className="hero-title-gradient">understood</span>
               <br />
               by AI
-            </h1>
+            </motion.h1>
 
-            <p className="hero-subtitle">
+            <motion.p
+              className="hero-subtitle"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
+            >
               Talk to your data in plain English. DataHub&apos;s AI agent cleans, transforms, and visualises — recording every
               step so your work is always auditable, repeatable, and shareable.
-            </p>
+            </motion.p>
 
-            <div className="hero-actions">
-              <button type="button" className="hero-primary-btn" onClick={handleGetStarted}>
+            <motion.div
+              className="hero-actions"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.24, ease: "easeOut" }}
+            >
+              <motion.button
+                type="button" className="hero-primary-btn" onClick={handleGetStarted}
+                whileHover={{ scale: 1.04, backgroundColor: "#4b59dc" }}
+                whileTap={{ scale: 0.97 }}
+              >
                 ▶ Get started free
-              </button>
-              <button type="button" className="hero-ghost-btn" onClick={handleScrollHow}>
+              </motion.button>
+              <motion.button
+                type="button" className="hero-ghost-btn" onClick={handleScrollHow}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+              >
                 See how it works ↓
-              </button>
-            </div>
-            <p style={{ marginTop: 10, fontSize: 11, color: "#44445a" }}>No credit card required · Free tier forever</p>
+              </motion.button>
+            </motion.div>
+            <motion.p
+              style={{ marginTop: 10, fontSize: 11, color: "#44445a" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.38 }}
+            >No credit card required · Free tier forever</motion.p>
           </div>
 
           <div className="hero-window-wrap">
@@ -626,15 +655,23 @@ export function HomePage() {
           </p>
 
           <div className="how-grid">
-            {howSteps.map((step) => (
-              <article key={step.step} className="how-card">
+            {howSteps.map((step, i) => (
+              <motion.article
+                key={step.step}
+                className="how-card"
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.45, delay: i * 0.09, ease: "easeOut" }}
+                whileHover={{ y: -3, transition: { duration: 0.18 } }}
+              >
                 <p className="how-step">{step.step}</p>
                 <div className="how-icon-wrap" style={{ background: `${step.color}1A` }}>
                   {step.icon}
                 </div>
                 <h3 className="how-title">{step.title}</h3>
                 <p className="how-description">{step.description}</p>
-              </article>
+              </motion.article>
             ))}
           </div>
         </div>
@@ -649,14 +686,23 @@ export function HomePage() {
           </p>
 
           <div className="features-grid">
-            {features.map((feature) => (
-              <article key={feature.title} className="feature-card" style={{ "--feature-color": feature.color } as CSSProperties}>
+            {features.map((feature, i) => (
+              <motion.article
+                key={feature.title}
+                className="feature-card"
+                style={{ "--feature-color": feature.color } as CSSProperties}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.4, delay: i * 0.07, ease: "easeOut" }}
+                whileHover={{ y: -4, borderColor: `${feature.color}55`, transition: { duration: 0.18 } }}
+              >
                 <div className="feature-icon-wrap" style={{ background: `${feature.color}1A` }}>
                   {feature.icon}
                 </div>
                 <h3 className="feature-title">{feature.title}</h3>
                 <p className="feature-description">{feature.description}</p>
-              </article>
+              </motion.article>
             ))}
           </div>
         </div>
@@ -678,22 +724,46 @@ export function HomePage() {
             </div>
             <div className="dag-demo-graph">
               <div className="dag-row">
-                <div className="dag-node dag-node-source">1 &middot; Clean sales data</div>
+                <motion.div
+                  className="dag-node dag-node-source"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: 0.0 }}
+                >1 &middot; Clean sales data</motion.div>
               </div>
               <div className="dag-connectors dag-connectors-fork">
                 <span className="dag-line dag-line-left" />
                 <span className="dag-line dag-line-right" />
               </div>
               <div className="dag-row">
-                <div className="dag-node dag-node-branch">2 &middot; Segment by region</div>
-                <div className="dag-node dag-node-branch">3 &middot; Revenue trends</div>
+                <motion.div
+                  className="dag-node dag-node-branch"
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: 0.18 }}
+                >2 &middot; Segment by region</motion.div>
+                <motion.div
+                  className="dag-node dag-node-branch"
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: 0.18 }}
+                >3 &middot; Revenue trends</motion.div>
               </div>
               <div className="dag-connectors dag-connectors-join">
                 <span className="dag-line dag-line-left" />
                 <span className="dag-line dag-line-right" />
               </div>
               <div className="dag-row">
-                <div className="dag-node dag-node-merge">4 &middot; Merge into summary</div>
+                <motion.div
+                  className="dag-node dag-node-merge"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: 0.36 }}
+                >4 &middot; Merge into summary</motion.div>
               </div>
             </div>
             <div className="dag-demo-note">
@@ -770,9 +840,13 @@ export function HomePage() {
         <div className="home-inner home-cta-inner">
           <h2 className="home-cta-title">Start analysing your data in 60 seconds</h2>
           <p className="home-cta-sub">Upload a CSV, ask a question, get results. No setup. No SQL. No BI team required.</p>
-          <button type="button" className="home-cta-btn" onClick={handleGetStarted}>
+          <motion.button
+            type="button" className="home-cta-btn" onClick={handleGetStarted}
+            whileHover={{ scale: 1.04, backgroundColor: "#4b59dc" }}
+            whileTap={{ scale: 0.97 }}
+          >
             ▶ Try it free &mdash; no credit card needed
-          </button>
+          </motion.button>
         </div>
       </section>
 

@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useState, useEffect } from "react";
+import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   IconBrain,
@@ -267,6 +267,28 @@ export function HomePage() {
   const [currency, setCurrency] = useState<"USD" | "INR">("USD");
   const [showWaitlistToast, setShowWaitlistToast] = useState(false);
 
+  // Animated demo queries in hero input bar
+  const DEMO_QUERIES = [
+    "Remove duplicates and fill nulls with averages",
+    "Show revenue by region as a bar chart",
+    "Join with customers table on customer_id",
+    "Flag rows where revenue exceeds the monthly average",
+    "Export cleaned data to Google Sheets",
+  ];
+  const [demoQueryIdx, setDemoQueryIdx] = useState(0);
+  const [demoQueryFade, setDemoQueryFade] = useState(true);
+  const demoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    demoTimerRef.current = setInterval(() => {
+      setDemoQueryFade(false);
+      setTimeout(() => {
+        setDemoQueryIdx((i) => (i + 1) % DEMO_QUERIES.length);
+        setDemoQueryFade(true);
+      }, 350);
+    }, 3200);
+    return () => { if (demoTimerRef.current) clearInterval(demoTimerRef.current); };
+  }, []);
+
   useEffect(() => {
     fetch("https://ipapi.co/json/")
       .then((r) => r.json())
@@ -413,6 +435,7 @@ export function HomePage() {
                 See how it works ↓
               </button>
             </div>
+            <p style={{ marginTop: 10, fontSize: 11, color: "#44445a" }}>No credit card required · Free tier forever</p>
           </div>
 
           <div className="hero-window-wrap">
@@ -563,7 +586,18 @@ export function HomePage() {
 
                   {/* Input bar */}
                   <div style={{ height: "34px", background: "#18181e", borderTop: "1px solid #22222a", display: "flex", alignItems: "center", padding: "0 10px", gap: "6px", flexShrink: 0 }}>
-                    <span style={{ flex: 1, fontSize: "10px", color: "#2e2e3a", fontStyle: "italic" }}>Ask anything about your data…</span>
+                    <span style={{
+                      flex: 1,
+                      fontSize: "10px",
+                      color: demoQueryFade ? "#818cf8" : "transparent",
+                      fontStyle: "italic",
+                      transition: "color 0.35s ease",
+                      overflow: "hidden",
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
+                    }}>
+                      {DEMO_QUERIES[demoQueryIdx]}
+                    </span>
                     <div style={{ width: 20, height: 20, borderRadius: "4px", background: "rgba(91,106,240,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", color: "#818cf8" }}>↑</div>
                   </div>
                 </div>
@@ -578,6 +612,25 @@ export function HomePage() {
               <span className="hero-badge-dot hero-badge-dot-indigo" />
               3 steps recorded · replayable
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Stats strip ──────────────────────────────────────────────────── */}
+      <section className="home-stats-strip">
+        <div className="home-inner">
+          <div className="stats-grid">
+            {[
+              { value: "10+", label: "Countries using DataHub" },
+              { value: "Free", label: "Tier — forever" },
+              { value: "0", label: "Lines of code needed" },
+              { value: "100%", label: "Full audit trail" },
+            ].map((s) => (
+              <div key={s.label} className="stat-item">
+                <span className="stat-value">{s.value}</span>
+                <span className="stat-label">{s.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -623,6 +676,47 @@ export function HomePage() {
                 <p className="feature-description">{feature.description}</p>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Branching Pipeline DAG section ── */}
+      <section className="home-section" style={{ background: "#08080d" }}>
+        <div className="home-inner">
+          <p className="section-label">Branching Pipelines</p>
+          <h2 className="section-title">Multi-stream pipelines, not just a list</h2>
+          <p className="section-subtitle">
+            When your analysis splits into parallel streams, DataHub visualises it as a dependency graph —
+            just like GitHub Actions workflows. Independent branches run as soon as their inputs are ready;
+            join steps wait for all upstream branches automatically.
+          </p>
+          <div className="pipeline-dag-demo">
+            <div className="dag-demo-query">
+              &ldquo;Clean the data, then branch — segment customers by region AND calculate monthly revenue trends, finally merge into one summary report.&rdquo;
+            </div>
+            <div className="dag-demo-graph">
+              <div className="dag-row">
+                <div className="dag-node dag-node-source">1 &middot; Clean sales data</div>
+              </div>
+              <div className="dag-connectors dag-connectors-fork">
+                <span className="dag-line dag-line-left" />
+                <span className="dag-line dag-line-right" />
+              </div>
+              <div className="dag-row">
+                <div className="dag-node dag-node-branch">2 &middot; Segment by region</div>
+                <div className="dag-node dag-node-branch">3 &middot; Revenue trends</div>
+              </div>
+              <div className="dag-connectors dag-connectors-join">
+                <span className="dag-line dag-line-left" />
+                <span className="dag-line dag-line-right" />
+              </div>
+              <div className="dag-row">
+                <div className="dag-node dag-node-merge">4 &middot; Merge into summary</div>
+              </div>
+            </div>
+            <div className="dag-demo-note">
+              Steps 2 and 3 run independently — step 4 starts only when both are done.
+            </div>
           </div>
         </div>
       </section>
@@ -742,6 +836,17 @@ export function HomePage() {
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* ── Bottom CTA ──────────────────────────────────────────────────── */}
+      <section className="home-cta-section">
+        <div className="home-inner home-cta-inner">
+          <h2 className="home-cta-title">Start analysing your data in 60 seconds</h2>
+          <p className="home-cta-sub">Upload a CSV, ask a question, get results. No setup. No SQL. No BI team required.</p>
+          <button type="button" className="home-cta-btn" onClick={handleGetStarted}>
+            ▶ Try it free &mdash; no credit card needed
+          </button>
         </div>
       </section>
 

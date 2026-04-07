@@ -882,7 +882,7 @@ const WEBHOOK_EVENTS = [
 ];
 
 interface Webhook {
-  id: string;
+  hook_id: string;
   target_url: string;
   event: string;
   created_at?: string;
@@ -912,7 +912,7 @@ function WebhooksPanel({ plan }: { plan: string }) {
     setError(null);
     try {
       const hook = await registerWebhook(url.trim(), event);
-      setHooks((prev) => [...prev, hook]);
+      setHooks((prev) => [...prev, hook as Webhook]);
       setUrl("");
     } catch {
       setError("Failed to register webhook.");
@@ -924,7 +924,7 @@ function WebhooksPanel({ plan }: { plan: string }) {
   const handleDelete = async (id: string) => {
     try {
       await deleteWebhook(id);
-      setHooks((prev) => prev.filter((h) => h.id !== id));
+      setHooks((prev) => prev.filter((h) => h.hook_id !== id));
     } catch {
       setError("Failed to delete webhook.");
     }
@@ -1021,7 +1021,7 @@ function WebhooksPanel({ plan }: { plan: string }) {
         <div style={{ display: "grid", gap: 6 }}>
           {hooks.map((hook) => (
             <div
-              key={hook.id}
+              key={hook.hook_id}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1061,7 +1061,7 @@ function WebhooksPanel({ plan }: { plan: string }) {
                 </span>
               </div>
               <button
-                onClick={() => handleDelete(hook.id)}
+                onClick={() => handleDelete(hook.hook_id)}
                 style={{
                   background: "transparent",
                   border: "1px solid #3a2a2a",

@@ -315,6 +315,8 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS step_id TEXT",
         "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS pipeline_run_id TEXT REFERENCES pipeline_runs_v2(id) ON DELETE SET NULL",
+        # 0042/0043 — uploaded_by attribution on dataset versions
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS uploaded_by TEXT",
     ]
     try:
         from sqlalchemy import text as _text

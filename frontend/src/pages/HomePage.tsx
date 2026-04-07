@@ -235,13 +235,6 @@ const plans: PricingPlan[] = [
 
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
 
-const metricsStrip = [
-  { number: "10+", label: "Countries" },
-  { number: "Free", label: "Forever tier" },
-  { number: "0", label: "Lines of code" },
-  { number: "100%", label: "Audit trail" },
-];
-
 export function HomePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
@@ -675,26 +668,6 @@ export function HomePage() {
               3 steps recorded · replayable
             </motion.div>
           </motion.div>
-        </div>
-      </section>
-
-      <section className="metrics-strip-section" aria-hidden="true">
-        <div className="home-inner">
-          <div className="metrics-strip">
-            {metricsStrip.map((item, i) => (
-              <motion.div
-                key={item.label}
-                className="metrics-item"
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.09 }}
-              >
-                <span className="metrics-number">{item.number}</span>
-                <span className="metrics-label">{item.label}</span>
-              </motion.div>
-            ))}
-          </div>
         </div>
       </section>
 

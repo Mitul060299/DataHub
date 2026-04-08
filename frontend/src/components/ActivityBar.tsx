@@ -30,4 +30,5 @@ const iconButton = (active: boolean): React.CSSProperties => ({
   background: active ? "var(--acl)" : "transparent",
   display: "grid",
   placeItems: "center",
+  cursor: "pointer",
 });

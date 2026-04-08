@@ -4,7 +4,7 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { useChatSession, type AgentEvent, type ConversationMessage, type PlanStep, type TransformationPayload } from "../hooks/useChatSession";
 import { usePipeline } from "../hooks/usePipeline";
-import { IconRefresh, IconZap } from "./Icons";
+import { IconBarChart, IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
 import PlanDAG from "./PlanDAG";
 import { StepCard } from "./StepCard";
@@ -815,7 +815,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               disabled={analyzingDataset}
               title="Run data quality report"
             >
-              {analyzingDataset ? "Analyzing…" : "📊 Quality"}
+              {analyzingDataset ? "Analyzing…" : <><span style={{ marginRight: 3, verticalAlign: "middle", display: "inline-flex" }}><IconBarChart size={12} /></span>Quality</>}
             </button>
           ) : null}
           {dataset && workspaceDatasets.filter((ds) => ds.id !== dataset.id).length > 0 ? (

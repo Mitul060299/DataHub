@@ -49,70 +49,78 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
   };
 
   return (
-    <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em" }}>
-          {open ? "▼" : "▶"} DATA
+    <section style={{ borderTop: "1px solid var(--bd)", marginTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <button
+          onClick={() => setOpen((value) => !value)}
+          style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "6px 0", color: "var(--tx1)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", background: "none", border: "none", cursor: "pointer" }}
+        >
+          <IconDatabase size={13} color="var(--tx2)" />
+          DATA
+          {datasets.length > 0 && (
+            <span style={{ background: "var(--bg3)", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: 400, color: "var(--tx2)", letterSpacing: "normal", lineHeight: "16px" }}>
+              {datasets.length}
+            </span>
+          )}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--tx2)" }}>{open ? "▾" : "▸"}</span>
         </button>
-        {open ? (
-          <div style={{ position: "relative" }}>
-            <button
-              className="btn"
-              style={{ width: 26, padding: 0 }}
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Add data"
-              title="Add data"
+        <div style={{ position: "relative" }}>
+          <button
+            className="btn"
+            style={{ width: 22, height: 22, padding: 0 }}
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Add data"
+            title="Add data"
+          >
+            <IconPlus size={13} />
+          </button>
+          {menuOpen && (
+            <div
+              onMouseLeave={() => setMenuOpen(false)}
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 4px)",
+                zIndex: 200,
+                background: "var(--bg2)",
+                border: "1px solid var(--bd)",
+                borderRadius: "var(--r6)",
+                minWidth: 164,
+                boxShadow: "0 4px 12px rgba(0,0,0,.25)",
+                overflow: "hidden",
+              }}
             >
-              <IconPlus size={14} />
-            </button>
-            {menuOpen && (
-              <div
-                onMouseLeave={() => setMenuOpen(false)}
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 4px)",
-                  zIndex: 200,
-                  background: "var(--bg2)",
-                  border: "1px solid var(--bd)",
-                  borderRadius: "var(--r6)",
-                  minWidth: 164,
-                  boxShadow: "0 4px 12px rgba(0,0,0,.25)",
-                  overflow: "hidden",
-                }}
-              >
-                {([
-                  { label: "Upload file", icon: <IconPlus size={13} />, action: () => { setMenuOpen(false); onImport(); } },
-                  { label: "Connect database", icon: <IconDatabase size={13} />, action: () => { setMenuOpen(false); onAddConnection?.(); } },
-                ] as { label: string; icon: React.ReactNode; action: () => void }[]).map(({ label, icon, action }) => (
-                  <button
-                    key={label}
-                    onClick={action}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      width: "100%",
-                      padding: "7px 12px",
-                      fontSize: 12,
-                      color: "var(--tx1)",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                  >
-                    {icon}
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </header>
+              {([
+                { label: "Upload file", icon: <IconPlus size={13} />, action: () => { setMenuOpen(false); onImport(); } },
+                { label: "Connect database", icon: <IconDatabase size={13} />, action: () => { setMenuOpen(false); onAddConnection?.(); } },
+              ] as { label: string; icon: React.ReactNode; action: () => void }[]).map(({ label, icon, action }) => (
+                <button
+                  key={label}
+                  onClick={action}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 12px",
+                    fontSize: 12,
+                    color: "var(--tx1)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       {open ? (
         <div style={{ display: "grid", gap: 4 }}>
           {datasets.map((dataset) => {

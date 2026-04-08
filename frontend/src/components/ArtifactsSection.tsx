@@ -158,25 +158,25 @@ export function ArtifactsSection({
   const totalCount = dedupedArtifacts.length + stored.length;
 
   return (
-    <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+    <section style={{ borderTop: "1px solid var(--bd)", marginTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
         <button
           onClick={() => setOpen((v) => !v)}
-          style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", display: "inline-flex", alignItems: "center", gap: 6 }}
+          style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "6px 0", color: "var(--tx1)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", background: "none", border: "none", cursor: "pointer" }}
         >
-          {open ? "▼" : "▶"} ARTIFACTS
-          {totalCount > 0 ? (
-            <span style={{ background: "#27272a", borderRadius: 10, padding: "1px 7px", fontSize: 10, color: "#71717a", letterSpacing: "normal" }}>
+          <IconTable size={13} color="var(--tx2)" />
+          ARTIFACTS
+          {totalCount > 0 && (
+            <span style={{ background: "var(--bg3)", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: 400, color: "var(--tx2)", letterSpacing: "normal", lineHeight: "16px" }}>
               {totalCount}
             </span>
-          ) : null}
+          )}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--tx2)" }}>{open ? "▾" : "▸"}</span>
         </button>
-        {open && stored.length > 0 ? (
-          <button className="btn" style={{ fontSize: 10, padding: "1px 6px" }} onClick={() => void fetchStored()}>
-            ↻
-          </button>
-        ) : null}
-      </header>
+        <button className="btn" style={{ width: 22, height: 22, padding: 0, flexShrink: 0 }} title="Refresh artifacts" onClick={() => void fetchStored()}>
+          ↻
+        </button>
+      </div>
 
       {open ? (
         <div style={{ display: "grid", gap: 4 }}>
@@ -305,9 +305,10 @@ export function ArtifactsSection({
                       letterSpacing: "0.07em",
                       padding: "1px 5px",
                       borderRadius: 3,
-                      background: artifact.type === "auto" ? "#1e1b4b" : "#1a2a1a",
-                      color: artifact.type === "auto" ? "#818cf8" : "#4ade80",
-                      border: `1px solid ${artifact.type === "auto" ? "#312e81" : "#166534"}`,
+                      background: artifact.type === "auto" ? "var(--acl)" : "rgba(34,197,94,0.1)",
+                      color: artifact.type === "auto" ? "var(--ac)" : "var(--gr)",
+                      border: `1px solid ${artifact.type === "auto" ? "var(--acg)" : "rgba(34,197,94,0.3)"}`,
+
                     }}
                   >
                     {artifact.type === "auto" ? "AUTO" : "EXPORT"}
@@ -326,7 +327,7 @@ export function ArtifactsSection({
                   </button>
                   <button
                     className="btn"
-                    style={{ height: 20, width: 20, padding: 0, flexShrink: 0, borderColor: "transparent", background: "transparent", color: "#f87171" }}
+                    style={{ height: 20, width: 20, padding: 0, flexShrink: 0, borderColor: "transparent", background: "transparent", color: "var(--rd)" }}
                     title="Delete artifact"
                     disabled={deletingId === artifact.id}
                     onClick={() => void handleDelete(artifact)}
@@ -336,7 +337,7 @@ export function ArtifactsSection({
                 </div>
                 {/* Meta row */}
                 {(artifact.row_count != null || artifact.created_at) ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 19, color: "#52525b", fontSize: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 19, color: "var(--tx2)", fontSize: 10 }}>
                     {artifact.row_count != null ? <span>{artifact.row_count.toLocaleString()} rows</span> : null}
                     {artifact.created_at ? <span>{relativeTime(artifact.created_at)}</span> : null}
                   </div>

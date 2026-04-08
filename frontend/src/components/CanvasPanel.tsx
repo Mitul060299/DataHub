@@ -115,16 +115,16 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns,
               top: "calc(100% + 4px)",
               right: 0,
               zIndex: 50,
-              background: "#1a1d27",
-              border: "1px solid #2a2d3a",
+              background: "var(--bg2)",
+              border: "1px solid var(--bd)",
               borderRadius: 8,
               minWidth: 230,
               boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
               padding: "4px 0",
             }}>
               {/* Header row */}
-              <div style={{ padding: "6px 14px 4px", borderBottom: "1px solid #2a2d3a", marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: "#6668a0", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              <div style={{ padding: "6px 14px 4px", borderBottom: "1px solid var(--bd)", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "var(--tx2)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
                   Export{rowCount != null ? ` · ${rowCount.toLocaleString()} rows` : ""}
                 </span>
               </div>
@@ -153,7 +153,7 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns,
               />
 
               {/* Divider */}
-              <div style={{ height: 1, background: "#2a2d3a", margin: "4px 0" }} />
+              <div style={{ height: 1, background: "var(--bd)", margin: "4px 0" }} />
 
               {/* Standard downloads */}
               <ExportItem
@@ -208,9 +208,9 @@ function ExportItem({ label, sub, accent, badge, onClick }: ExportItemProps) {
         border: "none",
         cursor: "pointer",
         textAlign: "left",
-        color: "#e8e8f0",
+        color: "var(--tx0)",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "#23263a")}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
     >
       {badge && (
@@ -229,8 +229,8 @@ function ExportItem({ label, sub, accent, badge, onClick }: ExportItemProps) {
         }}>{badge}</span>
       )}
       <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "#e8e8f0" }}>{label}</div>
-        <div style={{ fontSize: 11, color: "#6668a0", marginTop: 1 }}>{sub}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--tx0)" }}>{label}</div>
+        <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 1 }}>{sub}</div>
       </div>
     </button>
   );

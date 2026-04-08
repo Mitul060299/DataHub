@@ -3,6 +3,7 @@ interface OnboardingProgressProps {
   hasCompletedOnboarding: boolean;
   hasAskedFirstQuestion?: boolean;
   onDismiss: () => void;
+  onStartTour?: () => void;
 }
 
 const STEPS = [
@@ -28,6 +29,7 @@ export const OnboardingProgress = ({
   hasCompletedOnboarding,
   hasAskedFirstQuestion,
   onDismiss,
+  onStartTour,
 }: OnboardingProgressProps) => {
   if (hasCompletedOnboarding) return null;
 
@@ -80,6 +82,15 @@ export const OnboardingProgress = ({
           );
         })}
       </ul>
+      {onStartTour && (
+        <button
+          className="btn"
+          style={{ marginTop: 8, width: "100%", fontSize: 12 }}
+          onClick={onStartTour}
+        >
+          🗺 Take a tour
+        </button>
+      )}
     </div>
   );
 };

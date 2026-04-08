@@ -296,8 +296,8 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {datasetsLoading && datasets.length === 0 ? (
           // Skeleton shimmer — shown only on first load before any cache exists
-          <div style={{ borderTop: "1px solid var(--bd)", paddingTop: 8 }}>
-            <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", marginBottom: 8 }}>▼ DATA</div>
+          <div style={{ borderTop: "1px solid var(--bd)", marginTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", color: "var(--tx1)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em" }}>DATA</div>
             {[70, 88, 55].map((w, i) => (
               <div key={i} style={{
                 height: 30, borderRadius: 6, marginBottom: 4,

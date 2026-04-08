@@ -140,7 +140,7 @@ export function WorkspacePage() {
     ...(resolvedProject
       ? [{ label: resolvedProject.name, href: `/workspace/project/${resolvedProject.id}` }]
       : []),
-    { label: "Pipeline Editor" },
+    { label: activeDataset?.name ?? "Workspace" },
   ];
 
   return (
@@ -280,16 +280,8 @@ export function WorkspacePage() {
               setOnboardingDismissed(true);
               capture("onboarding_progress_dismissed");
             }}
+            onStartTour={!tourActive ? startTour : undefined}
           />
-          {!tourActive && (
-            <button
-              className="btn"
-              style={{ marginTop: 6, width: "100%", fontSize: 12 }}
-              onClick={() => { startTour(); }}
-            >
-              🗺 Take a tour
-            </button>
-          )}
         </div>
       )}
       {tourActive && (

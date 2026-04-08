@@ -52,7 +52,7 @@ export function PipelinePanel({ width, onClose }: PipelinePanelProps) {
             flex: 1,
           }}
         >
-          Pipeline
+          PIPELINE
         </span>
         {steps.length > 0 && (
           <span
@@ -93,6 +93,7 @@ export function PipelinePanel({ width, onClose }: PipelinePanelProps) {
         <PipelineSection
           onSchedule={() => setScheduleModalOpen(true)}
           onExport={() => exportPipeline(steps)}
+          hideHeader
         />
       </div>
 

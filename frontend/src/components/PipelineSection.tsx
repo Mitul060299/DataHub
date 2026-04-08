@@ -13,6 +13,7 @@ const FLAT_FILE_FORMATS = new Set(["csv", "xlsx", "xls", "excel", "json", "parqu
 interface PipelineSectionProps {
   onSchedule: () => void;
   onExport: () => void;
+  hideHeader?: boolean;
 }
 
 type ServerWorkflowTemplate = {
@@ -26,7 +27,7 @@ type RunStatusSummary = {
   rows: number | null;
 };
 
-export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) {
+export function PipelineSection({ onSchedule, onExport, hideHeader = false }: PipelineSectionProps) {
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
@@ -67,6 +68,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
   const [nlPrompt, setNlPrompt] = useState("");
   const [nlApplying, setNlApplying] = useState(false);
   const [nlFeedback, setNlFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ message: string; run: () => Promise<void> } | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const planAllowsScheduling = limits.features.scheduledPipelines;
   const isFlatFile = Boolean(
@@ -98,10 +101,10 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
 
   const getStepVisual = (operation: string) => {
     const normalized = operation.toLowerCase();
-    if (normalized === "source") return { background: "#1a2a1a", color: "#4ade80" };
-    if (["transform", "group_by", "join", "filter"].includes(normalized)) return { background: "#1a1a2e", color: "#818cf8" };
+    if (normalized === "source") return { background: "rgba(52,211,153,0.08)", color: "var(--gr)" };
+    if (["transform", "group_by", "join", "filter"].includes(normalized)) return { background: "var(--acl)", color: "var(--accent2)" };
     if (["output", "export"].includes(normalized)) return { background: "#1a2a2a", color: "#38bdf8" };
-    return { background: "#27272a", color: "#71717a" };
+    return { background: "var(--bg3)", color: "var(--tx2)" };
   };
 
   const parseRuntimeParameters = () => {
@@ -439,30 +442,28 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     setWorkflowMessage("Artifact JSON downloaded.");
   };
 
-  const handleUndoLast = async () => {
+  const handleUndoLast = () => {
     const lastStep = steps[steps.length - 1];
     if (!lastStep?.inputDataset || undoing) return;
-
-    const confirmed = window.confirm("Undo last step? This will remove 1 pipeline step.");
-    if (!confirmed) return;
-
-    setUndoing(true);
-    try {
-      setActiveDataset({
-        id: lastStep.inputDataset.id,
-        name: lastStep.inputDataset.name,
-        rows: lastStep.inputDataset.rows,
-      });
-      keepStepsThrough(steps[Math.max(steps.length - 2, 0)]?.id ?? "");
-      if (steps.length <= 1) {
-        clearSteps();
-      }
-    } finally {
-      setUndoing(false);
-    }
+    const inputDs = lastStep.inputDataset;
+    const prevStepId = steps[Math.max(steps.length - 2, 0)]?.id ?? "";
+    const isOnlyStep = steps.length <= 1;
+    setPendingAction({
+      message: "Undo last step? This will remove 1 pipeline step.",
+      run: async () => {
+        setUndoing(true);
+        try {
+          setActiveDataset({ id: inputDs.id, name: inputDs.name, rows: inputDs.rows });
+          keepStepsThrough(prevStepId);
+          if (isOnlyStep) clearSteps();
+        } finally {
+          setUndoing(false);
+        }
+      },
+    });
   };
 
-  const handleUndoFromStep = async (stepId: string) => {
+  const handleUndoFromStep = (stepId: string) => {
     if (undoing) return;
 
     const stepIndex = steps.findIndex((step) => step.id === stepId);
@@ -472,38 +473,24 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
     if (!selectedStep.inputDataset) return;
 
     const removedCount = steps.length - stepIndex;
-    const confirmed = window.confirm(
-      `Undo from this step? This will remove ${removedCount} pipeline ${removedCount === 1 ? "step" : "steps"}.`,
-    );
-    if (!confirmed) return;
-
-    setUndoing(true);
-    try {
-      setActiveDataset({
-        id: selectedStep.inputDataset.id,
-        name: selectedStep.inputDataset.name,
-        rows: selectedStep.inputDataset.rows,
-      });
-
-      if (stepIndex === 0) {
-        clearSteps();
-        return;
-      }
-
-      keepStepsThrough(steps[stepIndex - 1].id);
-    } finally {
-      setUndoing(false);
-    }
+    const inputDs = selectedStep.inputDataset;
+    const prevStepId = stepIndex > 0 ? steps[stepIndex - 1].id : null;
+    setPendingAction({
+      message: `Undo from this step? This will remove ${removedCount} pipeline ${removedCount === 1 ? "step" : "steps"}.`,
+      run: async () => {
+        setUndoing(true);
+        try {
+          setActiveDataset({ id: inputDs.id, name: inputDs.name, rows: inputDs.rows });
+          if (prevStepId === null) { clearSteps(); return; }
+          keepStepsThrough(prevStepId);
+        } finally {
+          setUndoing(false);
+        }
+      },
+    });
   };
 
-  /**
-   * Surgical step removal:
-   * – Removes step at index N from the pipeline.
-   * – If it was the last step, restores the active dataset to the step's input.
-   * – If subsequent steps exist, replays them via the /replay endpoint starting
-   *   from step[N-1]'s output dataset, then patches the steps array + active dataset.
-   */
-  const handleSurgicalRemove = async (stepId: string) => {
+  const handleSurgicalRemove = (stepId: string) => {
     if (undoing || surgicalRemoving) return;
 
     const stepIndex = steps.findIndex((s) => s.id === stepId);
@@ -513,112 +500,135 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
 
     // If there are no steps after, behave like undo-from-step
     if (stepsAfter.length === 0) {
-      await handleUndoFromStep(stepId);
+      handleUndoFromStep(stepId);
       return;
     }
 
-    const confirmed = window.confirm(
-      `Remove step "${getStepLabel(steps[stepIndex])}" and re-run the ${stepsAfter.length} step${stepsAfter.length === 1 ? "" : "s"} that follow?`,
-    );
-    if (!confirmed) return;
+    // Determine the pivot dataset before prompting
+    const pivotStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
+    const pivotDatasetId =
+      pivotStep?.outputDataset?.id ??
+      pivotStep?.inputDataset?.id ??
+      steps[0]?.inputDataset?.id ??
+      activeDataset?.id;
 
-    setSurgicalRemoving(true);
-    try {
-      // Determine the pivot dataset — output of the step before the removed one,
-      // or the source dataset if the removed step was the first.
-      const pivotStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
-      const pivotDatasetId =
-        pivotStep?.outputDataset?.id ??
-        pivotStep?.inputDataset?.id ??
-        steps[0]?.inputDataset?.id ??
-        activeDataset?.id;
-
-      if (!pivotDatasetId) {
-        window.alert("Cannot determine pivot dataset — please use Undo from this step instead.");
-        return;
-      }
-
-      // Build the list of rawConfigs for the steps that follow the removed step
-      const replayStepPayloads = stepsAfter.map((s) => s.rawConfig ?? { operation: s.operation, sql: s.sql });
-
-      const response = await api.post(
-        `/api/cleaning/datasets/${pivotDatasetId}/replay`,
-        { steps: replayStepPayloads },
-      );
-
-      const data = response.data as {
-        replayed_steps: Array<{ step_index: number; input_dataset_id: string; output_dataset_id: string; row_count: number | null; skipped: boolean }>;
-        final_dataset_id: string;
-        final_row_count: number | null;
-      };
-
-      // Patch the steps array: remove the surgical step, update the ones that follow
-      const keptBefore = steps.slice(0, stepIndex);
-      const patchedAfter = stepsAfter.map((s, i) => {
-        const replay = data.replayed_steps[i];
-        if (!replay) return s;
-        return {
-          ...s,
-          inputDataset: s.inputDataset ? { ...s.inputDataset, id: replay.input_dataset_id } : s.inputDataset,
-          outputDataset: (!replay.skipped && replay.output_dataset_id !== replay.input_dataset_id)
-            ? { id: replay.output_dataset_id, name: s.outputDataset?.name ?? s.description, rowCount: replay.row_count ?? 0, parentId: replay.input_dataset_id }
-            : s.outputDataset,
-        };
-      });
-
-      replaceSteps([...keptBefore, ...patchedAfter]);
-
-      // Update active dataset to final output
-      if (data.final_dataset_id && data.final_dataset_id !== activeDataset?.id) {
-        setActiveDataset({
-          id: data.final_dataset_id,
-          name: activeDataset?.name ?? "Cleaned dataset",
-          rows: data.final_row_count ?? activeDataset?.rows ?? 0,
-        });
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      window.alert(`Surgical remove failed: ${msg}\n\nUse "Undo from this step" to revert instead.`);
-    } finally {
-      setSurgicalRemoving(false);
+    if (!pivotDatasetId) {
+      setInlineError("Cannot determine pivot dataset — please use Undo from this step instead.");
+      return;
     }
+
+    const stepLabel = getStepLabel(steps[stepIndex]);
+    const replayStepPayloads = stepsAfter.map((s) => s.rawConfig ?? { operation: s.operation, sql: s.sql });
+    const capturedStepsBefore = steps.slice(0, stepIndex);
+    const capturedStepsAfter = stepsAfter;
+    const capturedActiveDataset = activeDataset;
+    setPendingAction({
+      message: `Remove step "${stepLabel}" and re-run the ${stepsAfter.length} step${stepsAfter.length === 1 ? "" : "s"} that follow?`,
+      run: async () => {
+        setSurgicalRemoving(true);
+        try {
+          const response = await api.post(
+            `/api/cleaning/datasets/${pivotDatasetId}/replay`,
+            { steps: replayStepPayloads },
+          );
+          const data = response.data as {
+            replayed_steps: Array<{ step_index: number; input_dataset_id: string; output_dataset_id: string; row_count: number | null; skipped: boolean }>;
+            final_dataset_id: string;
+            final_row_count: number | null;
+          };
+          const patchedAfter = capturedStepsAfter.map((s, i) => {
+            const replay = data.replayed_steps[i];
+            if (!replay) return s;
+            return {
+              ...s,
+              inputDataset: s.inputDataset ? { ...s.inputDataset, id: replay.input_dataset_id } : s.inputDataset,
+              outputDataset: (!replay.skipped && replay.output_dataset_id !== replay.input_dataset_id)
+                ? { id: replay.output_dataset_id, name: s.outputDataset?.name ?? s.description, rowCount: replay.row_count ?? 0, parentId: replay.input_dataset_id }
+                : s.outputDataset,
+            };
+          });
+          replaceSteps([...capturedStepsBefore, ...patchedAfter]);
+          if (data.final_dataset_id && data.final_dataset_id !== capturedActiveDataset?.id) {
+            setActiveDataset({
+              id: data.final_dataset_id,
+              name: capturedActiveDataset?.name ?? "Cleaned dataset",
+              rows: data.final_row_count ?? capturedActiveDataset?.rows ?? 0,
+            });
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setInlineError(`Surgical remove failed: ${msg} — Use "Undo from this step" to revert instead.`);
+        } finally {
+          setSurgicalRemoving(false);
+        }
+      },
+    });
   };
 
   return (
-    <section style={{ borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          {open ? "▼" : "▶"} PIPELINE
-          <span
-            style={{
-              background: "#27272a",
-              borderRadius: 10,
-              padding: "1px 7px",
-              fontSize: 10,
-              color: "#71717a",
-              letterSpacing: "normal",
-            }}
-          >
-            {steps.length} {steps.length === 1 ? "step" : "steps"}
-          </span>
-        </button>
-        {open ? (
-          <div style={{ display: "flex", gap: 4 }}>
+    <section style={{ ...(hideHeader ? { padding: 8 } : { borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10 }), display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
+      {!hideHeader && (
+        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {open ? "▼" : "▶"} PIPELINE
+            <span
+              style={{
+                background: "var(--bg3)",
+                borderRadius: 10,
+                padding: "1px 7px",
+                fontSize: 10,
+                color: "var(--tx2)",
+                letterSpacing: "normal",
+              }}
+            >
+              {steps.length} {steps.length === 1 ? "step" : "steps"}
+            </span>
+          </button>
+          {open ? (
+            <div style={{ display: "flex", gap: 4 }}>
+              <button
+                className="btn"
+                style={{ fontSize: 11, padding: "3px 8px" }}
+                onClick={() => setBuiltInPickerOpen(true)}
+                title="Browse pipeline templates"
+              >
+                Templates
+              </button>
+              <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps" title="Clear all steps">
+                <IconTrash size={14} />
+              </button>
+            </div>
+          ) : null}
+        </header>
+      )}
+
+      {pendingAction && (
+        <div style={{ background: "var(--bg3)", border: "1px solid var(--bd2)", borderRadius: "var(--r6)", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "var(--tx0)" }}>{pendingAction.message}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: "3px 8px", background: "var(--rd)", border: "1px solid var(--rd)", color: "#fff" }}
+              onClick={() => { void pendingAction.run(); setPendingAction(null); }}
+            >
+              Confirm
+            </button>
             <button
               className="btn"
               style={{ fontSize: 11, padding: "3px 8px" }}
-              onClick={() => setBuiltInPickerOpen(true)}
-              title="Browse pipeline templates"
+              onClick={() => setPendingAction(null)}
             >
-              Templates
-            </button>
-            <button className="btn" style={{ width: 26, padding: 0 }} onClick={clearSteps} aria-label="Clear steps" title="Clear all steps">
-              <IconTrash size={14} />
+              Cancel
             </button>
           </div>
-        ) : null}
-      </header>
-
+        </div>
+      )}
+      {inlineError && (
+        <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid var(--rd)", borderRadius: "var(--r6)", padding: "8px 12px", fontSize: 12, color: "var(--rd)", display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ flex: 1 }}>{inlineError}</span>
+          <button onClick={() => setInlineError(null)} style={{ background: "none", border: "none", color: "var(--tx2)", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      )}
       {open ? (
         <div style={{ flex: 1, overflow: "auto", display: "grid", gap: 8, paddingRight: 4 }}>
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", overflow: "hidden" }}>
@@ -647,10 +657,10 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                 ? "active"
                 : (index < steps.length - 1 ? "completed" : "pending");
               const statusColor = step.status === "failed"
-                ? "#ef4444"
+                ? "var(--rd)"
                 : stepStatus === "completed"
-                ? "#22c55e"
-                : (stepStatus === "active" ? "#5B6AF0" : "#3f3f46");
+                ? "var(--gr)"
+                : (stepStatus === "active" ? "var(--ac)" : "var(--bd3)");
               const stepVisual = getStepVisual(step.operation);
               const isSqlExpanded = expandedStepIds.has(step.id);
               const rowDelta =
@@ -666,8 +676,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                   style={{
                     padding: "6px 8px",
                     borderBottom: index === steps.length - 1 ? "none" : "1px solid var(--bd)",
-                    background: isActiveStep ? "#1c1c3a" : "transparent",
-                    borderLeft: `2px solid ${isActiveStep ? "#5B6AF0" : "transparent"}`,
+                    background: isActiveStep ? "var(--acl)" : "transparent",
+                    borderLeft: `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
                     display: "flex",
                     flexDirection: "column",
                     gap: 4,
@@ -766,7 +776,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                         className="btn"
                         style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
                         title="Undo from this step"
-                        onClick={() => void handleUndoFromStep(step.id)}
+                        onClick={() => handleUndoFromStep(step.id)}
                         disabled={undoing}
                       >
                         ↺
@@ -775,7 +785,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                         className="btn"
                         style={{ height: 20, width: 20, padding: 0 }}
                         title={steps.length > 1 && index < steps.length - 1 ? "Surgical remove (re-runs downstream steps)" : "Remove step"}
-                        onClick={() => void handleSurgicalRemove(step.id)}
+                        onClick={() => handleSurgicalRemove(step.id)}
                         disabled={undoing || surgicalRemoving}
                       >
                         {surgicalRemoving ? "…" : <IconX size={12} />}
@@ -798,15 +808,15 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                   {(step.input_tables?.length || step.output_table) ? (
                     <div style={{ paddingLeft: 24, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                       {step.input_tables?.map((t) => (
-                        <span key={t} className="mono" style={{ fontSize: 10, color: "#a1a1aa", background: "#18181b", borderRadius: 3, padding: "1px 4px", border: "1px solid #27272a" }}>
+                        <span key={t} className="mono" style={{ fontSize: 10, color: "var(--tx1)", background: "var(--bg2)", borderRadius: 3, padding: "1px 4px", border: "1px solid var(--bd)" }}>
                           {t}
                         </span>
                       ))}
                       {step.input_tables?.length && step.output_table ? (
-                        <span style={{ fontSize: 10, color: "#52525b" }}>→</span>
+                        <span style={{ fontSize: 10, color: "var(--tx2)" }}>→</span>
                       ) : null}
                       {step.output_table ? (
-                        <span className="mono" style={{ fontSize: 10, color: "#818cf8", background: "#1e1b4b", borderRadius: 3, padding: "1px 4px", border: "1px solid #312e81" }}>
+                        <span className="mono" style={{ fontSize: 10, color: "var(--accent2)", background: "var(--acl)", borderRadius: 3, padding: "1px 4px", border: "1px solid var(--acg)" }}>
                           {step.output_table}
                         </span>
                       ) : null}
@@ -818,23 +828,23 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                     <div style={{ paddingLeft: 24, display: "flex", alignItems: "center", gap: 8, color: "var(--tx2)", fontSize: 10 }}>
                       {step.row_count_after != null ? (
                         <span>
-                          <span style={{ color: "#71717a" }}>{step.row_count_after.toLocaleString()} rows</span>
+                          <span style={{ color: "var(--tx2)" }}>{step.row_count_after.toLocaleString()} rows</span>
                           {rowDelta !== null ? (
-                            <span style={{ marginLeft: 4, color: rowDelta >= 0 ? "#22c55e" : "#f87171" }}>
+                            <span style={{ marginLeft: 4, color: rowDelta >= 0 ? "var(--gr)" : "var(--rd)" }}>
                               ({rowDelta >= 0 ? "+" : ""}{rowDelta.toLocaleString()})
                             </span>
                           ) : null}
                         </span>
                       ) : null}
                       {step.execution_time_ms != null ? (
-                        <span style={{ color: "#52525b" }}>{step.execution_time_ms}ms</span>
+                        <span style={{ color: "var(--tx2)" }}>{step.execution_time_ms}ms</span>
                       ) : null}
                     </div>
                   ) : null}
 
                   {/* Row 4: error message */}
                   {step.error_message ? (
-                    <div style={{ paddingLeft: 24, fontSize: 10, color: "#f87171", wordBreak: "break-word" }}>
+                    <div style={{ paddingLeft: 24, fontSize: 10, color: "var(--rd)", wordBreak: "break-word" }}>
                       {step.error_message}
                     </div>
                   ) : null}
@@ -850,7 +860,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                             return next;
                           })
                         }
-                        style={{ fontSize: 10, color: "#52525b", textDecoration: "underline", cursor: "pointer" }}
+                        style={{ fontSize: 10, color: "var(--tx2)", textDecoration: "underline", cursor: "pointer" }}
                       >
                         {isSqlExpanded ? "hide SQL" : "show SQL"}
                       </button>
@@ -860,8 +870,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                           style={{
                             marginTop: 4,
                             fontSize: 10,
-                            color: "#a1a1aa",
-                            background: "#09090b",
+                            color: "var(--tx1)",
+                            background: "var(--bg0)",
                             borderRadius: 4,
                             padding: "6px 8px",
                             overflowX: "auto",
@@ -888,7 +898,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8, display: "grid", gap: 8 }}>
 
             {pipelineWorkflowId.trim() ? (
-              <div style={{ display: "grid", gap: 6, borderTop: "1px solid #1e1e24", paddingTop: 8, marginTop: 2 }}>
+              <div style={{ display: "grid", gap: 6, borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 2 }}>
                 <div style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>EDIT WITH AI</div>
                 <textarea
                   value={nlPrompt}
@@ -897,11 +907,11 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                   rows={2}
                   style={{
                     width: "100%",
-                    background: "#111113",
-                    border: "1px solid #27272a",
+                    background: "var(--bg1)",
+                    border: "1px solid var(--bd)",
                     borderRadius: 6,
                     padding: "7px 10px",
-                    color: "#d4d4d8",
+                    color: "var(--tx0)",
                     fontSize: 12,
                     resize: "vertical",
                     outline: "none",
@@ -916,7 +926,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                   }}
                 />
                 {nlFeedback && (
-                  <div style={{ fontSize: 12, color: nlFeedback.ok ? "#22b573" : "#c94040", padding: "2px 0" }}>
+                  <div style={{ fontSize: 12, color: nlFeedback.ok ? "var(--gr)" : "var(--rd)", padding: "2px 0" }}>
                     {nlFeedback.ok ? "✓ " : "✗ "}{nlFeedback.msg}
                   </div>
                 )}
@@ -924,10 +934,10 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                   onClick={() => void handleNlEdit()}
                   disabled={!nlPrompt.trim() || nlApplying}
                   style={{
-                    background: nlApplying ? "#3f3f46" : "#18181e",
-                    border: "1px solid #27272a",
+                    background: nlApplying ? "var(--bg3)" : "var(--bg2)",
+                    border: "1px solid var(--bd)",
                     borderRadius: 6,
-                    color: !nlPrompt.trim() || nlApplying ? "#52525b" : "#5B6AF0",
+                    color: !nlPrompt.trim() || nlApplying ? "var(--tx2)" : "var(--ac)",
                     fontSize: 12,
                     fontWeight: 600,
                     padding: "6px 12px",
@@ -942,8 +952,8 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             {runStatusSummary ? (
               <div
                 style={{
-                  background: "#111113",
-                  border: "1px solid #27272a",
+                  background: "var(--bg1)",
+                  border: "1px solid var(--bd)",
                   borderRadius: 6,
                   padding: "8px 10px",
                   display: "grid",
@@ -957,7 +967,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                     width: 8,
                     height: 8,
                     borderRadius: 999,
-                    background: runStatusSummary.status === "success" ? "#22c55e" : "#ef4444",
+                    background: runStatusSummary.status === "success" ? "var(--gr)" : "var(--rd)",
                   }}
                 />
                 <span style={{ fontSize: 12, color: "var(--tx1)" }}>
@@ -965,7 +975,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                     ? `Completed · ${runStatusSummary.rows != null ? `${runStatusSummary.rows} rows` : "see results"}`
                     : "Failed · see results"}
                 </span>
-                <span className="mono" style={{ fontSize: 11, color: "#3f3f46" }}>
+                <span className="mono" style={{ fontSize: 11, color: "var(--tx2)" }}>
                   {formatElapsed(runStatusSummary.elapsedMs)}
                 </span>
               </div>
@@ -988,7 +998,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                 justifyContent: "center",
                 gap: 7,
                 transition: "all 120ms ease",
-                background: runningWorkflow ? "#3f3f46" : (runCtaHovered ? "#4f5edb" : "#5B6AF0"),
+                background: runningWorkflow ? "var(--bg3)" : (runCtaHovered ? "var(--ach)" : "var(--ac)"),
                 transform: runCtaHovered && !runningWorkflow ? "translateY(-1px)" : "translateY(0)",
                 boxShadow: runningWorkflow ? "none" : "0 2px 12px rgba(91,106,240,0.25)",
                 cursor: runningWorkflow ? "not-allowed" : "pointer",
@@ -997,7 +1007,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             >
               {runningWorkflow ? (
                 <>
-                  <span className="badge-dot pulse" style={{ background: "#a1a1aa" }} />
+                  <span className="badge-dot pulse" style={{ background: "var(--tx1)" }} />
                   Running…
                 </>
               ) : (
@@ -1016,11 +1026,11 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                 disabled={!artifactRunId.trim() || artifactLoading}
                 style={{
                   width: "100%",
-                  border: `1px solid ${resultsHovered ? "#3f3f46" : "#27272a"}`,
+                  border: `1px solid ${resultsHovered ? "var(--bd3)" : "var(--bd)"}`,
                   borderRadius: 6,
-                  background: resultsHovered ? "#1f1f22" : "transparent",
+                  background: resultsHovered ? "var(--bg3)" : "transparent",
                   fontSize: 12,
-                  color: resultsHovered ? "#a1a1aa" : "#71717a",
+                  color: resultsHovered ? "var(--tx1)" : "var(--tx2)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -1041,7 +1051,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                color: "#3f3f46",
+                color: "var(--tx2)",
                 fontSize: 11,
                 fontFamily: "DM Sans, sans-serif",
               }}
@@ -1137,7 +1147,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run Applied Steps</span>
           </button>
 
-          <button className="btn" style={{ width: "100%" }} onClick={() => void handleUndoLast()} disabled={!steps.length || undoing}>
+          <button className="btn" style={{ width: "100%" }} onClick={() => handleUndoLast()} disabled={!steps.length || undoing}>
             {undoing ? "Undoing..." : "Undo Last"}
           </button>
 
@@ -1218,7 +1228,7 @@ export function PipelineSection({ onSchedule, onExport }: PipelineSectionProps) 
               ))}
             </div>
             <button
-              style={{ marginTop: 16, background: "none", border: "none", color: "#5B6AF0", fontSize: 12, cursor: "pointer", padding: 0 }}
+              style={{ marginTop: 16, background: "none", border: "none", color: "var(--ac)", fontSize: 12, cursor: "pointer", padding: 0 }}
               onClick={() => { setBuiltInPickerOpen(false); setTemplatePickerOpen(true); }}
             >
               Browse saved pipeline templates →

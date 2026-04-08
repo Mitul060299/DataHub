@@ -159,31 +159,23 @@ export function VisualizationsSection() {
   };
 
   return (
-    <section style={{ borderTop: "1px solid var(--bd)" }}>
+    <section style={{ borderTop: "1px solid var(--bd)", marginTop: 8 }}>
       {/* header row */}
-      <button
-        className="btn"
-        style={{
-          width: "100%",
-          textAlign: "left",
-          padding: "6px 10px",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontWeight: 600,
-          fontSize: 11,
-          color: "var(--tx)",
-          background: "none",
-          border: "none",
-        }}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <IconBarChart size={13} />
-        Visualizations
-        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--tx1)" }}>
-          {open ? "▾" : "▸"}
-        </span>
-      </button>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "6px 0", color: "var(--tx1)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", background: "none", border: "none", cursor: "pointer" }}
+        >
+          <IconBarChart size={13} color="var(--tx2)" />
+          VISUALIZATIONS
+          {items.length > 0 && (
+            <span style={{ background: "var(--bg3)", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: 400, color: "var(--tx2)", letterSpacing: "normal", lineHeight: "16px" }}>
+              {items.length}
+            </span>
+          )}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--tx2)" }}>{open ? "▾" : "▸"}</span>
+        </button>
+      </div>
 
       {open && (
         <div style={{ paddingBottom: 4 }}>

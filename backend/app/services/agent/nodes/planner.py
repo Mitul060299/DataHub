@@ -8,6 +8,32 @@ from ..prompts import PLANNER_SYSTEM_PROMPT
 from ..state import AgentState, PlanStep
 from ...echarts_builder import infer_chart_type
 
+
+class _SafeEncoder(json.JSONEncoder):
+    """Encode numpy / pandas scalar types that stdlib json can't handle."""
+    def default(self, o):
+        try:
+            import numpy as np
+            if isinstance(o, (np.integer,)):
+                return int(o)
+            if isinstance(o, (np.floating,)):
+                return float(o)
+            if isinstance(o, np.ndarray):
+                return o.tolist()
+        except ImportError:
+            pass
+        try:
+            import pandas as pd
+            if isinstance(o, pd.NA.__class__):
+                return None
+        except ImportError:
+            pass
+        return super().default(o)
+
+
+def _dumps(obj) -> str:
+    return json.dumps(obj, indent=2, cls=_SafeEncoder)
+
 _llm = ChatGroq(
     model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
     temperature=0.1,
@@ -21,15 +47,15 @@ async def planner(state: AgentState) -> dict:
     requested_approval = bool(state.get("plan_approved", False))
 
     system_prompt = PLANNER_SYSTEM_PROMPT.format(
-        schema=json.dumps(state.get("schema", {}), indent=2),
-        stats=json.dumps(state.get("stats", {}), indent=2),
-        sample_rows=json.dumps(state.get("sample_rows", [])[:10], indent=2),
-        pipeline_steps=json.dumps(state.get("pipeline_steps", []), indent=2),
-        available_templates=json.dumps(state.get("available_templates", []), indent=2),
-        calculated_columns=json.dumps(state.get("calculated_columns", []), indent=2),
-        dashboards=json.dumps(state.get("dashboards", []), indent=2),
-        secondary_datasets=json.dumps(state.get("secondary_schemas", {}), indent=2),
-        table_registry=json.dumps(state.get("table_registry", {}), indent=2),
+        schema=_dumps(state.get("schema", {})),
+        stats=_dumps(state.get("stats", {})),
+        sample_rows=_dumps(state.get("sample_rows", [])[:10]),
+        pipeline_steps=_dumps(state.get("pipeline_steps", [])),
+        available_templates=_dumps(state.get("available_templates", [])),
+        calculated_columns=_dumps(state.get("calculated_columns", [])),
+        dashboards=_dumps(state.get("dashboards", [])),
+        secondary_datasets=_dumps(state.get("secondary_schemas", {})),
+        table_registry=_dumps(state.get("table_registry", {})),
         user_goal=user_goal,
     )
 

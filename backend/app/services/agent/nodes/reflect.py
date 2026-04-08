@@ -6,6 +6,7 @@ from langchain_groq import ChatGroq
 
 from ..prompts import REFLECT_PROMPT
 from ..state import AgentState
+from .planner import _dumps
 
 _llm = ChatGroq(
     model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
@@ -20,10 +21,10 @@ async def reflect(state: AgentState) -> dict:
     error_msg = state.get("error", "Unknown error")
 
     prompt = REFLECT_PROMPT.format(
-        schema=json.dumps(state.get("schema", {}), indent=2),
-        stats=json.dumps(state.get("stats", {}), indent=2),
+        schema=_dumps(state.get("schema", {})),
+        stats=_dumps(state.get("stats", {})),
         operation=failed_step.get("operation", ""),
-        table_registry=json.dumps(state.get("table_registry", {}), indent=2),
+        table_registry=_dumps(state.get("table_registry", {})),
         failed_sql=failed_step["sql"],
         error=error_msg,
     )

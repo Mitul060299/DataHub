@@ -6,6 +6,7 @@ from langchain_groq import ChatGroq
 
 from ..prompts import INTENT_CLASSIFIER_PROMPT
 from ..state import AgentState
+from .planner import _dumps
 
 _llm = ChatGroq(
     model=os.getenv("GROQ_INTENT_MODEL", "llama-3.1-8b-instant"),
@@ -25,7 +26,7 @@ async def intent_classifier(state: AgentState) -> dict:
     last_message = messages[-1].content if messages else ""
 
     prompt = INTENT_CLASSIFIER_PROMPT.format(
-        table_registry=json.dumps(state.get("table_registry", {}), indent=2),
+        table_registry=_dumps(state.get("table_registry", {})),
     )
 
     try:

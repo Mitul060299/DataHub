@@ -89,10 +89,11 @@ def list_artifacts(
     result = []
     for art in artifacts:
         download_url: Optional[str] = None
-        try:
-            download_url = StorageService.get_signed_url(art.s3_key, expires_in=3600)
-        except Exception as exc:
-            logger.warning("Could not generate signed URL for artifact %s: %s", art.id, exc)
+        if art.s3_key and not str(art.s3_key).startswith("local://"):
+            try:
+                download_url = StorageService.get_signed_url(art.s3_key, expires_in=3600)
+            except Exception as exc:
+                logger.warning("Could not generate signed URL for artifact %s: %s", art.id, exc)
         dataset_id = datasets_by_key.get(art.s3_key) if art.s3_key else None
         result.append(_serialize(art, download_url, dataset_id=dataset_id))
 
@@ -241,8 +242,8 @@ def load_artifact_into_session(
     table_name = table_name.replace(" ", "_")
 
     try:
-        signed_url = StorageService.get_signed_url(artifact.s3_key, expires_in=3600)
-        load_sql = f"SELECT * FROM read_parquet('{signed_url}')"
+        query_path = StorageService.get_query_path(artifact.s3_key)
+        load_sql = f"SELECT * FROM read_parquet('{query_path}')"
         register_table_from_sql(session_id, table_name, load_sql)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to load artifact into session: {exc}")

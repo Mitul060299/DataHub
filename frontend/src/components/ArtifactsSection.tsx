@@ -125,6 +125,22 @@ export function ArtifactsSection({
     }
   };
 
+  const handleLoadArtifact = async (artifact: StoredArtifact) => {
+    // If the artifact already has a linked dataset, switch directly to it.
+    if (artifact.dataset_id) {
+      onSelect({ id: artifact.dataset_id, name: artifact.name, rows: artifact.row_count ?? 0 });
+      return;
+    }
+    // Otherwise call /load to register it in a session then refresh stored list
+    // so future clicks use the dataset_id path.
+    try {
+      await api.post(`/api/artifacts/${artifact.id}/load`, { session_id: "default" });
+    } catch {
+      // best-effort — the dataset may appear in the list on next refresh
+    }
+    void fetchStored();
+  };
+
   const handleDelete = async (artifact: StoredArtifact) => {
     if (!window.confirm(`Delete artifact "${artifact.name}"? This cannot be undone.`)) return;
     setDeletingId(artifact.id);
@@ -266,29 +282,21 @@ export function ArtifactsSection({
                       }}
                       style={{ flex: 1, height: 20, fontSize: 12, background: "var(--bg3)", border: "1px solid var(--ac)", borderRadius: 4, color: "var(--tx0)", padding: "0 5px" }}
                     />
-                  ) : artifact.dataset_id ? (
+                  ) : (
                     <button
                       className="btn"
                       style={{ flex: 1, minWidth: 0, height: 20, padding: 0, borderColor: "transparent", background: "transparent", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center" }}
                       title={`Load ${artifact.name}`}
-                      onClick={() => onSelect({ id: artifact.dataset_id!, name: artifact.name, rows: artifact.row_count ?? 0 })}
+                      onClick={() => void handleLoadArtifact(artifact)}
                     >
                       <span
                         className="mono"
-                        style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ac)" }}
+                        style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: artifact.dataset_id ? "var(--ac)" : "var(--tx0)" }}
                         title={artifact.name}
                       >
                         {artifact.name}
                       </span>
                     </button>
-                  ) : (
-                    <span
-                      className="mono"
-                      style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--tx0)" }}
-                      title={artifact.name}
-                    >
-                      {artifact.name}
-                    </span>
                   )}
                   <span
                     style={{

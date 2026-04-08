@@ -14,6 +14,7 @@ interface CanvasPanelProps {
   projectId: string;
   dataset: Dataset | null;
   loading: boolean;
+  dataError?: string;
   columns: string[];
   rows: Record<string, unknown>[];
   calculatedColumns: CalculatedColumn[];
@@ -32,7 +33,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport }: CanvasPanelProps) {
   const { steps } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -167,6 +168,12 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, columns,
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
+        {dataError && tab === "data" && (
+          <div style={{ padding: "10px 16px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.2)", color: "var(--rd)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>⚠</span>
+            <span>{dataError}</span>
+          </div>
+        )}
         {tab === "data" ? (
           <DataTable
             datasetId={dataset?.id}

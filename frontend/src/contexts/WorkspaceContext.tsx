@@ -134,6 +134,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Clear the selected dataset when switching projects so a stale ID from
+  // the previous project never hits the backend (which would return a 404).
+  useEffect(() => {
+    setActiveDataset(null);
+  }, [activeProject?.id]);
+
   const value = useMemo(
     () => ({
       projects,

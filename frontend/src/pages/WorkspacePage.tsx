@@ -29,7 +29,7 @@ export function WorkspacePage() {
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
   const { runPipeline, steps } = usePipelineContext();
-  const { data, loading, refetch } = useDataset(activeDataset?.id);
+  const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
@@ -187,6 +187,7 @@ export function WorkspacePage() {
         projectId={resolvedProject?.id ?? ""}
         dataset={activeDataset}
         loading={loading}
+        dataError={datasetError ?? undefined}
         columns={data?.columns ?? []}
         rows={data?.rows ?? []}
         calculatedColumns={data?.calculatedColumns ?? []}

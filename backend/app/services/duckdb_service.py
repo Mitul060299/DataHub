@@ -24,6 +24,11 @@ class DuckDBService:
             import duckdb  # noqa: PLC0415 — lazy to avoid native-ext load at startup
             cls._db = duckdb.connect(database=":memory:")
             try:
+                cls._db.execute("SET memory_limit='256MB';")
+                cls._db.execute("SET threads=2;")
+            except Exception:
+                pass
+            try:
                 cls._db.execute("INSTALL httpfs;")
                 cls._db.execute("LOAD httpfs;")
             except Exception:
@@ -147,32 +152,22 @@ class DuckDBService:
         guarded_from = guard_duckdb_sql_paths(base_from, allowed_paths=[file_path])
 
         # Count (only when filtering; caller should pass meta.row_count otherwise)
-        count_result = connection.execute(f"SELECT COUNT(*) {guarded_from}", params).fetchone()
-        total = int(count_result[0]) if count_result else 0
-
-        # Data page
-        data_sql = f"SELECT * {guarded_from} {order_sql} LIMIT ? OFFSET ?"
-        result = connection.execute(data_sql, params + [int(limit), int(offset)])
-        columns = [col[0] for col in result.description]
-        rows = [dict(zip(columns, row)) for row in result.fetchall()]
-
-        return rows, total
-        connection = cls._ensure_db()
-        dataset_df = pd.DataFrame(rows or [])
-        view_name = "dataset_rows"
-        connection.register(view_name, dataset_df)
         try:
-            sql_query = cls._inject_relation(query, view_name)
-            if dataset_id:
-                from .calculated_columns_service import CalculatedColumnsService
+            count_result = connection.execute(f"SELECT COUNT(*) {guarded_from}", params).fetchone()
+            total = int(count_result[0]) if count_result else 0
 
-                sql_query = CalculatedColumnsService.inject_calculated_columns(sql_query, dataset_id)
-            return cls._execute(connection, sql_query)
-        finally:
-            try:
-                connection.unregister(view_name)
-            except Exception:
-                pass
+            # Data page
+            data_sql = f"SELECT * {guarded_from} {order_sql} LIMIT ? OFFSET ?"
+            result = connection.execute(data_sql, params + [int(limit), int(offset)])
+            columns = [col[0] for col in result.description]
+            rows = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            return rows, total
+        except Exception:
+            # Reset the singleton so the next request gets a fresh connection
+            # rather than hitting a corrupted/hung state.
+            cls._db = None
+            raise
 
     @classmethod
     def transform_rows(cls, rows: list[dict[str, Any]], sql: str, dataset_id: str | None = None) -> list[dict[str, Any]]:

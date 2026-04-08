@@ -180,7 +180,13 @@ async def validate_file(
     """Validate an uploaded file before commit — returns preview metadata."""
     from ..services.file_validator import validate_upload
 
-    file_bytes = await file.read()
+    _MAX_VALIDATE_BYTES = 200 * 1024 * 1024  # 200 MB hard cap
+    file_bytes = await file.read(_MAX_VALIDATE_BYTES + 1)
+    if len(file_bytes) > _MAX_VALIDATE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large to validate (max 200 MB). Convert to Parquet for large files.",
+        )
     result = validate_upload(file_bytes, file.filename or "")
 
     if not result.valid:
@@ -644,7 +650,13 @@ async def upload_new_version(
 
     # Validate
     from ..services.file_validator import validate_upload
-    file_bytes = await file.read()
+    _MAX_VERSION_BYTES = 200 * 1024 * 1024  # 200 MB hard cap
+    file_bytes = await file.read(_MAX_VERSION_BYTES + 1)
+    if len(file_bytes) > _MAX_VERSION_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large (max 200 MB). Convert to Parquet for large files.",
+        )
     validation = validate_upload(file_bytes, file.filename or "")
     if not validation.valid:
         raise HTTPException(status_code=422, detail={

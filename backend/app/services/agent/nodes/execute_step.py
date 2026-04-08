@@ -414,8 +414,46 @@ async def execute_step(state: AgentState) -> dict:
                                     except Exception:
                                         pass
                     else:
-                        # Plain SELECT — just execute and return rows directly
+                        # Plain SELECT — execute and return rows, then upload as artifact
                         rows = execute_in_session(session_id, step_sql) if session_id else []
+                        # Give the result a logical table name so the artifact has a meaningful label
+                        result_table = f"{intent_key}_{step['step_number']}_{uuid.uuid4().hex[:6]}"
+                        _sv_bytes: bytes | None = None
+                        try:
+                            import io as _io
+                            import pyarrow as _pa
+                            import pyarrow.parquet as _pq
+                            if rows:
+                                _tbl = _pa.Table.from_pylist(rows)
+                            else:
+                                _tbl = _pa.table({})
+                            _buf = _io.BytesIO()
+                            _pq.write_table(_tbl, _buf)
+                            _sv_bytes = _buf.getvalue()
+                            artifact_s3_key_sv = StorageService.upload(
+                                user_id=str(state.get("user_id") or "agent"),
+                                dataset_id=f"artifacts/{session_id or 'nosession'}",
+                                buffer=_sv_bytes,
+                                file_name=f"{result_table}.parquet",
+                            )
+                        except Exception as _upload_exc:
+                            import logging as _logging
+                            _logging.getLogger(__name__).warning(
+                                "artifact upload failed for plain-select %s %s: %s",
+                                intent_key, result_table, _upload_exc,
+                            )
+                            if artifact_s3_key_sv is None and _sv_bytes is not None:
+                                try:
+                                    _u = str(state.get("user_id") or "agent")
+                                    _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{result_table}.parquet"
+                                    _lr = StorageService._local_dir().resolve()
+                                    _lp = (_lr / _lk).resolve()
+                                    if str(_lp).startswith(str(_lr)):
+                                        _lp.parent.mkdir(parents=True, exist_ok=True)
+                                        _lp.write_bytes(_sv_bytes)
+                                        artifact_s3_key_sv = f"local://{_lk}"
+                                except Exception:
+                                    pass
 
                     result_dict: dict = {
                         "step_number": step["step_number"],

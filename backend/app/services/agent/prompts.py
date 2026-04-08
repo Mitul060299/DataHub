@@ -81,6 +81,11 @@ RULES:
 18. reconcile: CREATE TABLE <name>_recon AS SELECT COALESCE(l.key,r.key) AS key, l.val AS left_value, r.val AS right_value, (r.val-l.val) AS variance, (r.val=l.val) AS reconciled FROM left_table l FULL OUTER JOIN right_table r ON l.key=r.key.
 19. export: Set operation to 'export'. Include parameters: duckdb_name (table to export), format ('csv'|'excel'|'parquet'), display_name.
 20. For union/join/reconcile across session tables, reference tables by duckdb_name from the TABLE REGISTRY above.
+21. validate: NEVER use COUNT(DISTINCT *) or COUNT(DISTINCT COLUMNS(*)) — both are INVALID DuckDB syntax and will cause a Binder Error. To count distinct rows use a correlated subquery: `(SELECT COUNT(*) FROM (SELECT DISTINCT * FROM dataset))`. The correct null + duplicate check template is:
+    SELECT COUNT(*) AS total_rows, COUNT(col1) AS col1_count, COUNT(col2) AS col2_count, ...,
+           (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM dataset)) AS distinct_rows
+    FROM dataset
+22. For validate/summarise steps that use a plain SELECT (no CREATE TABLE … AS prefix), the engine automatically saves the result as a stored artifact — no special SQL required from you; just write the cleanest SELECT.
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{
@@ -129,7 +134,9 @@ RULES:
 - No explanation, no markdown, no fences
 - Use DuckDB syntax (not PostgreSQL, not SQLite)
 - The primary input table is always: dataset
-- Cross-session tables can be referenced by their duckdb_name from the registry"""
+- Cross-session tables can be referenced by their duckdb_name from the registry
+- NEVER use COUNT(DISTINCT *) — invalid DuckDB; replace with a subquery: (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM <table>))
+- NEVER use COLUMNS(*) inside aggregates such as COUNT(DISTINCT COLUMNS(*)) — also invalid"""
 
 
 RESPONDER_TRANSFORM_PROMPT = """You are a friendly data analyst assistant. Summarise what was accomplished in 2-3 plain-English sentences.

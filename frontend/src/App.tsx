@@ -17,6 +17,7 @@ import { DocsPage } from "./pages/DocsPage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -33,7 +34,8 @@ export function App() {
 
   return (
     <>
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
@@ -62,6 +64,7 @@ export function App() {
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
+      </ErrorBoundary>
       {rateLimitMsg && (
         <div
           style={{

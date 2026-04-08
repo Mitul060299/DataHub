@@ -239,7 +239,16 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((row, index) => (
+            {filteredRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={columns.length + 1}
+                  style={{ padding: "32px 0", textAlign: "center", color: "var(--tx2)", fontSize: 13, fontStyle: "italic" }}
+                >
+                  {rows.length === 0 ? "No data loaded" : "No rows match your search"}
+                </td>
+              </tr>
+            ) : filteredRows.map((row, index) => (
               <tr key={`row-${index}`} style={{ borderBottom: "1px solid var(--bd)" }}>
                 <td className="mono" style={{ textAlign: "right", color: "var(--tx1)", padding: "7px 10px" }}>{index + 1}</td>
                 {columns.map((column) => {

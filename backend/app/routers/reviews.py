@@ -2,13 +2,14 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from ..db import get_db
 from ..models_db import ReviewDB
+from ..services.rate_limiter import limiter
 
 router = APIRouter(tags=["reviews"])
 logger = logging.getLogger(__name__)
@@ -33,7 +34,8 @@ class ReviewOut(BaseModel):
 
 
 @router.post("/reviews", response_model=dict)
-async def submit_review(body: ReviewRequest, db: Session = Depends(get_db)) -> dict:
+@limiter.limit("5/minute")
+async def submit_review(request: Request, body: ReviewRequest, db: Session = Depends(get_db)) -> dict:
     name = body.name.strip()
     review_body = body.body.strip()
 

@@ -161,6 +161,21 @@ class Settings(BaseModel):
 
 settings = Settings()
 
+# ── Startup secret validation ─────────────────────────────────────────────────
+# Catch misconfigured deployments before they accept traffic.
+_INSECURE_DEFAULTS = {"change-me", "change-me-in-production", "secret", "password", ""}
+if settings.app_env == "production":
+    if settings.app_secret_key in _INSECURE_DEFAULTS:
+        raise ValueError(
+            "APP_SECRET_KEY is set to an insecure default value. "
+            "Set a strong random secret before deploying to production."
+        )
+    if settings.supabase_url and settings.supabase_jwt_secret in _INSECURE_DEFAULTS:
+        raise ValueError(
+            "SUPABASE_JWT_SECRET is empty but SUPABASE_URL is configured. "
+            "Set SUPABASE_JWT_SECRET to the HS256 secret from your Supabase project settings."
+        )
+
 try:
     _razorpay_plans = importlib.import_module("app.razorpay_plans")
     sys.modules[__name__ + ".razorpay_plans"] = _razorpay_plans

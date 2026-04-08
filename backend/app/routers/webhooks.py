@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Header, Depends
+from fastapi import APIRouter, Header, Depends, HTTPException
 import uuid
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 from ..models import WebhookRegistration
 from ..models_db import WebhookDB
@@ -8,6 +11,40 @@ from ..security import get_current_role, require_role
 from ..services.plan_guard import resolve_user_plan, enforce_webhooks
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+_ALLOWED_SCHEMES = {"https", "http"}
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),  # link-local / AWS metadata
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Reject localhost, private RFC-1918 addresses, and non-http(s) schemes."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in _ALLOWED_SCHEMES:
+            raise ValueError(f"Scheme '{parsed.scheme}' not allowed")
+        hostname = parsed.hostname
+        if not hostname:
+            raise ValueError("Missing hostname")
+        try:
+            resolved = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            raise ValueError(f"Cannot resolve hostname: {hostname}")
+        for (_family, _type, _proto, _canonname, sockaddr) in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if any(ip in net for net in _PRIVATE_NETWORKS):
+                raise ValueError(f"Webhook target resolves to a private address: {ip}")
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Invalid webhook URL: {exc}") from exc
 
 
 @router.post("/", response_model=WebhookRegistration)
@@ -21,6 +58,10 @@ def register_hook(
     require_role("editor", role)
     user_plan = resolve_user_plan(db, authorization)
     enforce_webhooks(user_plan)
+    try:
+        _validate_webhook_url(target_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     hook_id = str(uuid.uuid4())
     db.add(WebhookDB(id=hook_id, target_url=target_url, event=event))
     db.commit()

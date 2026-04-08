@@ -199,18 +199,10 @@ def _verify_supabase_token(token: str) -> Dict[str, Any]:
             logger.warning("Token has expired")
             return {}
         except jwt.InvalidAudienceError as e:
-            logger.warning("Invalid audience: %s", str(e))
-            try:
-                decoded = jwt.decode(
-                    token,
-                    verification_key,
-                    algorithms=[alg],
-                    options={"verify_signature": True, "verify_exp": True, "verify_aud": False},
-                )
-                logger.debug("Verified token (%s, no audience check) for user: %s", alg, decoded.get('email', decoded.get('sub')))
-                return decoded
-            except Exception as e2:
-                logger.error("%s without audience also failed: %s", alg, str(e2))
+            # Reject outright — retrying with audience checks disabled would allow
+            # tokens issued for a different service to be accepted here.
+            logger.warning("Token audience mismatch — rejecting: %s", str(e))
+            return {}
         except Exception as e:
             logger.warning("%s verification failed: %s: %s", alg, type(e).__name__, str(e))
 
@@ -249,8 +241,8 @@ def _map_supabase_role(claims: Dict[str, Any]) -> str:
     if not raw_role:
         raw_role = claims.get("role")
     if not raw_role:
-        if claims.get("sub"):
-            return "editor"
+        # Default authenticated users to the least-privileged role; elevation
+        # must be granted explicitly via app_metadata or user_metadata.
         return "viewer"
     normalized = str(raw_role).lower()
     if normalized in {"service_role", "supabase_admin", "admin"}:
@@ -313,8 +305,6 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
             claims = _verify_supabase_token(token)
             if not claims:
                 claims = _verify_app_token(token)
-            if not claims:
-                claims = _decode_jwt_unverified(token)
             if claims:
                 return _map_supabase_role(claims)
         decoded = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")
@@ -335,8 +325,6 @@ def get_current_subject(authorization: str | None = Header(default=None)) -> Opt
             claims = _verify_supabase_token(token)
             if not claims:
                 claims = _verify_app_token(token)
-            if not claims:
-                claims = _decode_jwt_unverified(token)
             if claims:
                 return (
                     claims.get("email")
@@ -362,8 +350,6 @@ def get_current_user_id(authorization: str | None = Header(default=None)) -> Opt
             claims = _verify_supabase_token(token)
             if not claims:
                 claims = _verify_app_token(token)
-            if not claims:
-                claims = _decode_jwt_unverified(token)
             if claims:
                 return claims.get("sub")
         return None

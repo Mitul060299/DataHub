@@ -1,11 +1,12 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models_db import FeedbackDB
+from ..services.rate_limiter import limiter
 
 router = APIRouter(tags=["feedback"])
 logger = logging.getLogger(__name__)
@@ -24,7 +25,8 @@ class FeedbackResponse(BaseModel):
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
-async def submit_feedback(body: FeedbackRequest, db: Session = Depends(get_db)) -> FeedbackResponse:
+@limiter.limit("5/minute")
+async def submit_feedback(request: Request, body: FeedbackRequest, db: Session = Depends(get_db)) -> FeedbackResponse:
     name = body.name.strip()
     email = body.email.strip()
     message = body.message.strip()

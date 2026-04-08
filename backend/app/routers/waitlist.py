@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from ..db import SessionLocal
+from sqlalchemy.orm import Session
+from ..db import get_db
 from ..models_db import WaitlistEntryDB
+from ..services.rate_limiter import limiter
 
 router = APIRouter()
 
@@ -13,8 +15,8 @@ class WaitlistRequest(BaseModel):
 
 
 @router.post("/waitlist")
-async def join_waitlist(req: WaitlistRequest):
-    db = SessionLocal()
+@limiter.limit("5/minute")
+async def join_waitlist(request: Request, req: WaitlistRequest, db: Session = Depends(get_db)):
     try:
         existing = db.query(WaitlistEntryDB).filter(
             WaitlistEntryDB.email == req.email
@@ -31,5 +33,3 @@ async def join_waitlist(req: WaitlistRequest):
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()

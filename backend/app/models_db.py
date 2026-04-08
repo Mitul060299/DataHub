@@ -190,6 +190,10 @@ class DatasetChunkDB(Base):
     chunk_index = Column(Integer, nullable=False)
     rows = Column(JSONB, nullable=False, default=list)
 
+    __table_args__ = (
+        Index("idx_dataset_chunks_dataset_id", "dataset_id"),
+    )
+
 
 class CalculatedColumnDB(Base):
     __tablename__ = "calculated_columns"
@@ -244,6 +248,11 @@ class AuditLogDB(Base):
     target = Column(String, nullable=False)
     metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_audit_logs_actor", "actor"),
+        Index("idx_audit_logs_created_at", "created_at"),
+    )
 
 
 class AgentFeedbackDB(Base):

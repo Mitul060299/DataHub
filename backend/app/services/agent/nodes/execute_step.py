@@ -364,6 +364,7 @@ async def execute_step(state: AgentState) -> dict:
                         # Gate only on DDL having succeeded (result_table set) — not on rows
                         # being non-empty; a valid empty result is still a real artifact.
                         if result_table:
+                            _sv_bytes: bytes | None = None
                             try:
                                 import io as _io
                                 import pyarrow as _pa
@@ -387,10 +388,11 @@ async def execute_step(state: AgentState) -> dict:
                                     )
                                 _buf = _io.BytesIO()
                                 _pq.write_table(_tbl, _buf)
+                                _sv_bytes = _buf.getvalue()
                                 artifact_s3_key_sv = StorageService.upload(
                                     user_id=str(state.get("user_id") or "agent"),
                                     dataset_id=f"artifacts/{session_id or 'nosession'}",
-                                    buffer=_buf.getvalue(),
+                                    buffer=_sv_bytes,
                                     file_name=f"{result_table}.parquet",
                                 )
                             except Exception as _upload_exc:
@@ -399,6 +401,18 @@ async def execute_step(state: AgentState) -> dict:
                                     "artifact S3 upload failed for %s %s: %s",
                                     intent_key, result_table, _upload_exc,
                                 )
+                                if artifact_s3_key_sv is None and _sv_bytes is not None:
+                                    try:
+                                        _u = str(state.get("user_id") or "agent")
+                                        _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{result_table}.parquet"
+                                        _lr = StorageService._local_dir().resolve()
+                                        _lp = (_lr / _lk).resolve()
+                                        if str(_lp).startswith(str(_lr)):
+                                            _lp.parent.mkdir(parents=True, exist_ok=True)
+                                            _lp.write_bytes(_sv_bytes)
+                                            artifact_s3_key_sv = f"local://{_lk}"
+                                    except Exception:
+                                        pass
                     else:
                         # Plain SELECT — just execute and return rows directly
                         rows = execute_in_session(session_id, step_sql) if session_id else []
@@ -513,6 +527,7 @@ async def execute_step(state: AgentState) -> dict:
                                 out_cols = []
 
                         # Upload Parquet snapshot to S3 (best-effort)
+                        _artifact_bytes: bytes | None = None
                         try:
                             import io as _io
                             import pyarrow as _pa
@@ -522,12 +537,12 @@ async def execute_step(state: AgentState) -> dict:
                                 _table = _pa.Table.from_pylist(_rows)
                                 _parquet_buf = _io.BytesIO()
                                 _pq.write_table(_table, _parquet_buf)
-                                _parquet_bytes = _parquet_buf.getvalue()
+                                _artifact_bytes = _parquet_buf.getvalue()
                                 _artifact_name = f"{output_table}.parquet"
                                 artifact_s3_key = StorageService.upload(
                                     user_id=str(state.get("user_id") or "agent"),
                                     dataset_id=f"artifacts/{session_id or 'nosession'}",
-                                    buffer=_parquet_bytes,
+                                    buffer=_artifact_bytes,
                                     file_name=_artifact_name,
                                 )
                         except Exception as _upload_exc:
@@ -536,10 +551,20 @@ async def execute_step(state: AgentState) -> dict:
                                 "artifact S3 upload failed for %s: %s",
                                 output_table, _upload_exc,
                             )
-                            # Even without S3, mark key as sentinel so ArtifactDB
-                            # is still created and appears in the artifacts list.
-                            if artifact_s3_key is None:
-                                artifact_s3_key = f"local/{session_id or 'nosession'}/{output_table}.parquet"
+                            # Cloud upload failed — fall back to local disk storage
+                            # using the correct local:// scheme so DuckDB can read it.
+                            if artifact_s3_key is None and _artifact_bytes is not None:
+                                try:
+                                    _u = str(state.get("user_id") or "agent")
+                                    _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{output_table}.parquet"
+                                    _lr = StorageService._local_dir().resolve()
+                                    _lp = (_lr / _lk).resolve()
+                                    if str(_lp).startswith(str(_lr)):
+                                        _lp.parent.mkdir(parents=True, exist_ok=True)
+                                        _lp.write_bytes(_artifact_bytes)
+                                        artifact_s3_key = f"local://{_lk}"
+                                except Exception:
+                                    pass
                         # Fetch inline preview rows for the chat table card
                         try:
                             preview_rows = execute_in_session(

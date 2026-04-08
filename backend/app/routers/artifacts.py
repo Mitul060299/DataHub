@@ -133,13 +133,25 @@ def download_artifact(
     s3_key = artifact.s3_key
     safe_name = (artifact.name or "artifact").replace(" ", "_")
 
-    if s3_key and str(s3_key).startswith("local/"):
+    # Reject legacy bad-format sentinels ("local/..." without ://)
+    if s3_key and str(s3_key).startswith("local/") and "://" not in str(s3_key):
         raise HTTPException(
             status_code=503,
             detail="This artifact was generated without cloud storage configured and cannot be downloaded.",
         )
 
     if fmt == "parquet":
+        if s3_key and str(s3_key).startswith("local://"):
+            # Local artifacts must be served directly, not via redirect
+            try:
+                raw_bytes = _fetch_bytes(s3_key)
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=f"Failed to read local artifact: {exc}")
+            return Response(
+                content=raw_bytes,
+                media_type="application/octet-stream",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}.parquet"'},
+            )
         # Return a redirect to a fresh presigned URL
         try:
             url = StorageService.get_signed_url(s3_key, expires_in=3600)
@@ -198,7 +210,9 @@ def download_artifact(
 
 def _fetch_bytes(s3_key: str) -> bytes:
     """Download raw bytes from storage given an s3_key (storage path)."""
-    import tempfile, os
+    if str(s3_key).startswith("local://"):
+        local_path = StorageService._local_dir() / str(s3_key).replace("local://", "", 1)
+        return local_path.read_bytes()
     url = StorageService.get_signed_url(s3_key, expires_in=3600)
     import urllib.request
     with urllib.request.urlopen(url, timeout=60) as resp:  # type: ignore

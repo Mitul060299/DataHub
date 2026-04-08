@@ -235,6 +235,13 @@ const plans: PricingPlan[] = [
 
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
 
+const metricsStrip = [
+  { number: "10+", label: "Countries served" },
+  { number: "Free", label: "Forever tier" },
+  { number: "0", label: "Lines of code" },
+  { number: "100%", label: "Audit trail" },
+];
+
 export function HomePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
@@ -668,6 +675,25 @@ export function HomePage() {
               3 steps recorded · replayable
             </motion.div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* ── Trust metrics strip ── */}
+      <section className="metrics-strip-section">
+        <div className="metrics-strip">
+          {metricsStrip.map((item, i) => (
+            <motion.div
+              key={item.label}
+              className="metrics-item"
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.38, delay: i * 0.08, ease: "easeOut" }}
+            >
+              <span className="metrics-number">{item.number}</span>
+              <span className="metrics-label">{item.label}</span>
+            </motion.div>
+          ))}
         </div>
       </section>
 

@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
+import { PipelinePanel } from "../components/PipelinePanel";
 import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
@@ -37,6 +38,11 @@ export function WorkspacePage() {
   const [explorerSearchFocusNonce, setExplorerSearchFocusNonce] = useState(0);
   const [explorerWidth, setExplorerWidth] = useState(() => Number(localStorage.getItem("explorerWidth") ?? 280));
   const [resizingExplorer, setResizingExplorer] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(() => localStorage.getItem("pipelineOpen") !== "false");
+  const [pipelineWidth, setPipelineWidth] = useState(() => Number(localStorage.getItem("pipelineWidth") ?? 300));
+  const [resizingPipeline, setResizingPipeline] = useState(false);
+  const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
+  const [resizingAI, setResizingAI] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
@@ -95,6 +101,40 @@ export function WorkspacePage() {
     };
   }, [resizingExplorer]);
 
+  useEffect(() => {
+    if (!resizingPipeline) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      // Pipeline panel sits to the LEFT of AI panel; we track the cursor
+      // relative to the right edge of the window minus AI panel width.
+      const nextWidth = Math.max(240, Math.min(560, window.innerWidth - aiWidth - e.clientX));
+      setPipelineWidth(nextWidth);
+      localStorage.setItem("pipelineWidth", String(nextWidth));
+    };
+    const stop = () => setResizingPipeline(false);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stop);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stop);
+    };
+  }, [resizingPipeline, aiWidth]);
+
+  useEffect(() => {
+    if (!resizingAI) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const nextWidth = Math.max(280, Math.min(560, window.innerWidth - e.clientX));
+      setAiWidth(nextWidth);
+      localStorage.setItem("aiWidth", String(nextWidth));
+    };
+    const stop = () => setResizingAI(false);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stop);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stop);
+    };
+  }, [resizingAI]);
+
   const breadcrumbSegments = [
     { label: "Workspace", href: "/workspace" },
     ...(resolvedProject
@@ -109,7 +149,14 @@ export function WorkspacePage() {
       <main style={{ height: "calc(100% - var(--th) - 36px)", display: "flex", minWidth: 0, minHeight: 0 }}>
       <ActivityBar
         explorerOpen={explorerOpen}
+        pipelineOpen={pipelineOpen}
         onToggleExplorer={() => setExplorerOpen((value) => !value)}
+        onTogglePipeline={() => {
+          setPipelineOpen((v) => {
+            localStorage.setItem("pipelineOpen", String(!v));
+            return !v;
+          });
+        }}
       />
       {explorerOpen ? (
         <>
@@ -151,20 +198,57 @@ export function WorkspacePage() {
           void refetch();
         }}
       />
+      {/* Pipeline column — dedicated panel between canvas and AI */}
+      {pipelineOpen ? (
+        <>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            title="Drag to resize pipeline panel"
+            onMouseDown={() => setResizingPipeline(true)}
+            style={{
+              width: 6,
+              cursor: "col-resize",
+              background: resizingPipeline ? "var(--bd3)" : "transparent",
+              borderRight: "1px solid var(--bd)",
+              borderLeft: "1px solid var(--bd)",
+              flexShrink: 0,
+            }}
+          />
+          <PipelinePanel
+            width={pipelineWidth}
+            onClose={() => {
+              setPipelineOpen(false);
+              localStorage.setItem("pipelineOpen", "false");
+            }}
+          />
+        </>
+      ) : null}
+      {/* AI panel drag handle */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize AI panel"
+        onMouseDown={() => setResizingAI(true)}
+        style={{
+          width: 6,
+          cursor: "col-resize",
+          background: resizingAI ? "var(--bd3)" : "transparent",
+          borderRight: "1px solid var(--bd)",
+          borderLeft: "1px solid var(--bd)",
+          flexShrink: 0,
+        }}
+      />
       <AIPanel
         dataset={activeDataset}
         workspaceId={workspaceId}
         projectId={resolvedProject?.id ?? "default"}
+        width={aiWidth}
         onStepApplied={() => {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();
         }}
         onDatasetMutated={() => {
-          // Refresh the sidebar dataset list. Do NOT call refetch() here —
-          // when activeDataset.id changes (new artifact created), useDataset
-          // reloads automatically via useEffect. Calling refetch() with the
-          // stale source-dataset id would race against and overwrite the new
-          // artifact data.
           setDatasetRefreshNonce((value) => value + 1);
         }}
       />

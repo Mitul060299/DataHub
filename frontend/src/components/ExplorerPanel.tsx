@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, deleteDataset, renameDataset } from "../api";
-import { usePipeline } from "../hooks/usePipeline";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { IconChevronDown, IconTeam } from "./Icons";
 import { ArtifactsSection, type ArtifactItem } from "./ArtifactsSection";
 import { VisualizationsSection } from "./VisualizationsSection";
 import { DataSection } from "./DataSection";
 
-import { PipelineSection } from "./PipelineSection";
 import { TeamPanel } from "./TeamPanel";
 import { ProjectModal } from "./modals/ProjectModal";
 import { ImportModal } from "./modals/ImportModal";
-import { ScheduleModal } from "./modals/ScheduleModal";
 import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
 
@@ -24,14 +21,12 @@ interface ExplorerPanelProps {
 
 export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, workspaceMembers, refreshMembers, projectsLoading } = useWorkspaceContext();
-  const { steps, setScheduleInfo } = usePipelineContext();
-  const { exportPipeline, schedule } = usePipeline();
+  const { steps } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [teamPanelOpen, setTeamPanelOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [datasetLoadError, setDatasetLoadError] = useState<string | null>(null);
@@ -331,12 +326,6 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         />
         </div>
         )}
-        <div data-tour="pipeline-section">
-        <PipelineSection
-          onSchedule={() => setScheduleModalOpen(true)}
-          onExport={() => exportPipeline(steps)}
-        />
-        </div>
         <ArtifactsSection
           artifacts={artifacts}
           activeDatasetId={activeDataset?.id}
@@ -371,14 +360,6 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         onImported={() => {
           setImportModalOpen(false);
           void loadDatasets();
-        }}
-      />
-      <ScheduleModal
-        open={scheduleModalOpen}
-        onClose={() => setScheduleModalOpen(false)}
-        onConfirm={(payload) => {
-          setScheduleInfo(payload);
-          void schedule("default", payload.cron, payload.autoRefreshOnUpload);
         }}
       />
       <ConnectorModal

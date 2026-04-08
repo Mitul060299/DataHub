@@ -859,6 +859,65 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.pricing-card:hover {
+  border-color: var(--plan-color);
+  box-shadow: 0 8px 36px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Metrics strip ───────────────────────────────────────────────────────── */
+.metrics-strip-section {
+  padding: 28px 0;
+  border-bottom: 1px solid #22222a;
+  background: #0a0a0f;
+}
+
+.metrics-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+.metrics-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 4px 20px;
+  gap: 3px;
+  position: relative;
+}
+
+.metrics-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 10%;
+  height: 80%;
+  width: 1px;
+  background: #22222a;
+}
+
+.metrics-number {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #818cf8 0%, #e8e8f0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+
+.metrics-label {
+  font-size: 11px;
+  color: #8888a0;
+  letter-spacing: 0.02em;
+}
+
 /* ── Home page removes extra top-padding since nav is layout-sticky ──────── */
 .home-page {
   padding-top: 0;

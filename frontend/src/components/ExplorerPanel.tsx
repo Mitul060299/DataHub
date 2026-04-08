@@ -166,24 +166,24 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         code?: string;
       };
       const isTimeout = maybeError.code === "ECONNABORTED" || (maybeError.message ?? "").toLowerCase().includes("timeout");
-      // Auto-retry once on timeout (backend cold-start wakeup)
-      if (isTimeout && attempt === 0) {
+      const isNetworkError = !maybeError.response && (maybeError.message ?? "").toLowerCase().includes("network error");
+      const status = maybeError.response?.status;
+      const isRetriable = isTimeout || isNetworkError || status === 502 || status === 503 || status === 504;
+      // Auto-retry once on network error / timeout / gateway error (Render deploy window or cold-start)
+      if (isRetriable && attempt === 0) {
         setDatasetLoadError("Backend is waking up, retrying…");
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 3000));
         return loadDatasets(1);
       }
-      const status = maybeError.response?.status;
       const detail = maybeError.response?.data?.detail
         ?? maybeError.response?.data?.message
         ?? maybeError.message
         ?? "Failed to load datasets";
-      const message = detail.toLowerCase().includes("network error")
-        ? "Network Error: Unable to reach backend API. Verify deployment health and /api routing."
-        : isTimeout
-          ? "Backend is taking too long to respond. Please click retry or wait and refresh."
-          : status
-            ? `${detail} (HTTP ${status})`
-            : detail;
+      const message = isNetworkError || isTimeout
+        ? "Backend is taking too long to respond. Please click retry or wait and refresh."
+        : status
+          ? `${detail} (HTTP ${status})`
+          : detail;
       setDatasetLoadError(message);
       setDatasets([]);
     } finally {

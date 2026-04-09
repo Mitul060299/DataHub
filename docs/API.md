@@ -39,6 +39,7 @@ Request body (`CommandRequest`):
   "workspace_id": "uuid",
   "pipeline_steps": [],
   "plan_approved": false,
+  "plan_pending_modification": false,
   "pending_plan": [],
   "conversation_history": [
     {"role": "user", "content": "Previous question"},
@@ -48,18 +49,21 @@ Request body (`CommandRequest`):
 }
 ```
 
+`plan_pending_modification` — set to `true` when the user clicks **Modify** on an existing plan card. The `pending_plan` field must carry the existing plan steps. The planner node will revise the plan rather than generate a new one.
+
 SSE event types emitted:
 - `agent.thinking` — node began processing
-- `agent.plan` — plan ready for user approval; contains `plan[]`
+- `agent.plan` — plan ready for user approval; contains `plan[]` and `plan_type` (`"linear"` or `"dag"`)
 - `agent.step.start` — step about to execute; contains `step_number`, `operation`, `description`, `total_steps`
-- `agent.step.done` — step completed; contains row counts and execution time
+- `agent.step.done` — step completed; contains `step`, `operation`, `row_count_before`, `row_count_after`, `execution_time_ms`
+- `agent.step.retry` — reflect node rewrote the SQL; contains `attempt` count
 - `agent.step.error` — step failed after reflect/retry
-- `agent.query_results` — read-only SQL results; contains `results[]`
-- `column_added` — calculated column created
-- `tile_created` — chart tile created on a dashboard
-- `agent.artifact` — CSV/Parquet/Excel export ready
-- `agent.done` — run complete; contains `response`, `run_id`, `pipeline_steps[]`
-- `agent.error` — unrecoverable error
+- `agent.query_results` — read-only SQL results; contains `results[]` and `operation`
+- `column_added` — calculated column created; contains `column` object
+- `tile_created` — chart tile created on a dashboard; contains `tile` object
+- `agent.artifact` — CSV/Parquet/Excel export ready; contains `artifact_url` or `artifact_s3_key`
+- `agent.done` — run complete; contains `response`, `intent`, `run_id`, `output_dataset_id`, `run_steps[]`, `pipeline_steps[]`. When `intent` is `"clarify"` the response is a clarifying question and no execution steps were run.
+- `agent.error` — unrecoverable error; contains `error` string
 
 ## AI Agents (legacy non-streaming)
 - GET /agents/suggest/{dataset_id}?workspace_id=...

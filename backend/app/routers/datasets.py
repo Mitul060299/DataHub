@@ -225,7 +225,23 @@ async def upload_dataset(
     # Usage limit check
     user_plan = resolve_user_plan(db, authorization)
     enforce_usage_limit(user_id, user_plan, "datasets_uploaded", db)
-    content = await file.read()
+    # Hard cap before pandas ever touches the bytes — prevents OOM on 512 MB instances.
+    # The per-plan size check below still fires for smaller plan limits.
+    _UPLOAD_HARD_CAP = 500 * 1024 * 1024  # 500 MB absolute ceiling
+    content = await file.read(_UPLOAD_HARD_CAP + 1)
+    if len(content) > _UPLOAD_HARD_CAP:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error": "file_too_large",
+                "message": (
+                    "File exceeds the 500 MB hard limit. "
+                    "Convert large datasets to Parquet format for 5\u201310\u00d7 smaller files: "
+                    "df.to_parquet('file.parquet')"
+                ),
+                "plan": user_plan,
+            },
+        )
     # ── File validation: extension, magic bytes, size, encoding ──────────────
     from ..services.file_validator import validate_upload as _validate_upload
     from ..services.plan_guard import limits_for_plan as _limits_for_plan

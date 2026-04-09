@@ -108,6 +108,6 @@ exec uvicorn app.main:app \
   --host 0.0.0.0 \
   --port "${PORT_VALUE}" \
   --workers "${WORKERS_VALUE}" \
-  --limit-concurrency 4 \
+  --limit-concurrency 25 \
   --timeout-keep-alive 65 \
   --lifespan on

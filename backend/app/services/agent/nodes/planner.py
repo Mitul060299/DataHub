@@ -46,6 +46,12 @@ async def planner(state: AgentState) -> dict:
     user_goal = messages[-1].content if messages else ""
     requested_approval = bool(state.get("plan_approved", False))
 
+    # Check if this is a plan modification request
+    existing_plan = state.get("plan", [])
+    is_modification = bool(
+        existing_plan and state.get("plan_pending_modification", False)
+    )
+
     system_prompt = PLANNER_SYSTEM_PROMPT.format(
         schema=_dumps(state.get("schema", {})),
         stats=_dumps(state.get("stats", {})),
@@ -59,11 +65,24 @@ async def planner(state: AgentState) -> dict:
         user_goal=user_goal,
     )
 
+    if is_modification:
+        modification_prompt = (
+            f"You have an existing execution plan. The user wants to modify it.\n\n"
+            f"EXISTING PLAN:\n{_dumps(existing_plan)}\n\n"
+            f"USER MODIFICATION REQUEST:\n{user_goal}\n\n"
+            f"Return the complete updated plan JSON with the modification applied. "
+            f"Only change what the user asked to change. Keep all other steps identical. "
+            f"Renumber steps if needed. Follow all existing plan rules."
+        )
+        human_content = modification_prompt
+    else:
+        human_content = f"Generate the execution plan for: {user_goal}"
+
     try:
         response = await _llm.ainvoke(
             [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=f"Generate the execution plan for: {user_goal}"),
+                HumanMessage(content=human_content),
             ]
         )
         raw = str(response.content).strip()

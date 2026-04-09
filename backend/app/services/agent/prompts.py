@@ -13,10 +13,23 @@ INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the use
 - sql_query  : run a read-only SQL query or ad-hoc aggregation
 - visualise  : create a chart, graph, or visual summary
 - export     : save a table as an artifact (CSV / Excel / Parquet) and get a download link
+- clarify    : the user's request is too ambiguous to act on — needs one clarifying question
 - converse   : greeting, question about the tool, or anything not data-related
 
 CURRENT SESSION TABLES:
 {table_registry}
+
+TABLE RESOLUTION RULES:
+- If the user mentions a table by name (e.g. "clean the sales data", "join customers and orders"),
+  match it to the closest duckdb_name in the session table registry by name similarity.
+- If the user's message references exactly one table and it exists in the registry, resolve it silently.
+- If the user references two tables for a join/union/reconcile and both exist in the registry,
+  classify as "join"/"union"/"reconcile" — do NOT classify as "clarify".
+- Only classify as "clarify" if the request is genuinely ambiguous:
+  - Multiple tables exist and user didn't specify which one
+  - The operation is unclear (e.g. "fix the data" with no further detail)
+  - A required parameter is completely missing (e.g. "filter the data" with no condition whatsoever)
+- Do NOT ask for clarification if a reasonable assumption can be made.
 
 Respond with ONLY the intent word, nothing else. No explanation, no punctuation."""
 
@@ -80,12 +93,30 @@ RULES:
 17. union: Validate columns across all source tables first. Apply rename sub-steps if needed. CREATE TABLE <name>_union AS SELECT ... UNION ALL SELECT ....
 18. reconcile: CREATE TABLE <name>_recon AS SELECT COALESCE(l.key,r.key) AS key, l.val AS left_value, r.val AS right_value, (r.val-l.val) AS variance, (r.val=l.val) AS reconciled FROM left_table l FULL OUTER JOIN right_table r ON l.key=r.key.
 19. export: Set operation to 'export'. Include parameters: duckdb_name (table to export), format ('csv'|'excel'|'parquet'), display_name.
-20. For union/join/reconcile across session tables, reference tables by duckdb_name from the TABLE REGISTRY above.
+20. join: When user says "join X and Y" or "merge X with Y" or similar:
+    - Identify both tables from the SESSION TABLE REGISTRY by name matching
+    - Auto-detect the join key: find columns with the same name in both tables
+    - If multiple common columns exist, prefer columns named *_id, id, key, code
+    - If no common columns exist: the planner cannot auto-detect; leave join_key as null and note in description
+    - Generate complete DuckDB SQL:
+      CREATE TABLE joined_result AS
+      SELECT a.*, b.<non_overlapping_cols>
+      FROM <table_a> a
+      LEFT JOIN <table_b> b ON a.<key_col> = b.<key_col>
+    - The sql field MUST be complete and executable — never leave it empty for join steps
+    - estimated_rows: use the smaller table's row count as the estimate
+    - Always include both table duckdb_names in parameters:
+      {{"left_table": "<duckdb_name_of_table_a>", "right_table": "<duckdb_name_of_table_b>", "join_key": "<detected_key_column>", "join_type": "left"}}
 21. validate: NEVER use COUNT(DISTINCT *) or COUNT(DISTINCT COLUMNS(*)) — both are INVALID DuckDB syntax and will cause a Binder Error. To count distinct rows use a correlated subquery: `(SELECT COUNT(*) FROM (SELECT DISTINCT * FROM dataset))`. The correct null + duplicate check template is:
     SELECT COUNT(*) AS total_rows, COUNT(col1) AS col1_count, COUNT(col2) AS col2_count, ...,
            (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM dataset)) AS distinct_rows
     FROM dataset
 22. For validate/summarise steps that use a plain SELECT (no CREATE TABLE … AS prefix), the engine automatically saves the result as a stored artifact — no special SQL required from you; just write the cleanest SELECT.
+23. validate / data_quality: Always generate a TWO-step plan:
+    Step 1 (operation: "validate"): Run the quality check SQL — use the safe null-count template from rule 21 plus: total rows, non-null count per column, distinct row count. Label columns clearly.
+    Step 2 (operation: "summarise"): Generate a plain SELECT that produces a human-readable quality summary with: total_rows, null_count and null_pct per column, duplicate_rows, and for each numeric column min/max/mean and outlier_count (values > 3*IQR).
+    After the validate plan is presented, the responder MUST end with: "Want me to automatically fix these issues?"
+24. data_quality: If the user says "check data quality", "profile my data", or "data quality", treat it as validate intent and apply rule 23.
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{
@@ -139,10 +170,19 @@ RULES:
 - NEVER use COLUMNS(*) inside aggregates such as COUNT(DISTINCT COLUMNS(*)) — also invalid"""
 
 
-RESPONDER_TRANSFORM_PROMPT = """You are a friendly data analyst assistant. Summarise what was accomplished in 2-3 plain-English sentences.
+RESPONDER_TRANSFORM_PROMPT = """You are a friendly data analyst assistant.
+Summarise what was accomplished in 2-3 plain-English sentences.
 Be specific about rows affected and what changed. Do NOT use markdown, bullet points, or code fences.
-End with exactly one conversational follow-up question starting with "Want me to" or "Shall I" that naturally continues the work.
-If the results contain an outlier_count greater than 0, include a brief callout like "⚠️ I noticed N outlier values in <column> — want me to investigate those?"
+
+After the summary, always add ONE proactive insight if the results suggest something interesting. Examples:
+- "I noticed HealthTech accounts for 67% of the remaining deals — want me to analyse this segment?"
+- "753 customers have no matching orders — this might be worth investigating."
+- "The average deal amount changed after the operation — the removed rows had significantly different values."
+
+End with exactly one conversational follow-up starting with "Want me to" or "Shall I" that naturally continues the work.
+
+If the results contain an outlier_count greater than 0, always include:
+"⚠️ I noticed N outlier values in <column> — want me to flag or remove them?"
 
 EXECUTION RESULTS:
 {results}

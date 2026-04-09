@@ -628,7 +628,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
     }
   };
 
-  const handleSend = async (text?: string, approvePlan?: boolean, pendingPlan?: PlanStep[]) => {
+  const handleSend = async (text?: string, approvePlan?: boolean, pendingPlan?: PlanStep[], isPlanModification?: boolean) => {
     if (!dataset) return;
     const content = (text || input).trim();
     if (!content && !approvePlan) return;
@@ -657,6 +657,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           rows_affected: step.affectedRows,
         })),
         plan_approved: approvePlan ?? false,
+        plan_pending_modification: isPlanModification ?? false,
         pending_plan: pendingPlan,
         secondary_dataset_ids: secondaryDatasetIds,
         onEvent: handleAgentEvent,
@@ -699,6 +700,20 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         ? { ...message, planPending: false, planRejected: true }
         : message
     )));
+  };
+
+  const modifyPlan = (instruction: string) => {
+    if (sending) return;
+    const pendingPlanSteps = messages
+      .filter((m) => m.planPending && Array.isArray(m.plan))
+      .flatMap((m) => m.plan ?? []);
+    // Mark the current pending plan as rejected so it turns red
+    setMessages((previous) => previous.map((message) => (
+      message.planPending
+        ? { ...message, planPending: false, planRejected: true }
+        : message
+    )));
+    void handleSend(instruction, false, pendingPlanSteps, true);
   };
 
   const applyStep = async (messageId: string, transformation: TransformationPayload) => {
@@ -916,6 +931,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                     sending={sending}
                     onApprove={approvePlan}
                     onReject={rejectPlan}
+                    onModify={modifyPlan}
                   />
                 ) : (
                   <PlanCard
@@ -926,6 +942,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                     sending={sending}
                     onApprove={approvePlan}
                     onReject={rejectPlan}
+                    onModify={modifyPlan}
                   />
                 )
               ) : null}

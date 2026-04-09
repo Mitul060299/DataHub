@@ -23,6 +23,7 @@ class AgentGraphService:
         session_id: str = "",
         secondary_dataset_ids: list[str] | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        plan_pending_modification: bool = False,
     ) -> dict[str, Any]:
         # Build LangChain messages from the prior conversation turns
         history_messages: list = []
@@ -63,6 +64,7 @@ class AgentGraphService:
             "final_response": "",
             "chart_config": None,
             "query_results": None,
+            "plan_pending_modification": plan_pending_modification,
         }
         if secondary_dataset_ids:
             state["secondary_dataset_ids"] = secondary_dataset_ids
@@ -82,6 +84,7 @@ class AgentGraphService:
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        plan_pending_modification: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         config = {"configurable": {"thread_id": session_id}}
         if plan_approved:
@@ -146,6 +149,7 @@ class AgentGraphService:
                 session_id=session_id,
                 secondary_dataset_ids=secondary_dataset_ids or [],
                 conversation_history=conversation_history or [],
+                plan_pending_modification=plan_pending_modification,
             )
 
         try:

@@ -57,6 +57,7 @@ class CleaningController:
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        plan_pending_modification: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         role = get_current_role(authorization)
         require_role("viewer", role)
@@ -82,6 +83,7 @@ class CleaningController:
             workspace_id=effective_workspace_id,
             secondary_dataset_ids=secondary_dataset_ids or [],
             conversation_history=conversation_history or [],
+            plan_pending_modification=plan_pending_modification,
         )
 
     @staticmethod

@@ -58,6 +58,7 @@ export function useChatSession() {
     conversation_history: ConversationMessage[];
     pipeline_steps?: Array<Record<string, unknown>>;
     plan_approved?: boolean;
+    plan_pending_modification?: boolean;
     pending_plan?: PlanStep[];
     secondary_dataset_ids?: string[];
     onEvent?: (event: AgentEvent) => void;
@@ -89,6 +90,7 @@ export function useChatSession() {
           project_id: payload.project_id,
           pipeline_steps: payload.pipeline_steps ?? [],
           plan_approved: payload.plan_approved ?? false,
+          plan_pending_modification: payload.plan_pending_modification ?? false,
           pending_plan: payload.pending_plan ?? [],
           conversation_history: payload.conversation_history,
           secondary_dataset_ids: payload.secondary_dataset_ids ?? [],

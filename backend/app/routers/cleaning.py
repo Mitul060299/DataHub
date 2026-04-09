@@ -23,6 +23,7 @@ class CommandRequest(BaseModel):
     project_id: str | None = None
     pipeline_steps: list[dict[str, Any]] = Field(default_factory=list)
     plan_approved: bool = False
+    plan_pending_modification: bool = False
     pending_plan: list[dict[str, Any]] = Field(default_factory=list)
     conversation_history: list[dict[str, Any]] = Field(default_factory=list)
     secondary_dataset_ids: list[str] = Field(
@@ -66,6 +67,7 @@ async def process_command(
                 authorization=authorization,
                 secondary_dataset_ids=payload.secondary_dataset_ids or [],
                 conversation_history=payload.conversation_history or [],
+                plan_pending_modification=payload.plan_pending_modification,
             )
             async for event in stream:
                 if isinstance(event, dict):

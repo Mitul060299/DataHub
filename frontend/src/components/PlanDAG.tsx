@@ -18,6 +18,7 @@ interface PlanDAGProps {
   sending?: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onModify: (instruction: string) => void;
 }
 
 // Layout constants
@@ -56,9 +57,12 @@ export default function PlanDAG({
   sending,
   onApprove,
   onReject,
+  onModify,
 }: PlanDAGProps) {
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
+  const [modifying, setModifying] = useState(false);
+  const [modifyText, setModifyText] = useState("");
 
   function copySQL(stepNumber: number, sql: string) {
     navigator.clipboard.writeText(sql).then(() => {
@@ -306,25 +310,60 @@ export default function PlanDAG({
         </div>
       ) : null}
 
-      {/* Approve / Reject buttons */}
+      {/* Approve / Reject / Modify buttons */}
       {pending ? (
         <div
           data-tour="approve-button"
-          style={{ display: "flex", gap: 8, marginTop: 10 }}
+          style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}
         >
-          <button
-            className="btn"
-            onClick={onApprove}
-            disabled={sending}
-            style={
-              sending ? { opacity: 0.6, cursor: "not-allowed" } : undefined
-            }
-          >
-            {sending ? "Running…" : "✓ Approve & Run"}
-          </button>
-          <button className="btn" onClick={onReject} disabled={sending}>
-            ✕ Reject
-          </button>
+          {!modifying ? (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="btn"
+                onClick={onApprove}
+                disabled={sending}
+                style={{ flex: 1, background: "#5B6AF0", color: "#eef2ff", borderColor: "#5B6AF0", ...(sending ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
+              >
+                {sending ? "Running…" : "✓ Approve"}
+              </button>
+              <button className="btn" onClick={() => setModifying(true)} disabled={sending} style={{ flex: 1 }}>
+                ✎ Modify
+              </button>
+              <button className="btn" onClick={onReject} disabled={sending} style={{ flex: 1, color: "#ef4444", borderColor: "#ef4444" }}>
+                ✕ Reject
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <textarea
+                autoFocus
+                value={modifyText}
+                onChange={(e) => setModifyText(e.target.value)}
+                placeholder='Describe your change e.g. "Change step 2 to group by industry" or "Add a remove-nulls step first"'
+                rows={2}
+                style={{ width: "100%", resize: "none", background: "var(--bg1)", border: "1px solid var(--bd2)", borderRadius: 6, color: "var(--tx)", padding: "6px 8px", fontSize: 12, boxSizing: "border-box" }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (modifyText.trim()) { onModify(modifyText.trim()); setModifyText(""); setModifying(false); }
+                  }
+                }}
+              />
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="btn"
+                  disabled={!modifyText.trim()}
+                  onClick={() => { if (modifyText.trim()) { onModify(modifyText.trim()); setModifyText(""); setModifying(false); } }}
+                  style={{ flex: 1, background: modifyText.trim() ? "#5B6AF0" : undefined, color: modifyText.trim() ? "#fff" : undefined }}
+                >
+                  Apply changes
+                </button>
+                <button className="btn" onClick={() => { setModifying(false); setModifyText(""); }} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 

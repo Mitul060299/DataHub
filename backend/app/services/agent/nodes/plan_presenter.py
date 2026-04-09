@@ -34,7 +34,7 @@ async def plan_presenter(state: AgentState) -> dict:
             f"{step['description']}\n"
             f"*Estimated: {step['estimated_rows']}*{deps_note}\n"
         )
-    lines.append("\nShall I proceed? Click **Approve** to run all steps, or **Reject** to cancel.")
+    lines.append("\nClick **Approve** to run, **Modify** to change specific steps, or **Reject** to cancel.")
 
     return {
         "messages": [AIMessage(content="\n".join(lines))],

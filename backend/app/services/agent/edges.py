@@ -38,6 +38,8 @@ def route_intent(state: AgentState) -> str:
     if state.get("plan_approved"):
         return "execute_step"
     intent = state.get("intent", "converse")
+    if intent == "clarify":
+        return "clarify_step"
     if intent in _PLANNING_INTENTS:
         return "planner"
     return "responder"

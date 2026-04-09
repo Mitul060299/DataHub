@@ -15,6 +15,9 @@ export function PipelinePanel({ width, onClose }: PipelinePanelProps) {
   const { exportPipeline, schedule } = usePipeline();
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
+  const lastStep = steps[steps.length - 1];
+  const lastRowCount = lastStep?.outputDataset?.rowCount ?? lastStep?.row_count_after ?? null;
+
   return (
     <aside
       style={{
@@ -64,9 +67,12 @@ export function PipelinePanel({ width, onClose }: PipelinePanelProps) {
               borderRadius: 999,
               padding: "1px 6px",
               lineHeight: "18px",
+              whiteSpace: "nowrap",
             }}
           >
-            {steps.length}
+            {lastRowCount != null
+              ? `${steps.length} · ${lastRowCount.toLocaleString()} rows`
+              : `${steps.length}`}
           </span>
         )}
         <button

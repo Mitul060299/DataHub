@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import type { CalculatedColumn } from "../types";
-import { IconBarChart, IconDownload, IconTable } from "./Icons";
+import { IconBarChart, IconDownload, IconGitBranch, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
+import { PipelineGraphTab } from "./PipelineGraphTab";
 import { exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau } from "../api";
 
-type CanvasTab = "data" | "canvas";
+type CanvasTab = "data" | "pipeline" | "canvas";
 
 interface CanvasPanelProps {
   workspaceId: string;
@@ -86,6 +87,16 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
         <div style={{ display: "inline-flex", gap: 6 }}>
           <button className="btn" onClick={() => setTab("data")} style={{ background: tab === "data" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "data" ? "var(--acg)" : "var(--bd2)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconTable size={14} />Data</span>
+          </button>
+          <button className="btn" onClick={() => setTab("pipeline")} style={{ background: tab === "pipeline" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "pipeline" ? "var(--acg)" : "var(--bd2)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <IconGitBranch size={14} />Pipeline
+              {steps.length > 0 && (
+                <span style={{ background: "var(--acg)", color: "var(--ac)", fontSize: 9, fontWeight: 700, borderRadius: 999, padding: "0 4px", lineHeight: "14px" }}>
+                  {steps.length}
+                </span>
+              )}
+            </span>
           </button>
           <button data-tour="canvas-tab" className="btn" onClick={() => setTab("canvas")} style={{ background: tab === "canvas" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "canvas" ? "var(--acg)" : "var(--bd2)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconBarChart size={14} />Canvas</span>
@@ -174,7 +185,9 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
             <span>{dataError}</span>
           </div>
         )}
-        {tab === "data" ? (
+        {tab === "pipeline" ? (
+          <PipelineGraphTab />
+        ) : tab === "data" ? (
           <DataTable
             datasetId={dataset?.id}
             loading={loading}

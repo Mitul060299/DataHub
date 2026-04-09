@@ -71,3 +71,7 @@ export const IconFileText = makeIcon(<><path d="M7 3h8l4 4v14H7z" /><path d="M15
 export const IconGrid = makeIcon(<><rect x="4" y="4" width="7" height="7" rx="1.2" /><rect x="13" y="4" width="7" height="7" rx="1.2" /><rect x="4" y="13" width="7" height="7" rx="1.2" /><rect x="13" y="13" width="7" height="7" rx="1.2" /></>);
 export const IconShield = makeIcon(<><path d="M12 3 5 6v6c0 4.2 2.6 7.3 7 9 4.4-1.7 7-4.8 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></>);
 export const IconSend = makeIcon(<><path d="M3 12 21 4 15 20l-3.6-5.3L3 12Z" /><path d="M11.4 14.7 21 4" /></>);
+export const IconGitBranch = makeIcon(<><path d="M6 3v12" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></>);
+export const IconSparkles = makeIcon(<><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" /><circle cx="12" cy="12" r="4" /></>);
+export const IconSortAsc = makeIcon(<><path d="M4 6h16M4 12h10M4 18h6" /><path d="m17 15 3 3 3-3" /><path d="M20 18v-6" /></>);
+export const IconMerge = makeIcon(<><path d="M8 7v8a2 2 0 0 0 2 2h6" /><path d="M8 7V5" /><path d="M16 7V5" /><path d="M16 15l2 2-2 2" /><path d="M16 7a4 4 0 0 1 0 8" /></>);

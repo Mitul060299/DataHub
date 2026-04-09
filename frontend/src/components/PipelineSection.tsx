@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { IconChevronDown, IconClock, IconCopy, IconDownload, IconPlay, IconTrash, IconUpload, IconX } from "./Icons";
+import { IconBarChart, IconChevronDown, IconClock, IconCode, IconCopy, IconDownload, IconFilter, IconGrid, IconMerge, IconPlay, IconPlus, IconSortAsc, IconSparkles, IconTrash, IconUpload, IconX } from "./Icons";
 import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { usePipeline, type PipelineRunArtifact } from "../hooks/usePipeline";
@@ -9,6 +9,18 @@ import { TemplatePickerModal } from "./modals/TemplatePickerModal";
 import { WORKFLOW_TEMPLATES } from "../lib/workflowTemplates";
 
 const FLAT_FILE_FORMATS = new Set(["csv", "xlsx", "xls", "excel", "json", "parquet", "txt", "tsv"]);
+
+function getOperationIcon(op: string) {
+  const n = op.toLowerCase();
+  if (n.includes("filter")) return <IconFilter size={12} />;
+  if (n.includes("join") || n.includes("merge")) return <IconMerge size={12} />;
+  if (n.includes("sort")) return <IconSortAsc size={12} />;
+  if (n.includes("clean") || n.includes("dedupe")) return <IconSparkles size={12} />;
+  if (n.includes("summarise") || n.includes("group")) return <IconBarChart size={12} />;
+  if (n.includes("pivot")) return <IconGrid size={12} />;
+  if (n.includes("add_column") || n.includes("add column")) return <IconPlus size={12} />;
+  return <IconCode size={12} />;
+}
 
 interface PipelineSectionProps {
   onSchedule: () => void;
@@ -694,13 +706,11 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
                         color: stepVisual.color,
                         display: "grid",
                         placeItems: "center",
-                        fontSize: 10,
-                        fontWeight: 700,
                         flexShrink: 0,
                       }}
                       title={getStepLabel(step)}
                     >
-                      {formatStepLabel(step.operation).charAt(0)}
+                      {getOperationIcon(step.operation)}
                     </div>
 
                     {editingStepId === step.id ? (

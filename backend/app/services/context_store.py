@@ -15,13 +15,29 @@ class ContextStore:
             key: ContextPayload(**value) for key, value in saved.items()
         }
         self._client = None
+        self._collection = None
+
+        # Only attempt to connect to Chroma — and therefore import chromadb +
+        # onnxruntime (~175 MB) — when CHROMA_URL points to a real external
+        # host.  On Render the default is localhost:8001 which is never
+        # reachable, so we skip the import entirely to preserve memory.
+        _chroma_host = (
+            settings.chroma_url
+            .replace("http://", "")
+            .replace("https://", "")
+            .split(":")[0]
+        )
+        _chroma_is_external = _chroma_host not in ("", "localhost", "127.0.0.1")
+        if not _chroma_is_external:
+            return
+
         try:
             # Lazy import: chromadb pulls in onnxruntime which probes for GPU
             # devices at module init — deferring avoids 20-30s startup penalty.
             from chromadb import HttpClient  # noqa: PLC0415
             from chromadb.config import Settings as ChromaSettings  # noqa: PLC0415
             self._client = HttpClient(
-                host=settings.chroma_url.replace("http://", "").replace("https://", "").split(":")[0],
+                host=_chroma_host,
                 port=int(settings.chroma_url.split(":")[-1]),
                 settings=ChromaSettings(allow_reset=True),
             )

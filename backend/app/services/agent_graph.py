@@ -24,6 +24,7 @@ class AgentGraphService:
         secondary_dataset_ids: list[str] | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
         plan_pending_modification: bool = False,
+        pending_plan: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         # Build LangChain messages from the prior conversation turns
         history_messages: list = []
@@ -53,7 +54,7 @@ class AgentGraphService:
             "pipeline_steps": pipeline_steps or [],
             "plan_approved": plan_approved,
             "intent": "",
-            "plan": [],
+            "plan": pending_plan or [],
             "current_step_index": 0,
             "execution_results": [],
             "retry_count": 0,
@@ -150,6 +151,7 @@ class AgentGraphService:
                 secondary_dataset_ids=secondary_dataset_ids or [],
                 conversation_history=conversation_history or [],
                 plan_pending_modification=plan_pending_modification,
+                pending_plan=pending_plan,
             )
 
         try:
@@ -199,6 +201,16 @@ class AgentGraphService:
                     messages = output.get("messages", [])
                     plan_text = messages[-1].content if messages else ""
                     yield {"type": "agent.plan_presented", "text": plan_text}
+
+                elif node_name == "clarify_step":
+                    output = data.get("output", {})
+                    out_messages = output.get("messages", [])
+                    response_text = out_messages[-1].content if out_messages else output.get("final_response", "")
+                    yield {
+                        "type": "agent.done",
+                        "response": response_text,
+                        "intent": "clarify",
+                    }
 
                 elif node_name == "execute_step":
                     output = data.get("output", {})
@@ -279,6 +291,7 @@ class AgentGraphService:
                     yield {"type": "agent.thinking", "message": "Saving pipeline steps..."}
 
                 elif node_name == "responder":
+                    input_state = data.get("input", {})
                     output = data.get("output", {})
                     final = output.get("final_response", "")
                     messages = output.get("messages", [])
@@ -286,6 +299,7 @@ class AgentGraphService:
                     yield {
                         "type": "agent.done",
                         "response": response_text,
+                        "intent": input_state.get("intent", ""),
                         "run_id": output.get("run_id"),
                         "output_dataset_id": output.get("output_dataset_id"),
                         "run_steps": output.get("run_steps", []),

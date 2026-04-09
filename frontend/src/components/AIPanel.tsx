@@ -55,12 +55,20 @@ function buildFollowUpChips(
   pipelineSteps: Array<Record<string, unknown>>,
   dataset: Dataset | null,
 ): string[] {
+  if (intent === "clarify" || intent === "converse") return [];
   const name = dataset?.name ?? "dataset";
   const ops = pipelineSteps.map((s) => String(s.operation ?? "")).filter(Boolean);
   const hasClean = ops.some((o) => ["fill_nulls", "drop_nulls", "dedup", "filter"].includes(o));
   const hasAgg = ops.some((o) => ["aggregate", "group_by"].includes(o));
   const hasJoin = ops.some((o) => o === "join");
 
+  if (intent === "validate") {
+    return [
+      "Fix all detected issues automatically",
+      `Show me a null distribution chart for ${name}`,
+      "Export the quality report",
+    ];
+  }
   if (intent === "visualise") {
     return [
       `Show me a different chart type for ${name}`,
@@ -192,6 +200,7 @@ type Message = ConversationMessage & {
   queryResults?: Array<Record<string, unknown>>;
   dataProfile?: DataProfile;
   followUpChips?: string[];
+  isClarification?: boolean;
 };
 
 interface AIPanelProps {
@@ -291,6 +300,20 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       case "agent.done": {
         setCurrentStepInfo(null);
         const responseText = typeof event.response === "string" ? event.response : "Done.";
+        const doneIntent = typeof event.intent === "string" ? event.intent : "transform";
+        // Short-circuit for clarification — no execution happened, just show the question
+        if (doneIntent === "clarify") {
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant" as const,
+              content: responseText,
+              isClarification: true,
+            },
+          ]);
+          break;
+        }
 
         const runId = typeof event.run_id === "string" ? event.run_id : null;
         const runSteps = Array.isArray(event.run_steps)
@@ -451,7 +474,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         }
 
         // Build context-aware follow-up chips based on THIS run's completed steps only
-        const doneIntent = typeof event.intent === "string" ? event.intent : "transform";
         const followUpChips = buildFollowUpChips(doneIntent, sortedCompletedSteps, dataset);
 
         setMessages((previous) => [
@@ -908,8 +930,14 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                 } : undefined}
               />
             ) : (
-            <div style={{ border: "1px solid var(--bd2)", background: message.role === "user" ? "var(--acg)" : "var(--bg2)", borderRadius: "var(--r8)", padding: 8 }}>
+            <div style={{ border: `1px solid ${message.isClarification ? "#7c3aed" : "var(--bd2)"}`, borderLeft: message.isClarification ? "3px solid #7c3aed" : undefined, background: message.role === "user" ? "var(--acg)" : "var(--bg2)", borderRadius: "var(--r8)", padding: 8 }}>
+              {message.isClarification ? (
+                <div style={{ fontSize: 10, color: "#7c3aed", fontWeight: 700, marginBottom: 6, letterSpacing: "0.04em" }}>❓ NEEDS YOUR INPUT</div>
+              ) : null}
               <div className="ai-message-body"><ReactMarkdown>{message.content}</ReactMarkdown></div>
+              {message.isClarification ? (
+                <div style={{ marginTop: 6, fontSize: 11, color: "var(--tx1)" }}>↓ Type your answer below</div>
+              ) : null}
               {message.transformation ? (
                 <StepCard
                   operation={message.transformation.operation}

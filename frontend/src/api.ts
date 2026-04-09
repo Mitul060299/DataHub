@@ -113,9 +113,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Retry interceptor — handles cold-start "Network Error" (Render Free tier
+// sleeps after 15 min; the first request times out before the instance wakes).
+// Retries up to 3 times with exponential backoff (1 s → 2 s → 4 s).
+// Only retries on true network failures (no HTTP response) — never on 4xx/5xx.
+const _MAX_RETRIES = 3;
+const _RETRY_DELAY_MS = 1000;
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config as (typeof error.config & { _retryCount?: number }) | undefined;
+    const isNetworkError = !error.response;          // no status → connection failed
+    const isRetryableMethod = !config?.method || ["get", "head", "options"].includes((config.method ?? "").toLowerCase());
+
+    if (isNetworkError && isRetryableMethod && config) {
+      config._retryCount = (config._retryCount ?? 0) + 1;
+      if (config._retryCount <= _MAX_RETRIES) {
+        const delay = _RETRY_DELAY_MS * Math.pow(2, config._retryCount - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return api(config);
+      }
+    }
+
     const status = error?.response?.status;
     const detail = String(error?.response?.data?.detail ?? "");
     const lower = detail.toLowerCase();

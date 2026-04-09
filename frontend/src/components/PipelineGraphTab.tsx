@@ -511,38 +511,33 @@ function PipelineGraphTabInner() {
     rf.fitView({ padding: 0.15, duration: 400 });
   }, [rf]);
 
+  // Source name/rows come from what was recorded on the first step's inputDataset.
+  // This is set once at execution time and never changes when the user clicks an
+  // artifact or switches the active preview dataset elsewhere in the UI.
+  const sourceName =
+    steps[0]?.inputDataset?.name ??
+    activeDataset?.name ??
+    "Source";
+  const sourceRows =
+    steps[0]?.inputDataset?.rows ??
+    activeDataset?.rows ??
+    activeDataset?.row_count ??
+    0;
+
   useEffect(() => {
-    if (!activeDataset) {
+    if (steps.length === 0) {
       setNodes([]);
       setEdges([]);
       return;
     }
-    const datasetName = activeDataset.name;
-    const rows = activeDataset.rows ?? activeDataset.row_count ?? 0;
-    const { nodes: n, edges: e } = buildLayout(datasetName, rows, steps, handleNodeClick);
+    const { nodes: n, edges: e } = buildLayout(sourceName, sourceRows, steps, handleNodeClick);
     setNodes(n);
     setEdges(e);
     const t = setTimeout(() => {
       rf.fitView({ padding: 0.15, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [steps, activeDataset, handleNodeClick, setNodes, setEdges, rf]);
-
-  if (!activeDataset) {
-    return (
-      <div
-        style={{
-          flex: 1,
-          display: "grid",
-          placeItems: "center",
-          color: "var(--tx2)",
-          fontSize: 13,
-        }}
-      >
-        Select a dataset to view its pipeline graph.
-      </div>
-    );
-  }
+  }, [steps, sourceName, sourceRows, handleNodeClick, setNodes, setEdges, rf]);
 
   if (steps.length === 0) {
     return (

@@ -552,11 +552,22 @@ async def execute_step(state: AgentState) -> dict:
                     column_schema: list = []
                     row_count_before: int | None = None
                     _step_start_ts = datetime.now(timezone.utc)
-                    # Only persist to S3 + DB for the final step in the plan.
-                    # Intermediate steps stay in DuckDB memory — chaining works via
-                    # table_registry. This eliminates N-1 redundant Parquet uploads
-                    # and DatasetMetaDB records for multi-step agent runs.
-                    is_final_step = (idx == len(plan) - 1)
+                    # Only persist to S3 + DB for "terminal" steps — steps whose output
+                    # is not consumed by any subsequent step in the plan.
+                    # For sequential plans (all depends_on are [] or absent), only the
+                    # last step is terminal.  For branching plans (explicit depends_on
+                    # used), every DAG leaf node is terminal — each produces an artifact.
+                    # This eliminates redundant Parquet uploads for intermediate steps.
+                    _this_step_num = step["step_number"]
+                    _all_explicit_deps: set[int] = set()
+                    for _s in plan:
+                        _all_explicit_deps.update(_s.get("depends_on") or [])
+                    if _all_explicit_deps:
+                        # Branching plan: this step is terminal if nothing else depends on it
+                        is_final_step = _this_step_num not in _all_explicit_deps
+                    else:
+                        # Sequential plan: only the last step in list order is terminal
+                        is_final_step = (idx == len(plan) - 1)
 
                     if session_id:
                         register_table_from_sql(session_id, output_table, step_sql)
@@ -684,14 +695,19 @@ async def execute_step(state: AgentState) -> dict:
 
                     new_entry: TableRegistryEntry = {
                         "duckdb_name": output_table,
-                        "dataset_id": str(output_dataset_id_new or state.get("dataset_id") or ""),
+                        # Intermediate steps have no DatasetMetaDB entry (no S3 artifact).
+                        # Use "" so context_loader skips re-registration of this table
+                        # from S3 on follow-up turns (it would wrongly point to the raw
+                        # source file because output_dataset_id_new is None for intermediates).
+                        # Final-step entries get the real new UUID.
+                        "dataset_id": str(output_dataset_id_new or ""),
                         "display_name": str(parameters.get("display_name") or output_table),
                         "source_intent": intent_key,
                         "parent_tables": input_tables,
                         "row_count": rows_out or 0,
                         "column_names": out_cols,
                         "pipeline_step_number": step["step_number"],
-                        "is_artifact": False,
+                        "is_artifact": bool(output_dataset_id_new),
                         "is_view": False,
                     }
                     table_registry[output_table] = new_entry

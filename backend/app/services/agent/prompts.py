@@ -117,6 +117,7 @@ RULES:
     Step 2 (operation: "summarise"): Generate a plain SELECT that produces a human-readable quality summary with: total_rows, null_count and null_pct per column, duplicate_rows, and for each numeric column min/max/mean and outlier_count (values > 3*IQR).
     After the validate plan is presented, the responder MUST end with: "Want me to automatically fix these issues?"
 24. data_quality: If the user says "check data quality", "profile my data", or "data quality", treat it as validate intent and apply rule 23.
+25. SQL identifier quoting: DuckDB uses ANSI standard double-quote identifiers. ALWAYS quote column names that contain spaces, special characters, or are reserved words using double quotes: "Customer ID", "Transaction Date", "Price Per Unit". NEVER use backticks (`Customer ID`) — backticks are MySQL syntax and will cause a Parser Error in DuckDB. Every column name with a space MUST be wrapped in double quotes in every part of the query (SELECT, WHERE, GROUP BY, ORDER BY, JOIN ON).
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{

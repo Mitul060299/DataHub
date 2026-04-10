@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -16,6 +17,18 @@ from ...duckdb_session import (
 from ...export_service import ExportService
 from ...echarts_builder import build_echarts_config, infer_chart_type
 from ...object_storage import StorageService
+
+
+def _sanitize_sql_quotes(sql: str) -> str:
+    """Replace MySQL-style backtick identifiers with DuckDB ANSI double-quote identifiers.
+
+    The LLM occasionally generates MySQL-style backtick quoting for column names that
+    contain spaces (e.g. `Customer ID`). DuckDB only supports ANSI double-quote
+    identifiers ("Customer ID") and will raise a Parser Error on backticks.
+    """
+    if not sql or '`' not in sql:
+        return sql
+    return re.sub(r'`([^`]+)`', r'"\1"', sql)
 
 
 def _resolve_input_table(step: dict, state: AgentState) -> str:
@@ -60,7 +73,7 @@ async def execute_step(state: AgentState) -> dict:
 
         operation = str(step.get("operation") or "transform")
         parameters = step.get("parameters") if isinstance(step.get("parameters"), dict) else {}
-        step_sql = str(parameters.get("sql") or step.get("sql") or "").strip()
+        step_sql = _sanitize_sql_quotes(str(parameters.get("sql") or step.get("sql") or "").strip())
 
         if operation in {"add_column", "create_column"} or state.get("intent") == "add_column":
             column_name = str(parameters.get("column_name") or parameters.get("name") or "").strip()

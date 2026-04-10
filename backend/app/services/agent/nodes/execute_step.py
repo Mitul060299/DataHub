@@ -552,6 +552,11 @@ async def execute_step(state: AgentState) -> dict:
                     column_schema: list = []
                     row_count_before: int | None = None
                     _step_start_ts = datetime.now(timezone.utc)
+                    # Only persist to S3 + DB for the final step in the plan.
+                    # Intermediate steps stay in DuckDB memory — chaining works via
+                    # table_registry. This eliminates N-1 redundant Parquet uploads
+                    # and DatasetMetaDB records for multi-step agent runs.
+                    is_final_step = (idx == len(plan) - 1)
 
                     if session_id:
                         register_table_from_sql(session_id, output_table, step_sql)
@@ -577,45 +582,48 @@ async def execute_step(state: AgentState) -> dict:
                             except Exception:
                                 out_cols = []
 
-                        # Upload Parquet snapshot to S3 (best-effort)
-                        _artifact_bytes: bytes | None = None
-                        try:
-                            import io as _io
-                            import pyarrow as _pa
-                            import pyarrow.parquet as _pq
-                            _rows = execute_in_session(session_id, f"SELECT * FROM {output_table}")
-                            if _rows:
-                                _table = _pa.Table.from_pylist(_rows)
-                                _parquet_buf = _io.BytesIO()
-                                _pq.write_table(_table, _parquet_buf)
-                                _artifact_bytes = _parquet_buf.getvalue()
-                                _artifact_name = f"{output_table}.parquet"
-                                artifact_s3_key = StorageService.upload(
-                                    user_id=str(state.get("user_id") or "agent"),
-                                    dataset_id=f"artifacts/{session_id or 'nosession'}",
-                                    buffer=_artifact_bytes,
-                                    file_name=_artifact_name,
+                        # Upload Parquet snapshot to S3 only for the final step.
+                        # Intermediate steps are kept in DuckDB memory only.
+                        if is_final_step:
+                            _artifact_bytes: bytes | None = None
+                            try:
+                                import io as _io
+                                import pyarrow as _pa
+                                import pyarrow.parquet as _pq
+                                _rows = execute_in_session(session_id, f"SELECT * FROM {output_table}")
+                                if _rows:
+                                    _table = _pa.Table.from_pylist(_rows)
+                                    _parquet_buf = _io.BytesIO()
+                                    _pq.write_table(_table, _parquet_buf)
+                                    _artifact_bytes = _parquet_buf.getvalue()
+                                    _artifact_name = f"{output_table}.parquet"
+                                    artifact_s3_key = StorageService.upload(
+                                        user_id=str(state.get("user_id") or "agent"),
+                                        dataset_id=f"artifacts/{session_id or 'nosession'}",
+                                        buffer=_artifact_bytes,
+                                        file_name=_artifact_name,
+                                    )
+                            except Exception as _upload_exc:
+                                import logging as _logging
+                                _logging.getLogger(__name__).warning(
+                                    "artifact S3 upload failed for %s: %s",
+                                    output_table, _upload_exc,
                                 )
-                        except Exception as _upload_exc:
-                            import logging as _logging
-                            _logging.getLogger(__name__).warning(
-                                "artifact S3 upload failed for %s: %s",
-                                output_table, _upload_exc,
-                            )
-                            # Cloud upload failed — fall back to local disk storage
-                            # using the correct local:// scheme so DuckDB can read it.
-                            if artifact_s3_key is None and _artifact_bytes is not None:
-                                try:
-                                    _u = str(state.get("user_id") or "agent")
-                                    _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{output_table}.parquet"
-                                    _lr = StorageService._local_dir().resolve()
-                                    _lp = (_lr / _lk).resolve()
-                                    if str(_lp).startswith(str(_lr)):
-                                        _lp.parent.mkdir(parents=True, exist_ok=True)
-                                        _lp.write_bytes(_artifact_bytes)
-                                        artifact_s3_key = f"local://{_lk}"
-                                except Exception:
-                                    pass
+                                # Cloud upload failed — fall back to local disk storage
+                                # using the correct local:// scheme so DuckDB can read it.
+                                if artifact_s3_key is None and _artifact_bytes is not None:
+                                    try:
+                                        _u = str(state.get("user_id") or "agent")
+                                        _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{output_table}.parquet"
+                                        _lr = StorageService._local_dir().resolve()
+                                        _lp = (_lr / _lk).resolve()
+                                        if str(_lp).startswith(str(_lr)):
+                                            _lp.parent.mkdir(parents=True, exist_ok=True)
+                                            _lp.write_bytes(_artifact_bytes)
+                                            artifact_s3_key = f"local://{_lk}"
+                                    except Exception:
+                                        pass
+
                         # Fetch inline preview rows for the chat table card
                         try:
                             preview_rows = execute_in_session(

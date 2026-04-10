@@ -153,6 +153,13 @@ class AgentGraphService:
                 plan_pending_modification=plan_pending_modification,
                 pending_plan=pending_plan,
             )
+            # Restore table_registry from the prior turn's MemorySaver checkpoint so
+            # the planner sees artifacts created in previous messages and can use them
+            # as input tables instead of always falling back to the raw `dataset` view.
+            existing_for_registry = agent_graph.get_state(config)
+            prior_snapshot = existing_for_registry.values if existing_for_registry else {}
+            if prior_snapshot.get("table_registry"):
+                initial_state["table_registry"] = dict(prior_snapshot["table_registry"])
 
         try:
             async for event in agent_graph.astream_events(initial_state, config=config, version="v2"):

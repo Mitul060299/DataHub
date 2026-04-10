@@ -118,6 +118,28 @@ async def context_loader(state: AgentState) -> dict:
                 "is_view": True,
             }
 
+        # Re-register artifact tables from prior turns so their DuckDB views survive
+        # a session restart (e.g. server restart, session age > 2 h).
+        if session_id and table_registry:
+            _art_db = SessionLocal()
+            try:
+                for _entry in list(table_registry.values()):
+                    if _entry.get("pipeline_step_number", 0) > 0:
+                        _art_ds_id = _entry.get("dataset_id", "")
+                        if not _art_ds_id:
+                            continue
+                        _art_ds = _art_db.query(DatasetMetaDB).filter(
+                            DatasetMetaDB.id == _art_ds_id
+                        ).first()
+                        if _art_ds and _art_ds.storage_path:
+                            _register_dataset_view(
+                                _art_ds_id,
+                                _entry["duckdb_name"],
+                                storage_path=_art_ds.storage_path,
+                            )
+            finally:
+                _art_db.close()
+
     if state.get("schema"):
         # Schema already loaded — skip expensive reload but return refreshed table_registry.
         return {

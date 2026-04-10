@@ -316,7 +316,28 @@ class DuckDBService:
         result = connection.execute(guarded_sql)
         columns = [col[0] for col in result.description]
         rows = result.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+
+        import math as _math
+
+        def _safe(v: object) -> object:
+            """Coerce DuckDB/numpy types to plain Python so ormsgpack can checkpoint them."""
+            if v is None:
+                return None
+            t = type(v).__name__
+            if t in ("int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "hugeint"):
+                return int(v)
+            if t in ("float32", "float64", "double", "Decimal"):
+                f = float(v)
+                return None if (_math.isnan(f) or _math.isinf(f)) else f
+            if t in ("date", "time", "datetime", "timestamp", "timedelta", "interval"):
+                return str(v)
+            if isinstance(v, (list, tuple)):
+                return [_safe(item) for item in v]
+            if isinstance(v, dict):
+                return {k: _safe(item) for k, item in v.items()}
+            return v
+
+        return [{col: _safe(val) for col, val in zip(columns, row)} for row in rows]
 
     @classmethod
     def _load_dataset_rows(cls, dataset_id: str) -> tuple[DatasetMetaDB | None, list[dict[str, Any]]]:

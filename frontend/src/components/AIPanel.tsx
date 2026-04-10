@@ -4,7 +4,7 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { useChatSession, type AgentEvent, type ConversationMessage, type PlanStep, type TransformationPayload } from "../hooks/useChatSession";
 import { usePipeline } from "../hooks/usePipeline";
-import { IconBarChart, IconRefresh, IconZap } from "./Icons";
+import { IconBarChart, IconEdit, IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
 import PlanDAG from "./PlanDAG";
 import { StepCard } from "./StepCard";
@@ -16,6 +16,7 @@ import { type ColSchema } from "./SuggestionChips";
 import { capture } from "../lib/posthog";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
+import { getAuthToken } from "../utils/auth";
 
 interface TileCreatedData {
   chart_id: string;
@@ -216,12 +217,14 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const { addStep, steps } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
-  const { sendMessage, sending, resetSession, cancelMessage } = useChatSession();
+  const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory } = useChatSession();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [editHoverId, setEditHoverId] = useState<string | null>(null);
+  const lastSentInputRef = useRef<string>("");
   const [savingVizIds, setSavingVizIds] = useState<Set<string>>(new Set());
   const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
   const [analyzingDataset, setAnalyzingDataset] = useState(false);
@@ -240,6 +243,33 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       .then((r) => { if (!cancelled) setColumnSchema(r.data.columns ?? []); })
       .catch(() => { if (!cancelled) setColumnSchema([]); });
     return () => { cancelled = true; };
+  }, [dataset?.id]);
+
+  // Restore chat history from DB when the dataset changes
+  useEffect(() => {
+    if (!dataset?.id) return;
+    const storedId = localStorage.getItem(`datahub_chat_session_${dataset.id}`);
+    if (!storedId) return;
+    let cancelled = false;
+    const token = getAuthToken();
+    fetch(`/api/chat/sessions/${storedId}`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { data?: { messages?: Array<{ role: string; content: string }> } } | null) => {
+        if (cancelled || !json?.data?.messages?.length) return;
+        restoreSession(storedId);
+        setMessages(
+          json.data.messages.map((m) => ({
+            id: crypto.randomUUID(),
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset?.id]);
 
   // Load workspace datasets for secondary dataset (join) picker
@@ -486,6 +516,14 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
             followUpChips,
           },
         ]);
+        // Persist conversation to DB so it survives page reloads
+        if (dataset?.id) {
+          const historyToSave = [
+            ...history,
+            { role: "assistant" as const, content: responseText },
+          ];
+          void saveHistory(dataset.id, historyToSave);
+        }
         break;
       }
       case "agent.step.done": {
@@ -661,6 +699,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         ...previous,
         { id: crypto.randomUUID(), role: "user", content },
       ]);
+      lastSentInputRef.current = content;
       capture("ai_message_sent", { dataset_id: dataset.id, workspace_id: workspaceId });
     }
     setInput("");
@@ -694,8 +733,20 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
     }
   };
 
+  const handleCancel = () => {
+    cancelMessage();
+    const restored = lastSentInputRef.current;
+    if (restored) {
+      setInput(restored);
+      setMessages((prev) => {
+        const lastUserIdx = prev.reduce((acc, m, i) => (m.role === "user" ? i : acc), -1);
+        return lastUserIdx >= 0 ? prev.slice(0, lastUserIdx) : prev;
+      });
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  };
+
   const approvePlan = () => {
-    if (sending) return;
     const latestUserPrompt = [...messages]
       .reverse()
       .find((message) => message.role === "user")
@@ -865,7 +916,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               ＋ Join{secondaryDatasetIds.length > 0 ? ` (${secondaryDatasetIds.length})` : ""}
             </button>
           ) : null}
-          <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { setMessages([]); resetSession(); }}>
+          <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { if (dataset?.id) localStorage.removeItem(`datahub_chat_session_${dataset.id}`); setMessages([]); resetSession(); }}>
             <IconRefresh size={14} />
           </button>
         </span>
@@ -920,7 +971,41 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         ) : null}
 
         {messages.map((message) => (
-          <div key={message.id} style={{ justifySelf: message.role === "user" ? "end" : "start", maxWidth: "90%" }}>
+          <div
+            key={message.id}
+            style={{ position: "relative", justifySelf: message.role === "user" ? "end" : "start", maxWidth: "90%" }}
+            onMouseEnter={() => { if (message.role === "user") setEditHoverId(message.id); }}
+            onMouseLeave={() => setEditHoverId(null)}
+          >
+            {message.role === "user" && editHoverId === message.id && !sending ? (
+              <button
+                title="Edit message"
+                onClick={() => {
+                  const idx = messages.findIndex((m) => m.id === message.id);
+                  setMessages((prev) => prev.slice(0, idx));
+                  setInput(message.content);
+                  requestAnimationFrame(() => textareaRef.current?.focus());
+                }}
+                style={{
+                  position: "absolute",
+                  top: -8,
+                  right: -8,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  border: "1px solid var(--bd2)",
+                  background: "var(--bg3)",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--tx2)",
+                  zIndex: 10,
+                  padding: 0,
+                }}
+              >
+                <IconEdit size={11} />
+              </button>
+            ) : null}
             {message.role === "assistant" && message.content.startsWith("Error:") ? (
               <ErrorBubble
                 message={message.content.replace(/^Error:\s*/, "")}
@@ -1127,8 +1212,8 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
             <span className="dot-bounce" style={{ animationDelay: "0.28s" }} />
             <style>{`.dot-bounce{width:6px;height:6px;border-radius:99px;background:var(--tx1);display:inline-block;animation:dotBounce 0.8s infinite ease-in-out;}@keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-4px);opacity:1}}`}</style>
             <button
-              onClick={cancelMessage}
-              title="Stop generation"
+              onClick={handleCancel}
+              title="Stop generation and restore your message"
               style={{
                 marginLeft: 6,
                 background: "transparent",
@@ -1142,7 +1227,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                 lineHeight: 1.4,
               }}
             >
-              ■ Stop
+              ↩ Stop & Edit
             </button>
           </div>
         ) : null}
@@ -1162,6 +1247,11 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
             el.style.height = `${el.scrollHeight}px`;
           }}
           onKeyDown={(event) => {
+            if (event.key === "Escape" && sending) {
+              event.preventDefault();
+              handleCancel();
+              return;
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               void handleSend();

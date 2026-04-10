@@ -49,6 +49,7 @@ export function useChatSession() {
   const [sending, setSending] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sessionIdRef = useRef<string>("");
 
   const sendMessage = async (payload: {
     message: string;
@@ -69,7 +70,14 @@ export function useChatSession() {
     try {
       const sid = sessionId || crypto.randomUUID();
       const token = getAuthToken();
-      if (!sessionId) setSessionId(sid);
+      if (!sessionId) {
+        setSessionId(sid);
+        sessionIdRef.current = sid;
+        // Persist so AIPanel can load history on next mount
+        if (payload.dataset_id) {
+          localStorage.setItem(`datahub_chat_session_${payload.dataset_id}`, sid);
+        }
+      }
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -200,8 +208,32 @@ export function useChatSession() {
 
   const resetSession = () => {
     setSessionId("");
+    sessionIdRef.current = "";
     setRunId(null);
   };
 
-  return { sessionId, runId, sending, sendMessage, resetSession, cancelMessage };
+  const restoreSession = (id: string) => {
+    setSessionId(id);
+    sessionIdRef.current = id;
+  };
+
+  const saveHistory = async (datasetId: string, messages: ConversationMessage[]) => {
+    const sid = sessionIdRef.current || sessionId;
+    if (!sid) return;
+    const token = getAuthToken();
+    try {
+      await fetch(`/api/chat/sessions/${sid}/history`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ dataset_id: datasetId, messages }),
+      });
+    } catch {
+      // fire-and-forget — silently ignore save errors
+    }
+  };
+
+  return { sessionId, runId, sending, sendMessage, resetSession, cancelMessage, restoreSession, saveHistory };
 }

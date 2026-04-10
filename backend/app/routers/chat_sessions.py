@@ -8,6 +8,7 @@ from datetime import datetime
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc
@@ -217,6 +218,41 @@ async def delete_chat_session(
         "success": True,
         "data": {"deleted": True}
     }
+
+
+class SessionHistoryPayload(BaseModel):
+    dataset_id: str
+    messages: List[dict]
+
+
+@router.put("/sessions/{session_id}/history")
+async def upsert_session_history(
+    session_id: str,
+    payload: SessionHistoryPayload,
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+):
+    """Upsert conversation history for a session (create if new, update messages if existing)"""
+    session = db.query(ChatSessionDB).filter(
+        ChatSessionDB.id == session_id,
+        ChatSessionDB.user_id == current_user_id,
+    ).first()
+    if not session:
+        session = ChatSessionDB(
+            id=session_id,
+            user_id=current_user_id,
+            workspace_id="default",
+            dataset_id=payload.dataset_id,
+            title="AI Chat",
+            status="active",
+            messages=payload.messages,
+        )
+        db.add(session)
+    else:
+        session.messages = payload.messages
+        session.updated_at = datetime.utcnow()
+    db.commit()
+    return {"success": True}
 
 
 @router.post("/sessions/{session_id}/messages")

@@ -98,6 +98,7 @@ function SourceNode({ data }: NodeProps<SourceNodeData>) {
 type OperationNodeData = {
   step: PipelineStep;
   onClick: (step: PipelineStep) => void;
+  onDelete: (step: PipelineStep) => void;
 };
 
 function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
@@ -126,8 +127,42 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
         boxSizing: "border-box",
         boxShadow: selected ? "0 0 0 2px var(--acg)" : "none",
         transition: "box-shadow 0.15s",
+        position: "relative",
       }}
     >
+      {/* Delete button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); data.onDelete(step); }}
+        title="Remove this step from the graph"
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          border: "none",
+          background: "transparent",
+          color: "var(--tx2)",
+          cursor: "pointer",
+          display: "grid",
+          placeItems: "center",
+          padding: 0,
+          lineHeight: 1,
+          opacity: 0.4,
+          zIndex: 5,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--rd, #f87171)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.opacity = "0.4";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)";
+        }}
+      >
+        <IconX size={10} />
+      </button>
       <Handle
         type="target"
         position={Position.Top}
@@ -157,6 +192,7 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              paddingRight: 16,
             }}
             title={label}
           >
@@ -222,6 +258,7 @@ function buildLayout(
   rows: number,
   steps: PipelineStep[],
   onNodeClick: (step: PipelineStep) => void,
+  onNodeDelete: (step: PipelineStep) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
     {
@@ -241,7 +278,7 @@ function buildLayout(
       id: nodeId,
       type: "operationNode",
       position: { x: 0, y: (i + 1) * Y_GAP },
-      data: { step, onClick: onNodeClick } as OperationNodeData,
+      data: { step, onClick: onNodeClick, onDelete: onNodeDelete } as OperationNodeData,
     });
     edges.push({
       id: `e-${prevId}-${nodeId}`,
@@ -496,7 +533,7 @@ function StepDetailPanel({
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner() {
-  const { steps } = usePipelineContext();
+  const { steps, removeStep } = usePipelineContext();
   const { activeDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -506,6 +543,11 @@ function PipelineGraphTabInner() {
   const handleNodeClick = useCallback((step: PipelineStep) => {
     setSelectedStep((prev) => (prev?.id === step.id ? null : step));
   }, []);
+
+  const handleNodeDelete = useCallback((step: PipelineStep) => {
+    removeStep(step.id);
+    setSelectedStep((prev) => (prev?.id === step.id ? null : prev));
+  }, [removeStep]);
 
   const handleFit = useCallback(() => {
     rf.fitView({ padding: 0.15, duration: 400 });
@@ -530,14 +572,14 @@ function PipelineGraphTabInner() {
       setEdges([]);
       return;
     }
-    const { nodes: n, edges: e } = buildLayout(sourceName, sourceRows, steps, handleNodeClick);
+    const { nodes: n, edges: e } = buildLayout(sourceName, sourceRows, steps, handleNodeClick, handleNodeDelete);
     setNodes(n);
     setEdges(e);
     const t = setTimeout(() => {
       rf.fitView({ padding: 0.15, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [steps, sourceName, sourceRows, handleNodeClick, setNodes, setEdges, rf]);
+  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, setNodes, setEdges, rf]);
 
   if (steps.length === 0) {
     return (

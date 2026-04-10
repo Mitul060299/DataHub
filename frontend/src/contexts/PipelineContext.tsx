@@ -85,7 +85,18 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   }, [steps]);
 
   const addStep = (step: PipelineStep) => {
-    setSteps((current) => [...current, step]);
+    setSteps((current) => {
+      // If there's already a step with the same output dataset ID, replace it (retry dedup)
+      if (step.outputDataset?.id) {
+        const existingIdx = current.findIndex((s) => s.outputDataset?.id === step.outputDataset?.id);
+        if (existingIdx >= 0) {
+          const next = [...current];
+          next[existingIdx] = step;
+          return next;
+        }
+      }
+      return [...current, step];
+    });
   };
 
   const removeStep = (stepId: string) => {

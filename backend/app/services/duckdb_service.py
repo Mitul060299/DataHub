@@ -396,6 +396,25 @@ class DuckDBService:
         if not rows:
             return {}
 
+        import math as _math
+
+        def _scalar(v: Any) -> Any:
+            """Coerce a pandas/numpy scalar to a plain Python type for msgpack/JSON safety."""
+            if v is None:
+                return None
+            # pandas Timestamp, Period, Timedelta, etc. expose .isoformat()
+            if hasattr(v, "isoformat"):
+                return v.isoformat()
+            # numpy scalars expose .item() which converts to the corresponding Python type
+            if hasattr(v, "item"):
+                try:
+                    v = v.item()
+                except (ValueError, TypeError):
+                    return str(v)
+            if isinstance(v, float) and (_math.isnan(v) or _math.isinf(v)):
+                return None
+            return v
+
         frame = pd.DataFrame(rows)
         stats: dict[str, dict[str, Any]] = {}
         for column in frame.columns:
@@ -403,8 +422,8 @@ class DuckDBService:
             non_null = series.dropna()
             stats[column] = {
                 "nulls": int(series.isna().sum()),
-                "min": None if non_null.empty else non_null.min(),
-                "max": None if non_null.empty else non_null.max(),
+                "min": None if non_null.empty else _scalar(non_null.min()),
+                "max": None if non_null.empty else _scalar(non_null.max()),
                 "unique": int(non_null.nunique(dropna=True)),
             }
         return stats

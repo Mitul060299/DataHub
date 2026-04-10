@@ -809,7 +809,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         suggestions: unknown[];
         data_profile?: DataProfile;
         error?: string;
-      }>(`/api/cleaning/datasets/${dataset.id}/analyze`);
+      }>(`/cleaning/datasets/${dataset.id}/analyze`);
       const profile = res.data.data_profile;
       const issueCount = (res.data.issues ?? []).length;
       const content = profile

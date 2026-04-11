@@ -233,6 +233,44 @@ const plans: PricingPlan[] = [
   },
 ];
 
+const myths = [
+  {
+    myth: "\"It's a black box — I have no idea what it's doing to my data.\"",
+    reality:
+      "Every action is a named step shown to you before it runs. You see the exact SQL or operation, then choose Approve, Edit, or Reject. Nothing executes without your go-ahead.",
+    mythColor: "#f87171",
+    realityColor: "#34d399",
+  },
+  {
+    myth: "\"The AI will hallucinate results or make up numbers.\"",
+    reality:
+      "DataHub runs real, deterministic SQL on your actual data using DuckDB. The AI writes the query — your data produces the result. No generation, no guessing, no invented rows.",
+    mythColor: "#f87171",
+    realityColor: "#34d399",
+  },
+  {
+    myth: "\"I'll lose control of my pipeline once the AI builds it.\"",
+    reality:
+      "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours — the AI is just the author.",
+    mythColor: "#f87171",
+    realityColor: "#34d399",
+  },
+  {
+    myth: "\"My sensitive data is being sent somewhere unsafe.\"",
+    reality:
+      "Your data lives in your own S3 bucket (or stays local). We never train models on your data. Full audit logs show every access, by whom, and when.",
+    mythColor: "#f87171",
+    realityColor: "#34d399",
+  },
+  {
+    myth: "\"It only works on clean, nicely formatted CSVs.\"",
+    reality:
+      "DataHub was built specifically for the messy real world — auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel out of the box.",
+    mythColor: "#f87171",
+    realityColor: "#34d399",
+  },
+];
+
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
 
 const metricsStrip = [
@@ -874,6 +912,57 @@ export function HomePage() {
             <div className="dag-demo-note">
               Steps 2 and 3 run independently — step 4 starts only when both are done.
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="myths" className="home-section">
+        <div className="home-inner">
+          <motion.p
+            className="section-label"
+            initial={{ opacity: 0, x: -18 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.38, ease: "easeOut" }}
+          >Straight answers</motion.p>
+          <motion.h2
+            className="section-title"
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+          >Common concerns, addressed</motion.h2>
+          <motion.p
+            className="section-subtitle"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.16, ease: "easeOut" }}
+          >
+            AI and data tools attract scepticism — and that&apos;s healthy. Here&apos;s exactly how DataHub works, no hand-waving.
+          </motion.p>
+
+          <div className="myths-list">
+            {myths.map((item, i) => (
+              <motion.div
+                key={i}
+                className="myth-row"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.42, delay: i * 0.07, ease: "easeOut" }}
+              >
+                <div className="myth-col myth-col-concern">
+                  <span className="myth-badge myth-badge-concern">Concern</span>
+                  <p className="myth-text myth-text-concern">{item.myth}</p>
+                </div>
+                <div className="myth-arrow">→</div>
+                <div className="myth-col myth-col-reality">
+                  <span className="myth-badge myth-badge-reality">Reality</span>
+                  <p className="myth-text myth-text-reality">{item.reality}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>

@@ -970,3 +970,105 @@
   }
 }
 
+/* ── Myths / misconceptions section ─────────────────────────────────────── */
+
+.myths-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.myth-row {
+  display: grid;
+  grid-template-columns: 1fr 28px 1fr;
+  align-items: center;
+  gap: 0;
+  background: #111115;
+  border: 1px solid #22222a;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.myth-row:hover {
+  border-color: #2e2e3a;
+}
+
+.myth-col {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.myth-col-concern {
+  background: rgba(248, 113, 113, 0.04);
+  border-right: 1px solid #22222a;
+}
+
+.myth-col-reality {
+  background: rgba(52, 211, 153, 0.04);
+}
+
+.myth-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #2e2e3a;
+  flex-shrink: 0;
+}
+
+.myth-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.myth-badge-concern {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: #f87171;
+}
+
+.myth-badge-reality {
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: #34d399;
+}
+
+.myth-text {
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.myth-text-concern {
+  color: #6b6b80;
+  font-style: italic;
+}
+
+.myth-text-reality {
+  color: #c8c8dc;
+}
+
+@media (max-width: 700px) {
+  .myth-row {
+    grid-template-columns: 1fr;
+  }
+
+  .myth-arrow {
+    display: none;
+  }
+
+  .myth-col-concern {
+    border-right: none;
+    border-bottom: 1px solid #22222a;
+  }
+}
+

@@ -99,6 +99,7 @@ class DuckDBService:
         filter_col: str | None = None,
         filter_op: str | None = None,
         filter_val: str | None = None,
+        skip_count: bool = False,
     ) -> tuple[list[dict[str, Any]], int]:
         """
         Return (page_rows, total_matching_rows) for a Parquet file via DuckDB.
@@ -107,6 +108,10 @@ class DuckDBService:
         embedded in SQL.  Filter values are passed via DuckDB parameter binding
         (never interpolated) to prevent injection.  At most `limit` rows ever
         reach Python memory.
+
+        When skip_count=True the COUNT(*) scan is skipped and 0 is returned for
+        total — callers that already have meta.row_count should pass skip_count=True
+        to avoid a redundant full-file scan that can spike memory.
         """
         import duckdb as _duckdb  # noqa: PLC0415
         connection = cls._ensure_db()
@@ -151,10 +156,15 @@ class DuckDBService:
         base_from = f"FROM read_parquet('{file_path}') {where_sql}"
         guarded_from = guard_duckdb_sql_paths(base_from, allowed_paths=[file_path])
 
-        # Count (only when filtering; caller should pass meta.row_count otherwise)
+        # Count — skip when no filter is active; the caller has meta.row_count and
+        # will override the value anyway, so the full-file scan is wasted work that
+        # can spike DuckDB memory on large Parquet files.
         try:
-            count_result = connection.execute(f"SELECT COUNT(*) {guarded_from}", params).fetchone()
-            total = int(count_result[0]) if count_result else 0
+            if skip_count:
+                total = 0  # caller must use meta.row_count
+            else:
+                count_result = connection.execute(f"SELECT COUNT(*) {guarded_from}", params).fetchone()
+                total = int(count_result[0]) if count_result else 0
 
             # Data page
             data_sql = f"SELECT * {guarded_from} {order_sql} LIMIT ? OFFSET ?"

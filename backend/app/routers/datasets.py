@@ -1174,6 +1174,8 @@ def preview_dataset(
     # This avoids loading all rows into RAM regardless of dataset size.
     if meta.storage_path and getattr(meta, "import_mode", "cached") != "live":
         try:
+            # skip_count=True when no filter: caller uses meta.row_count instead,
+            # avoiding a redundant full-file COUNT scan that spikes DuckDB memory.
             page_rows, total = DuckDBService.preview_page(
                 meta.storage_path,
                 offset=offset,
@@ -1184,8 +1186,9 @@ def preview_dataset(
                 filter_col=filter_col,
                 filter_op=filter_op,
                 filter_val=filter_val,
+                skip_count=not bool(filter_col),
             )
-            # Avoid a full COUNT scan when no filter is active — use stored metadata
+            # Use stored row_count when no filter (skip_count=True returns 0)
             if not filter_col:
                 total = meta.row_count or total
             return DatasetPage(
@@ -1198,10 +1201,16 @@ def preview_dataset(
             )
         except Exception as exc:
             logger.warning(
-                "DuckDB preview_page failed for %s, falling back to chunk path: %s",
+                "DuckDB preview_page failed for %s: %s",
                 dataset_id, exc,
             )
-            # Fall through to chunk/live paths below
+            # For storage-path datasets do NOT fall back to pd.read_parquet — that
+            # loads the entire file into Python RAM with no memory cap, which is
+            # worse than the DuckDB failure and will OOM-kill the process.
+            raise HTTPException(
+                status_code=503,
+                detail="Preview temporarily unavailable. Please try again shortly.",
+            ) from exc
 
     # ── Live federation path ───────────────────────────────────────────────────
     if getattr(meta, "import_mode", "cached") == "live":

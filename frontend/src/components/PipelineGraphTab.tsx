@@ -104,6 +104,7 @@ type OperationNodeData = {
 function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
   const { step } = data;
   const color = statusBorderColor(step.status);
+  const rowBefore = step.row_count_before ?? null;
   const rowAfter = step.row_count_after ?? step.outputDataset?.rowCount ?? null;
   const label = step.description || step.operation.replace(/_/g, " ");
   const elapsed =
@@ -222,14 +223,14 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
           }}
         >
           {rowAfter != null && (
-            <span
-              style={{
-                background: "var(--bg3)",
-                borderRadius: 4,
-                padding: "1px 5px",
-              }}
-            >
+            <span style={{ background: "var(--bg3)", borderRadius: 4, padding: "1px 5px" }}>
+              {rowBefore != null ? `${rowBefore.toLocaleString()} → ` : ""}
               {rowAfter.toLocaleString()} rows
+            </span>
+          )}
+          {rowAfter != null && rowBefore != null && rowAfter !== rowBefore && (
+            <span style={{ color: rowAfter < rowBefore ? "var(--rd, #f87171)" : "var(--gr, #34d399)", fontSize: 9 }}>
+              {rowAfter < rowBefore ? "−" : "+"}{Math.abs(rowAfter - rowBefore).toLocaleString()}
             </span>
           )}
           {elapsed && <span>{elapsed}</span>}
@@ -299,9 +300,11 @@ function buildLayout(
 function StepDetailPanel({
   step,
   onClose,
+  onRunToHere,
 }: {
   step: PipelineStep | null;
   onClose: () => void;
+  onRunToHere?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -506,23 +509,23 @@ function StepDetailPanel({
               </div>
             )}
 
-            {/* Re-run placeholder */}
             <button
-              disabled
-              title="Re-run functionality coming soon"
+              onClick={onRunToHere}
+              disabled={!onRunToHere}
+              title={onRunToHere ? "Remove all subsequent steps and switch to this output" : "No steps after this one"}
               style={{
                 marginTop: "auto",
                 padding: "7px 12px",
                 fontSize: 12,
-                background: "var(--bg3)",
-                border: "1px solid var(--bd2)",
+                background: onRunToHere ? "rgba(91,106,240,0.08)" : "var(--bg3)",
+                border: `1px solid ${onRunToHere ? "rgba(91,106,240,0.35)" : "var(--bd2)"}`,
                 borderRadius: "var(--r6)",
-                color: "var(--tx2)",
-                cursor: "not-allowed",
-                opacity: 0.5,
+                color: onRunToHere ? "var(--ac, #818cf8)" : "var(--tx2)",
+                cursor: onRunToHere ? "pointer" : "not-allowed",
+                opacity: onRunToHere ? 1 : 0.45,
               }}
             >
-              Re-run from here
+              Trim pipeline to here
             </button>
           </div>
         </>
@@ -533,8 +536,8 @@ function StepDetailPanel({
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner() {
-  const { steps, removeStep } = usePipelineContext();
-  const { activeDataset } = useWorkspaceContext();
+  const { steps, removeStep, keepStepsThrough } = usePipelineContext();
+  const { activeDataset, setActiveDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -650,7 +653,25 @@ function PipelineGraphTabInner() {
         </button>
       </div>
 
-      <StepDetailPanel step={selectedStep} onClose={() => setSelectedStep(null)} />
+      <StepDetailPanel
+        step={selectedStep}
+        onClose={() => setSelectedStep(null)}
+        onRunToHere={
+          selectedStep && steps.some((s) => s.stepNumber > selectedStep.stepNumber)
+            ? () => {
+                keepStepsThrough(selectedStep.id);
+                if (selectedStep.outputDataset) {
+                  setActiveDataset({
+                    id: selectedStep.outputDataset.id,
+                    name: selectedStep.outputDataset.name,
+                    rows: selectedStep.outputDataset.rowCount ?? 0,
+                  });
+                }
+                setSelectedStep(null);
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

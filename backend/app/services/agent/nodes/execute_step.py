@@ -551,6 +551,33 @@ async def execute_step(state: AgentState) -> dict:
                     preview_rows: list = []
                     column_schema: list = []
                     row_count_before: int | None = None
+                    # Capture the input table row count BEFORE the transformation runs
+                    # so agent.step.done events show "N → M rows" in the chat.
+                    if session_id:
+                        _rb_src = (
+                            parameters.get("source_table")
+                            or parameters.get("input_table")
+                            or next(
+                                (
+                                    v["duckdb_name"]
+                                    for v in sorted(
+                                        table_registry.values(),
+                                        key=lambda _x: _x.get("pipeline_step_number", 0),
+                                        reverse=True,
+                                    )
+                                    if 0 <= v.get("pipeline_step_number", 0) < step["step_number"]
+                                ),
+                                None,
+                            )
+                        )
+                        if _rb_src:
+                            try:
+                                _rb_cnt = execute_in_session(
+                                    session_id, f"SELECT COUNT(*) AS n FROM {_rb_src}"
+                                )
+                                row_count_before = int(_rb_cnt[0]["n"]) if _rb_cnt else None
+                            except Exception:
+                                pass
                     _step_start_ts = datetime.now(timezone.utc)
                     # Only persist to S3 + DB for "terminal" steps — steps whose output
                     # is not consumed by any subsequent step in the plan.

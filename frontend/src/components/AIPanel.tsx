@@ -232,6 +232,8 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const [columnSchema, setColumnSchema] = useState<ColSchema[]>([]);
   const [currentStepInfo, setCurrentStepInfo] = useState<{ stepNumber: number; operation: string; totalSteps: number } | null>(null);
   const [showAllRowsIds, setShowAllRowsIds] = useState<Set<string>>(new Set());
+  // Tracks dataset IDs that have already been auto-analyzed on first load
+  const autoQualityRunRef = useRef<Set<string>>(new Set());
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -863,6 +865,20 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       setAnalyzingDataset(false);
     }
   };
+
+  // Auto-trigger quality report for fresh datasets with no prior chat history
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!dataset?.id || analyzingDataset) return;
+    if (autoQualityRunRef.current.has(dataset.id)) return;
+    // If there is stored history for this dataset, skip — user has prior context
+    const storedId = localStorage.getItem(`datahub_chat_session_${dataset.id}`);
+    if (storedId) return;
+    autoQualityRunRef.current.add(dataset.id);
+    // Small delay so any in-flight history restore can settle first
+    const t = setTimeout(() => { void runDataQualityReport(); }, 800);
+    return () => clearTimeout(t);
+  }, [dataset?.id]); // intentionally omit runDataQualityReport — stable enough for one-shot
 
   return (
     <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>

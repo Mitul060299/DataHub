@@ -244,7 +244,7 @@ const myths = [
   {
     myth: "\"The AI will hallucinate results or make up numbers.\"",
     reality:
-      "DataHub runs real, deterministic SQL on your actual data using DuckDB. The AI writes the query — your data produces the result. No generation, no guessing, no invented rows.",
+      "DataHub runs real, deterministic SQL on your actual data. The AI writes the query — your data produces the result. No generation, no guessing, no invented rows.",
     mythColor: "#f87171",
     realityColor: "#34d399",
   },
@@ -258,7 +258,7 @@ const myths = [
   {
     myth: "\"My sensitive data is being sent somewhere unsafe.\"",
     reality:
-      "Your data lives in your own S3 bucket (or stays local). We never train models on your data. Full audit logs show every access, by whom, and when.",
+      "Your data is stored in our encrypted, isolated cloud storage — never shared between accounts. We never use your data to train our AI. Full audit logs record every access, by whom, and when.",
     mythColor: "#f87171",
     realityColor: "#34d399",
   },

@@ -93,6 +93,40 @@ def increment_usage(
         db.rollback()
 
 
+def update_storage_bytes(user_id: str, db: Session) -> None:
+    """Recalculate and store the current cumulative storage used by this user.
+
+    Reads the actual sum from import_tables (the same source used by /users/me)
+    and upserts it into user_usage for the current period so the Usage panel
+    always reflects real disk usage.
+    """
+    from ..models_db import ImportTableDB
+    period = _current_period()
+    try:
+        rows = (
+            db.query(ImportTableDB.size_bytes)
+            .filter(ImportTableDB.user_id == user_id)
+            .all()
+        )
+        total_bytes = sum(r[0] or 0 for r in rows)
+        db.execute(
+            text(
+                """
+                INSERT INTO user_usage (user_id, period, storage_bytes_used)
+                VALUES (:uid, :period, :total)
+                ON CONFLICT (user_id, period)
+                DO UPDATE SET storage_bytes_used = :total,
+                              updated_at = NOW()
+                """
+            ),
+            {"uid": user_id, "period": period, "total": total_bytes},
+        )
+        db.commit()
+    except Exception as exc:
+        logger.warning("Failed to update storage bytes for %s: %s", user_id, exc)
+        db.rollback()
+
+
 def enforce_usage_limit(
     user_id: str,
     plan: str,

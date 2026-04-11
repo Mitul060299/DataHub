@@ -37,7 +37,7 @@ from ..services.object_storage import StorageService
 from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
-from ..services.usage_service import enforce_usage_limit, increment_usage
+from ..services.usage_service import enforce_usage_limit, increment_usage, update_storage_bytes
 from ..services.audit import audit_store
 from ..models import AuditEntry
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB
@@ -319,8 +319,9 @@ async def upload_dataset(
             )
         )
     db.commit()
-    # Track monthly dataset upload usage
+    # Track monthly dataset upload usage + refresh storage byte count
     increment_usage(user_id, "datasets_uploaded", db)
+    update_storage_bytes(user_id, db)
     # Audit trail
     try:
         audit_store.add(AuditEntry(
@@ -705,6 +706,7 @@ async def upload_new_version(
         db.add(DatasetDataDB(id=new_id, rows=rows))
     db.commit()
     increment_usage(user_id, "datasets_uploaded", db)
+    update_storage_bytes(user_id, db)
 
     return {
         "new_dataset_id": new_id,

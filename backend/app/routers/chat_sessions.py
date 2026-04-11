@@ -19,6 +19,7 @@ from app.models_db import ChatSessionDB, TransformationStepDB, PipelineV2DB, Cha
 from app.services.chat_engine import ChatEngine, EventType, ChatEvent
 from app.services.ai_operating_controls import get_ai_operating_controls
 from app.services.plan_guard import resolve_user_plan
+from app.services.usage_service import enforce_usage_limit, increment_usage
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -277,7 +278,11 @@ async def send_message_to_session(
         raise HTTPException(status_code=404, detail="Session not found")
     
     user_plan = _resolve_chat_plan(db, authorization)
-    
+
+    # Enforce and count the AI chat call
+    enforce_usage_limit(current_user_id, user_plan, "api_calls", db)
+    increment_usage(current_user_id, "api_calls", db)
+
     engine = ChatEngine(
         db=db,
         user_id=current_user_id,

@@ -273,3 +273,31 @@ def update_notification_preferences(
     user.notification_prefs = current
     db.commit()
     return {**_DEFAULT_PREFS, **current}
+
+
+@router.delete("/me", status_code=204)
+def delete_me(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> None:
+    """Permanently delete the current user record and write an audit event."""
+    from ..services.audit import audit_store
+    from ..models import AuditEntry
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user = db.query(User).filter(User.username == subject).first()
+    if user:
+        try:
+            audit_store.add(AuditEntry(
+                action="account.delete",
+                actor=subject,
+                target=f"user:{user.id}",
+                metadata={"user_id": user.id},
+            ))
+        except Exception:
+            pass
+        db.delete(user)
+        db.commit()

@@ -19,7 +19,7 @@ from ..services.object_storage import StorageService
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_file_constraints, enforce_connector_access
 from ..services.duckdb_service import DuckDBService
-from ..services.usage_service import increment_usage
+from ..services.usage_service import increment_usage, update_storage_bytes
 from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, ImportTableDB, ImportConnectionDB
 from .datasets import save_dataset, get_dataset_from_db
 from ..config import settings
@@ -502,6 +502,7 @@ async def finalize_upload(
     db.commit()
 
     increment_usage(user_id, "datasets_uploaded", db)
+    update_storage_bytes(user_id, db)
 
     return {
         "success": True,

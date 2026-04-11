@@ -57,4 +57,6 @@ USAGE_FIELD_LABELS: dict[str, str] = {
 
 
 def get_limits(plan: str) -> UsageLimits:
-    return USAGE_LIMITS.get(plan, USAGE_LIMITS["Free"])
+    # Accept any case (e.g. "free", "Free", "FREE")
+    normalized = plan.strip().title()
+    return USAGE_LIMITS.get(normalized, USAGE_LIMITS["Free"])

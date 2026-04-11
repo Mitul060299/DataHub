@@ -6,6 +6,7 @@ import { BillingSettings } from "../components/BillingSettings";
 import { TeamSettings } from "../components/TeamSettings";
 import { useAuth } from "../contexts/AuthContext";
 import { formatFileSize, useUser } from "../contexts/UserContext";
+import { supabase } from "../lib/supabase";
 import { billingEnabled } from "../utils/featureFlags";
 
 type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team" | "webhooks";
@@ -28,7 +29,7 @@ const formatLimit = (value: number, kind: "count" | "bytes") => {
 
 export function SettingsPage({ section }: SettingsPageProps) {
   const navigate = useNavigate();
-  const { user: authUser } = useAuth();
+  const { user: authUser, signOut } = useAuth();
   const { plan, limits, usage, user } = useUser();
   const displayName = useMemo(() => {
     const metadataName = authUser?.user_metadata?.full_name as string | undefined;
@@ -103,6 +104,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
               limits={limits}
               usage={usage}
               onOpenBilling={() => navigate("/settings/billing")}
+              onSignOut={() => signOut().then(() => navigate("/login"))}
             />
           ) : null}
           {section === "billing" ? (
@@ -255,6 +257,39 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
 }
 
 function ProfilePanel({ displayName, email, isSsoUser }: { displayName: string; email: string; isSsoUser: boolean }) {
+  const [name, setName] = useState(displayName);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { full_name: trimmed } });
+      if (error) throw error;
+      setSaveMsg({ ok: true, text: "Profile saved successfully." });
+    } catch (e: unknown) {
+      setSaveMsg({ ok: false, text: (e as Error).message ?? "Failed to save profile." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setResetError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      setResetSent(true);
+    } catch (e: unknown) {
+      setResetError((e as Error).message ?? "Failed to send reset email.");
+    }
+  };
+
   return (
     <section style={{ display: "grid", gap: 12 }}>
       <div
@@ -281,35 +316,87 @@ function ProfilePanel({ displayName, email, isSsoUser }: { displayName: string; 
             color: "#fff",
           }}
         >
-          {displayName?.[0]?.toUpperCase() ?? "U"}
+          {name?.[0]?.toUpperCase() ?? "U"}
         </div>
         <div>
-          <div style={{ fontSize: "15px", fontWeight: 600, color: "#e8e8f0" }}>{displayName || "DataHub User"}</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: "#e8e8f0" }}>{name || "DataHub User"}</div>
           <div style={{ fontSize: "13px", color: "#8888a0" }}>{email}</div>
         </div>
       </div>
 
       <div>
         <p style={{ color: "var(--tx1)", marginBottom: 6 }}>Display Name</p>
-        <input className="auth-input" placeholder="Your name" defaultValue={displayName} />
+        <input
+          className="auth-input"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => { setName(e.target.value); setSaveMsg(null); }}
+        />
       </div>
       <div>
         <p style={{ color: "var(--tx1)", marginBottom: 6 }}>Email</p>
         <input
           className="auth-input"
           placeholder="you@company.com"
-          defaultValue={email}
-          readOnly={isSsoUser}
-          style={isSsoUser ? { opacity: 0.8, cursor: "not-allowed" } : undefined}
+          value={email}
+          readOnly
+          style={{ opacity: 0.7, cursor: "not-allowed" }}
         />
+        {isSsoUser && (
+          <p style={{ fontSize: 11, color: "#8888a0", marginTop: 4 }}>
+            Email is managed by your SSO provider.
+          </p>
+        )}
       </div>
-      <div>
-        <p style={{ color: "var(--tx1)", marginBottom: 6 }}>Theme</p>
-        <select className="auth-select" defaultValue="dark">
-          <option value="dark">Dark</option>
-        </select>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+        <button
+          className="btn btn-primary"
+          style={{ width: 120 }}
+          onClick={handleSave}
+          disabled={saving || !name.trim()}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        {saveMsg && (
+          <span style={{ fontSize: 12, color: saveMsg.ok ? "#22c55e" : "#f87171" }}>
+            {saveMsg.text}
+          </span>
+        )}
       </div>
-      <button className="btn btn-primary" style={{ width: 120 }}>Save</button>
+
+      {!isSsoUser && (
+        <div
+          style={{
+            borderTop: "1px solid #22222a",
+            paddingTop: 20,
+            marginTop: 8,
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          <p style={{ fontSize: 13, fontWeight: 600, color: "#e8e8f0", margin: 0 }}>Password</p>
+          <p style={{ fontSize: 13, color: "#8888a0", margin: 0 }}>
+            Send a password reset link to <strong style={{ color: "#c7c7d6" }}>{email}</strong>.
+          </p>
+          {resetSent ? (
+            <p style={{ fontSize: 13, color: "#22c55e", margin: 0 }}>
+              ✓ Reset email sent — check your inbox.
+            </p>
+          ) : (
+            <>
+              <div>
+                <button className="btn" style={{ fontSize: 13 }} onClick={handlePasswordReset}>
+                  Send password reset email
+                </button>
+              </div>
+              {resetError && (
+                <p style={{ fontSize: 12, color: "#f87171", margin: 0 }}>{resetError}</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -319,13 +406,22 @@ function GeneralSettingsPanel({
   limits,
   usage,
   onOpenBilling,
+  onSignOut,
 }: {
   plan: string;
   limits: { maxDatasets: number; maxStorage: number; aiMessagesPerMonth: number };
   usage: { datasetsUsed: number; storageUsed: number; aiMessagesUsed: number };
   onOpenBilling: () => void;
+  onSignOut: () => void;
 }) {
-  const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">("dark");
+  const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">(() => {
+    const stored = localStorage.getItem("app-theme");
+    return stored === "light" || stored === "system" ? stored : "dark";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("app-theme", themeMode);
+  }, [themeMode]);
   const datasetPct = asPercent(usage.datasetsUsed, limits.maxDatasets);
   const storagePct = asPercent(usage.storageUsed, limits.maxStorage);
   const aiPct = asPercent(usage.aiMessagesUsed, limits.aiMessagesPerMonth);
@@ -374,26 +470,7 @@ function GeneralSettingsPanel({
       <NotificationPrefsPanel />
 
       <div style={sectionHeaderStyle}>Danger Zone</div>
-      <div style={{ border: "1px solid rgba(239,68,68,0.35)", borderRadius: 10, padding: 14, display: "grid", gap: 8 }}>
-        <h3 style={{ fontSize: 14, color: "#fecaca" }}>Delete Account</h3>
-        <p style={{ fontSize: 13, color: "#fca5a5" }}>
-          This will permanently delete your account and all data. This cannot be undone.
-        </p>
-        <div>
-          <button
-            className="btn"
-            style={{ borderColor: "#ef4444", color: "#ef4444" }}
-            onClick={() => {
-              const confirmed = window.confirm("Delete account? This action cannot be undone.");
-              if (confirmed) {
-                window.alert("Coming soon: account deletion workflow.");
-              }
-            }}
-          >
-            Delete account
-          </button>
-        </div>
-      </div>
+      <DeleteAccountSection onSignOut={onSignOut} />
     </section>
   );
 }
@@ -485,6 +562,76 @@ function NotificationPrefsPanel() {
           </button>
         </div>
       ))}
+    </div>
+  );
+}
+
+function DeleteAccountSection({ onSignOut }: { onSignOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setErr(null);
+    try {
+      await api.delete("/users/me");
+      onSignOut();
+    } catch (e: unknown) {
+      setErr((e as Error).message ?? "Failed to delete account.");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div style={{ border: "1px solid rgba(239,68,68,0.35)", borderRadius: 10, padding: 14, display: "grid", gap: 10 }}>
+      <h3 style={{ fontSize: 14, color: "#fecaca", margin: 0 }}>Delete Account</h3>
+      <p style={{ fontSize: 13, color: "#fca5a5", margin: 0 }}>
+        This will permanently delete your account and all data. This action cannot be undone.
+      </p>
+      {!open ? (
+        <div>
+          <button
+            className="btn"
+            style={{ borderColor: "#ef4444", color: "#ef4444" }}
+            onClick={() => setOpen(true)}
+          >
+            Delete account
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 8 }}>
+          <p style={{ fontSize: 12, color: "#fca5a5", margin: 0 }}>
+            Type <strong>DELETE</strong> to confirm:
+          </p>
+          <input
+            className="auth-input"
+            value={input}
+            onChange={(e) => { setInput(e.target.value); setErr(null); }}
+            placeholder="DELETE"
+            style={{ maxWidth: 240 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn"
+              style={{
+                borderColor: input === "DELETE" ? "#ef4444" : "#44445a",
+                color: input === "DELETE" ? "#ef4444" : "#44445a",
+                cursor: input === "DELETE" ? "pointer" : "not-allowed",
+              }}
+              disabled={input !== "DELETE" || deleting}
+              onClick={handleDelete}
+            >
+              {deleting ? "Deleting…" : "Confirm delete"}
+            </button>
+            <button className="btn" onClick={() => { setOpen(false); setInput(""); setErr(null); }}>
+              Cancel
+            </button>
+          </div>
+          {err && <p style={{ fontSize: 12, color: "#f87171", margin: 0 }}>{err}</p>}
+        </div>
+      )}
     </div>
   );
 }

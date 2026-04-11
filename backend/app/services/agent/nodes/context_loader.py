@@ -149,34 +149,32 @@ async def context_loader(state: AgentState) -> dict:
             "table_registry": table_registry,
         }
 
-    # Load secondary dataset schemas so the planner can generate cross-dataset SQL
+    # Auto-discover all other datasets in the workspace so the planner can reference
+    # any of them by name in SQL — no manual "Join" picker needed on the frontend.
     secondary_schemas: dict = {}
-    secondary_ids: list[str] = list(state.get("secondary_dataset_ids") or [])
-    if secondary_ids:
-        sec_db = SessionLocal()
-        try:
-            for sec_id in secondary_ids:
-                sec_meta = sec_db.query(DatasetMetaDB).filter(DatasetMetaDB.id == sec_id).first()
-                if sec_meta:
-                    alias = _sanitize_alias(str(sec_meta.name or sec_id))
-                    try:
-                        secondary_schemas[alias] = {
-                            "dataset_id": sec_id,
-                            "columns": list(sec_meta.columns or []),
-                            "row_count": int(sec_meta.row_count or 0),
-                            "storage_path": sec_meta.storage_path,
-                            "schema": DuckDBService.get_schema(sec_id),
-                        }
-                    except Exception:
-                        secondary_schemas[alias] = {
-                            "dataset_id": sec_id,
-                            "columns": list(sec_meta.columns or []),
-                            "row_count": int(sec_meta.row_count or 0),
-                            "storage_path": sec_meta.storage_path,
-                            "schema": {},
-                        }
-        finally:
-            sec_db.close()
+    sec_db = SessionLocal()
+    try:
+        workspace_datasets_list = (
+            sec_db.query(DatasetMetaDB)
+            .filter(
+                DatasetMetaDB.workspace_id == workspace_id,
+                DatasetMetaDB.id != dataset_id,
+            )
+            .limit(20)
+            .all()
+        )
+        for sec_meta in workspace_datasets_list:
+            sec_id = str(sec_meta.id)
+            alias = _sanitize_alias(str(sec_meta.name or sec_id))
+            secondary_schemas[alias] = {
+                "dataset_id": sec_id,
+                "columns": list(sec_meta.columns or []),
+                "row_count": int(sec_meta.row_count or 0),
+                "storage_path": sec_meta.storage_path,
+                "schema": {},
+            }
+    finally:
+        sec_db.close()
 
     # (DuckDB session setup moved above early-return check; views already registered)
 
@@ -264,7 +262,7 @@ async def context_loader(state: AgentState) -> dict:
 
         # Detect overlapping columns between primary and secondary datasets
         # and populate join_suggestions for the responder to surface.
-        primary_cols = set(schema.keys())
+        primary_cols = set(col_names)
         join_suggestions: list[dict] = []
         for alias, info in secondary_schemas.items():
             sec_cols_raw = info.get("columns") or []

@@ -143,7 +143,7 @@ function DataProfileCard({ profile }: { profile: DataProfile }) {
       {/* Per-column breakdown toggle */}
       <button
         onClick={() => setOpen((v) => !v)}
-        style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "#18181b", borderTop: "1px solid #27272a", color: "#52525b", fontSize: 11, cursor: "pointer" }}
+        style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "#18181b", borderTop: "1px solid #27272a", color: "#a1a1aa", fontSize: 11, cursor: "pointer" }}
       >
         {open ? "▲ Hide column details" : "▼ Show column details"}
       </button>
@@ -154,13 +154,14 @@ function DataProfileCard({ profile }: { profile: DataProfile }) {
             <div key={col} style={{ padding: "5px 10px", borderTop: "1px solid #27272a", display: "grid", gap: 2 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="mono" style={{ color: "#d4d4d8", fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{col}</span>
-                <span style={{ fontSize: 10, color: c.null_pct >= 20 ? "#f87171" : c.null_pct >= 5 ? "#fbbf24" : "#52525b" }}>
+                <span style={{ fontSize: 10, color: c.null_pct >= 20 ? "#f87171" : c.null_pct >= 5 ? "#fbbf24" : "#71717a" }}>
                   {c.null_pct}% null
                 </span>
               </div>
-              {/* Null bar */}
-              <div style={{ height: 3, background: "#27272a", borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${Math.min(c.null_pct, 100)}%`, background: c.null_pct >= 20 ? "#ef4444" : c.null_pct >= 5 ? "#f59e0b" : "#22c55e", transition: "width 300ms" }} />
+              {/* Null bar: green = valid portion, red/amber = null portion */}
+              <div style={{ height: 6, background: "#27272a", borderRadius: 3, overflow: "hidden", display: "flex" }}>
+                <div style={{ height: "100%", width: `${100 - Math.min(c.null_pct, 100)}%`, background: "#22c55e", transition: "width 300ms" }} />
+                <div style={{ height: "100%", width: `${Math.min(c.null_pct, 100)}%`, background: c.null_pct >= 20 ? "#ef4444" : c.null_pct >= 5 ? "#f59e0b" : "transparent", transition: "width 300ms" }} />
               </div>
               {/* Numeric extras */}
               {c.min !== undefined ? (
@@ -230,10 +231,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const [analyzingDataset, setAnalyzingDataset] = useState(false);
   const [columnSchema, setColumnSchema] = useState<ColSchema[]>([]);
   const [currentStepInfo, setCurrentStepInfo] = useState<{ stepNumber: number; operation: string; totalSteps: number } | null>(null);
-  const [secondaryDatasetIds, setSecondaryDatasetIds] = useState<string[]>([]);
   const [showAllRowsIds, setShowAllRowsIds] = useState<Set<string>>(new Set());
-  const [workspaceDatasets, setWorkspaceDatasets] = useState<Array<{ id: string; name: string }>>([]);
-  const [joinPickerOpen, setJoinPickerOpen] = useState(false);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -272,26 +270,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset?.id]);
 
-  // Load workspace datasets for secondary dataset (join) picker
-  useEffect(() => {
-    if (!workspaceId) return;
-    let cancelled = false;
-    api.get<Array<Record<string, unknown>>>("/datasets", {
-      headers: { "X-Workspace-Id": workspaceId },
-    })
-      .then((r) => {
-        if (!cancelled) {
-          setWorkspaceDatasets(
-            (r.data ?? []).map((item) => ({
-              id: String(item.id ?? item.dataset_id ?? ""),
-              name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
-            })).filter((ds) => ds.id)
-          );
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [workspaceId]);
+
 
   // Press "/" anywhere (when not typing in an input) to focus the AI input
   useEffect(() => {
@@ -720,7 +699,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         plan_approved: approvePlan ?? false,
         plan_pending_modification: isPlanModification ?? false,
         pending_plan: pendingPlan,
-        secondary_dataset_ids: secondaryDatasetIds,
         onEvent: handleAgentEvent,
       });
     } catch (error: unknown) {
@@ -906,52 +884,13 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               {analyzingDataset ? "Analyzing…" : <><span style={{ marginRight: 3, verticalAlign: "middle", display: "inline-flex" }}><IconBarChart size={12} /></span>Quality</>}
             </button>
           ) : null}
-          {dataset && workspaceDatasets.filter((ds) => ds.id !== dataset.id).length > 0 ? (
-            <button
-              className="btn"
-              style={{ fontSize: 10, padding: "2px 7px", background: joinPickerOpen ? "var(--acg)" : undefined }}
-              onClick={() => setJoinPickerOpen((o) => !o)}
-              title="Join an additional dataset"
-            >
-              ＋ Join{secondaryDatasetIds.length > 0 ? ` (${secondaryDatasetIds.length})` : ""}
-            </button>
-          ) : null}
+
           <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { if (dataset?.id) localStorage.removeItem(`datahub_chat_session_${dataset.id}`); setMessages([]); resetSession(); }}>
             <IconRefresh size={14} />
           </button>
         </span>
       </header>
-      {joinPickerOpen ? (
-        <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--bd)", background: "var(--bg1)", fontSize: 11 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--tx2)" }}>Select datasets to join:</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {workspaceDatasets
-              .filter((ds) => ds.id !== dataset?.id)
-              .map((ds) => {
-                const selected = secondaryDatasetIds.includes(ds.id);
-                return (
-                  <button
-                    key={ds.id}
-                    onClick={() => setSecondaryDatasetIds((prev) =>
-                      selected ? prev.filter((id) => id !== ds.id) : [...prev, ds.id]
-                    )}
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      borderRadius: 12,
-                      border: `1px solid ${selected ? "var(--ac)" : "var(--bd2)"}`,
-                      background: selected ? "var(--acg)" : "var(--bg2)",
-                      cursor: "pointer",
-                      color: selected ? "var(--ac)" : "var(--tx2)",
-                    }}
-                  >
-                    {selected ? "✓ " : ""}{ds.name}
-                  </button>
-                );
-              })}
-          </div>
-        </div>
-      ) : null}
+
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
         {!dataset ? (

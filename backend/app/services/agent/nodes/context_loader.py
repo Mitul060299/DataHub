@@ -140,22 +140,15 @@ async def context_loader(state: AgentState) -> dict:
             finally:
                 _art_db.close()
 
-    if state.get("schema"):
-        # Schema already loaded — skip expensive reload but return refreshed table_registry.
-        return {
-            "available_templates": available_templates,
-            "calculated_columns": calculated_columns,
-            "dashboards": dashboards,
-            "table_registry": table_registry,
-        }
-
     # Auto-discover all other datasets in the workspace so the planner can reference
     # any of them by name in SQL — no manual "Join" picker needed on the frontend.
+    # This block runs on EVERY turn (not just the first) so secondary views
+    # remain registered after session restarts and are present in the early-return dict.
     secondary_schemas: dict = {}
-    sec_db = SessionLocal()
+    _sec_db2 = SessionLocal()
     try:
         workspace_datasets_list = (
-            sec_db.query(DatasetMetaDB)
+            _sec_db2.query(DatasetMetaDB)
             .filter(
                 DatasetMetaDB.workspace_id == workspace_id,
                 DatasetMetaDB.id != dataset_id,
@@ -173,10 +166,40 @@ async def context_loader(state: AgentState) -> dict:
                 "storage_path": sec_meta.storage_path,
                 "schema": {},
             }
+            # Register the DuckDB view and table_registry entry for every secondary
+            # dataset on every turn so join SQL works even after session restarts.
+            _register_dataset_view(sec_id, alias, storage_path=sec_meta.storage_path)
+            if alias not in table_registry:
+                _sec_cols = list(sec_meta.columns or [])
+                table_registry[alias] = {
+                    "duckdb_name": alias,
+                    "dataset_id": sec_id,
+                    "display_name": alias,
+                    "source_intent": "upload",
+                    "parent_tables": [],
+                    "row_count": int(sec_meta.row_count or 0),
+                    "column_names": [c if isinstance(c, str) else str(c) for c in _sec_cols],
+                    "pipeline_step_number": 0,
+                    "is_artifact": False,
+                    "is_view": True,
+                }
     finally:
-        sec_db.close()
+        _sec_db2.close()
 
-    # (DuckDB session setup moved above early-return check; views already registered)
+    if state.get("schema"):
+        # Schema already loaded — skip expensive reload but return refreshed
+        # table_registry (now includes secondary datasets) and secondary_schemas.
+        early: dict = {
+            "available_templates": available_templates,
+            "calculated_columns": calculated_columns,
+            "dashboards": dashboards,
+            "table_registry": table_registry,
+        }
+        if secondary_schemas:
+            early["secondary_schemas"] = secondary_schemas
+        return early
+
+    # (DuckDB session setup and secondary registration already done above)
 
     try:
         schema = DuckDBService.get_schema(dataset_id)
@@ -227,26 +250,8 @@ async def context_loader(state: AgentState) -> dict:
     }
     table_registry[primary_alias] = primary_entry
 
-    # Secondary datasets
-    for alias, info in (secondary_schemas or {}).items():
-        sec_id = info.get("dataset_id", "")
-        sec_cols = info.get("columns") or []
-        sec_row_count = int(info.get("row_count") or 0)
-        _register_dataset_view(sec_id, alias, storage_path=info.get("storage_path"))
-        if alias not in table_registry:
-            sec_entry: TableRegistryEntry = {
-                "duckdb_name": alias,
-                "dataset_id": sec_id,
-                "display_name": alias,
-                "source_intent": "upload",
-                "parent_tables": [],
-                "row_count": sec_row_count,
-                "column_names": [c if isinstance(c, str) else str(c) for c in sec_cols],
-                "pipeline_step_number": 0,
-                "is_artifact": False,
-                "is_view": True,
-            }
-            table_registry[alias] = sec_entry
+    # Secondary dataset views and table_registry entries were already registered
+    # in the block above (before the early-return check) — no need to repeat.
 
     base = {
         "schema": schema,

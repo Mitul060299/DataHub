@@ -364,7 +364,9 @@ class DuckDBService:
                 return dataset, list(data.rows)
 
             if dataset.storage_path:
-                preview = cls.get_preview(dataset.storage_path, limit=max(1, int(dataset.row_count or 1000)))
+                # Use a small fixed limit — callers only need rows to infer schema
+                # or column stats; loading the full dataset causes OOM on large files.
+                preview = cls.get_preview(dataset.storage_path, limit=50)
                 return dataset, list(preview.get("rows") or [])
 
             return dataset, []

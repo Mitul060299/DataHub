@@ -29,12 +29,19 @@ All operations are addressable by name in the NL pipeline editor and visual step
 - `GET /datasets/compare-schemas?ids=id1,id2` returns exact matches, unmatched columns per side, fuzzy column suggestions, and an alignment score 0–1.
 
 ### Proactive, Autonomous AI Agents
-- Multi-node AI state machine with streaming SSE output.
+- Multi-node AI state machine (9 nodes) with streaming SSE output.
 - Multi-turn conversation memory — prior context is carried across turns.
 - Live step progress — streamed to the client before each execution step.
 - Schema-aware mode — answers column questions accurately using the active dataset schema.
 - Two LLM models: a lightweight model for intent routing; a large model for planning, execution, and responses.
 - Fallback rule-based suggestions if no LLM is configured.
+- **Table name auto-resolution** — intent classifier silently matches user-mentioned table names to the session registry by name similarity; only asks for clarification when genuinely ambiguous.
+- **Clarify intent & node** — `clarify_step` asks exactly one focused question with 2–3 concrete examples when the request cannot proceed; the question streams via SSE and is rendered in the frontend with a purple border and NEEDS YOUR INPUT label.
+- **Plan modification workflow** — Approve / Modify / Reject three-button UI on every plan card (linear and branching); Modify opens an inline textarea; the modified instruction flows back through the planner with the original plan as context; the old plan is marked rejected in the chat.
+- **Data quality two-step plan** — `validate` intent always generates step 1 (null-count SQL) + step 2 (human-readable summary with min/max/mean/outlier_count per column); the responder ends with "Want me to automatically fix these issues?"
+- **Join key auto-detection** — for join/union/reconcile, the planner identifies both tables by name matching, finds common columns, prefers `*_id / id / key / code`, and generates a complete `LEFT JOIN` SQL with `left_table / right_table / join_key / join_type` in the parameters block.
+- **Proactive insights after every operation** — the responder appends one domain observation about the result and one "Want me to" / "Shall I" follow-up; an outlier callout is injected whenever outlier_count > 0.
+- **Intent-aware follow-up chips** — `validate` intent shows fix/chart/export chips; `clarify` and `converse` intents show no chips.
 
 ### Business Context Memory
 - Context API with optional Chroma-backed persistence.

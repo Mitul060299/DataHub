@@ -28,6 +28,7 @@ const SECTIONS: Section[] = [
     pages: [
       { id: "projects", label: "Projects" },
       { id: "pipelines", label: "Pipelines" },
+      { id: "ai-agent", label: "AI Agent" },
       { id: "data-ops", label: "AI Data Operations" },
       { id: "artifacts", label: "Artifacts" },
       { id: "canvases", label: "Canvases" },
@@ -90,6 +91,9 @@ function Welcome() {
         </li>
         <li>
           <strong>Schedule & automate</strong> — run pipelines on a cron schedule and keep your dashboards always fresh.
+        </li>
+        <li>
+          <strong>Smart AI agent</strong> — the AI understands plain English, auto-detects table names and join keys, and always shows a step-by-step plan you can <strong>Approve</strong>, <strong>Modify</strong>, or <strong>Reject</strong> before anything runs.
         </li>
         <li>
           <strong>Collaborate</strong> — invite teammates, share dashboards publicly or securely.
@@ -161,8 +165,13 @@ function QuickStart() {
         <div className="docs-step__body">
           <h3>Ask the AI a question</h3>
           <p>
-            In the AI panel, type a question like <em>"Show me total revenue by month"</em>. The AI will generate a pipeline step, run it, and return a
-            result table or chart.
+            In the AI panel, type a question like <em>"Show me total revenue by month"</em>. The AI classifies your intent, then generates an execution plan showing each step and estimated row counts.
+          </p>
+          <p>
+            If your request needs more context, the AI replies with a single clarifying question — shown with a purple <strong>❓ NEEDS YOUR INPUT</strong> badge. Type your answer and press <kbd>Enter</kbd> to continue.
+          </p>
+          <p>
+            Once the plan appears, click <strong>✓ Approve</strong> to run it, <strong>✎ Modify</strong> to tweak a step first, or <strong>✕ Reject</strong> to cancel.
           </p>
         </div>
       </div>
@@ -237,6 +246,18 @@ function KeyConcepts() {
           <dd>
             Each time you send a prompt to the AI assistant (e.g. "filter rows where country = US"), that counts as one AI message. Monthly limits vary by
             plan; see Plan limits for details.
+          </dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Execution plan</dt>
+          <dd>
+            Before making any changes, the AI always presents a plan: a numbered list of steps with descriptions and estimated row counts. Review it, then <strong>Approve</strong> to run, <strong>Modify</strong> to change specific steps, or <strong>Reject</strong> to cancel.
+          </dd>
+        </div>
+        <div className="docs-glossary__item">
+          <dt>Clarification step</dt>
+          <dd>
+            When a request is ambiguous (e.g. multiple tables loaded and none specified), the AI asks exactly one focused question with concrete examples. Answer it in the chat input and the agent proceeds.
           </dd>
         </div>
       </dl>
@@ -366,6 +387,14 @@ function WhatIsPipeline() {
         Click <strong>Run</strong> to execute all steps in order. The pipeline creates a <em>pipeline run</em> record, executes each step, and saves any
         output as an artifact. Runs are shown in the Run history panel.
       </p>
+      <h2>AI plan workflow: Approve, Modify, Reject</h2>
+      <p>When you describe a transformation in the AI chat, the agent generates a plan card before executing anything. Three actions are available:</p>
+      <ul>
+        <li><strong>✓ Approve</strong> — run all steps immediately.</li>
+        <li><strong>✎ Modify</strong> — opens an inline text field. Describe what to change (e.g. <em>"group by region not country"</em>). The agent revises the plan; the previous plan turns red.</li>
+        <li><strong>✕ Reject</strong> — discard the plan without running anything.</li>
+      </ul>
+      <p>You can Modify as many times as needed before approving. Each modification generates a fresh plan incorporating your instruction.</p>
       <h2>Scheduling</h2>
       <p>
         On paid plans you can schedule a pipeline to run automatically on a cron schedule — e.g. every day at 08:00, or every Monday at 09:00. When the
@@ -766,17 +795,19 @@ function GuidePipeline() {
         <div className="docs-step__body">
           <h3>Describe a transformation in plain English</h3>
           <p>
-            In the AI chat panel, type what you want to do — e.g. <em>"Filter to rows where region = APAC, then group by month and sum revenue"</em>. The AI
-            generates and executes SQL for each step.
+            In the AI chat panel, type what you want to do — e.g. <em>"Filter to rows where region = APAC, then group by month and sum revenue"</em>. The AI classifies your intent and generates a step-by-step execution plan with SQL and estimated row counts.
+          </p>
+          <p>
+            If the request is ambiguous the AI asks one clarifying question first. Answer it and press <kbd>Enter</kbd> to receive the plan.
           </p>
         </div>
       </div>
       <div className="docs-step">
         <div className="docs-step__number">4</div>
         <div className="docs-step__body">
-          <h3>Review and run</h3>
+          <h3>Approve, modify, or reject the plan</h3>
           <p>
-            Each generated step shows a preview of the output. Click <strong>Run pipeline</strong> to execute all steps in order and produce an artifact.
+            The plan card shows each step with a description and estimated row count. Click <strong>✓ Approve</strong> to run all steps, <strong>✎ Modify</strong> to type a change before running (e.g. <em>"Remove the sort step"</em>), or <strong>✕ Reject</strong> to cancel. You can modify as many times as needed before approving.
           </p>
         </div>
       </div>
@@ -1007,6 +1038,18 @@ function Faq() {
       q: "What happens when I hit a plan limit?",
       a: "You'll see an in-app warning when you're close to a limit. When you exceed it, the specific action (e.g. uploading a new file, or sending an AI message) will be blocked until you upgrade or the quota resets.",
     },
+    {
+      q: "Can I modify an AI plan before it runs?",
+      a: "Yes. When the AI presents a plan card, click ✎ Modify. A text field appears — describe what to change (e.g. \"Group by region instead of country\" or \"Add a dedup step first\"). Press Enter or click Apply changes. The previous plan is discarded and a revised plan is generated. You can modify as many times as you like before approving.",
+    },
+    {
+      q: "Why did the AI ask me a question instead of showing a plan?",
+      a: "The AI only asks for clarification when it genuinely cannot proceed without more information — for example, multiple tables are loaded and you didn't specify which one, or your request has no actionable detail. The question appears with a purple border and a NEEDS YOUR INPUT label. Type your answer and press Enter.",
+    },
+    {
+      q: "What is the data quality check and how do I fix issues automatically?",
+      a: "Type \"validate\", \"check data quality\", \"profile my data\", or click the Quality button in the AI panel header. A two-step plan runs: step 1 collects null counts and duplicate statistics; step 2 produces a human-readable summary with per-column null percentages, min/max/mean, and outlier counts. After the report, the AI asks \"Want me to automatically fix these issues?\" — reply or approve the follow-up plan to clean the dataset.",
+    },
   ];
 
   const [openIdx, setOpenIdx] = useState<number | null>(null);
@@ -1186,16 +1229,184 @@ function Shortcuts() {
   );
 }
 
+function AiAgent() {
+  return (
+    <article className="docs-article">
+      <h1>AI Agent</h1>
+      <p className="docs-lead">
+        The DataHub AI agent understands plain English, generates step-by-step SQL execution plans, and asks focused clarifying questions when it needs
+        more information — all before a single row of your data changes.
+      </p>
+
+      <div className="docs-callout docs-callout--info">
+        <strong>Nothing runs without your approval.</strong> The agent always presents a step-by-step plan first. You can review, modify, or reject
+        it before anything executes.
+      </div>
+
+      <h2>How it works</h2>
+      <p>
+        Every message you type passes through a multi-step pipeline: intent classification → planning → approval gate → execution → response. You stay in full
+        control at every stage.
+      </p>
+
+      <h2>Supported intents</h2>
+      <p>The agent classifies every message into one intent before generating a plan:</p>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead>
+            <tr>
+              <th>Intent</th>
+              <th>What it does</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>clean</code></td><td>Standardise column names, cast types, remove duplicates, trim whitespace, handle nulls</td></tr>
+            <tr><td><code>filter</code></td><td>Subset rows by one or more conditions (equals, ≥, ≤, contains, is null…)</td></tr>
+            <tr><td><code>transform</code></td><td>General data modification not covered by a more specific intent</td></tr>
+            <tr><td><code>add_column</code></td><td>Create a new calculated or derived column</td></tr>
+            <tr><td><code>summarise</code></td><td>Group-by aggregation (sum, count, avg, min, max, count_distinct)</td></tr>
+            <tr><td><code>pivot</code></td><td>Reshape long-to-wide format</td></tr>
+            <tr><td><code>union</code></td><td>Vertically stack two or more tables</td></tr>
+            <tr><td><code>join</code></td><td>Merge two tables on a key column — join key is auto-detected</td></tr>
+            <tr><td><code>reconcile</code></td><td>Compare two tables on a key to find variances and missing rows</td></tr>
+            <tr><td><code>validate</code></td><td>Read-only data quality report (null counts, dupes, outliers) — always generates a two-step plan</td></tr>
+            <tr><td><code>sql_query</code></td><td>Run a read-only SQL query or ad-hoc aggregation</td></tr>
+            <tr><td><code>visualise</code></td><td>Create a chart, graph, or visual summary</td></tr>
+            <tr><td><code>export</code></td><td>Save a table as CSV, Excel, or Parquet and get a download link</td></tr>
+            <tr><td><code>clarify</code></td><td>The request is too ambiguous to proceed — triggers exactly one focused clarifying question</td></tr>
+            <tr><td><code>converse</code></td><td>Greeting, question about the tool, or anything not data-related</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Table name auto-resolution</h2>
+      <p>
+        You don't need to use exact internal table names. Mention a dataset by its display name and the agent silently resolves it. For example, typing
+        <em> "clean the sales data"</em> will match your <code>sales_data</code> table automatically.
+      </p>
+      <ul>
+        <li>If you reference one table and it exists, it resolves silently — no question asked.</li>
+        <li>
+          If you reference two tables for a join, union, or reconcile and both exist, they are resolved automatically — join key is auto-detected from
+          common columns (preferring columns named <code>*_id</code>, <code>id</code>, <code>key</code>, or <code>code</code>).
+        </li>
+        <li>Clarification is only requested when the situation is genuinely ambiguous and a reasonable assumption cannot be made.</li>
+      </ul>
+
+      <h2>Clarification step</h2>
+      <p>
+        When the agent cannot proceed without more information it asks <em>exactly one</em> focused question — never more. The question always includes
+        2–3 concrete examples to guide your answer.
+      </p>
+      <p>
+        Clarification messages appear with a <strong style={{ color: "#7c3aed" }}>purple border</strong>, a{" "}
+        <strong>❓ NEEDS YOUR INPUT</strong> label, and a <em>↓ Type your answer below</em> hint so they are immediately distinguishable from
+        regular responses. No follow-up chips are shown after a clarification.
+      </p>
+      <p>Clarification is triggered only when:</p>
+      <ul>
+        <li>Multiple tables are loaded and you have not specified which one.</li>
+        <li>The operation type is unclear (e.g. <em>"fix the data"</em> with no further detail).</li>
+        <li>A required parameter is completely missing (e.g. <em>"filter the data"</em> with no condition).</li>
+      </ul>
+      <div className="docs-callout docs-callout--info">
+        After you answer a clarifying question, the agent proceeds automatically — you do not need to re-state your original request.
+      </div>
+
+      <h2>Execution plan: Approve, Modify, Reject</h2>
+      <p>
+        Before running anything the agent presents a numbered step-by-step plan. Each step shows the operation type, a plain-English description,
+        estimated row count, and the SQL that will run. Three actions are available:
+      </p>
+      <ul>
+        <li>
+          <strong>✓ Approve</strong> — all steps run immediately in sequence. A live progress indicator updates as each step completes (e.g.
+          <em> "Step 2/3: summarise"</em>).
+        </li>
+        <li>
+          <strong>✎ Modify</strong> — an inline text field appears inside the plan card. Describe what to change — e.g.{" "}
+          <em>"group by region instead of country"</em> or <em>"add a dedup step first"</em>. Press <kbd>Enter</kbd> or click{" "}
+          <strong>Apply changes</strong>. The current plan turns red and a revised plan is generated incorporating your instruction. You can modify
+          as many times as needed before approving.
+        </li>
+        <li>
+          <strong>✕ Reject</strong> — the plan is discarded without running. The plan card turns red.
+        </li>
+      </ul>
+
+      <h2>Data quality check</h2>
+      <p>
+        Type <em>"validate"</em>, <em>"check data quality"</em>, <em>"profile my data"</em>, or click the <strong>Quality</strong> button in the
+        AI panel header. The agent generates a <strong>two-step plan</strong>:
+      </p>
+      <ul>
+        <li>
+          <strong>Step 1 — Validate:</strong> runs a safe null-count query that counts non-null values per column and the number of distinct rows.
+        </li>
+        <li>
+          <strong>Step 2 — Summarise:</strong> produces a human-readable report with total rows, null count and null% per column, duplicate row count,
+          and for numeric columns: min, max, mean, and outlier count.
+        </li>
+      </ul>
+      <p>
+        After presenting results the AI asks <em>"Want me to automatically fix these issues?"</em> — approve the follow-up plan to clean the dataset.
+      </p>
+
+      <h2>Join key auto-detection</h2>
+      <p>When you say <em>"join customers and orders"</em>, the agent:</p>
+      <ol>
+        <li>Identifies both tables from the session by name matching.</li>
+        <li>Finds columns that exist in both tables with the same name.</li>
+        <li>Prefers columns named <code>*_id</code>, <code>id</code>, <code>key</code>, or <code>code</code>.</li>
+        <li>Generates a complete, ready-to-run <code>LEFT JOIN</code> SQL statement.</li>
+      </ol>
+      <p>If no common column is found, the plan notes this and asks you to specify the join key.</p>
+
+      <h2>Proactive insights</h2>
+      <p>After every data operation the AI response includes one proactive domain observation. Examples:</p>
+      <ul>
+        <li><em>"I noticed HealthTech accounts for 67% of the remaining deals — want me to analyse this segment?"</em></li>
+        <li><em>"753 customers have no matching orders — this might be worth investigating."</em></li>
+        <li><em>"The removed rows had significantly higher average deal amounts."</em></li>
+      </ul>
+      <p>
+        If any column contains outliers, the response automatically includes a <strong>⚠️ outlier callout</strong> with the column name and count.
+        Every response ends with a <em>"Want me to…"</em> or <em>"Shall I…"</em> follow-up to continue naturally.
+      </p>
+
+      <h2>Follow-up suggestion chips</h2>
+      <p>After each completed operation, 2–3 context-specific chips appear to continue the analysis:</p>
+      <ul>
+        <li>After <strong>validate</strong>: "Fix all detected issues automatically", "Show null distribution chart", "Export the quality report".</li>
+        <li>After <strong>join</strong>: "Show a summary of joined data", "Visualise the combined dataset", "Export the joined result".</li>
+        <li>After <strong>visualise</strong>: "Show a different chart type", "Add to dashboard", "Top 5 values?".</li>
+        <li>No chips are shown after clarification questions or conversational replies.</li>
+      </ul>
+
+      <h2>Branching pipelines</h2>
+      <p>
+        When a goal produces multiple independent outputs — e.g. <em>"summarise revenue by region AND by product"</em> — the agent generates a{" "}
+        <strong>branching pipeline</strong> where steps can run in parallel. The plan is rendered as a visual node graph with arrows showing
+        dependencies. The same Approve / Modify / Reject controls apply to branching plans.
+      </p>
+    </article>
+  );
+}
+
 // ── Content router ─────────────────────────────────────────────
 function DataOps() {
   return (
     <article className="docs-article">
       <h1>AI Data Operations</h1>
       <p className="docs-lead">
-        DataHub includes 30+ built-in transformation operations — each addressable by name in the visual pipeline builder and the AI edit panel.
-        Describe what you want in plain English and the AI maps it to the right operation automatically.
+        DataHub includes 30+ built-in transformation operations — each automatically selected by the AI agent when you describe your intent in plain English.
       </p>
-
+      <div className="docs-callout docs-callout--info">
+        <strong>Table names are auto-resolved.</strong> You don’t need to use exact internal names. Mention a table by its display name and the agent matches it. For joins and unions involving two tables, both are identified automatically and the join key is auto-detected from common columns.
+      </div>
+      <p>
+        For a full explanation of how the agent classifies intents, handles clarifications, and manages the Approve / Modify / Reject plan workflow, see the <strong>AI Agent</strong> page in Core Features.
+      </p>
       <h2>Null handling</h2>
       <div className="docs-table-wrap">
         <table className="docs-table">
@@ -1442,6 +1653,7 @@ function DocContent({ page }: { page: string }) {
     case "concepts":     return <KeyConcepts />;
     case "projects":     return <WhatIsProject />;
     case "pipelines":    return <WhatIsPipeline />;
+    case "ai-agent":     return <AiAgent />;
     case "data-ops":     return <DataOps />;
     case "artifacts":    return <WhatIsArtifact />;
     case "dashboards":     // legacy alias

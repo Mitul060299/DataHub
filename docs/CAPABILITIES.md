@@ -114,6 +114,13 @@ All operations available via NL pipeline editing and the visual step builder:
 - Copy SQL from plan steps ✅ — each step in the execution plan has a “Copy” button with a ✓ confirmation flash
 - Stop generation ✅ — “■ Stop” button aborts the SSE stream via `AbortController`
 - Rate-limited chat ✅ — AI chat endpoint is rate-limited per user
+- Table name auto-resolution ✅ — intent classifier silently matches user-mentioned table names to the session registry by name similarity; only asks for clarification when genuinely ambiguous
+- Clarify intent & node ✅ — `clarify_step` node asks exactly ONE focused question with concrete examples; sets `needs_clarification: True` and `final_response`; graph ends at `__end__` waiting for the user's next turn
+- Plan modification workflow ✅ — Approve / Modify / Reject three-button UI on every plan card (both linear `PlanCard` and branching `PlanDAG`); Modify opens inline textarea; modified instruction flows back through planner with original plan as context; old plan marked rejected (red) in frontend
+- Data quality two-step plan ✅ — `validate` intent always generates step 1 (safe null-count SQL) + step 2 (human-readable summary with min/max/mean/outlier_count per column); responder ends with "Want me to automatically fix these issues?"
+- Join key auto-detection ✅ — planner identifies both tables from session registry by name matching; finds common columns; prefers `*_id / id / key / code`; generates complete `LEFT JOIN` SQL with `left_table / right_table / join_key / join_type` in parameters block
+- Proactive insights after every operation ✅ — `RESPONDER_TRANSFORM_PROMPT` appends one domain observation about the result and one "Want me to" / "Shall I" follow-up; outlier callout injected when `outlier_count > 0`
+- `intent` field on `agent.done` SSE event ✅ — frontend follow-up chips are intent-aware: `validate` → fix/chart/export; `clarify` and `converse` → no chips shown
 
 ## 7. Analytics & Visualizations
 - Summary charts ✅
@@ -147,6 +154,9 @@ All operations available via NL pipeline editing and the visual step builder:
 - Chart rendering inline in chat (with ☁ Save to Visualizations button) ✅
 - `/` keyboard shortcut focuses AI chat input from anywhere on the page ✅
 - Explorer panel width drag-to-resize persisted to `localStorage` ✅
+- Plan Modify button ✅ — Approve / Modify / Reject three-button row on `PlanCard` (linear) and `PlanDAG` (branching); Modify expands inline textarea; Enter submits; Cancel restores three-button row; Apply disabled when textarea is empty
+- Clarification bubble styling ✅ — purple left-border + `❓ NEEDS YOUR INPUT` header + `↓ Type your answer below` hint rendered for `isClarification: true` messages; no follow-up chips shown after clarification
+- Intent-aware follow-up chips ✅ — `validate` intent shows "Fix all detected issues / null distribution chart / export quality report" chips; `clarify` and `converse` intents show no chips
 
 ## 9. Query Folding & Write-Back
 - Query folding ✅ — a query optimization layer collapses compatible pipeline steps into fewer SQL queries

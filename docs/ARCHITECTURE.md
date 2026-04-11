@@ -54,24 +54,27 @@ Current production stack:
 - Two models in use: a large model for planning, execution, and responses; a lightweight model for intent classification.
 
 ### AI Agent — State Machine
-The agent is an 8-node state machine pipeline.
+The agent is a 9-node state machine pipeline.
 
 **Nodes** (in execution order for a planning-path request):
 
 | Node | Role |
 |---|---|
 | `context_loader` | Entry point — loads dataset schema, glossary, and workspace context into state |
-| `intent_classifier` | Classifies the user turn into one of 14 intents |
-| `planner` | Generates an ordered plan of execution steps from the intent + context |
+| `intent_classifier` | Classifies the user turn into one of 15 intents (including `clarify`) |
+| `clarify_step` | Asks exactly one focused clarifying question with concrete examples; sets `needs_clarification: True` and streams the question via SSE; graph ends at `__end__` waiting for the user's reply |
+| `planner` | Generates an ordered plan of execution steps from the intent + context; if `plan_pending_modification=True`, incorporates the existing plan JSON and user modification instruction |
 | `plan_presenter` | Presents the plan to the user and awaits approval (gate) |
 | `execute_step` | Executes one step of the plan; emits a live progress event before each step |
 | `reflect` | On SQL failure: rewrites the SQL using schema, column stats, and error context |
 | `pipeline_recorder` | Persists the completed pipeline steps |
-| `responder` | Formats the final response; `converse` intent answers column questions using the active dataset schema |
+| `responder` | Formats the final response; includes one proactive insight and a contextual follow-up; `converse` intent answers column questions using the active dataset schema |
 
 **Conversation memory:** Prior conversation turns are carried by the frontend and prepended to the agent state before each request.
 
-**Conditional routing** handles branching between intent classification, plan approval, step execution, error reflection, and response generation.
+**Conditional routing** handles branching between intent classification, clarification, plan approval, step execution, error reflection, and response generation.
+
+**Plan modification:** The `plan_pending_modification` flag threads from the frontend request body through the router → controller → agent graph service → initial state → planner node, enabling the planner to revise an existing plan rather than generate a new one.
 
 ### Resend (transactional email)
 - `send_pipeline_complete(user, pipeline)` — sent when a pipeline run finishes (respects `pipeline_complete` user pref).

@@ -61,7 +61,20 @@
 - **Copy SQL** — copy button on each plan step’s SQL block with ✓ confirmation flash
 - **UX polish** — stop button (AbortController), auto-grow textarea, Markdown rendering, `/` shortcut to focus input, explorer width persistence, chart save error toast
 
-## Phase 8 - Enterprise Hardening ➕ Planned
+## Phase 8 - AI Intelligence Upgrade ✅ Complete
+- **Table name auto-resolution** — intent classifier silently matches user-mentioned table names to the session table registry by name similarity; only asks for clarification when genuinely ambiguous (e.g. multiple tables loaded and none specified)
+- **Clarify intent & node** — new `clarify_step` graph node asks exactly ONE focused question with 2–3 concrete examples; sets `needs_clarification: True`; question streamed via SSE `agent.done` event with `intent: "clarify"`; graph ends at `__end__` waiting for user's next turn
+- **Clarification bubble styling** — purple left-border + `❓ NEEDS YOUR INPUT` header + `↓ Type your answer below` hint; no follow-up chips shown after clarification
+- **Plan modification workflow** — Approve / Modify / Reject three-button UI on both `PlanCard` (linear) and `PlanDAG` (branching); Modify opens inline textarea; Enter submits; Apply disabled when textarea empty; old plan marked rejected (red) in chat
+- **Plan modification backend** — `plan_pending_modification` bool threaded from request body through router → controller → agent graph service → `_build_initial_state` → planner; planner builds a `modification_prompt` with the existing plan JSON + user instruction as `HumanMessage` content
+- **Data quality two-step plan** — `validate` / `data_quality` intent always generates step 1 (safe null-count SQL using correlated subquery) + step 2 (human-readable summary with null%, duplicate_rows, min/max/mean/outlier_count per numeric column); responder ends with "Want me to automatically fix these issues?"
+- **Join key auto-detection** — planner identifies both tables from session registry by name matching; finds common columns; prefers `*_id / id / key / code`; generates complete `LEFT JOIN` SQL with `left_table / right_table / join_key / join_type` in parameters block
+- **Proactive insights after every operation** — `RESPONDER_TRANSFORM_PROMPT` appends one domain observation + one "Want me to" / "Shall I" follow-up; outlier callout injected when `outlier_count > 0`
+- **`intent` field on `agent.done` SSE event** — `input_state.get("intent")` forwarded in responder SSE payload so frontend follow-up chips are intent-aware
+- **`clarify_step` SSE event** — `agent_graph.py` emits `agent.done` with `intent: "clarify"` from `clarify_step` node (previously the question was generated but never streamed)
+- **Intent-aware follow-up chips** — `validate` → fix/chart/export chips; `clarify` and `converse` → no chips
+
+## Phase 9 - Enterprise Hardening ➕ Planned
 - SSO / SAML integration
 - On-premise / air-gapped deployment
 - Advanced data lineage and compliance packs (SOC2, GDPR)

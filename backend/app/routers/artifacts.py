@@ -19,7 +19,7 @@ from ..db import get_db
 from ..dependencies import CurrentUser, get_current_user
 from ..models_db import ArtifactDB, DatasetMetaDB
 from ..services.object_storage import StorageService
-from ..services.duckdb_session import register_table_from_sql
+from ..services.duckdb_session import register_view
 from ..services.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
@@ -243,8 +243,10 @@ def load_artifact_into_session(
 
     try:
         query_path = StorageService.get_query_path(artifact.s3_key)
-        load_sql = f"SELECT * FROM read_parquet('{query_path}')"
-        register_table_from_sql(session_id, table_name, load_sql)
+        # Register as a lazy VIEW — no rows are materialised into RAM on click.
+        # DuckDB only reads from the Parquet file when a query actually runs
+        # against the view, preventing an OOM-kill on large artifacts.
+        register_view(session_id, table_name, query_path)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to load artifact into session: {exc}")
 

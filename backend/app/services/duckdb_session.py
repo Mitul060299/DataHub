@@ -63,8 +63,11 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
                     "Please re-upload your files to start a new session."
                 )
 
-        # Create a new in-memory connection
+        # Create a new in-memory connection.
+        # The memory limit prevents a runaway query from OOM-killing the whole
+        # OS process — DuckDB throws a catchable exception instead.
         new_conn = duckdb.connect(database=":memory:")
+        new_conn.execute("SET memory_limit='256MB'")
         _sessions[session_id] = new_conn
         _last_used[session_id] = time.monotonic()
         return new_conn

@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, De
 from fastapi.responses import StreamingResponse
 from typing import Dict
 import time
+import threading
 from io import StringIO
 import pandas as pd
 import uuid
@@ -48,10 +49,29 @@ router = APIRouter(prefix="/datasets", tags=["datasets"])
 _DATASETS: Dict[str, pd.DataFrame] = {}
 _DATASET_LAST_ACCESS: Dict[str, float] = {}
 
+# Per-dataset locks prevent concurrent "stampede" loads of the same dataset.
+# Without these, N simultaneous requests for the same uncached dataset each
+# call pd.read_parquet / DuckDB concurrently, multiplying peak RAM by N.
+_DATASET_LOADING_LOCK = threading.Lock()  # guards the _DATASET_LOADING dict
+_DATASET_LOADING: Dict[str, threading.Lock] = {}
+
+# Hard row-cap for get_dataset_from_db storage-path loads.  Callers that need
+# the full file (exports, transforms) should use DuckDB directly; everything
+# else (profiling, insights, AI agents) works fine on a sample.
+_STORAGE_DATASET_CAP = 50_000
+
 _CHUNK_SIZE = 1000
 _MAX_CACHE = settings.dataset_cache_max
 _CACHE_TTL = settings.dataset_cache_ttl_seconds
 _DATASET_META_SCHEMA_CHECKED = False
+
+
+def _get_dataset_lock(dataset_id: str) -> threading.Lock:
+    """Return (creating if absent) the per-dataset loading lock."""
+    with _DATASET_LOADING_LOCK:
+        if dataset_id not in _DATASET_LOADING:
+            _DATASET_LOADING[dataset_id] = threading.Lock()
+        return _DATASET_LOADING[dataset_id]
 
 
 def _touch_cache(dataset_id: str) -> None:
@@ -522,12 +542,30 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
     if not meta or not meta.storage_path:
         raise KeyError("Dataset not found")
 
-    query_path = StorageService.get_query_path(meta.storage_path)
-    df = pd.read_parquet(query_path)
-    _DATASETS[dataset_id] = df
-    _touch_cache(dataset_id)
-    _evict_cache()
-    return df
+    # Acquire a per-dataset lock so only ONE thread loads from storage at a
+    # time.  Any concurrent requests wait here, then find the result already
+    # in _DATASETS via the double-check below — preventing stampede OOM.
+    ds_lock = _get_dataset_lock(dataset_id)
+    with ds_lock:
+        # Double-check: another thread may have populated cache while we waited.
+        if dataset_id in _DATASETS:
+            _touch_cache(dataset_id)
+            return _DATASETS[dataset_id]
+
+        # Load via DuckDB with a hard row cap.  This is safe for memory because
+        # DuckDB itself enforces its own memory limit; and we never materialise
+        # more than _STORAGE_DATASET_CAP rows into Python/pandas at once.
+        rows, _ = DuckDBService.preview_page(
+            meta.storage_path,
+            offset=0,
+            limit=_STORAGE_DATASET_CAP,
+            skip_count=True,
+        )
+        df = pd.DataFrame(rows)
+        _DATASETS[dataset_id] = df
+        _touch_cache(dataset_id)
+        _evict_cache()
+        return df
 
 
 @router.get("", response_model=list[DatasetMeta])

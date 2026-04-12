@@ -154,14 +154,14 @@ function DataProfileCard({ profile }: { profile: DataProfile }) {
             <div key={col} style={{ padding: "5px 10px", borderTop: "1px solid #27272a", display: "grid", gap: 2 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="mono" style={{ color: "#d4d4d8", fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{col}</span>
-                <span style={{ fontSize: 10, color: c.null_pct >= 20 ? "#f87171" : c.null_pct >= 5 ? "#fbbf24" : "#71717a" }}>
+                <span style={{ fontSize: 10, color: c.null_pct >= 20 ? "#f87171" : c.null_pct >= 5 ? "#fbbf24" : c.null_pct > 0 ? "#d97706" : "#71717a" }}>
                   {c.null_pct}% null
                 </span>
               </div>
-              {/* Null bar: green = valid portion, red/amber = null portion */}
+              {/* Null bar: green = valid portion, red/amber/yellow = null portion */}
               <div style={{ height: 6, background: "#27272a", borderRadius: 3, overflow: "hidden", display: "flex" }}>
                 <div style={{ height: "100%", width: `${100 - Math.min(c.null_pct, 100)}%`, background: "#22c55e", transition: "width 300ms" }} />
-                <div style={{ height: "100%", width: `${Math.min(c.null_pct, 100)}%`, background: c.null_pct >= 20 ? "#ef4444" : c.null_pct >= 5 ? "#f59e0b" : "transparent", transition: "width 300ms" }} />
+                <div style={{ height: "100%", width: `${Math.min(c.null_pct, 100)}%`, background: c.null_pct >= 20 ? "#ef4444" : c.null_pct >= 5 ? "#f59e0b" : c.null_pct > 0 ? "#92400e" : "transparent", transition: "width 300ms" }} />
               </div>
               {/* Numeric extras */}
               {c.min !== undefined ? (
@@ -687,6 +687,12 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               sessionTableName,
             },
           ]);
+          // Push transformed preview to the Canvas Data tab for write operations.
+          // agent.done never carries execution_results, so this is the correct hook.
+          const WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile"]);
+          if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview) {
+            onSessionPreview(results, Object.keys(results[0]));
+          }
         }
         break;
       }

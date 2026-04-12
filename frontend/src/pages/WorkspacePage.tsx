@@ -28,7 +28,7 @@ export function WorkspacePage() {
   const resolvedProject = projectId
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
-  const { runPipeline, steps } = usePipelineContext();
+  const { runPipeline, steps, liveArtifact } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -83,6 +83,11 @@ export function WorkspacePage() {
   useEffect(() => {
     setSessionPreview(null);
   }, [activeDataset?.id]);
+
+  // Clear session preview when the live artifact is cleared (step deleted or artifact saved)
+  useEffect(() => {
+    if (!liveArtifact) setSessionPreview(null);
+  }, [liveArtifact]);
 
   useEffect(() => {
     if (!resizingExplorer) return;
@@ -204,6 +209,7 @@ export function WorkspacePage() {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();
         }}
+        onArtifactSaved={() => setDatasetRefreshNonce((value) => value + 1)}
         sessionPreviewRows={sessionPreview?.rows}
         sessionPreviewColumns={sessionPreview?.columns}
       />

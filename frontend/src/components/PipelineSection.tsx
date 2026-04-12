@@ -40,7 +40,7 @@ type RunStatusSummary = {
 };
 
 export function PipelineSection({ onSchedule, onExport, hideHeader = false }: PipelineSectionProps) {
-  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps } = usePipelineContext();
+  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
   const { limits } = useUser();
@@ -524,6 +524,7 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
       !removedStep.inputDataset?.id &&
       stepsAfter.every((s) => !s.outputDataset?.id && !s.inputDataset?.id);
     if (allSessionOnly) {
+      setLiveArtifact(null);
       removeStep(stepId);
       return;
     }

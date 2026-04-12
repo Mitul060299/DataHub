@@ -23,6 +23,7 @@ interface CanvasPanelProps {
   onImport: () => void;
   onColumnsChanged: () => void;
   onSheetsExport?: () => void;
+  onArtifactSaved?: () => void;
   /** 50-row preview from the latest AI transform (session-only, not persisted) */
   sessionPreviewRows?: Record<string, unknown>[];
   sessionPreviewColumns?: string[];
@@ -37,10 +38,11 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, sessionPreviewRows, sessionPreviewColumns }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns }: CanvasPanelProps) {
   const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [savingArtifact, setSavingArtifact] = useState(false);
+  const [saveArtifactError, setSaveArtifactError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -201,6 +203,7 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
                 onClick={async () => {
                   if (!liveArtifact?.sessionId) return;
                   setSavingArtifact(true);
+                  setSaveArtifactError(null);
                   try {
                     await api.post("/api/artifacts/save-checkpoint", {
                       session_id: liveArtifact.sessionId,
@@ -208,6 +211,10 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
                       artifact_name: liveArtifact.stepLabel,
                     });
                     setLiveArtifact(null);
+                    onArtifactSaved?.();
+                  } catch {
+                    setSaveArtifactError("Save failed — please try again.");
+                    setTimeout(() => setSaveArtifactError(null), 5000);
                   } finally {
                     setSavingArtifact(false);
                   }
@@ -218,6 +225,9 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
               </button>
             ) : (
               <span style={{ opacity: 0.6 }}>· Save as artifact to persist</span>
+            )}
+            {saveArtifactError && (
+              <span style={{ fontSize: 10, color: "#f87171", marginLeft: 4 }}>{saveArtifactError}</span>
             )}
           </div>
         )}

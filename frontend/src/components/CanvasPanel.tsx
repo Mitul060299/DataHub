@@ -6,7 +6,7 @@ import { IconBarChart, IconDownload, IconGitBranch, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
-import { exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau } from "../api";
+import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau } from "../api";
 
 type CanvasTab = "data" | "pipeline" | "canvas";
 
@@ -38,8 +38,9 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 }
 
 export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, sessionPreviewRows, sessionPreviewColumns }: CanvasPanelProps) {
-  const { steps } = usePipelineContext();
+  const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
+  const [savingArtifact, setSavingArtifact] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -190,9 +191,34 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
         )}
         {/* Amber banner shown when Canvas displays a session-only preview */}
         {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (
-          <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>⚡</span>
-            <span>Showing transformed preview ({sessionPreviewRows.length} rows) · Save as artifact to persist</span>
+            <span style={{ flex: 1 }}>Showing transformed preview ({sessionPreviewRows.length} rows)</span>
+            {liveArtifact?.sessionId ? (
+              <button
+                className="btn"
+                disabled={savingArtifact}
+                onClick={async () => {
+                  if (!liveArtifact?.sessionId) return;
+                  setSavingArtifact(true);
+                  try {
+                    await api.post("/artifacts/save-checkpoint", {
+                      session_id: liveArtifact.sessionId,
+                      table_name: liveArtifact.tableName,
+                      artifact_name: liveArtifact.stepLabel,
+                    });
+                    setLiveArtifact(null);
+                  } finally {
+                    setSavingArtifact(false);
+                  }
+                }}
+                style={{ height: 22, padding: "0 8px", fontSize: 10, flexShrink: 0, borderColor: "rgba(234,179,8,0.5)", color: "#fde68a", background: "rgba(234,179,8,0.15)" }}
+              >
+                {savingArtifact ? "Saving…" : "Save as artifact ↑"}
+              </button>
+            ) : (
+              <span style={{ opacity: 0.6 }}>· Save as artifact to persist</span>
+            )}
           </div>
         )}
         {tab === "pipeline" ? (

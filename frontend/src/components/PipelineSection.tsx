@@ -540,7 +540,7 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
         setSurgicalRemoving(true);
         try {
           const response = await api.post(
-            `/api/cleaning/datasets/${pivotDatasetId}/replay`,
+            `/cleaning/datasets/${pivotDatasetId}/replay`,
             { steps: replayStepPayloads },
           );
           const data = response.data as {

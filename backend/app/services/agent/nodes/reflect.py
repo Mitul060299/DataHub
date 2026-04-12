@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -29,7 +30,20 @@ async def reflect(state: AgentState) -> dict:
         error=error_msg,
     )
 
-    response = await _llm.ainvoke([HumanMessage(content=prompt)])
+    try:
+        response = await asyncio.wait_for(
+            _llm.ainvoke([HumanMessage(content=prompt)]),
+            timeout=30,
+        )
+    except asyncio.TimeoutError:
+        import logging
+        logging.getLogger(__name__).warning("reflect LLM timed out, keeping original SQL")
+        return {
+            "plan": state["plan"],
+            "execution_results": state.get("execution_results", [])[:-1],
+            "retry_count": state.get("retry_count", 0) + 1,
+            "error": "reflect_timeout",
+        }
     corrected_sql = str(response.content).strip()
 
     if "```" in corrected_sql:

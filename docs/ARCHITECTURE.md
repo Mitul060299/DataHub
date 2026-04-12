@@ -43,10 +43,13 @@ Current production stack:
 - Queries S3-backed data using storage credentials.
 - A query optimization layer collapses adjacent compatible pipeline steps into a single SQL query, reducing round-trips.
 - **Write-back**: pipeline output can be written back to the source connector using encrypted credentials stored in Postgres.
+- **Thread safety**: the global singleton (`DuckDBService._db`) is initialised with a double-checked lock (`_db_lock: threading.Lock`) so concurrent startup requests cannot race and produce a dead connection handle.
+- **503 safety**: if DuckDB preview fails, the dataset endpoint returns HTTP 503 immediately instead of falling back to a full `pd.read_parquet()` load that would OOM-kill the process.
 
 ### S3 Object Storage
-- Stores uploaded dataset Parquet artifacts.
+- Stores uploaded dataset Parquet artifacts and user-saved checkpoints.
 - Serves signed URLs for query/read operations.
+- All CSV uploads are immediately converted to Parquet and stored here; `DatasetMetaDB.storage_path` is set so previews take the fast DuckDB path instead of the DB-chunk fallback.
 
 ### Groq LLM
 - Powers the AI chat agent (streaming SSE).
@@ -91,20 +94,39 @@ The agent is a 9-node state machine pipeline.
 | Layer | Technology | What's stored |
 |---|---|---|
 | Transactional/metadata | Supabase Postgres | Users, workspaces, projects, dataset metadata, recipes, pipelines, dashboards, comments, reviews, audit logs, billing, feedback |
-| File/object | S3 | Dataset binaries / Parquet |
-| Compute/query | DuckDB | Executes SQL over Parquet; profiling, transformations, previews |
+| File/object | S3 | Uploaded datasets (Parquet) + user-saved checkpoints |
+| Compute/query | DuckDB | In-process session tables for pipeline step outputs; previews against S3 Parquet |
 | Cache | Redis | Hot query responses; rate limit counters |
+
+## Parquet-First Ingest (Phase 1)
+
+Every CSV upload is immediately converted to Parquet and uploaded to S3 as a best-effort step inside `upload_dataset()`. If the S3 upload succeeds, `DatasetMetaDB.storage_path` is set and `preview_dataset` takes the fast DuckDB streaming path (no full file load). If conversion fails (e.g. no S3 credentials in local dev), the endpoint falls back gracefully to the existing DB-chunk path — no error is surfaced to the user.
+
+This makes every uploaded CSV a first-class dataset: DuckDB can page through it with bounded memory, and the query cache can use it as a base for NL agent operations.
+
+## Explicit Checkpoint Pattern (Phase 2)
+
+Pipeline steps executed by the AI agent no longer auto-upload results to S3 or auto-create `DatasetMetaDB` rows. Instead:
+
+- Each step's output is registered as an in-memory DuckDB table inside the user's session (identified by `session_table_name` in the execution result).
+- `PipelineStepDB` rows are still written (audit trail), but `ArtifactDB` rows are **not** created automatically.
+- When a user explicitly clicks **Save Checkpoint** on a step result, the frontend calls `POST /api/artifacts/save-checkpoint` with `{ session_id, table_name, artifact_name }`. The backend materialises the DuckDB table to Parquet, uploads it to S3, and creates both an `ArtifactDB` row and a `DatasetMetaDB` row.
+- Only checkpointed outputs appear in the datasets list and artifact panel — no ephemeral step outputs pollute the dataset catalogue.
+
+This eliminates the per-step S3 write spike (memory + latency) and gives users full control over which intermediate results become permanent.
 
 ## Request and Data Flow
 1. User authenticates via Supabase Auth (browser).
 2. Frontend sends Bearer token to backend APIs.
 3. Backend validates JWT claims and applies RBAC checks.
-4. Dataset imports are normalised and written to S3 (Parquet); metadata stored in Postgres.
-5. DuckDB executes profiling/query/transformation SQL over stored Parquet.
-6. Query responses cached in Redis; cache metadata persisted in Postgres.
-7. Dashboards, shares, approvals, and audit events served from backend and persisted in Postgres.
-8. Email notifications dispatched asynchronously via Resend (`fire-and-forget` asyncio tasks).
-9. Usage is tracked per-user per-month in `user_usage`; limits enforced on every relevant API call.
+4. CSV uploads are parsed, converted to Parquet (best-effort), and stored in S3; `DatasetMetaDB` is written with the resulting `storage_path`.
+5. DuckDB streams pages from S3 Parquet for previews; DB-chunk fallback applies if `storage_path` is absent.
+6. AI agent pipeline steps materialise results as named DuckDB session tables; no automatic S3 upload occurs per step.
+7. User clicks **Save Checkpoint** → `POST /api/artifacts/save-checkpoint` → DuckDB table serialised to Parquet → S3 upload → `ArtifactDB` + `DatasetMetaDB` created.
+8. Query responses cached in Redis; cache metadata persisted in Postgres.
+9. Dashboards, shares, approvals, and audit events served from backend and persisted in Postgres.
+10. Email notifications dispatched asynchronously via Resend (`fire-and-forget` asyncio tasks).
+11. Usage is tracked per-user per-month in `user_usage`; limits enforced on every relevant API call.
 
 ## Security and Operations
 - **Authentication:** Supabase JWT (configurable OIDC).

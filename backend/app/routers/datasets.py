@@ -1,7 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from typing import Dict
-import time
 import threading
 from io import StringIO
 import pandas as pd
@@ -46,23 +45,20 @@ from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
-_DATASETS: Dict[str, pd.DataFrame] = {}
-_DATASET_LAST_ACCESS: Dict[str, float] = {}
+# _DATASETS in-process LRU cache removed (Phase 5 statelessness).
+# All dataset reads go via DB chunks or DuckDB-over-S3 so the backend
+# has no per-process dataframe state and can be horizontally scaled.
 
-# Per-dataset locks prevent concurrent "stampede" loads of the same dataset.
-# Without these, N simultaneous requests for the same uncached dataset each
-# call pd.read_parquet / DuckDB concurrently, multiplying peak RAM by N.
-_DATASET_LOADING_LOCK = threading.Lock()  # guards the _DATASET_LOADING dict
+# Per-dataset locks serialise concurrent DB-chunk loads for the same
+# dataset — prevents N threads each issuing the same query in parallel.
+_DATASET_LOADING_LOCK = threading.Lock()  # guards _DATASET_LOADING dict
 _DATASET_LOADING: Dict[str, threading.Lock] = {}
 
-# Hard row-cap for get_dataset_from_db storage-path loads.  Callers that need
-# the full file (exports, transforms) should use DuckDB directly; everything
-# else (profiling, insights, AI agents) works fine on a sample.
+# Hard row-cap for DB-chunk loads into pandas. Callers needing full data
+# (exports, transforms) should use DuckDB directly against S3 Parquet.
 _STORAGE_DATASET_CAP = 50_000
 
 _CHUNK_SIZE = 1000
-_MAX_CACHE = settings.dataset_cache_max
-_CACHE_TTL = settings.dataset_cache_ttl_seconds
 _DATASET_META_SCHEMA_CHECKED = False
 
 
@@ -74,39 +70,14 @@ def _get_dataset_lock(dataset_id: str) -> threading.Lock:
         return _DATASET_LOADING[dataset_id]
 
 
-def _touch_cache(dataset_id: str) -> None:
-    _DATASET_LAST_ACCESS[dataset_id] = time.time()
-
-
-def _evict_cache() -> None:
-    now = time.time()
-    expired = [key for key, ts in _DATASET_LAST_ACCESS.items() if now - ts > _CACHE_TTL]
-    for key in expired:
-        _DATASET_LAST_ACCESS.pop(key, None)
-        _DATASETS.pop(key, None)
-
-    if len(_DATASETS) <= _MAX_CACHE:
-        return
-    sorted_items = sorted(_DATASET_LAST_ACCESS.items(), key=lambda item: item[1])
-    while len(_DATASETS) > _MAX_CACHE and sorted_items:
-        key, _ = sorted_items.pop(0)
-        _DATASET_LAST_ACCESS.pop(key, None)
-        _DATASETS.pop(key, None)
-
-
 def dataset_cache_stats() -> dict:
-    if _DATASET_LAST_ACCESS:
-        oldest = min(_DATASET_LAST_ACCESS.values())
-        newest = max(_DATASET_LAST_ACCESS.values())
-    else:
-        oldest = None
-        newest = None
+    """Stub kept for API compatibility — in-process cache removed (Phase 5)."""
     return {
-        "cached_datasets": len(_DATASETS),
-        "max_cached": _MAX_CACHE,
-        "ttl_seconds": _CACHE_TTL,
-        "oldest_access": oldest,
-        "newest_access": newest,
+        "cached_datasets": 0,
+        "max_cached": 0,
+        "ttl_seconds": 0,
+        "oldest_access": None,
+        "newest_access": None,
     }
 
 
@@ -300,14 +271,27 @@ async def upload_dataset(
     df = df.astype(object).where(pd.notnull(df), None)
     resolved_name = (dataset_name or "").strip() or (file.filename or "dataset")
     dataset_id = str(uuid.uuid4())
-    if int(df.shape[0]) <= 5000:
-        _DATASETS[dataset_id] = df
-        _touch_cache(dataset_id)
-        _evict_cache()
     initial_tier = storage_tier_service.assign_initial_tier(
         file_size_bytes=len(content),
         row_count=int(df.shape[0]),
     )
+    # ── Best-effort: convert CSV to Parquet and persist to object storage ─────
+    # This makes the dataset first-class: DuckDB can stream pages directly from
+    # S3 without loading the full file, and preview_dataset takes the fast path.
+    _parquet_s3_path: str | None = None
+    try:
+        import io as _io
+        _parquet_buf = _io.BytesIO()
+        df.to_parquet(_parquet_buf, index=False, engine="pyarrow")
+        _parquet_s3_path = StorageService.upload(
+            user_id=user_id or "anonymous",
+            dataset_id=dataset_id,
+            buffer=_parquet_buf.getvalue(),
+            file_name=f"{dataset_id}.parquet",
+        )
+    except Exception:
+        pass  # Degraded to DB-chunk fallback — preview still works via get_dataset_from_db
+    # ─────────────────────────────────────────────────────────────────────────
     db.add(
         DatasetMetaDB(
             id=dataset_id,
@@ -317,6 +301,7 @@ async def upload_dataset(
             columns=list(df.columns),
             row_count=int(df.shape[0]),
             access_tier=initial_tier,
+            storage_path=_parquet_s3_path,
             parent_id=None,
         )
     )
@@ -403,10 +388,6 @@ def save_dataset(
     _ensure_dataset_meta_schema(db)
     dataset_id = str(uuid.uuid4())
     df = df.astype(object).where(pd.notnull(df), None)
-    if store_rows and int(df.shape[0]) <= 5000:
-        _DATASETS[dataset_id] = df
-        _touch_cache(dataset_id)
-        _evict_cache()
     meta_kwargs = {
         "id": dataset_id,
         "user_id": user_id,
@@ -507,10 +488,8 @@ def rebalance_storage_tiers(
 
 
 def get_dataset(dataset_id: str) -> pd.DataFrame:
-    if dataset_id not in _DATASETS:
-        raise KeyError("Dataset not found")
-    _touch_cache(dataset_id)
-    return _DATASETS[dataset_id]
+    """Legacy shim — callers should migrate to get_dataset_from_db."""
+    raise KeyError("Dataset not found — use get_dataset_from_db")
 
 
 def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
@@ -524,48 +503,27 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
         rows: list[dict] = []
         for chunk in chunks:
             rows.extend(chunk.rows or [])
-        df = pd.DataFrame(rows)
-        _DATASETS[dataset_id] = df
-        _touch_cache(dataset_id)
-        _evict_cache()
-        return df
+        return pd.DataFrame(rows)
 
     data = db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).first()
     if data:
-        df = pd.DataFrame(data.rows)
-        _DATASETS[dataset_id] = df
-        _touch_cache(dataset_id)
-        _evict_cache()
-        return df
+        return pd.DataFrame(data.rows)
 
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta or not meta.storage_path:
         raise KeyError("Dataset not found")
 
-    # Acquire a per-dataset lock so only ONE thread loads from storage at a
-    # time.  Any concurrent requests wait here, then find the result already
-    # in _DATASETS via the double-check below — preventing stampede OOM.
+    # Serialise concurrent loads for the same S3-backed dataset so only
+    # one thread calls DuckDB at a time — prevents stampede OOM.
     ds_lock = _get_dataset_lock(dataset_id)
     with ds_lock:
-        # Double-check: another thread may have populated cache while we waited.
-        if dataset_id in _DATASETS:
-            _touch_cache(dataset_id)
-            return _DATASETS[dataset_id]
-
-        # Load via DuckDB with a hard row cap.  This is safe for memory because
-        # DuckDB itself enforces its own memory limit; and we never materialise
-        # more than _STORAGE_DATASET_CAP rows into Python/pandas at once.
         rows, _ = DuckDBService.preview_page(
             meta.storage_path,
             offset=0,
             limit=_STORAGE_DATASET_CAP,
             skip_count=True,
         )
-        df = pd.DataFrame(rows)
-        _DATASETS[dataset_id] = df
-        _touch_cache(dataset_id)
-        _evict_cache()
-        return df
+        return pd.DataFrame(rows)
 
 
 @router.get("", response_model=list[DatasetMeta])
@@ -1185,6 +1143,56 @@ def get_dataset_schema(
         return str(v) if v is not None else "string"
     columns = [{"name": col, "type": _extract_type(col_type)} for col, col_type in raw_schema.items()]
     return {"columns": columns}
+
+
+# ── Phase 3: presigned URL — lets DuckDB-WASM load Parquet directly from S3 ──
+@limiter.limit("60/minute")
+@router.get("/{dataset_id}/presigned-url")
+def get_presigned_url(
+    request: Request,
+    dataset_id: str,
+    expires_in: int = 900,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Return a short-lived presigned URL for the dataset's Parquet file.
+    The browser DuckDB-WASM runtime can fetch this directly, offloading
+    all query computation to the client and zeroing server RAM usage for
+    read queries.
+
+    Only datasets with a storage_path (S3-backed Parquet) are supported.
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    if expires_in > 3600:
+        expires_in = 3600
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if not meta.storage_path or str(meta.storage_path).startswith("local://"):
+        raise HTTPException(
+            status_code=404,
+            detail="This dataset does not have an S3-backed Parquet file available.",
+        )
+    try:
+        url = StorageService.get_signed_url(meta.storage_path, expires_in=expires_in)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not generate presigned URL: {exc}")
+
+    import datetime
+    expires_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(seconds=expires_in)
+    ).isoformat()
+    return {
+        "url": url,
+        "expires_in": expires_in,
+        "expires_at": expires_at,
+        "dataset_id": dataset_id,
+        "row_count": meta.row_count,
+        "columns": meta.columns or [],
+    }
 
 
 @router.get("/{dataset_id}/preview", response_model=DatasetPage)

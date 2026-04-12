@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging as _log
+import threading as _threading
+import time as _time
 import uuid as _uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -9,6 +11,48 @@ from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy.orm import Session
 
 from .agent.graph import agent_graph
+
+# ── MemorySaver TTL pruning ───────────────────────────────────────────────────
+# LangGraph's MemorySaver stores all conversation turns in a module-level dict
+# keyed by thread_id (our session_id). Without pruning this grows unbounded and
+# leaks RSS on long-running Render instances.
+
+_THREAD_LAST_USED: dict[str, float] = {}
+_MEMSAVER_LOCK = _threading.Lock()
+_MEMSAVER_TTL_SECONDS = 4 * 3600  # 4 hours
+_MEMSAVER_PRUNE_INTERVAL = 15 * 60  # prune every 15 minutes
+
+
+def _prune_memsaver(max_age: float = _MEMSAVER_TTL_SECONDS) -> int:
+    """
+    Remove MemorySaver checkpoints for threads that have been idle longer than
+    *max_age* seconds.  Returns the number of threads pruned.
+    """
+    now = _time.monotonic()
+    with _MEMSAVER_LOCK:
+        stale = [tid for tid, ts in _THREAD_LAST_USED.items() if now - ts > max_age]
+        for tid in stale:
+            try:
+                # MemorySaver.storage is a defaultdict keyed by thread_id.
+                agent_graph.checkpointer.storage.pop(tid, None)
+            except Exception:
+                pass
+            _THREAD_LAST_USED.pop(tid, None)
+    if stale:
+        _log.getLogger(__name__).info("MemorySaver pruned %d stale threads", len(stale))
+    return len(stale)
+
+
+def _prune_loop() -> None:
+    while True:
+        _time.sleep(_MEMSAVER_PRUNE_INTERVAL)
+        try:
+            _prune_memsaver()
+        except Exception as exc:
+            _log.getLogger(__name__).warning("MemorySaver prune error: %s", exc)
+
+
+_threading.Thread(target=_prune_loop, daemon=True, name="memsaver-prune").start()
 
 
 class AgentGraphService:
@@ -88,6 +132,9 @@ class AgentGraphService:
         plan_pending_modification: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         config = {"configurable": {"thread_id": session_id}}
+        # Track last-used time so the prune thread can clear stale MemorySaver state.
+        with _MEMSAVER_LOCK:
+            _THREAD_LAST_USED[session_id] = _time.monotonic()
         if plan_approved:
             # Resume path: prefer plan sent by the frontend (pending_plan).
             # Fall back to MemorySaver checkpoint only if nothing was sent.
@@ -256,16 +303,6 @@ class AgentGraphService:
                                     "operation": last.get("operation"),
                                     "step": last.get("step_number"),
                                 }
-                            artifact_s3 = last.get("artifact_s3_key")
-                            if isinstance(artifact_s3, str) and artifact_s3 and not artifact_s3.startswith("local/"):
-                                # ArtifactDB row is created by pipeline_recorder (single writer).
-                                # Here we only emit the SSE event so the frontend refreshes.
-                                yield {
-                                    "type": "agent.artifact",
-                                    "artifact_s3_key": artifact_s3,
-                                    "table_name": last.get("output_table"),
-                                    "row_count": last.get("rows_affected"),
-                                }
                             qr = last.get("query_results")
                             if isinstance(qr, list) and qr:
                                 yield {
@@ -273,6 +310,7 @@ class AgentGraphService:
                                     "results": qr,
                                     "step": last.get("step_number"),
                                     "operation": last.get("operation"),
+                                    "session_table_name": last.get("session_table_name"),
                                 }
                             yield {
                                 "type": "agent.step.done",
@@ -282,6 +320,7 @@ class AgentGraphService:
                                 "row_count_before": last.get("row_count_before"),
                                 "row_count_after": last.get("row_count_after"),
                                 "execution_time_ms": last.get("execution_time_ms"),
+                                "session_table_name": last.get("session_table_name"),
                             }
                         else:
                             yield {

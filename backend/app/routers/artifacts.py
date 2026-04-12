@@ -19,7 +19,7 @@ from ..db import get_db
 from ..dependencies import CurrentUser, get_current_user
 from ..models_db import ArtifactDB, DatasetMetaDB
 from ..services.object_storage import StorageService
-from ..services.duckdb_session import register_view
+from ..services.duckdb_session import register_view, execute_in_session
 from ..services.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
@@ -220,7 +220,121 @@ def _fetch_bytes(s3_key: str) -> bytes:
         return resp.read()
 
 
-# ── 4. Load artifact into a DuckDB session ────────────────────────────────────
+# ── 4. Save pipeline step as a checkpoint artifact ───────────────────────────
+
+@router.post("/save-checkpoint")
+@limiter.limit("20/hour")
+def save_checkpoint(
+    request: Request,
+    body: dict,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Materialise a DuckDB session table as a Parquet artifact + DatasetMetaDB row.
+
+    Body:
+        session_id       (required) — DuckDB session containing the table
+        table_name       (required) — DuckDB table/view name to snapshot
+        artifact_name    (optional) — human-visible label (defaults to table_name)
+        description      (optional)
+    """
+    session_id = str(body.get("session_id") or "").strip()
+    table_name = str(body.get("table_name") or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=422, detail="session_id is required")
+    if not table_name:
+        raise HTTPException(status_code=422, detail="table_name is required")
+
+    artifact_name = str(body.get("artifact_name") or table_name).strip()
+    description = body.get("description")
+
+    # 1. Fetch rows from the live DuckDB session
+    try:
+        rows = execute_in_session(session_id, f"SELECT * FROM {table_name}") or []
+    except Exception as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Table '{table_name}' not found in session '{session_id}': {exc}",
+        )
+
+    # 2. Serialise to Parquet
+    try:
+        import io as _io
+        import pyarrow as _pa
+        import pyarrow.parquet as _pq
+
+        if rows:
+            parquet_table = _pa.Table.from_pylist(rows)
+        else:
+            parquet_table = _pa.table({})
+        buf = _io.BytesIO()
+        _pq.write_table(parquet_table, buf)
+        parquet_bytes = buf.getvalue()
+        col_schema: list = list(rows[0].keys()) if rows else []
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Parquet serialisation failed: {exc}")
+
+    # 3. Upload to object storage
+    import uuid as _uuid
+    checkpoint_id = str(_uuid.uuid4())
+    try:
+        s3_key = StorageService.upload(
+            user_id=current_user.id,
+            dataset_id=f"checkpoints/{session_id}",
+            buffer=parquet_bytes,
+            file_name=f"{checkpoint_id}.parquet",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Storage upload failed: {exc}")
+
+    # 4. Persist DatasetMetaDB so dataset appears in the datasets list
+    ds_id = str(_uuid.uuid4())
+    try:
+        ds_row = DatasetMetaDB(
+            id=ds_id,
+            user_id=current_user.id,
+            workspace_id=getattr(current_user, "workspace_id", None) or "default",
+            name=artifact_name,
+            source_type="checkpoint",
+            storage_path=s3_key,
+            file_format="parquet",
+            columns=col_schema,
+            row_count=len(rows),
+            status="ready",
+        )
+        db.add(ds_row)
+        db.flush()
+    except Exception as exc:
+        logger.warning("DatasetMetaDB persist failed for checkpoint %s: %s", checkpoint_id, exc)
+        ds_id = None
+
+    # 5. Persist ArtifactDB row
+    artifact_row = ArtifactDB(
+        id=checkpoint_id,
+        user_id=current_user.id,
+        session_id=session_id,
+        pipeline_run_id=None,
+        step_id=None,
+        name=artifact_name,
+        description=description,
+        s3_key=s3_key,
+        row_count=len(rows),
+        column_schema=col_schema,
+        type="checkpoint",
+        format="parquet",
+    )
+    db.add(artifact_row)
+    db.commit()
+
+    return {
+        **_serialize(artifact_row, dataset_id=ds_id),
+        "dataset_id": ds_id,
+        "message": f"Checkpoint '{artifact_name}' saved ({len(rows):,} rows).",
+    }
+
+
+# ── 5. Load artifact into a DuckDB session ────────────────────────────────────
 
 @router.post("/{artifact_id}/load")
 def load_artifact_into_session(
@@ -258,7 +372,7 @@ def load_artifact_into_session(
     }
 
 
-# ── 5. Delete artifact ────────────────────────────────────────────────────────
+# ── 6. Delete artifact ────────────────────────────────────────────────────────
 
 @router.delete("/{artifact_id}")
 def delete_artifact(

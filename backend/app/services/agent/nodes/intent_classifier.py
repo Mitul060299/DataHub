@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -30,13 +31,20 @@ async def intent_classifier(state: AgentState) -> dict:
     )
 
     try:
-        response = await _llm.ainvoke(
-            [
-                SystemMessage(content=prompt),
-                HumanMessage(content=last_message),
-            ]
+        response = await asyncio.wait_for(
+            _llm.ainvoke(
+                [
+                    SystemMessage(content=prompt),
+                    HumanMessage(content=last_message),
+                ]
+            ),
+            timeout=15,
         )
         intent = str(response.content).strip().lower()
+    except asyncio.TimeoutError:
+        import logging
+        logging.getLogger(__name__).warning("intent_classifier timed out, defaulting to converse")
+        intent = "converse"
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error("intent_classifier LLM error: %s", exc)

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -23,10 +24,13 @@ _LLM_TIMEOUT_MSG = (
 
 
 async def _invoke_llm(messages: list) -> str:
-    """Invoke the LLM with a friendly fallback on timeout or API error."""
+    """Invoke the LLM with a 30-second timeout and a friendly fallback."""
     try:
-        response = await _llm.ainvoke(messages)
+        response = await asyncio.wait_for(_llm.ainvoke(messages), timeout=30)
         return str(response.content)
+    except asyncio.TimeoutError:
+        logger.warning("responder LLM timed out after 30s")
+        return _LLM_TIMEOUT_MSG
     except Exception as exc:
         logger.warning("LLM invocation failed: %s", exc)
         return _LLM_TIMEOUT_MSG

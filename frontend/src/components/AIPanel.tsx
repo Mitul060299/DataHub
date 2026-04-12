@@ -200,6 +200,7 @@ type Message = ConversationMessage & {
   tileCreated?: TileCreatedData;
   artifactUrl?: string;
   queryResults?: Array<Record<string, unknown>>;
+  sessionTableName?: string;
   dataProfile?: DataProfile;
   followUpChips?: string[];
   isClarification?: boolean;
@@ -218,7 +219,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const { addStep, steps } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
-  const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory } = useChatSession();
+  const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId } = useChatSession();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -228,12 +229,18 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const lastSentInputRef = useRef<string>("");
   const [savingVizIds, setSavingVizIds] = useState<Set<string>>(new Set());
   const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
+  const [savingCheckpointIds, setSavingCheckpointIds] = useState<Set<string>>(new Set());
+  const [savedCheckpointIds, setSavedCheckpointIds] = useState<Set<string>>(new Set());
   const [analyzingDataset, setAnalyzingDataset] = useState(false);
   const [columnSchema, setColumnSchema] = useState<ColSchema[]>([]);
   const [currentStepInfo, setCurrentStepInfo] = useState<{ stepNumber: number; operation: string; totalSteps: number } | null>(null);
   const [showAllRowsIds, setShowAllRowsIds] = useState<Set<string>>(new Set());
   // Tracks dataset IDs that have already been auto-analyzed on first load
   const autoQualityRunRef = useRef<Set<string>>(new Set());
+  // ── Auto-save ──────────────────────────────────────────────────────────────
+  const [autoSaveStatus, setAutoSaveStatus] = useState<{ savedAt: Date; tableName: string } | null>(null);
+  // Tracks what we last saved so we skip unchanged state
+  const autoSaveRef = useRef<{ stepCount: number; tableName: string } | null>(null);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -644,6 +651,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           : [];
         if (results.length > 0) {
           const opLabel = typeof event.operation === "string" ? event.operation : "Results";
+          const sessionTableName = typeof event.session_table_name === "string" ? event.session_table_name : undefined;
           setMessages((previous) => [
             ...previous,
             {
@@ -651,6 +659,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               role: "assistant",
               content: `${opLabel} (${results.length} row${results.length !== 1 ? "s" : ""}):`  ,
               queryResults: results,
+              sessionTableName,
             },
           ]);
         }
@@ -666,6 +675,29 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       }
       default:
         break;
+    }
+  };
+
+  const handleSaveCheckpoint = async (messageId: string, tableName: string) => {
+    if (!sessionId || savingCheckpointIds.has(messageId) || savedCheckpointIds.has(messageId)) return;
+    setSavingCheckpointIds((prev) => new Set([...prev, messageId]));
+    const token = getAuthToken();
+    try {
+      const res = await fetch("/api/artifacts/save-checkpoint", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ session_id: sessionId, table_name: tableName, artifact_name: tableName }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSavedCheckpointIds((prev) => new Set([...prev, messageId]));
+      onDatasetMutated?.();
+    } catch (err) {
+      console.error("Save checkpoint failed:", err);
+    } finally {
+      setSavingCheckpointIds((prev) => { const n = new Set(prev); n.delete(messageId); return n; });
     }
   };
 
@@ -880,6 +912,62 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
     return () => clearTimeout(t);
   }, [dataset?.id]); // intentionally omit runDataQualityReport — stable enough for one-shot
 
+  // Auto-save the latest leaf session table to S3 every 2 minutes.
+  // Silent — never interrupts the user. Only fires when there is an active
+  // session with at least one transform step that produced a named DuckDB table.
+  useEffect(() => {
+    const AUTO_SAVE_MS = 2 * 60 * 1000;
+
+    const doAutoSave = async () => {
+      if (!sessionId || sending) return;
+
+      // Find the most recent step that holds a DuckDB session table name.
+      // Chart/visualise steps don't produce one, so they are naturally skipped.
+      const stepsWithTable = steps.filter((s) => {
+        const raw = s.rawConfig as Record<string, unknown> | undefined;
+        return Boolean(raw?.session_table_name ?? raw?.output_table);
+      });
+      if (stepsWithTable.length === 0) return;
+
+      const lastStep = stepsWithTable[stepsWithTable.length - 1];
+      const raw = lastStep.rawConfig as Record<string, unknown> | undefined;
+      const tableName = String(raw?.session_table_name ?? raw?.output_table ?? "");
+      if (!tableName) return;
+
+      // Skip if nothing has changed since the last save.
+      if (
+        autoSaveRef.current?.stepCount === steps.length &&
+        autoSaveRef.current?.tableName === tableName
+      ) return;
+
+      const token = getAuthToken();
+      try {
+        const res = await fetch("/api/artifacts/save-checkpoint", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            session_id: sessionId,
+            table_name: tableName,
+            artifact_name: `autosave_${tableName}`,
+          }),
+        });
+        if (!res.ok) return; // silent — auto-save failures must never disrupt UX
+        autoSaveRef.current = { stepCount: steps.length, tableName };
+        setAutoSaveStatus({ savedAt: new Date(), tableName });
+        onDatasetMutated?.();
+      } catch {
+        // silent — non-critical background save
+      }
+    };
+
+    const id = setInterval(() => { void doAutoSave(); }, AUTO_SAVE_MS);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, steps, sending]);
+
   return (
     <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <header data-tour="ai-agent-header" style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
@@ -887,6 +975,14 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           <span className="badge-dot pulse" style={{ background: "var(--gr)" }} />
           <IconZap size={14} />
           AI Agent
+          {autoSaveStatus ? (
+            <span
+              style={{ fontSize: 10, color: "var(--tx2)", opacity: 0.55, fontWeight: 400 }}
+              title={`Session progress auto-saved · table: ${autoSaveStatus.tableName}`}
+            >
+              · ↑ saved {autoSaveStatus.savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          ) : null}
         </span>
         <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
           {dataset ? (
@@ -1119,6 +1215,29 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                         style={{ fontSize: 11, background: "none", border: "1px solid var(--bd2)", borderRadius: 4, padding: "1px 6px", cursor: "pointer", color: "var(--tx2)" }}
                       >
                         {showAllRowsIds.has(message.id) ? "Show less" : "Show all"}
+                      </button>
+                    </div>
+                  ) : null}
+                  {message.sessionTableName && sessionId ? (
+                    <div style={{ marginTop: 6 }}>
+                      <button
+                        onClick={() => { void handleSaveCheckpoint(message.id, message.sessionTableName!); }}
+                        disabled={savingCheckpointIds.has(message.id) || savedCheckpointIds.has(message.id)}
+                        style={{
+                          fontSize: 11,
+                          background: savedCheckpointIds.has(message.id) ? "var(--bg1)" : "transparent",
+                          border: "1px solid var(--bd2)",
+                          borderRadius: 4,
+                          padding: "2px 8px",
+                          cursor: savedCheckpointIds.has(message.id) ? "default" : "pointer",
+                          color: savedCheckpointIds.has(message.id) ? "var(--green, #22c55e)" : "var(--tx2)",
+                        }}
+                      >
+                        {savedCheckpointIds.has(message.id)
+                          ? "✓ Saved as dataset"
+                          : savingCheckpointIds.has(message.id)
+                          ? "Saving…"
+                          : "⬆ Save as dataset"}
                       </button>
                     </div>
                   ) : null}

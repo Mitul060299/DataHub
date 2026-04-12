@@ -141,50 +141,55 @@ async def context_loader(state: AgentState) -> dict:
                 _art_db.close()
 
     # Auto-discover all other datasets in the workspace so the planner can reference
-    # any of them by name in SQL — no manual "Join" picker needed on the frontend.
-    # This block runs on EVERY turn (not just the first) so secondary views
-    # remain registered after session restarts and are present in the early-return dict.
+    # them by name in SQL.  This is expensive (DB query + N DuckDB view registrations)
+    # so we skip it on turns where the intent is already known to be single-dataset.
+    # On the first turn intent is "" (not yet classified) so we always run it.
+    _MULTI_DATASET_INTENTS = {"join", "union", "merge", "reconcile", "compare", "append", ""}
+    _current_intent = state.get("intent", "")
+    _run_secondary = _current_intent in _MULTI_DATASET_INTENTS
+
     secondary_schemas: dict = {}
-    _sec_db2 = SessionLocal()
-    try:
-        workspace_datasets_list = (
-            _sec_db2.query(DatasetMetaDB)
-            .filter(
-                DatasetMetaDB.workspace_id == workspace_id,
-                DatasetMetaDB.id != dataset_id,
+    if _run_secondary:
+        _sec_db2 = SessionLocal()
+        try:
+            workspace_datasets_list = (
+                _sec_db2.query(DatasetMetaDB)
+                .filter(
+                    DatasetMetaDB.workspace_id == workspace_id,
+                    DatasetMetaDB.id != dataset_id,
+                )
+                .limit(20)
+                .all()
             )
-            .limit(20)
-            .all()
-        )
-        for sec_meta in workspace_datasets_list:
-            sec_id = str(sec_meta.id)
-            alias = _sanitize_alias(str(sec_meta.name or sec_id))
-            secondary_schemas[alias] = {
-                "dataset_id": sec_id,
-                "columns": list(sec_meta.columns or []),
-                "row_count": int(sec_meta.row_count or 0),
-                "storage_path": sec_meta.storage_path,
-                "schema": {},
-            }
-            # Register the DuckDB view and table_registry entry for every secondary
-            # dataset on every turn so join SQL works even after session restarts.
-            _register_dataset_view(sec_id, alias, storage_path=sec_meta.storage_path)
-            if alias not in table_registry:
-                _sec_cols = list(sec_meta.columns or [])
-                table_registry[alias] = {
-                    "duckdb_name": alias,
+            for sec_meta in workspace_datasets_list:
+                sec_id = str(sec_meta.id)
+                alias = _sanitize_alias(str(sec_meta.name or sec_id))
+                secondary_schemas[alias] = {
                     "dataset_id": sec_id,
-                    "display_name": alias,
-                    "source_intent": "upload",
-                    "parent_tables": [],
+                    "columns": list(sec_meta.columns or []),
                     "row_count": int(sec_meta.row_count or 0),
-                    "column_names": [c if isinstance(c, str) else str(c) for c in _sec_cols],
-                    "pipeline_step_number": 0,
-                    "is_artifact": False,
-                    "is_view": True,
+                    "storage_path": sec_meta.storage_path,
+                    "schema": {},
                 }
-    finally:
-        _sec_db2.close()
+                # Register the DuckDB view and table_registry entry for every secondary
+                # dataset on every turn so join SQL works even after session restarts.
+                _register_dataset_view(sec_id, alias, storage_path=sec_meta.storage_path)
+                if alias not in table_registry:
+                    _sec_cols = list(sec_meta.columns or [])
+                    table_registry[alias] = {
+                        "duckdb_name": alias,
+                        "dataset_id": sec_id,
+                        "display_name": alias,
+                        "source_intent": "upload",
+                        "parent_tables": [],
+                        "row_count": int(sec_meta.row_count or 0),
+                        "column_names": [c if isinstance(c, str) else str(c) for c in _sec_cols],
+                        "pipeline_step_number": 0,
+                        "is_artifact": False,
+                        "is_view": True,
+                    }
+        finally:
+            _sec_db2.close()
 
     if state.get("schema"):
         # Schema already loaded — skip expensive reload but return refreshed
@@ -204,7 +209,7 @@ async def context_loader(state: AgentState) -> dict:
     try:
         schema = DuckDBService.get_schema(dataset_id)
         stats = DuckDBService.get_column_stats(dataset_id)
-        sample_rows = DuckDBService.get_sample_rows(dataset_id, limit=10)
+        sample_rows = DuckDBService.get_sample_rows(dataset_id, limit=5)
     except Exception as exc:
         base_err: dict = {
             "schema": {},

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -53,11 +54,17 @@ async def clarify_step(state: AgentState) -> dict:
     )
 
     try:
-        response = await _llm.ainvoke([
-            SystemMessage(content=prompt),
-            HumanMessage(content=user_goal),
-        ])
+        response = await asyncio.wait_for(
+            _llm.ainvoke([
+                SystemMessage(content=prompt),
+                HumanMessage(content=user_goal),
+            ]),
+            timeout=30,
+        )
         question = str(response.content).strip()
+    except asyncio.TimeoutError:
+        _log.warning("clarify_step LLM timed out")
+        question = "Could you give me a bit more detail about what you'd like to do?"
     except Exception as exc:
         _log.error("clarify_step LLM error: %s", exc)
         question = "Could you give me a bit more detail about what you'd like to do?"

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -79,13 +80,20 @@ async def planner(state: AgentState) -> dict:
         human_content = f"Generate the execution plan for: {user_goal}"
 
     try:
-        response = await _llm.ainvoke(
-            [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=human_content),
-            ]
+        response = await asyncio.wait_for(
+            _llm.ainvoke(
+                [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=human_content),
+                ]
+            ),
+            timeout=30,
         )
         raw = str(response.content).strip()
+    except asyncio.TimeoutError:
+        import logging
+        logging.getLogger(__name__).error("planner LLM timed out after 30s")
+        raise RuntimeError("AI service timed out while building plan. Please try again.")
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error("planner LLM error: %s", exc)

@@ -19,6 +19,7 @@ _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
 _last_used: dict[str, float] = {}
 
 MAX_SESSION_AGE_SECONDS = 7200  # 2 hours
+_CLEANUP_INTERVAL_SECONDS = 900  # run background cleanup every 15 minutes
 
 
 class SessionExpiredError(RuntimeError):
@@ -155,3 +156,28 @@ def table_exists(session_id: str, name: str) -> bool:
         return any(r[0] > 0 for r in result)
     except Exception:
         return False
+
+
+# ── Background cleanup thread ─────────────────────────────────────────────────
+# Without this, _cleanup_stale() only ran when a *new* session was opened.
+# Idle sessions after their 2-hour TTL were never reclaimed on quiet instances.
+
+def _cleanup_loop() -> None:
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    while True:
+        time.sleep(_CLEANUP_INTERVAL_SECONDS)
+        try:
+            with _lock:
+                before = len(_sessions)
+            _cleanup_stale()
+            with _lock:
+                after = len(_sessions)
+            pruned = before - after
+            if pruned:
+                _logger.info("DuckDB session cleanup: closed %d stale sessions (%d remaining)", pruned, after)
+        except Exception as exc:
+            _logging.getLogger(__name__).warning("DuckDB session cleanup error: %s", exc)
+
+
+threading.Thread(target=_cleanup_loop, daemon=True, name="duckdb-session-cleanup").start()

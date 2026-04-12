@@ -82,6 +82,14 @@ class Settings(BaseModel):
     posthog_api_key: str = os.getenv("POSTHOG_API_KEY", "")
     dataset_cache_max: int = int(os.getenv("DATASET_CACHE_MAX", "20"))
     dataset_cache_ttl_seconds: int = int(os.getenv("DATASET_CACHE_TTL", "1800"))
+    # ── Phase 4: Upstash QStash background jobs ───────────────────────────────
+    # Set QSTASH_TOKEN to enable async pipeline job offloading.
+    # Leave empty to keep the current in-process (synchronous) execution path.
+    qstash_token: str = os.getenv("QSTASH_TOKEN", "")
+    qstash_current_signing_key: str = os.getenv("QSTASH_CURRENT_SIGNING_KEY", "")
+    qstash_next_signing_key: str = os.getenv("QSTASH_NEXT_SIGNING_KEY", "")
+    # Public base URL of this API, used to build QStash callback URLs
+    api_public_url: str = os.getenv("API_PUBLIC_URL", "")
     profile_cache_ttl_seconds: int = int(os.getenv("PROFILE_CACHE_TTL", "300"))
     profile_cache_max: int = int(os.getenv("PROFILE_CACHE_MAX", "200"))
     recipe_retention_max_versions: int = int(os.getenv("RECIPE_RETENTION_MAX_VERSIONS", "100"))

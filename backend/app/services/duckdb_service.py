@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from typing import Any
 
@@ -17,23 +18,26 @@ from .query_cache import QueryCacheService
 
 class DuckDBService:
     _db: duckdb.DuckDBPyConnection | None = None
+    _db_lock: threading.Lock = threading.Lock()
 
     @classmethod
     def _ensure_db(cls) -> duckdb.DuckDBPyConnection:
         if cls._db is None:
-            import duckdb  # noqa: PLC0415 — lazy to avoid native-ext load at startup
-            cls._db = duckdb.connect(database=":memory:")
-            try:
-                cls._db.execute("SET memory_limit='160MB';")
-                cls._db.execute("SET threads=2;")
-            except Exception:
-                pass
-            try:
-                cls._db.execute("INSTALL httpfs;")
-                cls._db.execute("LOAD httpfs;")
-            except Exception:
-                pass
-            cls._configure_storage()
+            with cls._db_lock:
+                if cls._db is None:
+                    import duckdb  # noqa: PLC0415 — lazy to avoid native-ext load at startup
+                    cls._db = duckdb.connect(database=":memory:")
+                    try:
+                        cls._db.execute("SET memory_limit='160MB';")
+                        cls._db.execute("SET threads=2;")
+                    except Exception:
+                        pass
+                    try:
+                        cls._db.execute("INSTALL httpfs;")
+                        cls._db.execute("LOAD httpfs;")
+                    except Exception:
+                        pass
+                    cls._configure_storage()
         return cls._db
 
     @classmethod

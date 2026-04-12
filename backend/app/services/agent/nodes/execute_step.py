@@ -312,7 +312,6 @@ async def execute_step(state: AgentState) -> dict:
 
                     rows: list = []
                     result_table: str | None = None
-                    artifact_s3_key_sv: str | None = None
 
                     # The planner (rule 15) generates:
                     #   CREATE TABLE <name>_summary AS SELECT … GROUP BY …
@@ -355,7 +354,7 @@ async def execute_step(state: AgentState) -> dict:
                         except Exception:
                             rows = []
 
-                        # Only register / upload when the DDL actually succeeded
+                        # Only register when the DDL actually succeeded
                         if result_table:
                             # Register the new table in the session registry so it appears
                             # in the session-tables sidebar and is referenceable in follow-up
@@ -372,101 +371,11 @@ async def execute_step(state: AgentState) -> dict:
                                 "is_artifact": False,
                                 "is_view": False,
                             }
-
-                        # Upload Parquet snapshot to S3 (best-effort) for artifact download.
-                        # Gate only on DDL having succeeded (result_table set) — not on rows
-                        # being non-empty; a valid empty result is still a real artifact.
-                        if result_table:
-                            _sv_bytes: bytes | None = None
-                            try:
-                                import io as _io
-                                import pyarrow as _pa
-                                import pyarrow.parquet as _pq
-                                if rows:
-                                    _tbl = _pa.Table.from_pylist(rows)
-                                else:
-                                    # DDL succeeded but table is empty — build a schema-only
-                                    # Parquet so the artifact record still exists.
-                                    try:
-                                        _desc = execute_in_session(session_id, f"DESCRIBE {result_table}")
-                                        _pa_schema = _pa.schema([
-                                            _pa.field(r["column_name"], _pa.string())
-                                            for r in (_desc or [])
-                                        ])
-                                    except Exception:
-                                        _pa_schema = _pa.schema([])
-                                    _tbl = _pa.table(
-                                        {f.name: _pa.array([], type=f.type) for f in _pa_schema},
-                                        schema=_pa_schema,
-                                    )
-                                _buf = _io.BytesIO()
-                                _pq.write_table(_tbl, _buf)
-                                _sv_bytes = _buf.getvalue()
-                                artifact_s3_key_sv = StorageService.upload(
-                                    user_id=str(state.get("user_id") or "agent"),
-                                    dataset_id=f"artifacts/{session_id or 'nosession'}",
-                                    buffer=_sv_bytes,
-                                    file_name=f"{result_table}.parquet",
-                                )
-                            except Exception as _upload_exc:
-                                import logging as _logging
-                                _logging.getLogger(__name__).warning(
-                                    "artifact S3 upload failed for %s %s: %s",
-                                    intent_key, result_table, _upload_exc,
-                                )
-                                if artifact_s3_key_sv is None and _sv_bytes is not None:
-                                    try:
-                                        _u = str(state.get("user_id") or "agent")
-                                        _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{result_table}.parquet"
-                                        _lr = StorageService._local_dir().resolve()
-                                        _lp = (_lr / _lk).resolve()
-                                        if str(_lp).startswith(str(_lr)):
-                                            _lp.parent.mkdir(parents=True, exist_ok=True)
-                                            _lp.write_bytes(_sv_bytes)
-                                            artifact_s3_key_sv = f"local://{_lk}"
-                                    except Exception:
-                                        pass
                     else:
-                        # Plain SELECT — execute and return rows, then upload as artifact
+                        # Plain SELECT — execute and return rows
                         rows = execute_in_session(session_id, step_sql) if session_id else []
-                        # Give the result a logical table name so the artifact has a meaningful label
+                        # Give the result a logical table name so step cards have a label
                         result_table = f"{intent_key}_{step['step_number']}_{uuid.uuid4().hex[:6]}"
-                        _sv_bytes: bytes | None = None
-                        try:
-                            import io as _io
-                            import pyarrow as _pa
-                            import pyarrow.parquet as _pq
-                            if rows:
-                                _tbl = _pa.Table.from_pylist(rows)
-                            else:
-                                _tbl = _pa.table({})
-                            _buf = _io.BytesIO()
-                            _pq.write_table(_tbl, _buf)
-                            _sv_bytes = _buf.getvalue()
-                            artifact_s3_key_sv = StorageService.upload(
-                                user_id=str(state.get("user_id") or "agent"),
-                                dataset_id=f"artifacts/{session_id or 'nosession'}",
-                                buffer=_sv_bytes,
-                                file_name=f"{result_table}.parquet",
-                            )
-                        except Exception as _upload_exc:
-                            import logging as _logging
-                            _logging.getLogger(__name__).warning(
-                                "artifact upload failed for plain-select %s %s: %s",
-                                intent_key, result_table, _upload_exc,
-                            )
-                            if artifact_s3_key_sv is None and _sv_bytes is not None:
-                                try:
-                                    _u = str(state.get("user_id") or "agent")
-                                    _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{result_table}.parquet"
-                                    _lr = StorageService._local_dir().resolve()
-                                    _lp = (_lr / _lk).resolve()
-                                    if str(_lp).startswith(str(_lr)):
-                                        _lp.parent.mkdir(parents=True, exist_ok=True)
-                                        _lp.write_bytes(_sv_bytes)
-                                        artifact_s3_key_sv = f"local://{_lk}"
-                                except Exception:
-                                    pass
 
                     result_dict: dict = {
                         "step_number": step["step_number"],
@@ -479,39 +388,9 @@ async def execute_step(state: AgentState) -> dict:
                         "error": None,
                         "query_results": rows,
                         "output_table": result_table,
+                        "session_table_name": result_table,
                         "row_count_after": len(rows) if isinstance(rows, list) else None,
                     }
-                    if artifact_s3_key_sv:
-                        result_dict["artifact_s3_key"] = artifact_s3_key_sv
-                        # Persist summarise/validate result as a new DatasetMetaDB
-                        try:
-                            _sv_ds_id = str(uuid.uuid4())
-                            _sv_col_schema = list(rows[0].keys()) if rows else []
-                            _sv_db = SessionLocal()
-                            try:
-                                _sv_ds = DatasetMetaDB(
-                                    id=_sv_ds_id,
-                                    user_id=str(state.get("user_id") or "agent"),
-                                    workspace_id=str(state.get("workspace_id") or "default"),
-                                    name=str(result_table or intent_key),
-                                    source_type="agent_output",
-                                    storage_path=artifact_s3_key_sv,
-                                    file_format="parquet",
-                                    columns=_sv_col_schema,
-                                    row_count=len(rows) if isinstance(rows, list) else 0,
-                                    status="ready",
-                                    parent_id=str(state.get("dataset_id") or ""),
-                                )
-                                _sv_db.add(_sv_ds)
-                                _sv_db.commit()
-                                result_dict["output_dataset_id"] = _sv_ds_id
-                            finally:
-                                _sv_db.close()
-                        except Exception as _sv_ds_exc:
-                            import logging as _logging_sv
-                            _logging_sv.getLogger(__name__).warning(
-                                "DatasetMetaDB persist failed for %s: %s", result_table, _sv_ds_exc
-                            )
                     execution_result = result_dict
                     _sv_out_ds = result_dict.get("output_dataset_id") or state.get("dataset_id")
                     return {
@@ -547,12 +426,9 @@ async def execute_step(state: AgentState) -> dict:
                     if _ct_match:
                         step_sql = step_sql[_ct_match.end():].strip()
 
-                    artifact_s3_key: str | None = None
                     preview_rows: list = []
                     column_schema: list = []
                     row_count_before: int | None = None
-                    # Capture the input table row count BEFORE the transformation runs
-                    # so agent.step.done events show "N → M rows" in the chat.
                     if session_id:
                         _rb_src = (
                             parameters.get("source_table")
@@ -579,22 +455,6 @@ async def execute_step(state: AgentState) -> dict:
                             except Exception:
                                 pass
                     _step_start_ts = datetime.now(timezone.utc)
-                    # Only persist to S3 + DB for "terminal" steps — steps whose output
-                    # is not consumed by any subsequent step in the plan.
-                    # For sequential plans (all depends_on are [] or absent), only the
-                    # last step is terminal.  For branching plans (explicit depends_on
-                    # used), every DAG leaf node is terminal — each produces an artifact.
-                    # This eliminates redundant Parquet uploads for intermediate steps.
-                    _this_step_num = step["step_number"]
-                    _all_explicit_deps: set[int] = set()
-                    for _s in plan:
-                        _all_explicit_deps.update(_s.get("depends_on") or [])
-                    if _all_explicit_deps:
-                        # Branching plan: this step is terminal if nothing else depends on it
-                        is_final_step = _this_step_num not in _all_explicit_deps
-                    else:
-                        # Sequential plan: only the last step in list order is terminal
-                        is_final_step = (idx == len(plan) - 1)
 
                     if session_id:
                         register_table_from_sql(session_id, output_table, step_sql)
@@ -620,48 +480,6 @@ async def execute_step(state: AgentState) -> dict:
                             except Exception:
                                 out_cols = []
 
-                        # Upload Parquet snapshot to S3 only for the final step.
-                        # Intermediate steps are kept in DuckDB memory only.
-                        if is_final_step:
-                            _artifact_bytes: bytes | None = None
-                            try:
-                                import io as _io
-                                import pyarrow as _pa
-                                import pyarrow.parquet as _pq
-                                _rows = execute_in_session(session_id, f"SELECT * FROM {output_table}")
-                                if _rows:
-                                    _table = _pa.Table.from_pylist(_rows)
-                                    _parquet_buf = _io.BytesIO()
-                                    _pq.write_table(_table, _parquet_buf)
-                                    _artifact_bytes = _parquet_buf.getvalue()
-                                    _artifact_name = f"{output_table}.parquet"
-                                    artifact_s3_key = StorageService.upload(
-                                        user_id=str(state.get("user_id") or "agent"),
-                                        dataset_id=f"artifacts/{session_id or 'nosession'}",
-                                        buffer=_artifact_bytes,
-                                        file_name=_artifact_name,
-                                    )
-                            except Exception as _upload_exc:
-                                import logging as _logging
-                                _logging.getLogger(__name__).warning(
-                                    "artifact S3 upload failed for %s: %s",
-                                    output_table, _upload_exc,
-                                )
-                                # Cloud upload failed — fall back to local disk storage
-                                # using the correct local:// scheme so DuckDB can read it.
-                                if artifact_s3_key is None and _artifact_bytes is not None:
-                                    try:
-                                        _u = str(state.get("user_id") or "agent")
-                                        _lk = f"{_u}/artifacts/{session_id or 'nosession'}/{output_table}.parquet"
-                                        _lr = StorageService._local_dir().resolve()
-                                        _lp = (_lr / _lk).resolve()
-                                        if str(_lp).startswith(str(_lr)):
-                                            _lp.parent.mkdir(parents=True, exist_ok=True)
-                                            _lp.write_bytes(_artifact_bytes)
-                                            artifact_s3_key = f"local://{_lk}"
-                                    except Exception:
-                                        pass
-
                         # Fetch inline preview rows for the chat table card
                         try:
                             preview_rows = execute_in_session(
@@ -677,39 +495,8 @@ async def execute_step(state: AgentState) -> dict:
                         (datetime.now(timezone.utc) - _step_start_ts).total_seconds() * 1000
                     )
 
-                    # Persist result as a new DatasetMetaDB so it appears in the datasets list
-                    output_dataset_id_new: str | None = None
-                    if artifact_s3_key:
-                        try:
-                            _new_ds_id = str(uuid.uuid4())
-                            _ds_name = str(parameters.get("display_name") or output_table)
-                            _ds_db = SessionLocal()
-                            try:
-                                _new_ds = DatasetMetaDB(
-                                    id=_new_ds_id,
-                                    user_id=str(state.get("user_id") or "agent"),
-                                    workspace_id=str(state.get("workspace_id") or "default"),
-                                    name=_ds_name,
-                                    source_type="agent_output",
-                                    storage_path=artifact_s3_key,
-                                    file_format="parquet",
-                                    columns=out_cols,
-                                    row_count=rows_out or 0,
-                                    status="ready",
-                                    parent_id=str(state.get("dataset_id") or ""),
-                                )
-                                _ds_db.add(_new_ds)
-                                _ds_db.commit()
-                                output_dataset_id_new = _new_ds_id
-                            finally:
-                                _ds_db.close()
-                        except Exception as _ds_exc:
-                            import logging as _logging_ds
-                            _logging_ds.getLogger(__name__).warning(
-                                "DatasetMetaDB persist failed for %s: %s", output_table, _ds_exc
-                            )
-
-                    # Update table_registry
+                    # Update table_registry — dataset_id stays blank for pipeline
+                    # step tables; only user-saved checkpoints get a real DatasetMetaDB.
                     input_tables = list(parameters.get("input_tables") or [])
                     if not input_tables:
                         # infer from current primary table
@@ -722,45 +509,39 @@ async def execute_step(state: AgentState) -> dict:
 
                     new_entry: TableRegistryEntry = {
                         "duckdb_name": output_table,
-                        # Intermediate steps have no DatasetMetaDB entry (no S3 artifact).
-                        # Use "" so context_loader skips re-registration of this table
-                        # from S3 on follow-up turns (it would wrongly point to the raw
-                        # source file because output_dataset_id_new is None for intermediates).
-                        # Final-step entries get the real new UUID.
-                        "dataset_id": str(output_dataset_id_new or ""),
+                        "dataset_id": "",
                         "display_name": str(parameters.get("display_name") or output_table),
                         "source_intent": intent_key,
                         "parent_tables": input_tables,
                         "row_count": rows_out or 0,
                         "column_names": out_cols,
                         "pipeline_step_number": step["step_number"],
-                        "is_artifact": bool(output_dataset_id_new),
+                        "is_artifact": False,
                         "is_view": False,
                     }
                     table_registry[output_table] = new_entry
 
-                    _effective_output_dataset_id = output_dataset_id_new or state.get("dataset_id")
                     execution_result = {
                         "step_number": step["step_number"],
                         "operation": intent_key,
                         "success": True,
                         "rows_affected": rows_out,
                         "run_id": None,
-                        "output_dataset_id": _effective_output_dataset_id,
+                        "output_dataset_id": state.get("dataset_id"),
                         "sql": step_sql,
                         "error": None,
                         "output_table": output_table,
+                        "session_table_name": output_table,
                         "input_tables": input_tables,
                         "row_count_before": row_count_before,
                         "row_count_after": rows_out,
                         "execution_time_ms": _exec_time_ms,
                         "column_schema": column_schema,
-                        "artifact_s3_key": artifact_s3_key,
                         "query_results": preview_rows,
                     }
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
-                        "dataset_id": _effective_output_dataset_id,
+                        "dataset_id": state.get("dataset_id"),
                         "current_step_index": idx + 1,
                         "retry_count": 0,
                         "error": None,

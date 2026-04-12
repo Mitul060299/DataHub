@@ -23,6 +23,9 @@ interface CanvasPanelProps {
   onImport: () => void;
   onColumnsChanged: () => void;
   onSheetsExport?: () => void;
+  /** 50-row preview from the latest AI transform (session-only, not persisted) */
+  sessionPreviewRows?: Record<string, unknown>[];
+  sessionPreviewColumns?: string[];
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -34,7 +37,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, sessionPreviewRows, sessionPreviewColumns }: CanvasPanelProps) {
   const { steps } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -178,11 +181,18 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
           )}
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {dataError && tab === "data" && (
           <div style={{ padding: "10px 16px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.2)", color: "var(--rd)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
             <span>⚠</span>
             <span>{dataError}</span>
+          </div>
+        )}
+        {/* Amber banner shown when Canvas displays a session-only preview */}
+        {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (
+          <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span>⚡</span>
+            <span>Showing transformed preview ({sessionPreviewRows.length} rows) · Save as artifact to persist</span>
           </div>
         )}
         {tab === "pipeline" ? (
@@ -191,8 +201,8 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
           <DataTable
             datasetId={dataset?.id}
             loading={loading}
-            rows={rows}
-            columns={columns}
+            rows={sessionPreviewRows && sessionPreviewRows.length > 0 ? sessionPreviewRows : rows}
+            columns={sessionPreviewColumns && sessionPreviewColumns.length > 0 ? sessionPreviewColumns : columns}
             calculatedColumns={calculatedColumns}
             stepCount={steps.length}
             lastAction={lastAction}

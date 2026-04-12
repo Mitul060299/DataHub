@@ -213,10 +213,12 @@ interface AIPanelProps {
   width?: number;
   onStepApplied: () => void;
   onDatasetMutated?: () => void;
+  /** Called after a write-op completes with a 50-row preview of the resulting table */
+  onSessionPreview?: (rows: Record<string, unknown>[], columns: string[]) => void;
 }
 
-export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied, onDatasetMutated }: AIPanelProps) {
-  const { addStep, steps } = usePipelineContext();
+export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview }: AIPanelProps) {
+  const { addStep, steps, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
   const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId } = useChatSession();
@@ -493,6 +495,29 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
 
         // Build context-aware follow-up chips based on THIS run's completed steps only
         const followUpChips = buildFollowUpChips(doneIntent, sortedCompletedSteps, dataset);
+
+        // Surface the 50-row preview from the last write-op step so the Canvas Data
+        // tab can show the transformed data without a full dataset reload.
+        const SESSION_WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile", "summarise"]);
+        const lastWriteResult = [...executionResults].reverse().find((r) =>
+          SESSION_WRITE_OPS.has(String(r.operation ?? ""))
+        );
+        if (lastWriteResult && onSessionPreview) {
+          const previewRows = Array.isArray(lastWriteResult.query_results)
+            ? (lastWriteResult.query_results as Record<string, unknown>[])
+            : [];
+          if (previewRows.length > 0) {
+            const previewColumns = Object.keys(previewRows[0]);
+            onSessionPreview(previewRows, previewColumns);
+          }
+        }
+        // Track the live in-session table so the sidebar can show a "LIVE" entry
+        if (lastWriteResult && sessionId) {
+          const tableName = String(lastWriteResult.session_table_name ?? lastWriteResult.output_table ?? "");
+          const rowCount = Number(lastWriteResult.row_count_after ?? lastWriteResult.rows_affected ?? 0);
+          const stepLabel = String(lastWriteResult.description ?? lastWriteResult.operation ?? "transform");
+          if (tableName) setLiveArtifact({ tableName, rowCount, stepLabel, sessionId });
+        }
 
         setMessages((previous) => [
           ...previous,

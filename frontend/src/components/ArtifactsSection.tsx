@@ -41,6 +41,10 @@ interface ArtifactsSectionProps {
   onSelect: (dataset: Dataset) => void;
   onRemove: (dataset: Dataset) => void;
   onRename?: (dataset: Dataset, newName: string) => void;
+  /** The current in-session DuckDB table representing the pipeline leaf */
+  liveArtifact?: { tableName: string; rowCount: number; stepLabel: string } | null;
+  /** Called when the user clicks "Save ↑" on the live artifact */
+  onSaveLive?: (tableName: string, label: string) => Promise<void>;
 }
 
 const kindIcon: Record<ArtifactKind, typeof IconTable> = {
@@ -68,8 +72,11 @@ export function ArtifactsSection({
   onSelect,
   onRemove,
   onRename,
+  liveArtifact,
+  onSaveLive,
 }: ArtifactsSectionProps) {
   const [open, setOpen] = useState(true);
+  const [savingLive, setSavingLive] = useState(false);
 
   // ── Session table edit state ─────────────────────────────────────────────
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -155,7 +162,8 @@ export function ArtifactsSection({
   // Deduplicate: hide in-session entries that already have a matching stored artifact
   const storedNames = new Set(stored.map((a) => a.name));
   const dedupedArtifacts = artifacts.filter((a) => !storedNames.has(a.name));
-  const totalCount = dedupedArtifacts.length + stored.length;
+  const liveCount = liveArtifact ? 1 : 0;
+  const totalCount = liveCount + dedupedArtifacts.length + stored.length;
 
   return (
     <section style={{ borderTop: "1px solid var(--bd)", marginTop: 8 }}>
@@ -180,6 +188,62 @@ export function ArtifactsSection({
 
       {open ? (
         <div style={{ display: "grid", gap: 4 }}>
+          <style>{`@keyframes live-blink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+          {/* ── Live In-Session Entry ─────────────────────────────────── */}
+          {liveArtifact && (
+            <div
+              style={{
+                minHeight: 38,
+                borderRadius: "var(--r6)",
+                border: "1px solid rgba(34,197,94,0.35)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0 8px",
+                background: "rgba(34,197,94,0.06)",
+                gap: 6,
+              }}
+            >
+              {/* Pulsing green dot */}
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "#22c55e",
+                  flexShrink: 0,
+                  animation: "live-blink 1.7s infinite",
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="mono" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#86efac" }}>
+                  {liveArtifact.stepLabel}
+                </div>
+                <div style={{ fontSize: 10, color: "rgba(134,239,172,0.6)" }}>
+                  {liveArtifact.rowCount > 0 ? `${liveArtifact.rowCount.toLocaleString()} rows · ` : ""}LIVE
+                </div>
+              </div>
+              {onSaveLive && (
+                <button
+                  className="btn"
+                  disabled={savingLive}
+                  style={{ height: 22, padding: "0 8px", fontSize: 10, flexShrink: 0, borderColor: "rgba(34,197,94,0.4)", color: "#86efac" }}
+                  onClick={async () => {
+                    setSavingLive(true);
+                    try {
+                      await onSaveLive(liveArtifact.tableName, liveArtifact.stepLabel);
+                      void fetchStored();
+                    } finally {
+                      setSavingLive(false);
+                    }
+                  }}
+                >
+                  {savingLive ? "Saving…" : "Save ↑"}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ── In-Session Tables ─────────────────────────────────────── */}
           {dedupedArtifacts.map((artifact) => {
             const active = activeDatasetId === artifact.id;

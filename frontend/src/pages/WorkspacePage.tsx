@@ -47,6 +47,7 @@ export function WorkspacePage() {
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
+  const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // Show welcome modal on first visit
@@ -77,6 +78,11 @@ export function WorkspacePage() {
       capture("onboarding_completed");
     }
   }, [hasUploadedFirstFile, hasAskedFirstQuestion, hasCompletedOnboarding, markOnboardingComplete]);
+
+  // Clear session preview whenever the user switches to a different source dataset
+  useEffect(() => {
+    setSessionPreview(null);
+  }, [activeDataset?.id]);
 
   useEffect(() => {
     if (!resizingExplorer) return;
@@ -198,6 +204,8 @@ export function WorkspacePage() {
           setDatasetRefreshNonce((value) => value + 1);
           void refetch();
         }}
+        sessionPreviewRows={sessionPreview?.rows}
+        sessionPreviewColumns={sessionPreview?.columns}
       />
       {/* Pipeline column — dedicated panel between canvas and AI */}
       {pipelineOpen ? (
@@ -252,6 +260,7 @@ export function WorkspacePage() {
         onDatasetMutated={() => {
           setDatasetRefreshNonce((value) => value + 1);
         }}
+        onSessionPreview={(rows, columns) => setSessionPreview({ rows, columns })}
       />
       <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (

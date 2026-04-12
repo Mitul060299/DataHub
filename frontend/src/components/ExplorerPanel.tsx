@@ -21,7 +21,7 @@ interface ExplorerPanelProps {
 
 export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, workspaceMembers, refreshMembers, projectsLoading } = useWorkspaceContext();
-  const { steps } = usePipelineContext();
+  const { steps, liveArtifact } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -188,15 +188,18 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
 
   const removeDataset = async (dataset: Dataset) => {
     if (!dataset.id) return;
+    // Optimistic removal — instantly reflects in the UI
+    setDatasets((prev) => prev.filter((d) => d.id !== dataset.id));
+    if (activeDataset?.id === dataset.id) setActiveDataset(null);
     try {
       await deleteDataset(dataset.id);
-      if (activeDataset?.id === dataset.id) {
-        setActiveDataset(null);
-      }
     } catch {
-      await Promise.resolve();
-    } finally {
-      await loadDatasets();
+      // Restore the item and surface a brief error message
+      setDatasets((prev) =>
+        prev.find((d) => d.id === dataset.id) ? prev : [...prev, dataset]
+      );
+      setDatasetLoadError("Failed to delete — please try again.");
+      setTimeout(() => setDatasetLoadError(null), 4000);
     }
   };
 
@@ -334,6 +337,16 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           onRemove={(dataset) => void removeDataset(dataset)}
           onRename={async (dataset, name) => {
             await renameDataset(dataset.id, name);
+            void loadDatasets();
+          }}
+          liveArtifact={liveArtifact}
+          onSaveLive={async (tableName, label) => {
+            if (!liveArtifact?.sessionId) return;
+            await api.post("/api/artifacts/save-checkpoint", {
+              session_id: liveArtifact.sessionId,
+              table_name: tableName,
+              artifact_name: label,
+            });
             void loadDatasets();
           }}
         />

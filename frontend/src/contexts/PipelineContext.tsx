@@ -51,6 +51,9 @@ interface PipelineContextValue {
   runPipeline: () => Promise<void>;
   scheduleInfo: ScheduleInfo | null;
   setScheduleInfo: (info: ScheduleInfo | null) => void;
+  /** The in-session DuckDB table representing the current pipeline leaf output */
+  liveArtifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null;
+  setLiveArtifact: (artifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null) => void;
 }
 
 const PipelineContext = createContext<PipelineContextValue | undefined>(undefined);
@@ -75,6 +78,7 @@ const loadPersistedSteps = (): PipelineStep[] => {
 export function PipelineProvider({ children }: { children: ReactNode }) {
   const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps());
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
+  const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -145,8 +149,8 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, runPipeline, scheduleInfo, setScheduleInfo }),
-    [steps, scheduleInfo],  // eslint-disable-line react-hooks/exhaustive-deps
+    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact }),
+    [steps, scheduleInfo, liveArtifact],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return <PipelineContext.Provider value={value}>{children}</PipelineContext.Provider>;

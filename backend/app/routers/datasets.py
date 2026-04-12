@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from typing import Dict
+import logging
 import threading
 from io import StringIO
 import pandas as pd
@@ -40,8 +41,10 @@ from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.usage_service import enforce_usage_limit, increment_usage, update_storage_bytes
 from ..services.audit import audit_store
 from ..models import AuditEntry
-from ..models_db import DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB
+from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB
 from ..services.pipeline_runner import run_pipeline as _run_pipeline
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -923,14 +926,38 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
-    if dataset_id in _DATASETS:
-        _DATASETS.pop(dataset_id, None)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+
+    # Delete S3 file (best-effort)
     if meta and meta.storage_path:
         try:
             StorageService.delete(meta.storage_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("S3 delete failed for dataset %s: %s", dataset_id, exc)
+
+        # Delete the linked ArtifactDB record created by save-checkpoint (same storage_path)
+        db.query(ArtifactDB).filter(
+            ArtifactDB.s3_key == meta.storage_path
+        ).delete(synchronize_session=False)
+
+    # Cascade: delete child derived datasets (parent_id == dataset_id)
+    child_metas = db.query(DatasetMetaDB).filter(DatasetMetaDB.parent_id == dataset_id).all()
+    if child_metas:
+        child_ids = [c.id for c in child_metas]
+        for child in child_metas:
+            if child.storage_path:
+                try:
+                    StorageService.delete(child.storage_path)
+                except Exception as exc:
+                    logger.warning("S3 delete failed for child dataset %s: %s", child.id, exc)
+                db.query(ArtifactDB).filter(
+                    ArtifactDB.s3_key == child.storage_path
+                ).delete(synchronize_session=False)
+        db.query(DatasetDataDB).filter(DatasetDataDB.id.in_(child_ids)).delete(synchronize_session=False)
+        db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id.in_(child_ids)).delete(synchronize_session=False)
+        db.query(DatasetMetaDB).filter(DatasetMetaDB.id.in_(child_ids)).delete(synchronize_session=False)
+
+    # Delete the parent dataset records
     db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).delete()
     db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
     db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()

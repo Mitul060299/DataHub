@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import CurrentUser, get_current_user
-from ..models_db import ArtifactDB, DatasetMetaDB
+from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB
 from ..services.object_storage import StorageService
 from ..services.duckdb_session import register_view, execute_in_session
 from ..services.rate_limiter import limiter
@@ -387,6 +387,15 @@ def delete_artifact(
         StorageService.delete(artifact.s3_key)
     except Exception as exc:
         logger.warning("S3 delete failed for artifact %s: %s", artifact_id, exc)
+
+    # Delete the linked DatasetMetaDB record created by save-checkpoint (same s3_key = storage_path)
+    linked_ds = db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.storage_path == artifact.s3_key
+    ).first()
+    if linked_ds:
+        db.query(DatasetDataDB).filter(DatasetDataDB.id == linked_ds.id).delete(synchronize_session=False)
+        db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == linked_ds.id).delete(synchronize_session=False)
+        db.delete(linked_ds)
 
     db.delete(artifact)
     db.commit()

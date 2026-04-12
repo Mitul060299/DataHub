@@ -90,6 +90,7 @@ export function ArtifactsSection({
   const [renamingName, setRenamingName] = useState("");
   const storedInputRef = useRef<HTMLInputElement>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fetchStored = useCallback(async () => {
     setStoredLoading(true);
@@ -151,9 +152,13 @@ export function ArtifactsSection({
   const handleDelete = async (artifact: StoredArtifact) => {
     if (!window.confirm(`Delete artifact "${artifact.name}"? This cannot be undone.`)) return;
     setDeletingId(artifact.id);
+    setDeleteError(null);
     try {
       await api.delete(`/api/artifacts/${artifact.id}`);
       setStored((prev) => prev.filter((a) => a.id !== artifact.id));
+    } catch {
+      setDeleteError(`Failed to delete "${artifact.name}". Please try again.`);
+      setTimeout(() => setDeleteError(null), 5000);
     } finally {
       setDeletingId(null);
     }
@@ -314,6 +319,9 @@ export function ArtifactsSection({
           })}
 
           {/* ── Stored Artifacts ──────────────────────────────────────── */}
+          {deleteError ? (
+            <p style={{ color: "var(--rd)", fontSize: 11, margin: "4px 0" }}>{deleteError}</p>
+          ) : null}
           {storedLoading ? (
             <p style={{ color: "var(--tx2)", fontSize: 12 }}>Loading…</p>
           ) : (

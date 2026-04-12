@@ -222,7 +222,7 @@ export function useChatSession() {
     if (!sid) return;
     const token = getAuthToken();
     try {
-      await fetch(`/api/chat/sessions/${sid}/history`, {
+      const res = await fetch(`/api/chat/sessions/${sid}/history`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -230,8 +230,12 @@ export function useChatSession() {
         },
         body: JSON.stringify({ dataset_id: datasetId, messages }),
       });
+      if (!res.ok) {
+        // Surface non-2xx failures in browser devtools Network tab.
+        console.warn("[useChatSession] saveHistory failed:", res.status, res.statusText);
+      }
     } catch {
-      // fire-and-forget — silently ignore save errors
+      // Network-level failure — fire-and-forget.
     }
   };
 

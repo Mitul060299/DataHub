@@ -1264,6 +1264,26 @@ def preview_dataset(
             # Use stored row_count when no filter (skip_count=True returns 0)
             if not filter_col:
                 total = meta.row_count or total
+            # If DuckDB returned zero rows but the dataset metadata says it has
+            # data, try the DB-chunk fallback before returning an empty response.
+            # This covers CSV uploads where the Parquet conversion produced an
+            # empty file while the raw rows were persisted to DatasetChunkDB.
+            if not page_rows and (meta.row_count or 0) > 0:
+                try:
+                    df_fallback = get_dataset_from_db(dataset_id, db)
+                    if not df_fallback.empty:
+                        rows_fb = df_fallback.to_dict(orient="records")
+                        sliced = rows_fb[offset: offset + limit]
+                        return DatasetPage(
+                            dataset_id=dataset_id,
+                            columns=list(df_fallback.columns),
+                            offset=offset,
+                            limit=limit,
+                            rows=sliced,
+                            total_rows=len(rows_fb),
+                        )
+                except Exception:
+                    pass
             return DatasetPage(
                 dataset_id=dataset_id,
                 columns=meta.columns,

@@ -239,10 +239,17 @@ async def upsert_session_history(
         ChatSessionDB.user_id == current_user_id,
     ).first()
     if not session:
+        # Look up the dataset's actual workspace_id instead of hard-coding "default",
+        # which would violate a FK constraint if no workspace with that id exists.
+        from app.models_db import DatasetMetaDB as _DatasetMetaDB
+        ds_meta = db.query(_DatasetMetaDB).filter(
+            _DatasetMetaDB.id == payload.dataset_id
+        ).first()
+        workspace_id = (ds_meta.workspace_id if ds_meta and ds_meta.workspace_id else None) or "default"
         session = ChatSessionDB(
             id=session_id,
             user_id=current_user_id,
-            workspace_id="default",
+            workspace_id=workspace_id,
             dataset_id=payload.dataset_id,
             title="AI Chat",
             status="active",

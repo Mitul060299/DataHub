@@ -516,6 +516,18 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
       return;
     }
 
+    // AI agent steps run in a DuckDB session only — they never have DB dataset IDs.
+    // Replaying them via the cleaning API is wrong; just remove from context directly.
+    const removedStep = steps[stepIndex];
+    const allSessionOnly =
+      !removedStep.outputDataset?.id &&
+      !removedStep.inputDataset?.id &&
+      stepsAfter.every((s) => !s.outputDataset?.id && !s.inputDataset?.id);
+    if (allSessionOnly) {
+      removeStep(stepId);
+      return;
+    }
+
     // Determine the pivot dataset before prompting
     const pivotStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
     const pivotDatasetId =

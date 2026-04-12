@@ -40,6 +40,9 @@ function computeDepths(steps: PlanStep[]): Record<number, number> {
       depthMap[sn] = 0;
       return 0;
     }
+    // Set a sentinel before recursing so any cycle (e.g. step depends on itself)
+    // short-circuits instead of causing infinite recursion.
+    depthMap[sn] = 0;
     const parentDepths = step.depends_on.map(getDepth);
     depthMap[sn] = Math.max(...parentDepths) + 1;
     return depthMap[sn];

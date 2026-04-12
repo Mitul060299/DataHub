@@ -202,7 +202,7 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
                   if (!liveArtifact?.sessionId) return;
                   setSavingArtifact(true);
                   try {
-                    await api.post("/artifacts/save-checkpoint", {
+                    await api.post("/api/artifacts/save-checkpoint", {
                       session_id: liveArtifact.sessionId,
                       table_name: liveArtifact.tableName,
                       artifact_name: liveArtifact.stepLabel,

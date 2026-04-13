@@ -1,3 +1,4 @@
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -60,11 +61,15 @@ def _rewrite_dataset_alias(sql: str, primary_alias: str) -> str:
     """
     if not sql or not primary_alias or primary_alias == "dataset":
         return sql
-    return re.sub(
-        r'(?i)\b(FROM|JOIN|PIVOT)\s+dataset\b',
-        lambda m: f"{m.group(1)} {primary_alias}",
-        sql,
-    )
+    _pattern = re.compile(r'\b(FROM|JOIN|PIVOT)\s+dataset\b', re.IGNORECASE)
+    if _pattern.search(sql):
+        logging.getLogger(__name__).warning(
+            "SQL_ALIAS_FALLBACK: LLM generated 'FROM dataset' — "
+            "substituting with primary alias '%s'. "
+            "This indicates a planner prompt regression.",
+            primary_alias,
+        )
+    return _pattern.sub(lambda m: f"{m.group(1)} {primary_alias}", sql)
 
 
 def _resolve_input_table(step: dict, state: AgentState) -> str:

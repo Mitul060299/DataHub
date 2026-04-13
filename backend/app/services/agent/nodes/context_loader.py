@@ -242,7 +242,13 @@ async def context_loader(state: AgentState) -> dict:
         pass
 
     _register_dataset_view(dataset_id, primary_alias, storage_path=dataset.storage_path if dataset else None)
-    # Always register canonical "dataset" alias that planner rule 10 generates SQL against.
+    # Register "dataset" as a DuckDB compatibility fallback — do NOT remove this.
+    # Non-LLM callers that depend on this alias:
+    #   - ai_agent_service.py query_parquet() sampling ("SELECT * FROM dataset LIMIT …")
+    #   - duckdb_service.py _normalize_dataset_sql() connector SQL normalisation
+    # LLM-generated SQL should now use the named alias; execute_step rewrites any
+    # residual "FROM dataset" references at runtime and emits a WARNING to signal
+    # a planner prompt regression.
     if primary_alias != "dataset" and dataset and dataset.storage_path:
         _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
 

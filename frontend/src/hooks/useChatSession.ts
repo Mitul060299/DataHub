@@ -239,5 +239,5 @@ export function useChatSession() {
     }
   };
 
-  return { sessionId, runId, sending, sendMessage, resetSession, cancelMessage, restoreSession, saveHistory };
+  return { sessionId, sessionIdRef, runId, sending, sendMessage, resetSession, cancelMessage, restoreSession, saveHistory };
 }

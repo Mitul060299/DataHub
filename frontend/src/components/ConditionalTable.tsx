@@ -40,8 +40,8 @@ export function ConditionalTable({
   }, [conditional]);
 
   const sortedRows = useMemo(() => {
-    if (sortCol === null) return rows;
-    return [...rows].sort((a, b) => {
+    if (sortCol === null) return rows ?? [];
+    return [...(rows ?? [])].sort((a, b) => {
       const av = a[sortCol];
       const bv = b[sortCol];
       const an = Number(av);
@@ -62,7 +62,7 @@ export function ConditionalTable({
     }
   };
 
-  const totalRows = rowCount ?? rows.length;
+  const totalRows = rowCount ?? (rows ?? []).length;
 
   return (
     <div className={className} style={{ maxHeight, display: "flex", flexDirection: "column" }}>

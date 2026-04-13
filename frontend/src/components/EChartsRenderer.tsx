@@ -51,7 +51,7 @@ export function EChartsRenderer({
         title={config.title as string | undefined}
         subtitle={config.subtitle as string | undefined}
         columns={config.columns as string[]}
-        rows={config.rows as unknown[][]}
+        rows={(config.rows as unknown[][] | undefined) ?? []}
         rowCount={config.row_count as number | undefined}
         conditional={config.conditional as Array<{ row: number; type: string; color: string; bg: string }> | undefined}
         className={className}

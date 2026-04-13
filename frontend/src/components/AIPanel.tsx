@@ -173,11 +173,14 @@ function DataProfileCard({ profile }: { profile: DataProfile }) {
               {/* Categorical top values */}
               {c.top_values && c.top_values.length > 0 ? (
                 <div style={{ fontSize: 10, color: "#71717a", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {c.top_values.slice(0, 3).map((tv) => (
-                    <span key={tv.value} style={{ background: "#1f1f22", borderRadius: 4, padding: "1px 5px" }}>
-                      {tv.value.length > 12 ? tv.value.slice(0, 11) + "…" : tv.value} ({tv.count})
-                    </span>
-                  ))}
+                  {c.top_values.slice(0, 3).map((tv, tvi) => {
+                    const v = String(tv.value ?? "");
+                    return (
+                      <span key={tvi} style={{ background: "#1f1f22", borderRadius: 4, padding: "1px 5px" }}>
+                        {v.length > 12 ? v.slice(0, 11) + "…" : v} ({tv.count})
+                      </span>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>
@@ -221,7 +224,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const { addStep, steps, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
-  const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId } = useChatSession();
+  const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId, sessionIdRef } = useChatSession();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -692,6 +695,13 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           const WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile"]);
           if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview) {
             onSessionPreview(results, Object.keys(results[0]));
+          }
+          // Set the LIVE artifact entry so the sidebar shows the editable save card.
+          if (sessionTableName && WRITE_OPS.has(String(event.operation ?? ""))) {
+            const currentSid = sessionIdRef.current || sessionId;
+            if (currentSid) {
+              setLiveArtifact({ tableName: sessionTableName, rowCount: results.length, stepLabel: opLabel, sessionId: currentSid });
+            }
           }
         }
         break;

@@ -77,6 +77,12 @@ export function ArtifactsSection({
 }: ArtifactsSectionProps) {
   const [open, setOpen] = useState(true);
   const [savingLive, setSavingLive] = useState(false);
+  const [liveArtifactName, setLiveArtifactName] = useState(liveArtifact?.stepLabel ?? "");
+
+  // Sync editable name when a new LIVE artifact arrives
+  useEffect(() => {
+    setLiveArtifactName(liveArtifact?.stepLabel ?? "");
+  }, [liveArtifact?.stepLabel]);
 
   // ── Session table edit state ─────────────────────────────────────────────
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -221,10 +227,19 @@ export function ArtifactsSection({
                 }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="mono" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#86efac" }}>
-                  {liveArtifact.stepLabel}
-                </div>
-                <div style={{ fontSize: 10, color: "rgba(134,239,172,0.6)" }}>
+                <input
+                  value={liveArtifactName}
+                  onChange={(e) => setLiveArtifactName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setLiveArtifactName(liveArtifact.stepLabel)}
+                  style={{
+                    width: "100%", fontSize: 11, fontFamily: "monospace",
+                    background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)",
+                    borderRadius: 4, color: "#86efac", padding: "2px 5px", outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="Artifact name…"
+                />
+                <div style={{ fontSize: 10, color: "rgba(134,239,172,0.6)", marginTop: 2 }}>
                   {liveArtifact.rowCount > 0 ? `${liveArtifact.rowCount.toLocaleString()} rows · ` : ""}LIVE
                 </div>
               </div>
@@ -236,7 +251,7 @@ export function ArtifactsSection({
                   onClick={async () => {
                     setSavingLive(true);
                     try {
-                      await onSaveLive(liveArtifact.tableName, liveArtifact.stepLabel);
+                      await onSaveLive(liveArtifact.tableName, liveArtifactName.trim() || liveArtifact.stepLabel);
                       void fetchStored();
                     } finally {
                       setSavingLive(false);

@@ -39,10 +39,8 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 }
 
 export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns }: CanvasPanelProps) {
-  const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
+  const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
-  const [savingArtifact, setSavingArtifact] = useState(false);
-  const [saveArtifactError, setSaveArtifactError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -196,39 +194,7 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
           <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>⚡</span>
             <span style={{ flex: 1 }}>Showing transformed preview ({sessionPreviewRows.length} rows)</span>
-            {liveArtifact?.sessionId ? (
-              <button
-                className="btn"
-                disabled={savingArtifact}
-                onClick={async () => {
-                  if (!liveArtifact?.sessionId) return;
-                  setSavingArtifact(true);
-                  setSaveArtifactError(null);
-                  try {
-                    await api.post("/api/artifacts/save-checkpoint", {
-                      session_id: liveArtifact.sessionId,
-                      table_name: liveArtifact.tableName,
-                      artifact_name: liveArtifact.stepLabel,
-                    });
-                    setLiveArtifact(null);
-                    onArtifactSaved?.();
-                  } catch {
-                    setSaveArtifactError("Save failed — please try again.");
-                    setTimeout(() => setSaveArtifactError(null), 5000);
-                  } finally {
-                    setSavingArtifact(false);
-                  }
-                }}
-                style={{ height: 22, padding: "0 8px", fontSize: 10, flexShrink: 0, borderColor: "rgba(234,179,8,0.5)", color: "#fde68a", background: "rgba(234,179,8,0.15)" }}
-              >
-                {savingArtifact ? "Saving…" : "Save as artifact ↑"}
-              </button>
-            ) : (
-              <span style={{ opacity: 0.6 }}>· Save as artifact to persist</span>
-            )}
-            {saveArtifactError && (
-              <span style={{ fontSize: 10, color: "#f87171", marginLeft: 4 }}>{saveArtifactError}</span>
-            )}
+            <span style={{ opacity: 0.5, fontSize: 11, flexShrink: 0 }}>rename &amp; save in sidebar →</span>
           </div>
         )}
         {tab === "pipeline" ? (

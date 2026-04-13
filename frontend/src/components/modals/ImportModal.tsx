@@ -310,14 +310,7 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
                   refMap[ft.key].current?.click();
                 }}
               >
-                <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
-                  background: "var(--bg1)", border: "1px solid var(--bd2)",
-                  borderRadius: 4, padding: "2px 5px", color: "var(--ac)", fontFamily: "monospace",
-                }}>
-                  {ft.icon}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tx0)" }}>{ft.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--tx0)" }}>{ft.label}</span>
                 <span style={{ fontSize: 10, color: "var(--tx2)" }}>{ft.ext}</span>
               </button>
             ))}

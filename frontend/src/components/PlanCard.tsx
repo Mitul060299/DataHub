@@ -46,8 +46,12 @@ export default function PlanCard({
   return (
     <div style={{ borderLeft: `4px solid ${borderColor}`, border: "1px solid var(--bd2)", borderRadius: "var(--r8)", padding: 10, marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontWeight: 600 }}>📋 Execution Plan</span>
+        <span style={{ fontWeight: 600 }}>📋 Review Plan</span>
         <span style={{ color: "var(--tx1)" }}>{steps.length} steps</span>
+      </div>
+
+      <div style={{ fontSize: 11, color: "var(--tx1)", marginBottom: 6, lineHeight: 1.4 }}>
+        Nothing runs until you approve. Read each query, modify anything, or reject the whole plan.
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
@@ -88,7 +92,7 @@ export default function PlanCard({
           {!modifying ? (
             <div style={{ display: "flex", gap: 6 }}>
               <button className="btn" onClick={onApprove} disabled={sending} style={{ flex: 1, background: "#5B6AF0", color: "#eef2ff", borderColor: "#5B6AF0", ...(sending ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}>
-                {sending ? "Running…" : "✓ Approve"}
+                {sending ? "Running…" : "✓ Approve & Run"}
               </button>
               <button className="btn" onClick={() => setModifying(true)} disabled={sending} style={{ flex: 1 }}>
                 ✎ Modify

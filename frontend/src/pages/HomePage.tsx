@@ -59,7 +59,7 @@ const features = [
     color: "#818cf8",
     icon: <IconMessageCircle size={18} color="#818cf8" />,
     description:
-      "Understands your intent, builds a plan, shows it to you, then executes. Retries automatically on failure.",
+      "Understands your intent, builds a step-by-step plan with the exact SQL, presents it for your review — and only executes after you approve. Retries automatically on failure.",
   },
   {
     title: "Recorded Pipelines",
@@ -473,11 +473,11 @@ export function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, ease: "easeOut" }}
             >
-              Your data,
+              The data tool that lets you
               <br />
-              <span className="hero-title-gradient">understood</span>
+              <span className="hero-title-gradient">see exactly</span>
               <br />
-              by AI
+              what it&apos;s doing
             </motion.h1>
 
             <motion.p
@@ -486,8 +486,8 @@ export function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
             >
-              Talk to your data in plain English. DataHub&apos;s AI agent cleans, transforms, and visualises — recording every
-              step so your work is always auditable, repeatable, and shareable.
+              Describe what you want. DataHub builds a step-by-step plan with the exact SQL — you review and approve before
+              anything touches your data. Every step recorded, revertable, and auditable.
             </motion.p>
 
             <motion.div

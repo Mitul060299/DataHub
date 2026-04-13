@@ -193,8 +193,8 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
         {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (
           <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>⚡</span>
-            <span style={{ flex: 1 }}>Showing transformed preview ({sessionPreviewRows.length} rows)</span>
-            <span style={{ opacity: 0.5, fontSize: 11, flexShrink: 0 }}>rename &amp; save in sidebar →</span>
+            <span style={{ flex: 1 }}>⚡ Preview only — {sessionPreviewRows.length} rows. Not saved yet. Revert anytime with undo in the pipeline sidebar.</span>
+            <span style={{ opacity: 0.5, fontSize: 11, flexShrink: 0 }}>rename &amp; save →</span>
           </div>
         )}
         {tab === "pipeline" ? (

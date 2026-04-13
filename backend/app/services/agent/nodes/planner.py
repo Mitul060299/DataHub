@@ -148,7 +148,10 @@ async def planner(state: AgentState) -> dict:
             # Try to pick source table from plan params or most-recent registry entry
             src_table = str(params.get("source_table") or "").strip()
             if not src_table and table_registry:
-                last_entry = list(table_registry.values())[-1]
+                last_entry = next(
+                    (e for e in reversed(list(table_registry.values())) if isinstance(e, dict)),
+                    {},
+                )
                 src_table = str(last_entry.get("duckdb_name") or "")
                 col_names: list[str] = list(last_entry.get("column_names") or [])
                 row_count: int = int(last_entry.get("row_count") or 0)

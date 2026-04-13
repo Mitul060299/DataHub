@@ -72,6 +72,40 @@ def _rewrite_dataset_alias(sql: str, primary_alias: str) -> str:
     return _pattern.sub(lambda m: f"{m.group(1)} {primary_alias}", sql)
 
 
+def _rewrite_stale_source(sql: str, state: AgentState) -> str:
+    """Safety net: if the LLM's SQL targets the raw primary source but a derived
+    table with a higher pipeline_step_number already exists in the registry,
+    rewrite FROM/JOIN to use that derived table instead.
+
+    This catches prompt-compliance failures in sequential clean chains where the
+    LLM ignores rule 10 and defaults back to the original dataset alias.
+    Logs SQL_CHAIN_FALLBACK for observability.
+    """
+    table_registry: dict = dict(state.get("table_registry") or {})
+    primary = _primary_alias_from_state(state)
+    if not primary or primary == "dataset":
+        return sql
+    best_alias: str | None = None
+    best_step = -1
+    for name, entry in table_registry.items():
+        if not isinstance(entry, dict):
+            continue
+        sn = entry.get("pipeline_step_number", 0)
+        if sn > 0 and sn > best_step:
+            best_alias, best_step = name, sn
+    if not best_alias:
+        return sql
+    pattern = re.compile(rf'\b(FROM|JOIN)\s+{re.escape(primary)}\b', re.IGNORECASE)
+    if pattern.search(sql):
+        logging.getLogger(__name__).warning(
+            "SQL_CHAIN_FALLBACK: SQL references raw source '%s' but derived table "
+            "'%s' (step %d) exists — rewriting to use derived table.",
+            primary, best_alias, best_step,
+        )
+        return pattern.sub(lambda m: f"{m.group(1)} {best_alias}", sql)
+    return sql
+
+
 def _resolve_input_table(step: dict, state: AgentState) -> str:
     """Return the DuckDB table name that this step should read from.
 
@@ -120,6 +154,9 @@ async def execute_step(state: AgentState) -> dict:
         step_sql = _sanitize_sql_quotes(str(parameters.get("sql") or step.get("sql") or "").strip())
         # Rewrite any residual "FROM dataset" / "JOIN dataset" refs to the actual named alias.
         step_sql = _rewrite_dataset_alias(step_sql, _primary_alias_from_state(state))
+        # Safety net: if LLM ignored chain rule and wrote FROM <original> when a derived
+        # table already exists, silently promote to the latest derived table.
+        step_sql = _rewrite_stale_source(step_sql, state)
 
         if operation in {"add_column", "create_column"} or state.get("intent") == "add_column":
             column_name = str(parameters.get("column_name") or parameters.get("name") or "").strip()

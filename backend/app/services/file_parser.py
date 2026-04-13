@@ -48,6 +48,7 @@ class FileParserService:
         content: bytes,
         filename: str,
         sheet_name: Optional[str | int] = None,
+        delimiter: Optional[str] = None,
     ) -> pd.DataFrame:
         extension = filename.rsplit(".", 1)[-1].lower()
         FileParserService.detect_file_format(filename)
@@ -57,9 +58,13 @@ class FileParserService:
             return pd.read_csv(buffer, sep="\t")
 
         if extension in {"csv", "txt"}:
-            delimiter = FileParserService._sniff_delimiter(content)
-            logger.debug("CSV delimiter sniffed as %r for %s", delimiter, filename)
-            return pd.read_csv(BytesIO(content), sep=delimiter)
+            if delimiter:
+                # User-specified delimiter — use it directly (unescape \t)
+                sep = "\t" if delimiter == "\\t" else delimiter
+            else:
+                sep = FileParserService._sniff_delimiter(content)
+                logger.debug("CSV delimiter sniffed as %r for %s", sep, filename)
+            return pd.read_csv(BytesIO(content), sep=sep, engine="python" if len(sep) > 1 else "c")
 
         if extension in {"xls", "xlsx"}:
             # sheet_name=None reads all sheets (returns dict); pick specified or first

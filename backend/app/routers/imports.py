@@ -76,6 +76,7 @@ async def upload_file(
     file: UploadFile = File(...),
     dataset_name: str | None = Form(default=None),
     sheet: str | None = Form(default=None),
+    delimiter: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
@@ -131,7 +132,7 @@ async def upload_file(
 
     try:
         logger.info(f"Parsing file: {file.filename}")
-        df = FileParserService.parse_file(content, file.filename, sheet_name=sheet)
+        df = FileParserService.parse_file(content, file.filename, sheet_name=sheet, delimiter=delimiter or None)
         if df.empty:
             raise ValueError("CSV file is empty")
         if df.shape[0] == 0:

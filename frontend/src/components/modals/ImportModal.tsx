@@ -11,10 +11,13 @@ interface ImportModalProps {
   preloadUrl?: string;
 }
 
-type SourceType = "file";
+type FileType = "csv" | "excel" | "json" | "parquet";
 
-const sourceCards: Array<{ key: SourceType; label: string; description: string }> = [
-  { key: "file", label: "File Upload", description: "CSV, Excel, JSON, Parquet" },
+const FILE_TYPES: Array<{ key: FileType; label: string; ext: string; accept: string; icon: string }> = [
+  { key: "csv",     label: "CSV",     ext: ".csv",                  accept: ".csv,.tsv,.txt",      icon: "CSV" },
+  { key: "excel",  label: "Excel",   ext: ".xlsx / .xls",          accept: ".xlsx,.xls",           icon: "XLS" },
+  { key: "json",   label: "JSON",    ext: ".json",                 accept: ".json",                icon: "JSON" },
+  { key: "parquet",label: "Parquet", ext: ".parquet",              accept: ".parquet",             icon: "PAR" },
 ];
 
 interface FilePreview {
@@ -29,16 +32,22 @@ interface FilePreview {
 
 
 export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl }: ImportModalProps) {
-  const fileRef = useRef<HTMLInputElement>(null);
+  // One hidden <input> per file type so accept filter changes correctly
+  const csvRef     = useRef<HTMLInputElement>(null);
+  const excelRef   = useRef<HTMLInputElement>(null);
+  const jsonRef    = useRef<HTMLInputElement>(null);
+  const parquetRef = useRef<HTMLInputElement>(null);
+  const fileRef = csvRef; // used by preloadUrl path (CSV)
   const { markFirstUpload } = useUser();
-  const [isUploading, setIsUploading] = useState(false);
+  const [isUploading, setIsUploading]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isValidating, setIsValidating] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
-  const [datasetName, setDatasetName] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [sourceType] = useState<SourceType>("file");
-  const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
+  const [isValidating, setIsValidating]   = useState(false);
+  const [errorText, setErrorText]         = useState<string | null>(null);
+  const [datasetName, setDatasetName]     = useState("");
+  const [selectedFile, setSelectedFile]   = useState<File | null>(null);
+  const [selectedFileType, setSelectedFileType] = useState<FileType | null>(null);
+  const [filePreview, setFilePreview]     = useState<FilePreview | null>(null);
+  const [customDelimiter, setCustomDelimiter] = useState("");
 
   // Auto-load a sample file when preloadUrl is provided
   useEffect(() => {
@@ -100,9 +109,13 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
 
   const resetFileState = () => {
     setSelectedFile(null);
+    setSelectedFileType(null);
     setFilePreview(null);
     setErrorText(null);
-    if (fileRef.current) fileRef.current.value = "";
+    setCustomDelimiter("");
+    for (const ref of [csvRef, excelRef, jsonRef, parquetRef]) {
+      if (ref.current) ref.current.value = "";
+    }
   };
 
 
@@ -175,6 +188,10 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
         if (datasetName.trim()) {
           formData.append("dataset_name", datasetName.trim());
         }
+        // Pass custom delimiter for CSV files when the user specified one
+        if (selectedFileType === "csv" && customDelimiter.trim()) {
+          formData.append("delimiter", customDelimiter.trim());
+        }
         await api.post("/import/upload", formData, {
           headers: {
             "Content-Type": "multipart/form-data",
@@ -208,12 +225,14 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
-      if (fileRef.current) {
-        fileRef.current.value = "";
+      for (const ref of [csvRef, excelRef, jsonRef, parquetRef]) {
+        if (ref.current) ref.current.value = "";
       }
       setDatasetName("");
       setSelectedFile(null);
+      setSelectedFileType(null);
       setFilePreview(null);
+      setCustomDelimiter("");
     }
   };
 
@@ -231,18 +250,25 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
     <div style={overlay}>
       <div style={modal}>
         <h3 style={{ marginBottom: 10 }}>Import Data Source</h3>
-        <input
-          ref={fileRef}
-          type="file"
-          hidden
-          accept=".csv,.xlsx,.xls,.json,.parquet"
-          onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            if (file) {
-              void handleFileSelect(file);
-            }
-          }}
-        />
+
+        {/* One hidden input per file type so the accept filter is exact */}
+        {FILE_TYPES.map((ft) => (
+          <input
+            key={ft.key}
+            ref={ft.key === "csv" ? csvRef : ft.key === "excel" ? excelRef : ft.key === "json" ? jsonRef : parquetRef}
+            type="file"
+            hidden
+            accept={ft.accept}
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              if (file) {
+                setSelectedFileType(ft.key);
+                void handleFileSelect(file);
+              }
+            }}
+          />
+        ))}
+
         <label style={{ display: "grid", gap: 6, marginBottom: 10 }}>
           <span style={{ color: "var(--tx1)", fontSize: 12 }}>Dataset name (optional)</span>
           <input
@@ -260,43 +286,81 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
             }}
           />
         </label>
-        {sourceType === "file" && selectedFile && !filePreview && isValidating ? (
-          <p style={{ marginTop: 10, color: "var(--tx2)", fontSize: 12 }}>Validating file…</p>
-        ) : null}
-        {sourceType === "file" && filePreview ? (
-          <FilePreviewPanel preview={filePreview} onReset={resetFileState} />
-        ) : (
-          sourceType === "file" && selectedFile && !isValidating ? (
-            <p style={{ marginBottom: 10, color: "var(--tx1)", fontSize: 12 }}>Selected file: {selectedFile.name}</p>
-          ) : null
+
+        {/* File type selection buttons */}
+        {!selectedFile && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 10 }}>
+            {FILE_TYPES.map((ft) => (
+              <button
+                key={ft.key}
+                className="btn"
+                disabled={isUploading}
+                style={{
+                  height: 64,
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  borderColor: selectedFileType === ft.key ? "var(--ac)" : "var(--bd2)",
+                  background: selectedFileType === ft.key ? "var(--acl)" : "var(--bg3)",
+                }}
+                onClick={() => {
+                  setErrorText(null);
+                  const refMap = { csv: csvRef, excel: excelRef, json: jsonRef, parquet: parquetRef };
+                  refMap[ft.key].current?.click();
+                }}
+              >
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                  background: "var(--bg1)", border: "1px solid var(--bd2)",
+                  borderRadius: 4, padding: "2px 5px", color: "var(--ac)", fontFamily: "monospace",
+                }}>
+                  {ft.icon}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tx0)" }}>{ft.label}</span>
+                <span style={{ fontSize: 10, color: "var(--tx2)" }}>{ft.ext}</span>
+              </button>
+            ))}
+          </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-          {sourceCards.map((source) => (
-            <button
-              key={source.key}
-              className="btn"
+
+        {/* CSV custom delimiter — only shown when a CSV is selected and not yet previewed */}
+        {selectedFileType === "csv" && !filePreview && !isValidating && (
+          <label style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+            <span style={{ color: "var(--tx1)", fontSize: 12 }}>
+              Custom delimiter <span style={{ color: "var(--tx2)", fontWeight: 400 }}>(optional — leave blank to auto-detect)</span>
+            </span>
+            <input
+              value={customDelimiter}
+              onChange={(e) => setCustomDelimiter(e.target.value)}
+              placeholder={`e.g.  |  or  ;  or  \\t  for tab`}
+              maxLength={4}
               disabled={isUploading}
               style={{
-                height: 56,
-                justifyContent: "flex-start",
-                textAlign: "left",
-                borderColor: sourceType === source.key ? "var(--ac)" : "var(--bd2)",
-                background: sourceType === source.key ? "var(--acl)" : "var(--bg3)",
+                height: 34,
+                border: "1px solid var(--bd2)",
+                borderRadius: "var(--r8)",
+                background: "var(--bg2)",
+                color: "var(--tx0)",
+                padding: "0 10px",
+                fontFamily: "monospace",
+                width: 200,
               }}
-              onClick={() => {
-                setErrorText(null);
-                if (source.key === "file") {
-                  fileRef.current?.click();
-                }
-              }}
-            >
-              <span style={{ display: "grid", gap: 2 }}>
-                <strong style={{ fontSize: 12, color: "var(--tx0)" }}>{source.label}</strong>
-                <span style={{ fontSize: 11, color: "var(--tx1)" }}>{source.description}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+            />
+          </label>
+        )}
+
+        {/* Validation / preview state */}
+        {selectedFile && !filePreview && isValidating ? (
+          <p style={{ marginTop: 10, color: "var(--tx2)", fontSize: 12 }}>Validating file…</p>
+        ) : null}
+        {filePreview ? (
+          <FilePreviewPanel preview={filePreview} onReset={resetFileState} />
+        ) : (
+          selectedFile && !isValidating ? (
+            <p style={{ marginBottom: 10, color: "var(--tx1)", fontSize: 12 }}>Selected: {selectedFile.name}</p>
+          ) : null
+        )}
         {errorText ? <p style={{ marginTop: 10, color: "var(--rd)", fontSize: 12 }}>{errorText}</p> : null}
         {isUploading ? (
           <div style={{ marginTop: 10 }}>

@@ -27,6 +27,10 @@ interface CanvasPanelProps {
   /** 50-row preview from the latest AI transform (session-only, not persisted) */
   sessionPreviewRows?: Record<string, unknown>[];
   sessionPreviewColumns?: string[];
+  /** True when user toggled back to view the original source dataset */
+  showingOriginal?: boolean;
+  onViewOriginal?: () => void;
+  onViewCleaned?: () => void;
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -38,7 +42,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -106,7 +110,11 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconBarChart size={14} />Canvas</span>
           </button>
           <span className="mono" style={{ height: 30, padding: "0 10px", borderRadius: "var(--r6)", background: "var(--bg3)", border: "1px solid var(--bd2)", display: "inline-flex", alignItems: "center", color: "var(--tx1)" }}>
-            {dataset?.name ?? "No dataset"}
+            {sessionPreviewRows && sessionPreviewRows.length > 0
+              ? (liveArtifact?.stepLabel ?? "cleaned preview")
+              : showingOriginal
+              ? `${dataset?.name ?? "dataset"} (original)`
+              : (dataset?.name ?? "No dataset")}
           </span>
         </div>
 
@@ -189,12 +197,31 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
             <span>{dataError}</span>
           </div>
         )}
-        {/* Amber banner shown when Canvas displays a session-only preview */}
+        {/* Amber banner: cleaned preview mode */}
         {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (
           <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>⚡</span>
-            <span style={{ flex: 1 }}>⚡ Preview only — {sessionPreviewRows.length} rows. Not saved yet. Revert anytime with undo in the pipeline sidebar.</span>
+            <span style={{ flex: 1 }}>Preview only — {sessionPreviewRows.length} rows. Not saved yet.</span>
+            <button
+              onClick={onViewOriginal}
+              style={{ background: "transparent", border: "1px solid rgba(234,179,8,0.4)", borderRadius: 4, color: "#fde68a", fontSize: 11, padding: "2px 8px", cursor: "pointer", flexShrink: 0 }}
+            >
+              View original
+            </button>
             <span style={{ opacity: 0.5, fontSize: 11, flexShrink: 0 }}>rename &amp; save →</span>
+          </div>
+        )}
+        {/* Blue banner: viewing original while a live artifact exists */}
+        {tab === "data" && showingOriginal && (
+          <div style={{ padding: "6px 14px", background: "rgba(91,106,240,0.1)", borderBottom: "1px solid rgba(91,106,240,0.25)", color: "#a5b4fc", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <span>👁</span>
+            <span style={{ flex: 1 }}>Viewing original data.</span>
+            <button
+              onClick={onViewCleaned}
+              style={{ background: "transparent", border: "1px solid rgba(91,106,240,0.4)", borderRadius: 4, color: "#a5b4fc", fontSize: 11, padding: "2px 8px", cursor: "pointer", flexShrink: 0 }}
+            >
+              ▶ See cleaned data ({liveArtifact?.rowCount?.toLocaleString() ?? ""} rows)
+            </button>
           </div>
         )}
         {tab === "pipeline" ? (

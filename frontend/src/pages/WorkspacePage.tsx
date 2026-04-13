@@ -28,7 +28,7 @@ export function WorkspacePage() {
   const resolvedProject = projectId
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
-  const { runPipeline, steps, liveArtifact } = usePipelineContext();
+  const { runPipeline, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -48,6 +48,7 @@ export function WorkspacePage() {
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
+  const [showingOriginal, setShowingOriginal] = useState(false);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // Show welcome modal on first visit
@@ -79,14 +80,24 @@ export function WorkspacePage() {
     }
   }, [hasUploadedFirstFile, hasAskedFirstQuestion, hasCompletedOnboarding, markOnboardingComplete]);
 
-  // Clear session preview whenever the user switches to a different source dataset
+  // Clear session preview + live artifact whenever the user switches to a different source dataset
   useEffect(() => {
     setSessionPreview(null);
+    setLiveArtifact(null);
+    setShowingOriginal(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDataset?.id]);
 
-  // Clear session preview when the live artifact is cleared (step deleted or artifact saved)
+  // Clear session preview when the live artifact is cleared (step deleted or artifact saved).
+  // When a NEW live artifact is set (user ran another step while viewing original),
+  // snap back to showing the cleaned result automatically.
   useEffect(() => {
-    if (!liveArtifact) setSessionPreview(null);
+    if (!liveArtifact) {
+      setSessionPreview(null);
+      setShowingOriginal(false);
+    } else {
+      setShowingOriginal(false);
+    }
   }, [liveArtifact]);
 
   useEffect(() => {
@@ -210,8 +221,11 @@ export function WorkspacePage() {
           void refetch();
         }}
         onArtifactSaved={() => setDatasetRefreshNonce((value) => value + 1)}
-        sessionPreviewRows={sessionPreview?.rows}
-        sessionPreviewColumns={sessionPreview?.columns}
+        sessionPreviewRows={showingOriginal ? undefined : sessionPreview?.rows}
+        sessionPreviewColumns={showingOriginal ? undefined : sessionPreview?.columns}
+        showingOriginal={showingOriginal && !!sessionPreview}
+        onViewOriginal={() => setShowingOriginal(true)}
+        onViewCleaned={() => setShowingOriginal(false)}
       />
       {/* Pipeline column — dedicated panel between canvas and AI */}
       {pipelineOpen ? (

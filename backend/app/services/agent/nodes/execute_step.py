@@ -483,7 +483,7 @@ async def execute_step(state: AgentState) -> dict:
                                 (
                                     v["duckdb_name"]
                                     for v in sorted(
-                                        table_registry.values(),
+                                        (e for e in table_registry.values() if isinstance(e, dict)),
                                         key=lambda _x: _x.get("pipeline_step_number", 0),
                                         reverse=True,
                                     )

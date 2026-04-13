@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { api } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
@@ -28,7 +29,7 @@ export function WorkspacePage() {
   const resolvedProject = projectId
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
-  const { runPipeline, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
+  const { runPipeline, steps, liveArtifact, setLiveArtifact, clearSteps } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -85,6 +86,7 @@ export function WorkspacePage() {
     setSessionPreview(null);
     setLiveArtifact(null);
     setShowingOriginal(false);
+    clearSteps();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDataset?.id]);
 
@@ -226,6 +228,15 @@ export function WorkspacePage() {
         showingOriginal={showingOriginal && !!sessionPreview}
         onViewOriginal={() => setShowingOriginal(true)}
         onViewCleaned={() => setShowingOriginal(false)}
+        onSave={liveArtifact ? async () => {
+          await api.post("/api/artifacts/save-checkpoint", {
+            session_id: liveArtifact.sessionId,
+            table_name: liveArtifact.tableName,
+            artifact_name: liveArtifact.stepLabel,
+            source_dataset_id: activeDataset?.id,
+          });
+          setDatasetRefreshNonce((v) => v + 1);
+        } : undefined}
       />
       {/* Pipeline column — dedicated panel between canvas and AI */}
       {pipelineOpen ? (

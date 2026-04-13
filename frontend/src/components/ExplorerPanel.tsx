@@ -346,6 +346,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
               session_id: liveArtifact.sessionId,
               table_name: tableName,
               artifact_name: label,
+              source_dataset_id: activeDataset?.id,
             });
             void loadDatasets();
           }}

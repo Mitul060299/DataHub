@@ -234,10 +234,12 @@ def save_checkpoint(
     Materialise a DuckDB session table as a Parquet artifact + DatasetMetaDB row.
 
     Body:
-        session_id       (required) — DuckDB session containing the table
-        table_name       (required) — DuckDB table/view name to snapshot
-        artifact_name    (optional) — human-visible label (defaults to table_name)
-        description      (optional)
+        session_id         (required) — DuckDB session containing the table
+        table_name         (required) — DuckDB table/view name to snapshot
+        artifact_name      (optional) — human-visible label (defaults to table_name)
+        description        (optional)
+        source_dataset_id  (optional) — raw dataset this artifact was derived from;
+                                        stored as parent_id to link lineage
     """
     session_id = str(body.get("session_id") or "").strip()
     table_name = str(body.get("table_name") or "").strip()
@@ -248,6 +250,7 @@ def save_checkpoint(
 
     artifact_name = str(body.get("artifact_name") or table_name).strip()
     description = body.get("description")
+    source_dataset_id = str(body.get("source_dataset_id") or "").strip() or None
 
     # 1. Fetch rows from the live DuckDB session
     try:
@@ -302,6 +305,7 @@ def save_checkpoint(
             columns=col_schema,
             row_count=len(rows),
             status="ready",
+            parent_id=source_dataset_id,
         )
         db.add(ds_row)
         db.flush()

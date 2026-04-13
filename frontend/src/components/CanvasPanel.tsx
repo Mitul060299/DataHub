@@ -31,6 +31,8 @@ interface CanvasPanelProps {
   showingOriginal?: boolean;
   onViewOriginal?: () => void;
   onViewCleaned?: () => void;
+  /** Called when user clicks Save in the amber preview banner */
+  onSave?: () => void;
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -42,7 +44,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -208,7 +210,14 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
             >
               View original
             </button>
-            <span style={{ opacity: 0.5, fontSize: 11, flexShrink: 0 }}>rename &amp; save →</span>
+            {onSave && (
+              <button
+                onClick={onSave}
+                style={{ background: "rgba(234,179,8,0.15)", border: "1px solid rgba(234,179,8,0.4)", borderRadius: 4, color: "#fde68a", fontSize: 11, padding: "2px 8px", cursor: "pointer", flexShrink: 0 }}
+              >
+                Save ↑
+              </button>
+            )}
           </div>
         )}
         {/* Blue banner: viewing original while a live artifact exists */}

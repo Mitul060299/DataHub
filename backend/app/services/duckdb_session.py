@@ -18,7 +18,7 @@ _lock = threading.Lock()
 _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
 _last_used: dict[str, float] = {}
 
-MAX_SESSION_AGE_SECONDS = 7200  # 2 hours
+MAX_SESSION_AGE_SECONDS = 1800  # 30 minutes
 _CLEANUP_INTERVAL_SECONDS = 900  # run background cleanup every 15 minutes
 
 
@@ -107,6 +107,22 @@ def register_table_from_sql(session_id: str, table_name: str, sql: str) -> int:
     conn.execute(f"CREATE OR REPLACE TABLE {table_name} AS {sql}")
     result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
     return int(result[0]) if result else 0
+
+
+def register_view_from_sql(session_id: str, view_name: str, sql: str) -> None:
+    """Create a lazy VIEW from a SQL expression — zero RAM, deferred execution."""
+    conn = get_connection(session_id)
+    conn.execute(f"CREATE OR REPLACE VIEW {view_name} AS {sql}")
+
+
+def drop_table_or_view(session_id: str, name: str) -> None:
+    """Drop a table or view from the session, ignoring errors if it doesn't exist."""
+    try:
+        conn = get_connection(session_id)
+        conn.execute(f"DROP TABLE IF EXISTS {name}")
+        conn.execute(f"DROP VIEW IF EXISTS {name}")
+    except Exception:
+        pass
 
 
 def _coerce(value: object) -> object:

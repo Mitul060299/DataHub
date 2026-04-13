@@ -11,6 +11,7 @@ from ...dashboards_v2_service import DashboardsV2Service
 from ...plan_guard import normalize_plan
 from ...duckdb_session import (
     register_table_from_sql,
+    register_view_from_sql,
     execute_in_session,
     get_connection,
     SessionExpiredError,
@@ -540,7 +541,7 @@ async def execute_step(state: AgentState) -> dict:
                     _step_start_ts = datetime.now(timezone.utc)
 
                     if session_id:
-                        register_table_from_sql(session_id, output_table, step_sql)
+                        register_view_from_sql(session_id, output_table, step_sql)
                         # Try to get row count from new table
                         try:
                             count_rows = execute_in_session(session_id, f"SELECT COUNT(*) AS n FROM {output_table}")

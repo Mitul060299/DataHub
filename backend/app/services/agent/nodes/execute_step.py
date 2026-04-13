@@ -31,29 +31,68 @@ def _sanitize_sql_quotes(sql: str) -> str:
     return re.sub(r'`([^`]+)`', r'"\1"', sql)
 
 
+def _primary_alias_from_state(state: AgentState) -> str:
+    """Return the primary dataset's named DuckDB alias (never the generic 'dataset')."""
+    table_registry: dict = dict(state.get("table_registry") or {})
+    # Stored by context_loader under the sentinel key "__primary_alias__".
+    stored = table_registry.get("__primary_alias__")
+    if isinstance(stored, str) and stored and stored != "dataset":
+        return stored
+    # Fallback: find the registry entry with pipeline_step_number == 0
+    # that is not the sentinel and not the compatibility alias.
+    for name, entry in table_registry.items():
+        if name == "__primary_alias__":
+            continue
+        if isinstance(entry, dict) and entry.get("pipeline_step_number", -1) == 0 and name != "dataset":
+            return name
+    return "dataset"  # last-resort — keeps old behaviour
+
+
+def _rewrite_dataset_alias(sql: str, primary_alias: str) -> str:
+    """Replace bare `dataset` table references with the named primary alias.
+
+    Matches the word `dataset` only when it appears as a table reference:
+      - FROM dataset
+      - JOIN dataset
+      - PIVOT dataset
+    Does NOT replace `dataset` when it is part of a longer identifier
+    (e.g. dataset_clean, my_dataset) thanks to the word-boundary anchors.
+    """
+    if not sql or not primary_alias or primary_alias == "dataset":
+        return sql
+    return re.sub(
+        r'(?i)\b(FROM|JOIN|PIVOT)\s+dataset\b',
+        lambda m: f"{m.group(1)} {primary_alias}",
+        sql,
+    )
+
+
 def _resolve_input_table(step: dict, state: AgentState) -> str:
     """Return the DuckDB table name that this step should read from.
 
     For branching steps (depends_on is set), find the most-recently registered
     table_registry entry whose pipeline_step_number is in depends_on.
-    Falls back to "dataset" (the source view) when no match is found.
-    For sequential steps (depends_on absent or empty), also returns "dataset"
-    so the existing linear behaviour is preserved.
+    Falls back to the named primary alias when no match is found.
+    For sequential steps (depends_on absent or empty), also returns the primary
+    named alias so generated SQL references the correct dataset.
     """
     depends_on: list[int] = step.get("depends_on") or []
+    primary = _primary_alias_from_state(state)
     if not depends_on:
-        return "dataset"
+        return primary
     table_registry: dict = dict(state.get("table_registry") or {})
     # Prefer entries whose step number is the highest in depends_on
     # (the most derived predecessor) as the default input table.
     best: str | None = None
     best_step = -1
     for entry in table_registry.values():
+        if not isinstance(entry, dict):
+            continue
         sn = entry.get("pipeline_step_number", -1)
         if sn in depends_on and sn > best_step:
             best = entry["duckdb_name"]
             best_step = sn
-    return best if best else "dataset"
+    return best if best else primary
 
 
 async def execute_step(state: AgentState) -> dict:
@@ -74,6 +113,8 @@ async def execute_step(state: AgentState) -> dict:
         operation = str(step.get("operation") or "transform")
         parameters = step.get("parameters") if isinstance(step.get("parameters"), dict) else {}
         step_sql = _sanitize_sql_quotes(str(parameters.get("sql") or step.get("sql") or "").strip())
+        # Rewrite any residual "FROM dataset" / "JOIN dataset" refs to the actual named alias.
+        step_sql = _rewrite_dataset_alias(step_sql, _primary_alias_from_state(state))
 
         if operation in {"add_column", "create_column"} or state.get("intent") == "add_column":
             column_name = str(parameters.get("column_name") or parameters.get("name") or "").strip()

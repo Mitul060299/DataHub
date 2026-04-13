@@ -93,9 +93,9 @@ async def context_loader(state: AgentState) -> dict:
     if dataset and dataset.storage_path:
         _primary_alias = _sanitize_alias(str(dataset.name if dataset and dataset.name else dataset_id))
         _register_dataset_view(dataset_id, _primary_alias, storage_path=dataset.storage_path)
-        # ALSO register as the canonical "dataset" alias — the planner prompt (rule 10)
-        # hard-codes the primary input table as `dataset` in all generated SQL.  Without
-        # this view the DDL fails with "Table 'dataset' not found" and no artifact is created.
+        # Also register a "dataset" alias as a compatibility fallback for any SQL
+        # the LLM generates that still uses the generic name. Execute_step will
+        # rewrite these before execution, but the view must exist as a backstop.
         if _primary_alias != "dataset":
             _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
         if _primary_alias not in table_registry:
@@ -139,6 +139,11 @@ async def context_loader(state: AgentState) -> dict:
                             )
             finally:
                 _art_db.close()
+
+    # Store the primary alias in the state so execute_step can rewrite
+    # any residual "FROM dataset" references at runtime.
+    if dataset and dataset.storage_path:
+        table_registry["__primary_alias__"] = _primary_alias  # type: ignore[possibly-undefined]
 
     # Auto-discover all other datasets in the workspace so the planner can reference
     # them by name in SQL.  This is expensive (DB query + N DuckDB view registrations)

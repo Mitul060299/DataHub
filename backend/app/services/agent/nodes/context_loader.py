@@ -124,6 +124,8 @@ async def context_loader(state: AgentState) -> dict:
             _art_db = SessionLocal()
             try:
                 for _entry in list(table_registry.values()):
+                    if not isinstance(_entry, dict):
+                        continue
                     if _entry.get("pipeline_step_number", 0) > 0:
                         _art_ds_id = _entry.get("dataset_id", "")
                         if not _art_ds_id:

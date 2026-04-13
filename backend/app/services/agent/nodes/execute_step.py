@@ -547,7 +547,7 @@ async def execute_step(state: AgentState) -> dict:
                     if not input_tables:
                         # infer from current primary table
                         primary_alias = next(
-                            (k for k, v in table_registry.items() if v.get("dataset_id") == str(state.get("dataset_id"))),
+                            (k for k, v in table_registry.items() if isinstance(v, dict) and v.get("dataset_id") == str(state.get("dataset_id"))),
                             None,
                         )
                         if primary_alias:

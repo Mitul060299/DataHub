@@ -400,7 +400,6 @@ export function SourcesPage() {
           ))}
         </div>
       )}
-      )}
 
       {/* ── Saved DB Connections ──────────────────────────────── */}
       <div style={{ marginTop: 40 }}>

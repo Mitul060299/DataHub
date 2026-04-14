@@ -91,7 +91,7 @@ def create_workspace(
 
 
 @router.get("", response_model=list[WorkspaceOut])
-def list_workspaces(
+def list_workspaces(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> list[WorkspaceOut]:
     role = get_current_role(authorization)
     require_role("viewer", role)
     caller = get_current_subject(authorization)

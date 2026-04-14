@@ -22,7 +22,7 @@ import { capture } from "../lib/posthog";
 const workspaceId = "default";
 
 export function WorkspacePage() {
-  const { projectId } = useParams<{ projectId?: string }>();
+  const { projectId, pipelineId } = useParams<{ projectId?: string; pipelineId?: string }>();
   const { activeProject, activeDataset, projects, activeWorkspaceId } = useWorkspaceContext();
   const workspaceId = activeWorkspaceId !== "default" ? activeWorkspaceId : "default";
 
@@ -210,6 +210,7 @@ export function WorkspacePage() {
       <CanvasPanel
         workspaceId={workspaceId}
         projectId={resolvedProject?.id ?? ""}
+        pipelineId={pipelineId}
         dataset={activeDataset}
         loading={loading}
         dataError={datasetError ?? undefined}

@@ -6,7 +6,7 @@ import {
   removeMember,
   type WorkspaceMemberOut,
 } from "../api";
-import { useAuth } from "../contexts/AuthContext";
+import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "#5b6af0",
@@ -20,8 +20,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function TeamSettings() {
-  const { session } = useAuth();
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { activeWorkspaceId } = useWorkspaceContext();
+  const workspaceId = activeWorkspaceId !== "default" ? activeWorkspaceId : null;
   const [members, setMembers] = useState<WorkspaceMemberOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -34,13 +34,6 @@ export function TeamSettings() {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
-
-  // Derive workspace id from token claims (sub claim = user id used as workspace id for now)
-  useEffect(() => {
-    // Try to read workspace from auth session user metadata or default to user's own sub
-    const sub = session?.user?.id ?? null;
-    setWorkspaceId(sub);
-  }, [session]);
 
   useEffect(() => {
     if (!workspaceId) return;

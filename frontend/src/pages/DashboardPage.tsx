@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import {
   fetchDashboardById,
@@ -12,6 +12,7 @@ import { EChartsRenderer } from "../components/EChartsRenderer";
 import { MetricTile } from "../components/MetricTile";
 import { SharePanel } from "../components/SharePanel";
 import { DashboardComments } from "../components/DashboardComments";
+import { useRealtimeDashboard } from "../hooks/useRealtimeDashboard";
 
 // ---------- helpers ----------
 
@@ -313,6 +314,14 @@ export function DashboardPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showShare, setShowShare] = useState(false);
 
+  const onTilesRefresh = useCallback(async (_tileIds: string[]) => {
+    if (!id) return;
+    const dash = await fetchDashboardById(id);
+    setTiles(dash.tiles);
+  }, [id]);
+
+  const { toastMessage, refreshFailed } = useRealtimeDashboard(id, onTilesRefresh);
+
   useEffect(() => {
     if (!id) return;
     const load = async () => {
@@ -386,6 +395,18 @@ export function DashboardPage() {
     <>
       {/* Print CSS */}
       <style>{`@media print { .no-print { display: none !important; } }`}</style>
+
+      {/* Realtime toast */}
+      {toastMessage && (
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "#1e2030", border: "1px solid #5B6AF0", color: "#fff", padding: "10px 20px", borderRadius: 8, fontSize: 13, zIndex: 9999, whiteSpace: "nowrap" }}>
+          {toastMessage}
+        </div>
+      )}
+      {refreshFailed && (
+        <div style={{ position: "fixed", bottom: 64, left: "50%", transform: "translateX(-50%)", background: "#1e2030", border: "1px solid #f87171", color: "#f87171", padding: "8px 16px", borderRadius: 8, fontSize: 12, zIndex: 9999 }}>
+          ⚠ Last pipeline run failed — showing previous data
+        </div>
+      )}
 
       <main style={{ minHeight: "100%", background: "var(--bg0)", color: "var(--tx0)", display: "flex", flexDirection: "column" }}>
         {/* Header */}

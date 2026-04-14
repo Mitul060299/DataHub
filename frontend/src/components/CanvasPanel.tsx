@@ -6,13 +6,16 @@ import { IconBarChart, IconDownload, IconGitBranch, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
+import { PipelineScheduleTab } from "./PipelineScheduleTab";
+import { DataVersionHistory } from "./DataVersionHistory";
 import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau } from "../api";
 
-type CanvasTab = "data" | "pipeline" | "canvas";
+type CanvasTab = "data" | "pipeline" | "canvas" | "schedule" | "history";
 
 interface CanvasPanelProps {
   workspaceId: string;
   projectId: string;
+  pipelineId?: string;
   dataset: Dataset | null;
   loading: boolean;
   dataError?: string;
@@ -44,7 +47,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -111,6 +114,16 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
           <button data-tour="canvas-tab" className="btn" onClick={() => setTab("canvas")} style={{ background: tab === "canvas" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "canvas" ? "var(--acg)" : "var(--bd2)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconBarChart size={14} />Canvas</span>
           </button>
+          {pipelineId && (
+            <button className="btn" onClick={() => setTab("schedule")} style={{ background: tab === "schedule" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "schedule" ? "var(--acg)" : "var(--bd2)" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>⏱ Schedule</span>
+            </button>
+          )}
+          {dataset?.id && (
+            <button className="btn" onClick={() => setTab("history")} style={{ background: tab === "history" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "history" ? "var(--acg)" : "var(--bd2)" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>🕘 History</span>
+            </button>
+          )}
           <span className="mono" style={{ height: 30, padding: "0 10px", borderRadius: "var(--r6)", background: "var(--bg3)", border: "1px solid var(--bd2)", display: "inline-flex", alignItems: "center", color: "var(--tx1)" }}>
             {sessionPreviewRows && sessionPreviewRows.length > 0
               ? (liveArtifact?.stepLabel ?? "cleaned preview")
@@ -239,6 +252,14 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
         )}
         {tab === "pipeline" ? (
           <PipelineGraphTab />
+        ) : tab === "schedule" && pipelineId ? (
+          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            <PipelineScheduleTab pipelineId={pipelineId} />
+          </div>
+        ) : tab === "history" && dataset?.id ? (
+          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            <DataVersionHistory datasetId={dataset.id} />
+          </div>
         ) : tab === "data" ? (
           <DataTable
             datasetId={dataset?.id}

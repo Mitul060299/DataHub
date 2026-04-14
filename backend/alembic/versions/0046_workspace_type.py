@@ -1,7 +1,7 @@
 """Add workspace_type column to workspaces and seed personal workspace per user.
 
-Revision ID: 0042
-Revises: 0041
+Revision ID: 0046
+Revises: 0045
 Create Date: 2026-04-14
 """
 from __future__ import annotations
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect as sa_inspect, text
 
-revision = "0042"
-down_revision = "0041"
+revision = "0046"
+down_revision = "0045"
 branch_labels = None
 depends_on = None
 
@@ -57,8 +57,8 @@ def upgrade() -> None:
         ws_name = f"{safe_name}-personal"
         # Ensure uniqueness by appending short id suffix if name already taken
         taken = conn.execute(
-            text("SELECT 1 FROM workspaces WHERE name = :n LIMIT 1"),
-            {"n": ws_name},
+            text("SELECT 1 FROM workspaces WHERE owner_id IS NOT DISTINCT FROM :uid AND name = :n LIMIT 1"),
+            {"uid": user_id, "n": ws_name},
         ).fetchone()
         if taken:
             ws_name = f"{safe_name}-{ws_id[:6]}"

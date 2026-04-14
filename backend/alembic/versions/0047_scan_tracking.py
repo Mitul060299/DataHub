@@ -1,7 +1,7 @@
 """Add data_scanned_bytes to user_usage table.
 
-Revision ID: 0043
-Revises: 0042
+Revision ID: 0047
+Revises: 0046
 Create Date: 2026-04-14
 """
 from __future__ import annotations
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect as sa_inspect
 
-revision = "0043"
-down_revision = "0042"
+revision = "0047"
+down_revision = "0046"
 branch_labels = None
 depends_on = None
 

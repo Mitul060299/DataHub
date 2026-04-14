@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { createProject as apiCreateProject, fetchProjects, fetchWorkspaceMembers, type WorkspaceMemberOut } from "../api";
+import { createProject as apiCreateProject, createWorkspace as apiCreateWorkspace, fetchProjects, fetchWorkspaceMembers, listWorkspaces, type WorkspaceMemberOut, type WorkspaceOut } from "../api";
 import type { ProjectOut } from "../api";
 import { useAuth } from "./AuthContext";
 
@@ -51,6 +51,11 @@ export interface WorkspaceContextValue {
   setMembers: (members: Member[]) => void;
   workspaceMembers: WorkspaceMemberOut[];
   refreshMembers: (workspaceId: string) => Promise<void>;
+  // Workspace list + switcher
+  workspaces: WorkspaceOut[];
+  activeWorkspaceId: string;
+  setActiveWorkspaceId: (id: string) => void;
+  createWorkspace: (name: string, type: "personal" | "collab") => Promise<WorkspaceOut>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
@@ -75,13 +80,43 @@ function toProject(raw: ProjectOut): Project {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
-  // Start as true so ExplorerPanel waits for the first project fetch before
-  // loading datasets — prevents a wasted no-project-id request on cold mount.
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [activeDataset, setActiveDataset] = useState<Dataset | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberOut[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceOut[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string>(
+    () => localStorage.getItem("activeWorkspaceId") || "default"
+  );
+
+  const setActiveWorkspaceId = useCallback((id: string) => {
+    localStorage.setItem("activeWorkspaceId", id);
+    setActiveWorkspaceIdState(id);
+  }, []);
+
+  const refreshWorkspaces = useCallback(async () => {
+    if (!session) return;
+    try {
+      const data = await listWorkspaces();
+      setWorkspaces(data);
+    } catch {
+      // non-fatal
+    }
+  }, [session]);
+
+  const createWorkspace = useCallback(
+    async (name: string, type: "personal" | "collab") => {
+      const ws = await apiCreateWorkspace(name, type);
+      setWorkspaces((prev) => [...prev, ws]);
+      return ws;
+    },
+    []
+  );
+
+  useEffect(() => {
+    void refreshWorkspaces();
+  }, [refreshWorkspaces]);
 
   const refreshMembers = useCallback(async (workspaceId: string) => {
     if (!session || !workspaceId || workspaceId === "default") return;
@@ -154,8 +189,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setMembers,
       workspaceMembers,
       refreshMembers,
+      workspaces,
+      activeWorkspaceId,
+      setActiveWorkspaceId,
+      createWorkspace,
     }),
-    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, members, workspaceMembers, refreshMembers],
+    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, members, workspaceMembers, refreshMembers, workspaces, activeWorkspaceId, setActiveWorkspaceId, createWorkspace],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

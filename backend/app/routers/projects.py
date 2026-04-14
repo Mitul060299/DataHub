@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import func
+from sqlalchemy import func, text as _sql_text
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -39,6 +39,7 @@ from ..models_db import (
     ProjectDB,
 )
 from ..services.workspace_access import get_visible_user_ids
+from ..services.plan_guard import resolve_workspace_plan, enforce_project_limit
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 recent_router = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -119,11 +120,18 @@ def create_project(
     if duplicate:
         raise HTTPException(status_code=409, detail="A project with this name already exists.")
 
+    workspace_id = (payload.workspace_id or "default").strip()
+    _, billing_plan = resolve_workspace_plan(workspace_id, current_user.id, db)
+    # Advisory lock: serialise project creation per workspace to prevent TOCTOU races.
+    db.execute(_sql_text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"proj_create_{workspace_id}"})
+    existing_count = db.query(ProjectDB).filter(ProjectDB.workspace_id == workspace_id).count()
+    enforce_project_limit(billing_plan, existing_count)
+
     now = datetime.now(timezone.utc)
     project = ProjectDB(
         id=uuid.uuid4().hex,
         user_id=current_user.id,
-        workspace_id="default",
+        workspace_id=workspace_id,
         name=payload.name.strip(),
         description=payload.description,
         colour=payload.colour,
@@ -161,6 +169,7 @@ def get_project(
     project = _get_project_or_404(project_id, current_user.id, db)
 
     # Pipelines — guarded: project_id column may not yet exist in older DBs
+    from sqlalchemy.exc import ProgrammingError as _ProgrammingError
     try:
         pipelines_db = (
             db.query(PipelineV2DB)
@@ -168,7 +177,8 @@ def get_project(
             .order_by(PipelineV2DB.updated_at.desc())
             .all()
         )
-    except Exception:
+    except _ProgrammingError:
+        # Missing column in older DB — safe to return empty list until schema is migrated
         db.rollback()
         pipelines_db = []
     pipeline_rows: list[ProjectPipelineOut] = []

@@ -92,3 +92,6 @@ class AgentState(TypedDict):
     join_suggestions: NotRequired[list[dict]]  # [{secondary_id, secondary_name, on_column}] from context_loader
     needs_clarification: NotRequired[bool]
     plan_pending_modification: NotRequired[bool]
+    # Tracks which dataset_ids have already been charged for data scan this run,
+    # so we don't count the same source dataset multiple times across pipeline steps.
+    scan_charged_dataset_ids: NotRequired[list[str]]

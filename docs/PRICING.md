@@ -1,182 +1,136 @@
-# DataHub Pricing
+﻿# DataHub Pricing
 
-_Last updated: March 2026_
-
----
-
-## Overview
-
-DataHub is priced in **USD** with INR equivalents shown in brackets. All plans are billed monthly per workspace (not per seat).
-
-| Tier | Price | INR Equivalent |
-|---|---|---|
-| Free | $0 | ₹0 |
-| Professional | $79 / month | ₹3,299 / month |
-| Team | $149 / month | ₹6,199 / month |
-| Business | $399 / month | ₹16,599 / month |
-| Enterprise | Custom | Custom |
+> All limits are **per account** (not per user, not per device). Personal workspaces always draw from the account owner's quota. Collab workspaces draw from the workspace owner's quota.
 
 ---
 
-## Tier Details
+## Tier Overview
 
-### Free — $0
-
-| Feature | Value |
-|---|---|
-| Projects | 2 |
-| AI messages | 50 / month |
-| File size limit | 50 MB |
-| Storage | 100 MB |
-| Team members | 1 |
-| Scheduled pipelines | 0 |
-| Canvases | 2 |
-| Visualizations Library | Unlimited |
-| DB connections | CSV & Excel only |
-| Support | Community |
-
-CTA: **Get started**
-
----
-
-### Professional — $79 / month (₹3,299)
-
-| Feature | Value |
-|---|---|
-| Projects | Unlimited |
-| AI messages | 500 / month |
-| File size limit | 1 GB |
-| Storage | 20 GB |
-| Team members | 1 |
-| Scheduled pipelines | 5 |
-| Canvases | 20 |
-| Visualizations Library | Unlimited |
-| DB connections | PostgreSQL, MySQL, SQLite, MSSQL, Oracle |
-| Support | Email |
-
-CTA: **Start free trial**
-
----
-
-### Team — $149 / month (₹6,199) ⭐ Popular
-
-| Feature | Value |
-|---|---|
-| Projects | Unlimited |
-| AI messages | Unlimited |
-| File size limit | 1 GB |
-| Storage | 100 GB |
-| Team members | 10 |
-| Scheduled pipelines | 20 |
-| Canvases | Unlimited |
-| Visualizations Library | Unlimited |
-| DB connections | + Snowflake, Redshift, BigQuery _(coming soon)_ |
-| Audit log | ✅ |
-| Support | Priority email |
-
-CTA: **Start free trial**
-
----
-
-### Business — $399 / month (₹16,599)
-
-| Feature | Value |
-|---|---|
-| Projects | Unlimited |
-| AI messages | Unlimited |
-| File size limit | 1 GB |
-| Storage | 500 GB |
-| Team members | 50 |
-| Scheduled pipelines | Unlimited |
-| Canvases | Unlimited |
-| Visualizations Library | Unlimited |
-| DB connections | + Custom connectors _(coming soon)_ |
-| Audit log | ✅ |
-| SSO / SAML | _(coming soon)_ |
-| Support | 24/7 dedicated |
-
-CTA: **Start free trial**
-
----
-
-### Enterprise — Custom
-
-| Feature | Value |
-|---|---|
-| Projects | Unlimited |
-| AI messages | Unlimited |
-| File size limit | Custom |
-| Storage | Custom |
-| Team members | Unlimited |
-| Scheduled pipelines | Unlimited |
-| Canvases | Unlimited |
-| Visualizations Library | Unlimited |
-| DB connections | Custom _(coming soon)_ |
-| White-label option | _(coming soon)_ |
-| SSO / SAML | ✅ |
-| Audit log | ✅ |
-| Custom SLA | ✅ |
-| On-premise deploy | ✅ |
-| Support | Dedicated account manager |
-
-CTA: **Contact sales** → mitul.srivastava000@gmail.com
-
----
-
-## Backend Enforcement
-
-Plan limits are enforced in two backend files:
-
-### `backend/app/services/plan_guard.py`
-Enforces per-upload file size, total storage, dataset count, workspace count, allowed file formats, allowed connectors, SSO, scheduling, and canvas/dashboard sharing.
-
-| Plan | Max file size | Max storage | Scheduling | SSO |
-|---|---|---|---|---|
-| Free | 50 MB | 100 MB | ❌ | ❌ |
-| Professional | 1 GB | 20 GB | ✅ | ❌ |
-| Team | 1 GB | 100 GB | ✅ | ❌ |
-| Business | 1 GB | 500 GB | ✅ | ✅ |
-| Enterprise | Unlimited | Unlimited | ✅ | ✅ |
-
-### `backend/app/services/plan_limits.py`
-Enforces monthly rolling usage quotas (AI calls, pipeline runs, dataset uploads).
-
-| Plan | AI calls/month | Pipeline runs/month | Dataset uploads/month |
-|---|---|---|---|
-| Free | 100 | 10 | 3 |
-| Professional | 2,000 | 200 | 50 |
-| Team | 10,000 | 1,000 | Unlimited |
-| Business | Unlimited | Unlimited | Unlimited |
-| Enterprise | Unlimited | Unlimited | Unlimited |
-
----
-
-## DB Connector Availability
-
-SQL DB connectors (PostgreSQL, MySQL) are live. Others are in progress.
-
-| Connector | Free | Pro | Team | Business | Enterprise |
+| Feature | Free | Professional | Team | Business | Enterprise |
 |---|---|---|---|---|---|
-| CSV / Excel | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PostgreSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
-| MySQL | ❌ | ✅ | ✅ | ✅ | ✅ |
-| SQLite | ❌ | ✅ | ✅ | ✅ | ✅ |
-| MSSQL | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Oracle | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Snowflake | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
-| Redshift | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
-| BigQuery | ❌ | ❌ | 🔜 | 🔜 | 🔜 |
-| Custom | ❌ | ❌ | ❌ | 🔜 | 🔜 |
-| On-premise | ❌ | ❌ | ❌ | ❌ | 🔜 |
+| **Price** | $0 forever | $79/mo per account | $149/mo per account | $399/mo per account | Custom |
+| **Personal workspace** | 1 | 1 | 1 | 1 | Unlimited |
+| **Collab workspaces** | 0 | 0 | 2 | 9 | Unlimited |
+| **Projects per workspace** | 2 | 20 | Unlimited | Unlimited | Unlimited |
+| **AI messages / month** | 100 | 2,000 | 5,000 | Unlimited | Unlimited |
+| **Max file size** | 50 MB | 1 GB | 5 GB | 10 GB | Unlimited |
+| **Storage** | 100 MB | 20 GB | 100 GB | 1 TB | Unlimited |
+| **Data scan / month** | 5 GB | 50 GB | 200 GB | Unlimited | Unlimited |
+| **Members per workspace** | 1 | 1 | 10 | 50 | Unlimited |
+| **DB connectors** | CSV, Excel | + PostgreSQL, MySQL, SQLite, MSSQL, Oracle | + Snowflake, Redshift, BigQuery | + Custom connectors | All |
+| **Scheduling** | — | ✓ | ✓ | ✓ | ✓ |
+| **Dashboard sharing** | — | ✓ | ✓ | ✓ | ✓ |
+| **Webhooks** | — | — | — | ✓ | ✓ |
+| **SSO / SAML** | — | — | — | ✓ | ✓ |
+| **Audit log** | — | — | ✓ | ✓ | ✓ |
 
 ---
 
-## Payment Integration
+## Workspace Model
 
-- **Provider**: Razorpay (INR billing)
-- **Plans configured in**: `backend/app/razorpay_plans.py`
-- **Billing UI**: `frontend/src/components/BillingSettings.tsx`
-- **Plan enforcement entry point**: `backend/app/services/plan_guard.py`
-- **Canvas limit enforcement**: `backend/app/routers/canvas.py` (`_CANVAS_LIMITS` — Free: 2, Pro: 20, Team/Business/Enterprise: Unlimited)
-- **Saved Visualizations**: `backend/app/routers/saved_visualizations.py` (not plan-gated — unlimited for all tiers)
-- **Usage tracking**: `backend/app/services/usage_service.py`
+### Personal Workspace
+Every account gets exactly **one personal workspace** at sign-up, regardless of plan. This workspace is private to the owner. Usage (AI calls, storage, scan) is billed to the account owner.
+
+### Collab Workspaces
+Collab workspaces allow multiple members to collaborate. They are gated by plan:
+
+- **Free / Professional** — cannot create collab workspaces. These tiers are designed for individual use.
+- **Team** — up to 2 collab workspaces (3 total including personal).
+- **Business** — up to 9 collab workspaces (10 total including personal).
+- **Enterprise** — unlimited.
+
+All usage inside a collab workspace (AI calls, pipeline runs, data scans) is billed to the **workspace owner's** account, not the calling member's.
+
+---
+
+## Billing Attribution Rules
+
+| Workspace type | Billing account |
+|---|---|
+| Personal | Calling user |
+| Collab | Workspace owner |
+
+This means a Free-tier user invited into a Team collab workspace can run AI queries against the Team owner's quota — they do not need a paid plan themselves.
+
+---
+
+## Data Scan Limits
+
+Data scan measures the bytes read by DuckDB when executing SQL queries. It acts as a compute cost protection layer. Limits reset monthly.
+
+| Plan | Monthly scan cap |
+|---|---|
+| Free | 5 GB |
+| Professional | 50 GB |
+| Team | 200 GB |
+| Business | Unlimited |
+| Enterprise | Unlimited |
+
+When a user reaches 80%, a warning is logged. At 100%, queries return HTTP 403 with `"error": "scan_limit_exceeded"`.
+
+---
+
+## Project Limits
+
+Projects are scoped to a workspace. The limit applies per workspace.
+
+| Plan | Max projects per workspace |
+|---|---|
+| Free | 2 |
+| Professional | 20 |
+| Team | Unlimited |
+| Business | Unlimited |
+| Enterprise | Unlimited |
+
+---
+
+## AI Message Limits
+
+AI messages include: chat queries, pipeline runs triggered via AI, and agent-generated SQL steps.
+
+| Plan | Messages / month |
+|---|---|
+| Free | 100 |
+| Professional | 2,000 |
+| Team | 5,000 |
+| Business | Unlimited |
+| Enterprise | Unlimited |
+
+---
+
+## Storage Limits
+
+| Plan | Max file size | Total storage |
+|---|---|---|
+| Free | 50 MB | 100 MB |
+| Professional | 1 GB | 20 GB |
+| Team | 5 GB | 100 GB |
+| Business | 10 GB | 1 TB |
+| Enterprise | Unlimited | Unlimited |
+
+---
+
+## Enforcement Details
+
+All limits are enforced server-side in `plan_guard.py` and `usage_service.py`.
+
+- **Hard limits** raise `HTTP 403` with a structured error payload.
+- **File too large** raises `HTTP 413`.
+- DuckDB query timeout: 60 seconds (env `DUCKDB_QUERY_TIMEOUT_S`).
+- DML write operations are blocked in agent-executed queries.
+
+---
+
+## FAQ
+
+**Q: Can two Free users share a workspace?**
+Free users cannot create collab workspaces. They each work in their own personal workspace.
+
+**Q: If I'm on Team and invite a Free user to my collab workspace, do I pay for their usage?**
+Yes. All usage inside a collab workspace bills to the workspace owner (Team account).
+
+**Q: Do limits reset monthly?**
+Yes. AI messages, pipeline runs, data scan, and dataset upload counts reset monthly (UTC). Storage is cumulative.
+
+**Q: What happens when I hit the scan limit?**
+Queries return HTTP 403. Upgrade to the next tier or wait for the monthly reset.

@@ -162,12 +162,14 @@ def get_my_usage_stats(
             "pipeline_runs": usage["pipeline_runs"],
             "datasets_uploaded": usage["datasets_uploaded"],
             "storage_bytes_used": usage["storage_bytes_used"],
+            "data_scanned_bytes": usage.get("data_scanned_bytes", 0),
         },
         "limits": {
             "api_calls_per_month": limits["api_calls_per_month"],
             "pipeline_runs_per_month": limits["pipeline_runs_per_month"],
             "datasets_per_month": limits["datasets_per_month"],
             "storage_bytes": limits["storage_bytes"],
+            "data_scan_bytes_per_month": limits.get("data_scan_bytes_per_month", -1),
         },
     }
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import text as _sql_text
 from sqlalchemy.orm import Session
 import uuid
 from ..db import get_db
@@ -11,7 +12,7 @@ from ..services.rate_limit import FixedWindowRateLimiter
 from ..services.share_tokens import sign_token, verify_token
 from ..services.audit import audit_store
 from ..models import AuditEntry
-from ..services.plan_guard import resolve_user_plan, enforce_workspace_limit, enforce_min_plan
+from ..services.plan_guard import resolve_user_plan, enforce_workspace_limit, enforce_min_plan, resolve_user_plan_by_id, enforce_collab_workspace_limit
 from ..dependencies import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -26,13 +27,25 @@ def create_workspace(
 ) -> WorkspaceOut:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    user_plan = resolve_user_plan(db, authorization)
-    existing_count = db.query(Workspace).count()
-    enforce_workspace_limit(user_plan, existing_count)
     owner_id = get_current_subject(authorization)  # email / user identifier
+    user_plan = resolve_user_plan(db, authorization)
+
+    workspace_type = payload.workspace_type
+    if workspace_type == "collab":
+        # Advisory lock: serialise collab-workspace creation per owner to prevent
+        # concurrent requests both passing the count check (TOCTOU race).
+        db.execute(_sql_text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"ws_collab_{owner_id}"})
+        existing_collab_count = (
+            db.query(Workspace)
+            .filter(Workspace.owner_id == owner_id, Workspace.workspace_type == "collab")
+            .count()
+        )
+        enforce_collab_workspace_limit(user_plan, existing_collab_count)
+
     workspace = Workspace(
         id=str(uuid.uuid4()),
         name=payload.name,
+        workspace_type=workspace_type,
         is_shared=False,
         share_token=None,
         share_expires_at=None,
@@ -68,6 +81,8 @@ def create_workspace(
     return WorkspaceOut(
         id=workspace.id,
         name=workspace.name,
+        workspace_type=getattr(workspace, "workspace_type", "personal"),
+        owner_id=workspace.owner_id,
         is_shared=bool(workspace.is_shared),
         share_token=workspace.share_token,
         share_expires_at=str(workspace.share_expires_at) if workspace.share_expires_at else None,
@@ -79,11 +94,28 @@ def create_workspace(
 def list_workspaces(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> list[WorkspaceOut]:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    workspaces = db.query(Workspace).all()
+    caller = get_current_subject(authorization)
+    # Workspaces where user is the owner OR an active member
+    owned = db.query(Workspace).filter(Workspace.owner_id == caller).all()
+    member_ws_ids = [
+        m.workspace_id
+        for m in db.query(WorkspaceMemberDB)
+        .filter(WorkspaceMemberDB.user_id == caller, WorkspaceMemberDB.status == "active")
+        .all()
+    ]
+    member_ws = db.query(Workspace).filter(Workspace.id.in_(member_ws_ids)).all() if member_ws_ids else []
+    seen: set[str] = set()
+    workspaces: list[Workspace] = []
+    for w in owned + member_ws:
+        if w.id not in seen:
+            seen.add(w.id)
+            workspaces.append(w)
     return [
         WorkspaceOut(
             id=w.id,
             name=w.name,
+            workspace_type=getattr(w, "workspace_type", "personal"),
+            owner_id=w.owner_id,
             is_shared=bool(w.is_shared),
             share_token=w.share_token,
             share_expires_at=str(w.share_expires_at) if w.share_expires_at else None,

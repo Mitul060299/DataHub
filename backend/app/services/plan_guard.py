@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models_db import DatasetMetaDB, User
+from ..models_db import DatasetMetaDB, User, Workspace
 from ..security import get_current_subject, get_current_user_id
 from . import billing_repository
 
@@ -17,7 +17,9 @@ class PlanLimits:
     max_file_size_bytes: int
     max_storage_bytes: int
     max_datasets: int
-    max_workspaces: int
+    # Collab workspaces the user may *own/create* (personal workspace is always 1, not counted here)
+    max_collab_workspaces: int
+    max_projects_per_workspace: int  # -1 = unlimited
     allowed_formats: set[str]
     allowed_connectors: set[str]
     sso_enabled: bool
@@ -37,10 +39,11 @@ PLAN_ORDER = {
 
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "Free": PlanLimits(
-        max_file_size_bytes=50 * 1024 * 1024,
-        max_storage_bytes=100 * 1024 * 1024,
+        max_file_size_bytes=50 * 1024 * 1024,           # 50 MB
+        max_storage_bytes=100 * 1024 * 1024,             # 100 MB
         max_datasets=3,
-        max_workspaces=1,
+        max_collab_workspaces=0,                         # cannot CREATE collab workspaces
+        max_projects_per_workspace=2,
         allowed_formats={"csv", "excel"},
         allowed_connectors={"csv", "excel"},
         sso_enabled=False,
@@ -49,10 +52,11 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         dashboard_sharing_enabled=False,
     ),
     "Professional": PlanLimits(
-        max_file_size_bytes=1024 * 1024 * 1024,
-        max_storage_bytes=10 * 1024 * 1024 * 1024,
+        max_file_size_bytes=1024 * 1024 * 1024,          # 1 GB
+        max_storage_bytes=20 * 1024 * 1024 * 1024,       # 20 GB
         max_datasets=25,
-        max_workspaces=3,
+        max_collab_workspaces=0,                         # cannot CREATE collab workspaces
+        max_projects_per_workspace=20,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle"},
         sso_enabled=False,
@@ -61,10 +65,11 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         dashboard_sharing_enabled=True,
     ),
     "Team": PlanLimits(
-        max_file_size_bytes=5 * 1024 * 1024 * 1024,
-        max_storage_bytes=100 * 1024 * 1024 * 1024,
+        max_file_size_bytes=5 * 1024 * 1024 * 1024,      # 5 GB
+        max_storage_bytes=100 * 1024 * 1024 * 1024,       # 100 GB
         max_datasets=-1,
-        max_workspaces=-1,
+        max_collab_workspaces=2,                         # up to 2 collab workspaces (3 total incl. personal)
+        max_projects_per_workspace=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle", "snowflake", "redshift", "bigquery"},
         sso_enabled=False,
@@ -73,10 +78,11 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         dashboard_sharing_enabled=True,
     ),
     "Business": PlanLimits(
-        max_file_size_bytes=10 * 1024 * 1024 * 1024,
-        max_storage_bytes=1024 * 1024 * 1024 * 1024,
+        max_file_size_bytes=10 * 1024 * 1024 * 1024,     # 10 GB
+        max_storage_bytes=1024 * 1024 * 1024 * 1024,     # 1 TB
         max_datasets=-1,
-        max_workspaces=-1,
+        max_collab_workspaces=9,                         # up to 9 collab workspaces (10 total incl. personal)
+        max_projects_per_workspace=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"*"},
         sso_enabled=True,
@@ -88,7 +94,8 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_file_size_bytes=-1,
         max_storage_bytes=-1,
         max_datasets=-1,
-        max_workspaces=-1,
+        max_collab_workspaces=-1,
+        max_projects_per_workspace=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"*"},
         sso_enabled=True,
@@ -108,7 +115,86 @@ def normalize_plan(plan: str | None) -> str:
     return "Free"
 
 
+def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
+    """Return the plan for a known user_id (no JWT needed)."""
+    if settings.billing_enabled and user_id:
+        effective_plan = billing_repository.get_effective_plan(user_id)
+        if effective_plan:
+            return normalize_plan(effective_plan)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return "Free"
+    return normalize_plan(user.plan)
+
+
+def resolve_workspace_plan(
+    workspace_id: str,
+    calling_user_id: str,
+    db: Session,
+) -> Tuple[str, str]:
+    """Return (billing_user_id, plan) for a workspace.
+
+    Personal workspaces → calling user's own plan and quota pool.
+    Collab workspaces   → workspace owner's plan and quota pool.
+
+    This means an invited Free user working inside a Team collab workspace
+    draws from the Team owner's quota, not their own Free quota.
+    """
+    if not workspace_id or workspace_id == "default":
+        return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
+
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if ws is None:
+        return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
+
+    if ws.workspace_type == "collab" and ws.owner_id:
+        billing_user_id = ws.owner_id
+        plan = resolve_user_plan_by_id(billing_user_id, db)
+        return billing_user_id, plan
+
+    # personal workspace or unknown type → caller pays
+    return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
+
+
+def enforce_collab_workspace_limit(plan: str, existing_collab_count: int) -> None:
+    """Gate collab workspace *creation*. Free/Pro users cannot create collab workspaces."""
+    limits = limits_for_plan(plan)
+    if limits.max_collab_workspaces == 0:
+        raise HTTPException(
+            status_code=403,
+            detail=format_upgrade_message("Collab workspaces", plan, "Team"),
+        )
+    if limits.max_collab_workspaces > 0 and existing_collab_count >= limits.max_collab_workspaces:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Collab workspace limit reached for {normalize_plan(plan)} plan.",
+        )
+
+
+def enforce_project_limit(plan: str, existing_count: int) -> None:
+    limits = limits_for_plan(plan)
+    if limits.max_projects_per_workspace > 0 and existing_count >= limits.max_projects_per_workspace:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "project_limit_reached",
+                "plan": normalize_plan(plan),
+                "limit": limits.max_projects_per_workspace,
+                "message": (
+                    f"Project limit reached for {normalize_plan(plan)} plan "
+                    f"({limits.max_projects_per_workspace} projects per workspace). "
+                    "Upgrade to increase your limit."
+                ),
+            },
+        )
+
+
 def resolve_user_plan(db: Session, authorization: str | None) -> str:
+    """Resolve the effective plan for the calling user from their JWT + DB record.
+
+    Signature is (db, authorization) to match all existing call sites across routers.
+    For workspace-scoped billing use resolve_workspace_plan() instead.
+    """
     user_id = get_current_user_id(authorization)
     subject = get_current_subject(authorization)
 
@@ -256,12 +342,8 @@ def enforce_dashboard_sharing(plan: str) -> None:
 
 
 def enforce_workspace_limit(plan: str, existing_count: int) -> None:
-    limits = limits_for_plan(plan)
-    if limits.max_workspaces > 0 and existing_count >= limits.max_workspaces:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Workspace limit reached for {normalize_plan(plan)} plan.",
-        )
+    """Legacy shim kept for backward compat — delegates to enforce_collab_workspace_limit."""
+    enforce_collab_workspace_limit(plan, existing_count)
 
 
 def summarize_plan(plan: str) -> dict[str, Any]:
@@ -272,7 +354,8 @@ def summarize_plan(plan: str) -> dict[str, Any]:
         "max_file_size_bytes": limits.max_file_size_bytes,
         "max_storage_bytes": limits.max_storage_bytes,
         "max_datasets": limits.max_datasets,
-        "max_workspaces": limits.max_workspaces,
+        "max_collab_workspaces": limits.max_collab_workspaces,
+        "max_projects_per_workspace": limits.max_projects_per_workspace,
         "sso_enabled": limits.sso_enabled,
         "webhooks_enabled": limits.webhooks_enabled,
         "scheduling_enabled": limits.scheduling_enabled,

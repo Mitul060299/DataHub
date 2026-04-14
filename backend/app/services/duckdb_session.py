@@ -9,9 +9,23 @@ to prevent memory leaks on long-running Render instances.
 from __future__ import annotations
 
 import os
+import re
 import time
 import threading
+import concurrent.futures
 from typing import Optional
+
+# Maximum seconds a single DuckDB query may run before being cancelled.
+# Override via DUCKDB_QUERY_TIMEOUT_S env var (0 = disabled).
+QUERY_TIMEOUT_SECONDS: int = int(os.environ.get("DUCKDB_QUERY_TIMEOUT_S", "60"))
+
+# SQL operations that the LLM must never issue against session data.
+# Blocking is enforced at execute_in_session(); internal helpers that
+# deliberately create/drop objects call conn.execute() directly.
+_BLOCKED_DML = re.compile(
+    r"^\s*(DROP\s|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w|TRUNCATE)",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 import duckdb
 
@@ -30,6 +44,14 @@ _HIGH_MEMORY_THRESHOLD_MB: float = float(os.environ.get("DUCKDB_HIGH_MEMORY_MB",
 
 class SessionExpiredError(RuntimeError):
     """Raised when a session connection is lost or has been cleaned up."""
+
+
+class QueryTimeoutError(RuntimeError):
+    """Raised when a DuckDB query exceeds QUERY_TIMEOUT_SECONDS."""
+
+
+class BlockedSQLError(ValueError):
+    """Raised when LLM-generated SQL contains a forbidden write operation."""
 
 
 def _process_rss_mb() -> float:
@@ -187,11 +209,48 @@ def _coerce(value: object) -> object:
 
 
 def execute_in_session(session_id: str, sql: str) -> list[dict]:
-    """Run *sql* on the session connection and return rows as list[dict]."""
+    """Run *sql* on the session connection and return rows as list[dict].
+
+    Raises:
+        BlockedSQLError  — if *sql* contains a forbidden write-DML operation.
+        QueryTimeoutError — if execution exceeds QUERY_TIMEOUT_SECONDS.
+    """
+    # ── 1. DML guard ────────────────────────────────────────────────────────
+    # Strip leading line comments before pattern-matching so a comment
+    # line cannot shadow a DROP/DELETE that follows it.
+    _stripped = re.sub(r"^\s*--[^\n]*\n", "", sql, flags=re.MULTILINE).lstrip()
+    if _BLOCKED_DML.match(_stripped):
+        raise BlockedSQLError(
+            f"Blocked SQL operation: write DML is not permitted in agent steps. "
+            f"Starts with: {_stripped[:80]!r}"
+        )
+
+    # ── 2. Execute with timeout ─────────────────────────────────────────────
     conn = get_connection(session_id)
-    rel = conn.execute(sql)
-    columns = [desc[0] for desc in rel.description]
-    return [{col: _coerce(val) for col, val in zip(columns, row)} for row in rel.fetchall()]
+
+    def _run() -> list[dict]:
+        rel = conn.execute(sql)
+        columns = [desc[0] for desc in rel.description]
+        return [{col: _coerce(val) for col, val in zip(columns, row)} for row in rel.fetchall()]
+
+    if QUERY_TIMEOUT_SECONDS <= 0:
+        # Timeout disabled — run inline (avoids thread overhead).
+        return _run()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+        _future = _pool.submit(_run)
+        try:
+            return _future.result(timeout=QUERY_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            # Signal DuckDB to abort the running query, then surface a clean error.
+            try:
+                conn.interrupt()
+            except Exception:
+                pass
+            raise QueryTimeoutError(
+                f"Query exceeded the {QUERY_TIMEOUT_SECONDS}s time limit and was cancelled. "
+                "Try a more specific filter or a smaller dataset."
+            )
 
 
 def table_exists(session_id: str, name: str) -> bool:

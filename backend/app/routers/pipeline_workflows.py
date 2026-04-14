@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.db import get_db
 from app.security import get_current_subject
-from app.services.plan_guard import resolve_user_plan
+from app.services.plan_guard import resolve_user_plan, resolve_workspace_plan
 from app.services.pipeline_engine import PipelineEngine
 from app.services.rate_limiter import limiter
 from app.services.audit import audit_store
@@ -512,8 +512,12 @@ async def execute_pipeline(
     """Execute a pipeline with SSE streaming"""
     from app.services.usage_service import enforce_usage_limit, increment_usage as _inc_usage
     user_plan = resolve_user_plan(db, authorization)
-    enforce_usage_limit(current_user_id, user_plan, "pipeline_runs", db)
-    _inc_usage(current_user_id, "pipeline_runs", db)
+    # Resolve billing to workspace owner for collab workspaces
+    _pipeline = db.query(PipelineV2DB).filter(PipelineV2DB.id == pipeline_id).first()
+    _ws_id = (_pipeline.workspace_id if _pipeline and getattr(_pipeline, "workspace_id", None) else None) or "default"
+    billing_user_id, billing_plan = resolve_workspace_plan(_ws_id, current_user_id, db)
+    enforce_usage_limit(billing_user_id, billing_plan, "pipeline_runs", db)
+    _inc_usage(billing_user_id, "pipeline_runs", db)
     # Audit trail
     try:
         audit_store.add(AuditEntry(

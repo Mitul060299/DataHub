@@ -1008,7 +1008,7 @@ function Faq() {
   const faqs: { q: string; a: string }[] = [
     {
       q: "Does DataHub work with large files?",
-      a: "Free plan supports files up to 50 MB. Paid plans support files up to 1 GB per upload. For larger datasets, contact us for Enterprise options or consider splitting your file into multiple uploads.",
+      a: "Free supports files up to 50 MB. Professional supports up to 1 GB, Team up to 5 GB, Business up to 10 GB. Enterprise has no per-file size limit. For very large datasets, consider splitting files or contact us for Enterprise options.",
     },
     {
       q: "What SQL dialect does DataHub use internally?",
@@ -1020,7 +1020,7 @@ function Faq() {
     },
     {
       q: "Can I use DataHub for free?",
-      a: "Yes. The Free plan lets you create 2 projects, upload files up to 50 MB, use 50 AI messages per month, and build 2 canvases — with no credit card required.",
+      a: "Yes. The Free plan lets you create 2 projects, upload files up to 50 MB, use 100 AI messages per month — with no credit card required.",
     },
     {
       q: "Is there an API?",
@@ -1077,7 +1077,7 @@ function PlanLimits() {
   return (
     <article className="docs-article">
       <h1>Plan limits</h1>
-      <p className="docs-lead">All plans are billed monthly per workspace. There are no per-seat charges on Team or below.</p>
+      <p className="docs-lead">All plans are billed monthly <strong>per account</strong>. Personal workspaces draw from the account owner's quota; collab workspaces draw from the workspace owner's quota.</p>
 
       <h2>Feature comparison</h2>
       <div className="docs-table-wrap">
@@ -1086,50 +1086,37 @@ function PlanLimits() {
             <tr>
               <th>Feature</th>
               <th>Free</th>
-              <th>Pro ($79/mo)</th>
+              <th>Professional ($79/mo)</th>
               <th>Team ($149/mo)</th>
               <th>Business ($399/mo)</th>
+              <th>Enterprise</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>Projects</td><td>2</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>AI messages / mo</td><td>50</td><td>500</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>Max file size</td><td>50 MB</td><td>1 GB</td><td>1 GB</td><td>1 GB</td></tr>
-            <tr><td>Storage</td><td>1 GB</td><td>20 GB</td><td>100 GB</td><td>500 GB</td></tr>
-            <tr><td>Team members</td><td>1</td><td>1</td><td>10</td><td>50</td></tr>
-            <tr><td>Scheduled pipelines</td><td>—</td><td>5</td><td>20</td><td>Unlimited</td></tr>
-            <tr><td>Canvases</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>Visualizations Library</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>Public sharing</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
-            <tr><td>Audit log</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
-            <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>🔜</td></tr>
-            <tr><td>DB connections</td><td>CSV, Excel</td><td>PG, MySQL, SQLite, MSSQL, Oracle ✅</td><td>+ Snowflake, Redshift, BigQuery ✅</td><td>+ Custom 🔜</td></tr>
-            <tr><td>Support</td><td>Community</td><td>Email</td><td>Priority email</td><td>24/7 dedicated</td></tr>
+            <tr><td>Personal workspace</td><td>1</td><td>1</td><td>1</td><td>1</td><td>Unlimited</td></tr>
+            <tr><td>Collab workspaces</td><td>0</td><td>0</td><td>2</td><td>9</td><td>Unlimited</td></tr>
+            <tr><td>Projects per workspace</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>AI messages / month</td><td>100</td><td>2,000</td><td>5,000</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Max file size</td><td>50 MB</td><td>1 GB</td><td>5 GB</td><td>10 GB</td><td>Unlimited</td></tr>
+            <tr><td>Storage</td><td>100 MB</td><td>20 GB</td><td>100 GB</td><td>1 TB</td><td>Unlimited</td></tr>
+            <tr><td>Data scan / month</td><td>5 GB</td><td>50 GB</td><td>200 GB</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Members per workspace</td><td>1</td><td>1</td><td>10</td><td>50</td><td>Unlimited</td></tr>
+            <tr><td>DB connections</td><td>CSV, Excel</td><td>+ PG, MySQL, SQLite, MSSQL, Oracle</td><td>+ Snowflake, Redshift, BigQuery</td><td>+ Custom connectors</td><td>All</td></tr>
+            <tr><td>Scheduling</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Dashboard sharing</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Audit log</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Webhooks</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Support</td><td>Community</td><td>Email</td><td>Priority email</td><td>24/7 dedicated</td><td>Custom SLA</td></tr>
           </tbody>
         </table>
       </div>
 
-      <h2>Monthly usage quotas</h2>
-      <div className="docs-table-wrap">
-        <table className="docs-table docs-table--plans">
-          <thead>
-            <tr>
-              <th>Quota</th>
-              <th>Free</th>
-              <th>Pro</th>
-              <th>Team</th>
-              <th>Business</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>AI calls</td><td>100</td><td>2,000</td><td>10,000</td><td>Unlimited</td></tr>
-            <tr><td>Pipeline runs</td><td>10</td><td>200</td><td>1,000</td><td>Unlimited</td></tr>
-            <tr><td>Dataset uploads</td><td>3</td><td>50</td><td>Unlimited</td><td>Unlimited</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <h2>Billing attribution</h2>
+      <p>Usage inside a <strong>collab workspace</strong> (AI calls, pipeline runs, data scanned) is charged to the <strong>workspace owner's</strong> account — not the calling member's. A Free-tier user invited into a Team collab workspace uses the Team owner's quota.</p>
+
       <div className="docs-callout docs-callout--info">
-        INR pricing: Pro ₹3,299/mo · Team ₹6,199/mo · Business ₹16,599/mo. Billing is processed via Razorpay.
+        INR pricing: Professional ₹3,299/mo · Team ₹6,199/mo · Business ₹16,599/mo · Enterprise custom. Billing is processed via Razorpay.
       </div>
     </article>
   );

@@ -494,11 +494,14 @@ class UserProfileOut(BaseModel):
 
 class WorkspaceCreate(BaseModel):
     name: str
+    workspace_type: Literal["personal", "collab"] = "personal"
 
 
 class WorkspaceOut(BaseModel):
     id: str
     name: str
+    workspace_type: str = "personal"
+    owner_id: Optional[str] = None
     is_shared: bool = False
     share_token: Optional[str] = None
     share_expires_at: Optional[str] = None
@@ -773,6 +776,7 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=200)
     colour: str = Field(default="#5B6AF0")
     icon: str = Field(default="📁")
+    workspace_id: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):

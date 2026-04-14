@@ -15,6 +15,8 @@ from ...duckdb_session import (
     execute_in_session,
     get_connection,
     SessionExpiredError,
+    QueryTimeoutError,
+    BlockedSQLError,
 )
 from ...export_service import ExportService
 from ...echarts_builder import build_echarts_config, infer_chart_type
@@ -579,6 +581,44 @@ async def execute_step(state: AgentState) -> dict:
                         (datetime.now(timezone.utc) - _step_start_ts).total_seconds() * 1000
                     )
 
+                    # ── Scan byte tracking ────────────────────────────────────
+                    # Charge the source dataset's size to the billing account ONCE per
+                    # pipeline run (not per step). Repeated steps on the same dataset
+                    # do not multiply the charge.
+                    _scan_ds_id = str(state.get("dataset_id") or "")
+                    _already_charged = bool(
+                        _scan_ds_id and _scan_ds_id in (state.get("scan_charged_dataset_ids") or [])
+                    )
+                    if _scan_ds_id and not _already_charged:
+                        try:
+                            _scan_db_session = SessionLocal()
+                            try:
+                                from ...usage_service import increment_scan_bytes, enforce_scan_limit
+                                from ...plan_guard import resolve_workspace_plan as _resolve_ws_plan
+                                _ds_meta = _scan_db_session.query(DatasetMetaDB).filter(
+                                    DatasetMetaDB.id == _scan_ds_id
+                                ).first()
+                                # Prefer raw file size; fall back to compressed; connector
+                                # datasets with no size get a synthetic floor: 500 bytes × row_count.
+                                if _ds_meta:
+                                    _scan_bytes = (
+                                        _ds_meta.file_size_bytes
+                                        or _ds_meta.compressed_size_bytes
+                                        or ((_ds_meta.row_count or 0) * 500)
+                                    )
+                                else:
+                                    _scan_bytes = 0
+                                if _scan_bytes > 0:
+                                    _calling_uid = state.get("user_id") or (dataset.user_id if dataset else None) or ""
+                                    _ws = state.get("workspace_id") or (dataset.workspace_id if dataset else None) or "default"
+                                    _billing_uid, _billing_plan = _resolve_ws_plan(_ws, _calling_uid, _scan_db_session)
+                                    enforce_scan_limit(_billing_uid, _billing_plan, _scan_db_session)
+                                    increment_scan_bytes(_billing_uid, _scan_bytes, _scan_db_session)
+                            finally:
+                                _scan_db_session.close()
+                        except Exception:
+                            pass  # scan tracking is non-blocking
+
                     # Update table_registry — dataset_id stays blank for pipeline
                     # step tables; only user-saved checkpoints get a real DatasetMetaDB.
                     input_tables = list(parameters.get("input_tables") or [])
@@ -623,6 +663,12 @@ async def execute_step(state: AgentState) -> dict:
                         "column_schema": column_schema,
                         "query_results": preview_rows,
                     }
+                    _prev_charged = list(state.get("scan_charged_dataset_ids") or [])
+                    _new_charged = (
+                        [*_prev_charged, _scan_ds_id]
+                        if _scan_ds_id and _scan_ds_id not in _prev_charged
+                        else _prev_charged
+                    )
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
                         "dataset_id": state.get("dataset_id"),
@@ -632,8 +678,24 @@ async def execute_step(state: AgentState) -> dict:
                         "query_results": preview_rows,
                         "table_registry": table_registry,
                         "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
+                        "scan_charged_dataset_ids": _new_charged,
                     }
 
+            except (QueryTimeoutError, BlockedSQLError) as exc:
+                execution_result = {
+                    "step_number": step["step_number"],
+                    "operation": intent_key,
+                    "success": False,
+                    "rows_affected": None,
+                    "run_id": None,
+                    "output_dataset_id": None,
+                    "sql": step_sql or None,
+                    "error": str(exc),
+                }
+                return {
+                    "execution_results": [*state.get("execution_results", []), execution_result],
+                    "error": str(exc),
+                }
             except SessionExpiredError as exc:
                 execution_result = {
                     "step_number": step["step_number"],

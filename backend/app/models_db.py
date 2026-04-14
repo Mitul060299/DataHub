@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
+from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text, UniqueConstraint
 from sqlalchemy import DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -27,6 +27,8 @@ class UserUsageDB(Base):
     pipeline_runs = Column(Integer, nullable=False, default=0)
     datasets_uploaded = Column(Integer, nullable=False, default=0)
     storage_bytes_used = Column(BigInteger, nullable=False, default=0)
+    # Added by migration 0043 — tracks cumulative DuckDB bytes read this month
+    data_scanned_bytes = Column(BigInteger, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -58,13 +60,17 @@ class ProjectDB(Base):
 class Workspace(Base):
     __tablename__ = "workspaces"
     id = Column(String, primary_key=True)
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)  # uniqueness enforced per-owner via uq_workspaces_owner_name index
     is_shared = Column(Boolean, nullable=False, default=False)
     share_token = Column(String, nullable=True)
     share_expires_at = Column(DateTime(timezone=True), nullable=True)
     share_scope = Column(String, nullable=True)
     owner_id = Column(String, nullable=True)  # user_id of the workspace creator
+    workspace_type = Column(String, nullable=False, default="personal")  # 'personal' | 'collab'
 
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_workspaces_owner_name"),
+    )
 
 class WorkspaceMemberDB(Base):
     """Per-workspace membership rows (active + pending invites)."""

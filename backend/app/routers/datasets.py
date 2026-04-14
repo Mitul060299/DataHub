@@ -39,6 +39,7 @@ from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.usage_service import enforce_usage_limit, increment_usage, update_storage_bytes
+from ..services.plan_guard import resolve_user_plan, resolve_workspace_plan
 from ..services.audit import audit_store
 from ..models import AuditEntry
 from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB
@@ -216,9 +217,10 @@ async def upload_dataset(
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
     _ensure_dataset_meta_schema(db)
-    # Usage limit check
+    # Usage limit check — billing goes to workspace owner for collab workspaces
     user_plan = resolve_user_plan(db, authorization)
-    enforce_usage_limit(user_id, user_plan, "datasets_uploaded", db)
+    billing_user_id, billing_plan = resolve_workspace_plan(workspace_id or "default", user_id or "", db)
+    enforce_usage_limit(billing_user_id, billing_plan, "datasets_uploaded", db)
     # Hard cap before pandas ever touches the bytes — prevents OOM on 512 MB instances.
     # The per-plan size check below still fires for smaller plan limits.
     _UPLOAD_HARD_CAP = 500 * 1024 * 1024  # 500 MB absolute ceiling
@@ -328,8 +330,8 @@ async def upload_dataset(
         )
     db.commit()
     # Track monthly dataset upload usage + refresh storage byte count
-    increment_usage(user_id, "datasets_uploaded", db)
-    update_storage_bytes(user_id, db)
+    increment_usage(billing_user_id, "datasets_uploaded", db)
+    update_storage_bytes(billing_user_id, db)
     # Audit trail
     try:
         audit_store.add(AuditEntry(

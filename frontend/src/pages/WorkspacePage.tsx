@@ -23,7 +23,8 @@ const workspaceId = "default";
 
 export function WorkspacePage() {
   const { projectId } = useParams<{ projectId?: string }>();
-  const { activeProject, activeDataset, projects } = useWorkspaceContext();
+  const { activeProject, activeDataset, projects, activeWorkspaceId } = useWorkspaceContext();
+  const workspaceId = activeWorkspaceId !== "default" ? activeWorkspaceId : "default";
 
   // Resolve project from URL param or fall back to activeProject
   const resolvedProject = projectId

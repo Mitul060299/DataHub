@@ -1024,13 +1024,24 @@ export async function listDashboardTemplates() {
   return response.data;
 }
 
-export async function listWorkspaces() {
+export interface WorkspaceOut {
+  id: string;
+  name: string;
+  workspace_type: "personal" | "collab";
+  owner_id?: string | null;
+  is_shared: boolean;
+  share_token?: string | null;
+  share_expires_at?: string | null;
+  share_scope?: string | null;
+}
+
+export async function listWorkspaces(): Promise<WorkspaceOut[]> {
   const response = await api.get("/workspaces");
   return response.data;
 }
 
-export async function createWorkspace(name: string) {
-  const response = await api.post("/workspaces", { name });
+export async function createWorkspace(name: string, workspace_type: "personal" | "collab" = "personal"): Promise<WorkspaceOut> {
+  const response = await api.post("/workspaces", { name, workspace_type });
   return response.data;
 }
 
@@ -1252,6 +1263,7 @@ export async function createProject(payload: {
   description?: string;
   colour?: string;
   icon?: string;
+  workspace_id?: string;
 }): Promise<ProjectOut> {
   const response = await api.post("/projects", payload);
   return response.data;

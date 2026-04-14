@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
+import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 
@@ -42,7 +43,7 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects, activeWorkspaceId, workspaces } = useWorkspaceContext();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -60,7 +61,14 @@ export function WorkspaceHomePage() {
       .finally(() => setRecentLoading(false));
   }, []);
 
-  const filteredProjects = projects.filter((p) =>
+  // Filter projects to only those belonging to the active workspace
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+  const workspaceProjects = projects.filter((p) => {
+    if (!activeWorkspaceId || activeWorkspaceId === "default") return true;
+    return p.workspaceId === activeWorkspaceId || p.workspaceId === "default";
+  });
+
+  const filteredProjects = workspaceProjects.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -103,14 +111,38 @@ export function WorkspaceHomePage() {
   };
 
   return (
-    <div style={{ flex: 1, overflow: "auto", background: "var(--bg0)", display: "flex", flexDirection: "column" }}>
-      {/* Page header */}
-      <div style={{ padding: "28px 32px 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--tx0)", letterSpacing: "-0.02em" }}>Workspace</h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--tx1)" }}>All your data projects in one place.</p>
+    <div style={{ flex: 1, overflow: "hidden", background: "var(--bg0)", display: "flex", flexDirection: "row" }}>
+
+      {/* ── Left sidebar: workspace switcher ──────────────── */}
+      <div style={{
+        width: 220,
+        flexShrink: 0,
+        borderRight: "1px solid var(--bd)",
+        background: "var(--bg1)",
+        display: "flex",
+        flexDirection: "column",
+        padding: "20px 0",
+        overflowY: "auto",
+      }}>
+        <div style={{ padding: "0 16px 12px", fontSize: 11, fontWeight: 600, color: "var(--tx2, #888)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Workspaces
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <WorkspaceSwitcher />
+      </div>
+
+      {/* ── Main content ──────────────────────────────────── */}
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+        {/* Page header */}
+        <div style={{ padding: "28px 32px 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--tx0)", letterSpacing: "-0.02em" }}>
+              {activeWorkspace ? activeWorkspace.name : "Workspace"}
+            </h1>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--tx1)" }}>
+              {activeWorkspace?.workspace_type === "collab" ? "Collab workspace · shared projects" : "Your personal workspace"}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -371,6 +403,7 @@ export function WorkspaceHomePage() {
           )}
         </section>
       </div>
+      </div>{/* end main content */}
 
       {renameModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)" }}

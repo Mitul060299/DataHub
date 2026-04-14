@@ -19,7 +19,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 _shared_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
 
 
-@router.post("/", response_model=WorkspaceOut)
+@router.post("", response_model=WorkspaceOut)
 def create_workspace(
     payload: WorkspaceCreate,
     authorization: str | None = Header(default=None),
@@ -90,8 +90,8 @@ def create_workspace(
     )
 
 
-@router.get("/", response_model=list[WorkspaceOut])
-def list_workspaces(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> list[WorkspaceOut]:
+@router.get("", response_model=list[WorkspaceOut])
+def list_workspaces(
     role = get_current_role(authorization)
     require_role("viewer", role)
     caller = get_current_subject(authorization)

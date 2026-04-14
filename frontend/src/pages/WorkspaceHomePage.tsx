@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteProject, fetchWorkspaceRecent, updateProject, listContextVersions, revertContext, listDashboardTemplates } from "../api";
+import { deleteProject, fetchWorkspaceRecent, updateProject, listContextVersions, revertContext, listDashboardTemplates, fetchContext, saveContext } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import type { ContextVersion } from "../types";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
@@ -59,6 +59,55 @@ export function WorkspaceHomePage() {
   const [contextHistoryOpen, setContextHistoryOpen] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [revertingId, setRevertingId] = useState<string | null>(null);
+
+  // Business context editor
+  const [contextEditorOpen, setContextEditorOpen] = useState(false);
+  const [contextData, setContextData] = useState<{ glossary: Record<string, string>; rules: Array<{ key: string; description: string }> } | null>(null);
+  const [contextEditorLoading, setContextEditorLoading] = useState(false);
+  const [contextSaving, setContextSaving] = useState(false);
+  const [glossaryRaw, setGlossaryRaw] = useState("");
+  const [rulesRaw, setRulesRaw] = useState("");
+  const [contextSaveMsg, setContextSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!contextEditorOpen || !activeWorkspaceId) return;
+    setContextEditorLoading(true);
+    fetchContext(activeWorkspaceId)
+      .then((data) => {
+        setContextData(data);
+        setGlossaryRaw(JSON.stringify(data?.glossary ?? {}, null, 2));
+        setRulesRaw(JSON.stringify(data?.rules ?? [], null, 2));
+      })
+      .catch(() => {
+        setGlossaryRaw("{}");
+        setRulesRaw("[]");
+      })
+      .finally(() => setContextEditorLoading(false));
+  }, [contextEditorOpen, activeWorkspaceId]);
+
+  const handleSaveContext = async () => {
+    if (!activeWorkspaceId) return;
+    let glossary: Record<string, string>;
+    let rules: Array<{ key: string; description: string }>;
+    try {
+      glossary = JSON.parse(glossaryRaw);
+      rules = JSON.parse(rulesRaw);
+    } catch {
+      setContextSaveMsg({ ok: false, text: "Invalid JSON — check Glossary and Rules." });
+      return;
+    }
+    setContextSaving(true);
+    setContextSaveMsg(null);
+    try {
+      await saveContext({ workspace_id: activeWorkspaceId, glossary, rules });
+      setContextSaveMsg({ ok: true, text: "Context saved." });
+      setTimeout(() => setContextSaveMsg(null), 3000);
+    } catch {
+      setContextSaveMsg({ ok: false, text: "Save failed." });
+    } finally {
+      setContextSaving(false);
+    }
+  };
 
   // Dashboard templates
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; description?: string }>>([]);
@@ -227,6 +276,70 @@ export function WorkspaceHomePage() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}  
+        </div>
+
+        {/* ── Business Context Editor ──────────────── */}
+        <div style={{ marginTop: 8, borderTop: "1px solid var(--bd)", paddingTop: 12 }}>
+          <button
+            onClick={() => setContextEditorOpen((o) => !o)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "6px 16px",
+              background: "none",
+              border: "none",
+              color: "var(--tx1)",
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+            }}
+          >
+            <span>AI Context</span>
+            <span style={{ fontSize: 10, opacity: 0.6 }}>{contextEditorOpen ? "▲" : "▼"}</span>
+          </button>
+
+          {contextEditorOpen && (
+            <div style={{ padding: "6px 10px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {contextEditorLoading ? (
+                <p style={{ margin: 0, fontSize: 11, color: "var(--tx2, #888)" }}>Loading…</p>
+              ) : (
+                <>
+                  <div>
+                    <div style={{ fontSize: 10, color: "var(--tx2, #888)", marginBottom: 3, fontWeight: 600 }}>GLOSSARY (JSON)</div>
+                    <textarea
+                      value={glossaryRaw}
+                      onChange={(e) => setGlossaryRaw(e.target.value)}
+                      rows={4}
+                      style={{ width: "100%", background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 5, color: "var(--tx0)", fontSize: 10, fontFamily: "monospace", padding: 6, resize: "vertical", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: "var(--tx2, #888)", marginBottom: 3, fontWeight: 600 }}>RULES (JSON array)</div>
+                    <textarea
+                      value={rulesRaw}
+                      onChange={(e) => setRulesRaw(e.target.value)}
+                      rows={4}
+                      style={{ width: "100%", background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 5, color: "var(--tx0)", fontSize: 10, fontFamily: "monospace", padding: 6, resize: "vertical", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <button
+                    disabled={contextSaving}
+                    onClick={handleSaveContext}
+                    style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "var(--ac)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer" }}
+                  >
+                    {contextSaving ? "Saving…" : "Save Context"}
+                  </button>
+                  {contextSaveMsg && (
+                    <p style={{ margin: 0, fontSize: 11, color: contextSaveMsg.ok ? "#6ee7b7" : "#fca5a5" }}>{contextSaveMsg.text}</p>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>

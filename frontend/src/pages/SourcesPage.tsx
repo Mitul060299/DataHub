@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, listConnections, deleteConnection, type SavedConnection } from "../api";
 
 interface DataSource {
   id: string;
@@ -69,6 +69,34 @@ export function SourcesPage() {
   // Delete
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Saved DB connections
+  const [connections, setConnections] = useState<SavedConnection[]>([]);
+  const [connLoading, setConnLoading] = useState(false);
+  const [connError, setConnError] = useState<string | null>(null);
+  const [deletingConnId, setDeletingConnId] = useState<string | null>(null);
+
+  const loadConnections = () => {
+    setConnLoading(true);
+    setConnError(null);
+    listConnections()
+      .then((data) => setConnections(data.connections ?? []))
+      .catch(() => setConnError("Failed to load saved connections."))
+      .finally(() => setConnLoading(false));
+  };
+
+  const handleDeleteConnection = async (id: string) => {
+    if (!window.confirm("Remove this saved connection?")) return;
+    setDeletingConnId(id);
+    try {
+      await deleteConnection(id);
+      loadConnections();
+    } catch {
+      setConnError("Failed to remove connection.");
+    } finally {
+      setDeletingConnId(null);
+    }
+  };
+
   const loadSources = async () => {
     setLoading(true);
     setError(null);
@@ -84,6 +112,8 @@ export function SourcesPage() {
 
   useEffect(() => {
     loadSources();
+    loadConnections();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddSource = async () => {
@@ -370,6 +400,56 @@ export function SourcesPage() {
           ))}
         </div>
       )}
+      )}
+
+      {/* ── Saved DB Connections ──────────────────────────────── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 2 }}>Saved DB Connections</h2>
+            <p style={{ color: "var(--tx1, #888)", fontSize: 12 }}>Database connections created via the connector modal.</p>
+          </div>
+        </div>
+        {connLoading && <p style={{ color: "var(--tx1)", fontSize: 13 }}>Loading…</p>}
+        {connError && <p style={{ color: "#f87171", fontSize: 13 }}>{connError}</p>}
+        {!connLoading && !connError && connections.length === 0 && (
+          <div style={{ ...panelStyle, textAlign: "center", padding: 32, color: "var(--tx1)", fontSize: 13 }}>
+            No saved connections. Add a database connector from the workspace explorer.
+          </div>
+        )}
+        {connections.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {connections.map((conn) => (
+              <div key={conn.id} style={{ ...panelStyle, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{conn.name}</span>
+                    <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 10, background: "var(--bg3, #252540)", color: "var(--tx1)" }}>
+                      {conn.type}
+                    </span>
+                    <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 10, background: conn.status === "active" ? "#0d2d1a" : "#2d1a0d", color: conn.status === "active" ? "#4ade80" : "#fbbf24" }}>
+                      {conn.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--tx1)", display: "flex", gap: 16 }}>
+                    {conn.host && <span>Host: <strong>{conn.host}</strong></span>}
+                    {conn.database && <span>DB: <strong>{conn.database}</strong></span>}
+                    {conn.last_sync_at && <span>Last sync: {formatDate(conn.last_sync_at)}</span>}
+                  </div>
+                </div>
+                <button
+                  className="btn"
+                  onClick={() => handleDeleteConnection(conn.id)}
+                  disabled={deletingConnId === conn.id}
+                  style={{ fontSize: 12, color: "#f87171", flexShrink: 0 }}
+                >
+                  {deletingConnId === conn.id ? "Removing…" : "Remove"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

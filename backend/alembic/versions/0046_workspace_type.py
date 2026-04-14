@@ -40,13 +40,16 @@ def upgrade() -> None:
 
     # 3. For every user in the users table that has NO owned workspace,
     #    create a personal workspace named after them.
+    # NOTE: owner_id and workspace_members.user_id use the username (email) because
+    # that is what get_current_subject() returns and what all routers filter on.
     users = conn.execute(text("SELECT id, username FROM users")).fetchall()
     for user in users:
         user_id = user[0]
         username = user[1] or user_id
+        # Use username (email) as the owner identifier — matches router queries
         existing = conn.execute(
             text("SELECT id FROM workspaces WHERE owner_id = :uid LIMIT 1"),
-            {"uid": user_id},
+            {"uid": username},
         ).fetchone()
         if existing:
             continue
@@ -57,8 +60,8 @@ def upgrade() -> None:
         ws_name = f"{safe_name}-personal"
         # Ensure uniqueness by appending short id suffix if name already taken
         taken = conn.execute(
-            text("SELECT 1 FROM workspaces WHERE owner_id IS NOT DISTINCT FROM :uid AND name = :n LIMIT 1"),
-            {"uid": user_id, "n": ws_name},
+            text("SELECT 1 FROM workspaces WHERE owner_id = :uid AND name = :n LIMIT 1"),
+            {"uid": username, "n": ws_name},
         ).fetchone()
         if taken:
             ws_name = f"{safe_name}-{ws_id[:6]}"
@@ -67,7 +70,7 @@ def upgrade() -> None:
                 "INSERT INTO workspaces (id, name, is_shared, workspace_type, owner_id) "
                 "VALUES (:id, :name, false, 'personal', :owner)"
             ),
-            {"id": ws_id, "name": ws_name, "owner": user_id},
+            {"id": ws_id, "name": ws_name, "owner": username},
         )
         member_id = _uuid.uuid4().hex
         conn.execute(
@@ -76,7 +79,7 @@ def upgrade() -> None:
                 "(id, workspace_id, user_id, email, role, status, invited_by, created_at) "
                 "VALUES (:mid, :wid, :uid, :email, 'admin', 'active', :uid, NOW())"
             ),
-            {"mid": member_id, "wid": ws_id, "uid": user_id, "email": username},
+            {"mid": member_id, "wid": ws_id, "uid": username, "email": username},
         )
 
 

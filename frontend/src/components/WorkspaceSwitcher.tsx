@@ -36,8 +36,17 @@ export function WorkspaceSwitcher() {
 
   return (
     <div className="workspace-switcher">
-      {/* Personal workspace */}
+      {/* Personal workspaces */}
       <div className="ws-section-label">Personal</div>
+      {/* Synthetic fallback: always show "My Workspace" for the default context */}
+      <button
+        className={`ws-item ${activeWorkspaceId === "default" || personal.length === 0 && !collab.find((w) => w.id === activeWorkspaceId) ? "ws-item--active" : ""}`}
+        onClick={() => setActiveWorkspaceId("default")}
+        title="My Workspace"
+      >
+        <span className="ws-icon">🏠</span>
+        <span className="ws-name">My Workspace</span>
+      </button>
       {personal.map((w) => (
         <button
           key={w.id}

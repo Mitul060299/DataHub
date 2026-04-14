@@ -110,6 +110,44 @@ def list_workspaces(authorization: str | None = Header(default=None), db: Sessio
         if w.id not in seen:
             seen.add(w.id)
             workspaces.append(w)
+
+    # Auto-create a personal workspace on first access if the user has none yet.
+    # This handles users who signed up before migration 0046 ran, or any race condition.
+    if not workspaces and caller:
+        safe_name = (caller.split("@")[0] if "@" in caller else caller)[:40]
+        ws = Workspace(
+            id=str(uuid.uuid4()),
+            name=f"{safe_name}-personal",
+            workspace_type="personal",
+            is_shared=False,
+            share_token=None,
+            owner_id=caller,
+        )
+        db.add(ws)
+        try:
+            db.commit()
+            db.refresh(ws)
+            member = WorkspaceMemberDB(
+                id=str(uuid.uuid4()),
+                workspace_id=ws.id,
+                user_id=caller,
+                email=caller,
+                role="admin",
+                status="active",
+                invite_token=None,
+                invited_by=caller,
+                accepted_at=datetime.now(timezone.utc),
+            )
+            db.add(member)
+            db.commit()
+        except Exception:
+            db.rollback()
+            # If creation failed (e.g. concurrent request), just re-query
+            ws = db.query(Workspace).filter(Workspace.owner_id == caller).first()
+            if ws:
+                workspaces = [ws]
+        else:
+            workspaces = [ws]
     return [
         WorkspaceOut(
             id=w.id,

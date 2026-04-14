@@ -203,7 +203,11 @@ export function CanvasPanel({ workspaceId, projectId, dataset, loading, dataErro
         {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (
           <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>⚡</span>
-            <span style={{ flex: 1 }}>Preview only — {sessionPreviewRows.length} rows. Not saved yet.</span>
+            <span style={{ flex: 1 }}>
+              {sessionPreviewRows.length === (liveArtifact?.rowCount ?? -1)
+                ? `Complete result — ${sessionPreviewRows.length} rows. Not saved yet.`
+                : `Preview — ${sessionPreviewRows.length}${liveArtifact?.rowCount != null ? ` of ${liveArtifact.rowCount}` : ""} rows. Not saved yet.`}
+            </span>
             <button
               onClick={onViewOriginal}
               style={{ background: "transparent", border: "1px solid rgba(234,179,8,0.4)", borderRadius: 4, color: "#fde68a", fontSize: 11, padding: "2px 8px", cursor: "pointer", flexShrink: 0 }}

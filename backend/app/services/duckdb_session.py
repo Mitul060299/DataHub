@@ -8,6 +8,7 @@ to prevent memory leaks on long-running Render instances.
 """
 from __future__ import annotations
 
+import os
 import time
 import threading
 from typing import Optional
@@ -21,15 +22,48 @@ _last_used: dict[str, float] = {}
 MAX_SESSION_AGE_SECONDS = 1800  # 30 minutes
 _CLEANUP_INTERVAL_SECONDS = 900  # run background cleanup every 15 minutes
 
+# Evict oldest sessions more aggressively when process RSS exceeds this.
+# Default 400 MB = 80 % of a 512 MB Render instance.
+# Override via DUCKDB_HIGH_MEMORY_MB env var to match your instance tier.
+_HIGH_MEMORY_THRESHOLD_MB: float = float(os.environ.get("DUCKDB_HIGH_MEMORY_MB", "400"))
+
 
 class SessionExpiredError(RuntimeError):
     """Raised when a session connection is lost or has been cleaned up."""
 
 
-def _cleanup_stale(max_age_seconds: int = MAX_SESSION_AGE_SECONDS) -> None:
-    """Remove sessions unused for longer than max_age_seconds."""
+def _process_rss_mb() -> float:
+    """Return current process RSS in MB, or -1 if psutil is unavailable."""
+    try:
+        import psutil
+        return psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+    except Exception:
+        return -1.0
+
+
+def _cleanup_stale(max_age_seconds: int = MAX_SESSION_AGE_SECONDS) -> int:
+    """Remove sessions unused for longer than max_age_seconds.
+
+    Under memory pressure (RSS > _HIGH_MEMORY_THRESHOLD_MB) the effective TTL
+    is halved so oldest sessions are evicted before the OS OOM-killer fires.
+
+    Returns the number of sessions evicted.
+    """
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+
+    rss_mb = _process_rss_mb()
+    effective_ttl = max_age_seconds
+    if rss_mb > 0 and rss_mb > _HIGH_MEMORY_THRESHOLD_MB:
+        effective_ttl = max_age_seconds // 2
+        _logger.warning(
+            "DUCKDB_HIGH_MEMORY_PRESSURE: RSS=%.1f MB > threshold=%.0f MB — "
+            "evicting sessions idle > %ds (normal TTL %ds)",
+            rss_mb, _HIGH_MEMORY_THRESHOLD_MB, effective_ttl, max_age_seconds,
+        )
+
     now = time.monotonic()
-    stale = [sid for sid, ts in _last_used.items() if now - ts > max_age_seconds]
+    stale = [sid for sid, ts in _last_used.items() if now - ts > effective_ttl]
     for sid in stale:
         try:
             conn = _sessions.pop(sid, None)
@@ -38,6 +72,7 @@ def _cleanup_stale(max_age_seconds: int = MAX_SESSION_AGE_SECONDS) -> None:
         except Exception:
             pass
         _last_used.pop(sid, None)
+    return len(stale)
 
 
 def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
@@ -178,6 +213,28 @@ def table_exists(session_id: str, name: str) -> bool:
 # Without this, _cleanup_stale() only ran when a *new* session was opened.
 # Idle sessions after their 2-hour TTL were never reclaimed on quiet instances.
 
+def get_session_stats() -> dict:
+    """Point-in-time snapshot of session manager state.
+
+    Used by GET /health/sessions.  Safe to call from any thread.
+    """
+    now = time.monotonic()
+    with _lock:
+        active = len(_sessions)
+        ages = [now - ts for ts in _last_used.values()]
+    oldest_minutes = round(max(ages) / 60, 1) if ages else 0.0
+    rss_mb = _process_rss_mb()
+    return {
+        "active_sessions": active,
+        "oldest_session_age_minutes": oldest_minutes,
+        "process_rss_mb": round(rss_mb, 1) if rss_mb >= 0 else None,
+        "high_memory_threshold_mb": _HIGH_MEMORY_THRESHOLD_MB,
+        "under_memory_pressure": (rss_mb > 0 and rss_mb > _HIGH_MEMORY_THRESHOLD_MB),
+        "session_ttl_seconds": MAX_SESSION_AGE_SECONDS,
+        "cleanup_interval_seconds": _CLEANUP_INTERVAL_SECONDS,
+    }
+
+
 def _cleanup_loop() -> None:
     import logging as _logging
     _logger = _logging.getLogger(__name__)
@@ -186,14 +243,22 @@ def _cleanup_loop() -> None:
         try:
             with _lock:
                 before = len(_sessions)
-            _cleanup_stale()
+            evicted = _cleanup_stale()
+            rss_mb = _process_rss_mb()
             with _lock:
                 after = len(_sessions)
-            pruned = before - after
-            if pruned:
-                _logger.info("DuckDB session cleanup: closed %d stale sessions (%d remaining)", pruned, after)
+            # Always log every run — if this line is absent in Render logs after
+            # 15 min the thread has died silently; redeploy to recover.
+            _logger.info(
+                "DUCKDB_CLEANUP_RUN: evicted=%d active=%d rss_mb=%.1f pressure=%s",
+                evicted, after,
+                rss_mb if rss_mb >= 0 else -1,
+                str(rss_mb > 0 and rss_mb > _HIGH_MEMORY_THRESHOLD_MB),
+            )
         except Exception as exc:
-            _logging.getLogger(__name__).warning("DuckDB session cleanup error: %s", exc)
+            _logging.getLogger(__name__).warning(
+                "DUCKDB_CLEANUP_ERROR: cleanup thread iteration failed: %s", exc
+            )
 
 
 threading.Thread(target=_cleanup_loop, daemon=True, name="duckdb-session-cleanup").start()

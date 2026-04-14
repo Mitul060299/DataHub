@@ -64,3 +64,14 @@ def health_memory() -> dict:
         "memsaver_threads": memsaver_threads,
         "uptime_seconds": uptime_seconds,
     }
+
+
+@router.get("/health/sessions")
+def health_sessions() -> dict:
+    """Live session manager stats: active sessions, RSS, memory pressure flag.
+
+    Check this after every deploy and grep Render logs for DUCKDB_CLEANUP_RUN
+    every ~15 min to confirm the background cleanup thread is alive.
+    """
+    from ..services.duckdb_session import get_session_stats
+    return get_session_stats()

@@ -9,6 +9,7 @@ Presigned URLs are generated fresh on every response — never stored.
 
 import io
 import logging
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
@@ -220,6 +221,35 @@ def _fetch_bytes(s3_key: str) -> bytes:
         return resp.read()
 
 
+def _upload_with_retry(
+    user_id: str,
+    session_id: str,
+    checkpoint_id: str,
+    parquet_bytes: bytes,
+) -> str:
+    """Upload Parquet bytes to object storage with exponential backoff.
+
+    Retries up to 3 times (delays: 1 s, 2 s, 4 s) before raising.
+    The session VIEW remains intact throughout so users can retry the Save.
+    """
+    file_name = f"{checkpoint_id}.parquet"
+    last_exc: Exception | None = None
+    for attempt, delay in enumerate([0, 1, 2, 4]):
+        if delay:
+            time.sleep(delay)
+        try:
+            return StorageService.upload(
+                user_id=user_id,
+                dataset_id=f"checkpoints/{session_id}",
+                buffer=parquet_bytes,
+                file_name=file_name,
+            )
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("S3_UPLOAD_RETRY: attempt %d failed for checkpoint %s: %s", attempt + 1, checkpoint_id, exc)
+    raise last_exc  # type: ignore[misc]
+
+
 # ── 4. Save pipeline step as a checkpoint artifact ───────────────────────────
 
 @router.post("/save-checkpoint")
@@ -278,18 +308,24 @@ def save_checkpoint(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Parquet serialisation failed: {exc}")
 
-    # 3. Upload to object storage
+    # 3. Upload to object storage (with exponential-backoff retry)
     import uuid as _uuid
     checkpoint_id = str(_uuid.uuid4())
     try:
-        s3_key = StorageService.upload(
+        s3_key = _upload_with_retry(
             user_id=current_user.id,
-            dataset_id=f"checkpoints/{session_id}",
-            buffer=parquet_bytes,
-            file_name=f"{checkpoint_id}.parquet",
+            session_id=session_id,
+            checkpoint_id=checkpoint_id,
+            parquet_bytes=parquet_bytes,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Storage upload failed: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Save failed after 3 attempts — your session is still active, "
+                f"try again in a moment. ({exc})"
+            ),
+        )
 
     # 4. Persist DatasetMetaDB so dataset appears in the datasets list
     ds_id = str(_uuid.uuid4())

@@ -143,3 +143,67 @@ Configure via an external scheduler:
 - Verify auth flow and core actions: login, upload dataset, preview, insights
 - Verify shared links: `https://<vercel-app>/shared/{token}`
 - If monitoring enabled: open Prometheus/Grafana, confirm `datahub-backend` target is UP
+- After 15 min, grep Render logs for `DUCKDB_CLEANUP_RUN` — confirms background session cleanup thread is alive
+- Hit `GET /health/sessions` and confirm `active_sessions` and `process_rss_mb` look sane
+
+## Render Scaling & Session State
+
+### Why you must not run multiple Render instances yet
+
+DuckDB sessions are stored in `_sessions` — an in-process Python dict on each Render worker.
+If you scale to 2+ instances without session state in Redis, two requests from the same user can land on different instances and get `SessionExpiredError` because each instance has its own separate `_sessions`.
+
+**Do not increase Render instances until Redis session reconstruction is implemented.**
+
+### Scaling ladder
+
+| Stage | DAU | Action |
+|---|---|---|
+| Current | 1–20 | 1 Render instance, 512 MB RAM |
+| Upgrade RAM | 20–50 | Upgrade Render instance to 1 GB RAM. Still 1 instance. Lower cost than adding an instance, no session split risk. |
+| Add Redis session state | 50–100 | Move DuckDB session reconstruction to Redis (Upstash). On session miss, rebuild from last S3 checkpoint artifact. Then safe to run 2 instances. |
+| Horizontal scale | 100+ | 2–3 instances + Redis + session reconstruction. At this point use Kubernetes (Helm chart in `infra/helm/datahub`). |
+
+### Signal to act
+
+Use `GET /health/sessions` (add to your Render health check or post-deploy smoke test):
+
+```json
+{
+  "active_sessions": 3,
+  "oldest_session_age_minutes": 12.4,
+  "process_rss_mb": 280.5,
+  "high_memory_threshold_mb": 400.0,
+  "under_memory_pressure": false,
+  "session_ttl_seconds": 1800,
+  "cleanup_interval_seconds": 900
+}
+```
+
+- `process_rss_mb` consistently > 350 between cleanup runs → upgrade instance RAM (not add instances)
+- `under_memory_pressure: true` in logs → sessions are already being evicted at half TTL; upgrade instance immediately
+- `active_sessions` growing unbounded → cleanup thread may have died; grep logs for `DUCKDB_CLEANUP_ERROR`
+
+### Memory pressure tuning
+
+The `DUCKDB_HIGH_MEMORY_MB` env var (default `400`) sets the RSS threshold above which session TTL is halved from 30 min to 15 min to prevent OOM. Tune this to ~80% of your instance's RAM:
+
+| Render instance RAM | Set DUCKDB_HIGH_MEMORY_MB |
+|---|---|
+| 512 MB | 400 (default) |
+| 1 GB | 800 |
+| 2 GB | 1600 |
+
+### S3 credential rotation
+
+`StorageService._s3_client()` creates a fresh boto3 client on every call, so it re-reads env vars each time.
+Rotating AWS credentials via the Render environment variable dashboard takes effect on the **next upload/download** — no restart or session flush needed.
+For production AWS: prefer IAM instance roles over static access keys to eliminate manual rotation entirely.
+
+### Cleanup thread monitoring
+
+The background cleanup thread logs `DUCKDB_CLEANUP_RUN` every 15 minutes unconditionally.
+If this log line is absent in Render logs for > 20 minutes after deploy, the thread has died silently.
+**Fix**: redeploy. The thread restarts with the process.
+
+To search in Render: Dashboard → Logs → filter `DUCKDB_CLEANUP_RUN`.

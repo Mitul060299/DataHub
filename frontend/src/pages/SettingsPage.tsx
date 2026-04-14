@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, listWebhooks, registerWebhook, deleteWebhook } from "../api";
+import { api, listWebhooks, registerWebhook, deleteWebhook, listAuditLogs, listApprovalRequests, approveRequest, rejectRequest } from "../api";
 import { BillingSettings } from "../components/BillingSettings";
 import { TeamSettings } from "../components/TeamSettings";
 import { useAuth } from "../contexts/AuthContext";
@@ -9,7 +9,7 @@ import { formatFileSize, useUser } from "../contexts/UserContext";
 import { supabase } from "../lib/supabase";
 import { billingEnabled } from "../utils/featureFlags";
 
-type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team" | "webhooks";
+type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team" | "webhooks" | "approvals";
 
 interface SettingsPageProps {
   section: SettingsSection;
@@ -126,6 +126,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
           {section === "audit" ? <AuditPanel /> : null}
           {section === "team" ? <TeamSettings /> : null}
           {section === "webhooks" ? <WebhooksPanel plan={plan} /> : null}
+          {section === "approvals" ? <ApprovalsPanel /> : null}
         </div>
       </div>
     </div>
@@ -200,6 +201,17 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      key: "approvals" as SettingsSection,
+      label: "Approvals",
+      path: "/settings/approvals",
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 11l3 3L22 4" />
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </svg>
       ),
     },
@@ -838,28 +850,40 @@ function AuditPanel() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"personal" | "workspace">("personal");
   const PAGE = 20;
 
   const load = (off: number, action: AuditFilterAction) => {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ limit: String(PAGE), offset: String(off) });
-    if (action) params.set("action", action);
-    api
-      .get<AuditLogResponse>(`/users/me/audit-log?${params.toString()}`)
-      .then((r) => {
-        setEntries(r.data.entries);
-        setTotal(r.data.total);
-        setOffset(off);
-      })
-      .catch(() => setError("Failed to load audit log."))
-      .finally(() => setLoading(false));
+    if (viewMode === "workspace") {
+      listAuditLogs({ action: action || undefined, limit: PAGE })
+        .then((data: AuditEntry[]) => {
+          setEntries(Array.isArray(data) ? data : []);
+          setTotal(Array.isArray(data) ? data.length : 0);
+          setOffset(0);
+        })
+        .catch(() => setError("Failed to load workspace audit log."))
+        .finally(() => setLoading(false));
+    } else {
+      const params = new URLSearchParams({ limit: String(PAGE), offset: String(off) });
+      if (action) params.set("action", action);
+      api
+        .get<AuditLogResponse>(`/users/me/audit-log?${params.toString()}`)
+        .then((r) => {
+          setEntries(r.data.entries);
+          setTotal(r.data.total);
+          setOffset(off);
+        })
+        .catch(() => setError("Failed to load audit log."))
+        .finally(() => setLoading(false));
+    }
   };
 
   useEffect(() => {
     load(0, filterAction);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterAction]);
+  }, [filterAction, viewMode]);
 
   const formatDate = (iso: string | null) => {
     if (!iso) return "—";
@@ -882,8 +906,29 @@ function AuditPanel() {
         <div>
           <h2 style={{ fontSize: 18, color: "#e8e8f0", margin: 0 }}>Audit Log</h2>
           <p style={{ color: "#8888a0", fontSize: 12, margin: "4px 0 0" }}>
-            A record of key actions performed in your account.
+            {viewMode === "personal" ? "A record of key actions performed in your account." : "Workspace-wide audit events across all members."}
           </p>
+          <div style={{ display: "flex", gap: 4, marginTop: 10 }}>
+            {(["personal", "workspace"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #2a2a38",
+                  background: viewMode === mode ? "#5B6AF0" : "#18181e",
+                  color: viewMode === mode ? "#fff" : "#8888a0",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                }}
+              >
+                {mode === "personal" ? "My Activity" : "Workspace"}
+              </button>
+            ))}
+          </div>
         </div>
         <select
           value={filterAction}
@@ -1015,6 +1060,144 @@ function AuditPanel() {
           >
             Next →
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ApprovalRequest {
+  id: string;
+  requester: string;
+  resource_type: string;
+  resource_id: string;
+  summary: string;
+  status: "pending" | "approved" | "rejected" | string;
+  created_at?: string | null;
+  resolved_at?: string | null;
+  resolver?: string | null;
+}
+
+function ApprovalsPanel() {
+  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [acting, setActing] = useState<string | null>(null);
+
+  const refresh = () => {
+    setLoading(true);
+    setError(null);
+    listApprovalRequests()
+      .then((data: ApprovalRequest[]) => setRequests(Array.isArray(data) ? data : []))
+      .catch(() => setError("Failed to load approval requests."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const handleApprove = async (id: string) => {
+    setActing(id);
+    try {
+      await approveRequest(id);
+      refresh();
+    } catch {
+      setError("Failed to approve request.");
+    } finally {
+      setActing(null);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    setActing(id);
+    try {
+      await rejectRequest(id);
+      refresh();
+    } catch {
+      setError("Failed to reject request.");
+    } finally {
+      setActing(null);
+    }
+  };
+
+  const statusColor = (s: string) => {
+    if (s === "approved") return "#6ee7b7";
+    if (s === "rejected") return "#fca5a5";
+    return "#fbbf24";
+  };
+
+  const formatDate = (iso?: string | null) => {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); } catch { return iso; }
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div>
+        <h2 style={{ fontSize: 18, color: "#e8e8f0", margin: 0 }}>Approval Requests</h2>
+        <p style={{ color: "#8888a0", fontSize: 12, margin: "4px 0 0" }}>
+          Review and action pending data access or operation approvals.
+        </p>
+      </div>
+
+      {loading && <p style={{ color: "#8888a0", fontSize: 13 }}>Loading…</p>}
+      {error && <p style={{ color: "#c94040", fontSize: 13 }}>{error}</p>}
+      {!loading && !error && requests.length === 0 && (
+        <p style={{ color: "#8888a0", fontSize: 13 }}>No approval requests found.</p>
+      )}
+
+      {!loading && requests.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {requests.map((req) => (
+            <div
+              key={req.id}
+              style={{
+                background: "#18181e",
+                border: "1px solid #22222a",
+                borderRadius: 8,
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#e8e8f0" }}>{req.summary}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: statusColor(req.status), textTransform: "capitalize" }}>
+                  {req.status}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "#8888a0", display: "flex", gap: 16 }}>
+                <span>By: <span style={{ color: "#c8c8d8" }}>{req.requester}</span></span>
+                <span>Type: <span style={{ color: "#c8c8d8" }}>{req.resource_type}</span></span>
+                <span>Resource: <span style={{ color: "#c8c8d8" }}>{req.resource_id}</span></span>
+                <span>{formatDate(req.created_at)}</span>
+              </div>
+              {req.status === "pending" && (
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    disabled={acting === req.id}
+                    onClick={() => handleApprove(req.id)}
+                    style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    disabled={acting === req.id}
+                    onClick={() => handleReject(req.id)}
+                    style={{ padding: "5px 14px", borderRadius: 6, border: "1px solid #ef4444", background: "transparent", color: "#fca5a5", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+              {req.status !== "pending" && req.resolver && (
+                <div style={{ fontSize: 11, color: "#8888a0" }}>
+                  {req.status === "approved" ? "Approved" : "Rejected"} by <span style={{ color: "#c8c8d8" }}>{req.resolver}</span>
+                  {req.resolved_at && <> · {formatDate(req.resolved_at)}</>}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

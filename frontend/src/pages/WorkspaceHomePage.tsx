@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
+import { deleteProject, fetchWorkspaceRecent, updateProject, listContextVersions, revertContext, listDashboardTemplates } from "../api";
 import type { WorkspaceRecentOut } from "../api";
+import type { ContextVersion } from "../types";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
 import type { Project } from "../contexts/WorkspaceContext";
@@ -52,6 +53,46 @@ export function WorkspaceHomePage() {
   const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Context history sidebar
+  const [contextVersions, setContextVersions] = useState<ContextVersion[]>([]);
+  const [contextHistoryOpen, setContextHistoryOpen] = useState(false);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
+
+  // Dashboard templates
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (!contextHistoryOpen || !activeWorkspaceId) return;
+    setContextLoading(true);
+    listContextVersions(activeWorkspaceId)
+      .then((data) => setContextVersions(Array.isArray(data) ? data : []))
+      .catch(() => setContextVersions([]))
+      .finally(() => setContextLoading(false));
+  }, [contextHistoryOpen, activeWorkspaceId]);
+
+  useEffect(() => {
+    if (!templatePanelOpen) return;
+    listDashboardTemplates()
+      .then((data) => setTemplates(Array.isArray(data) ? data : []))
+      .catch(() => setTemplates([]));
+  }, [templatePanelOpen]);
+
+  const handleRevertContext = async (versionId: string) => {
+    if (!activeWorkspaceId) return;
+    if (!window.confirm("Revert workspace context to this version? Current context will be overwritten.")) return;
+    setRevertingId(versionId);
+    try {
+      await revertContext(activeWorkspaceId, versionId);
+      setContextHistoryOpen(false);
+    } catch {
+      alert("Failed to revert context.");
+    } finally {
+      setRevertingId(null);
+    }
+  };
 
   useEffect(() => {
     setRecentLoading(true);
@@ -128,6 +169,67 @@ export function WorkspaceHomePage() {
           Workspaces
         </div>
         <WorkspaceSwitcher />
+
+        {/* ── Context History ──────────────────────── */}
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--bd)", paddingTop: 12 }}>
+          <button
+            onClick={() => setContextHistoryOpen((o) => !o)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "6px 16px",
+              background: "none",
+              border: "none",
+              color: "var(--tx1)",
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+            }}
+          >
+            <span>Context History</span>
+            <span style={{ fontSize: 10, opacity: 0.6 }}>{contextHistoryOpen ? "▲" : "▼"}</span>
+          </button>
+
+          {contextHistoryOpen && (
+            <div style={{ padding: "6px 10px", display: "flex", flexDirection: "column", gap: 4 }}>
+              {contextLoading && (
+                <p style={{ margin: 0, fontSize: 11, color: "var(--tx2, #888)", padding: "4px 6px" }}>Loading…</p>
+              )}
+              {!contextLoading && contextVersions.length === 0 && (
+                <p style={{ margin: 0, fontSize: 11, color: "var(--tx2, #888)", padding: "4px 6px" }}>No versions saved yet.</p>
+              )}
+              {contextVersions.map((v) => (
+                <div
+                  key={v.version_id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "5px 8px",
+                    borderRadius: 6,
+                    background: "var(--bg2)",
+                    border: "1px solid var(--bd)",
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "var(--tx1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                    {v.created_at ? new Date(v.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : v.version_id.slice(0, 8)}
+                  </span>
+                  <button
+                    disabled={revertingId === v.version_id}
+                    onClick={() => handleRevertContext(v.version_id)}
+                    style={{ marginLeft: 4, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--bd2)", background: "none", color: "var(--tx1)", fontSize: 10, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    {revertingId === v.version_id ? "…" : "Revert"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Main content ──────────────────────────────────── */}
@@ -177,6 +279,76 @@ export function WorkspaceHomePage() {
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New Project
           </button>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setTemplatePanelOpen((o) => !o)}
+              style={{
+                padding: "8px 14px",
+                borderRadius: 8,
+                border: "1px solid var(--bd2)",
+                background: "var(--bg2)",
+                color: "var(--tx1)",
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                flexShrink: 0,
+              }}
+            >
+              📋 Templates
+            </button>
+            {templatePanelOpen && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setTemplatePanelOpen(false)} />
+                <div style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  zIndex: 100,
+                  background: "var(--bg2)",
+                  border: "1px solid var(--bd2)",
+                  borderRadius: 10,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                  minWidth: 240,
+                  maxHeight: 320,
+                  overflowY: "auto",
+                  padding: 8,
+                }}>
+                  <p style={{ margin: "4px 8px 8px", fontSize: 11, color: "var(--tx2, #888)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Dashboard Templates</p>
+                  {templates.length === 0 ? (
+                    <p style={{ margin: 0, padding: "8px 8px", fontSize: 12, color: "var(--tx1)" }}>No templates available.</p>
+                  ) : templates.map((t) => (
+                    <button
+                      key={t.id}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        padding: "9px 12px",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        color: "var(--tx0)",
+                        fontSize: 13,
+                        cursor: "pointer",
+                        borderRadius: 6,
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg3)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                      onClick={() => {
+                        setTemplatePanelOpen(false);
+                        navigate(`/dashboard/new?templateId=${t.id}`);
+                      }}
+                    >
+                      <div style={{ fontWeight: 500 }}>{t.name}</div>
+                      {t.description && <div style={{ fontSize: 11, color: "var(--tx1)", marginTop: 2 }}>{t.description}</div>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

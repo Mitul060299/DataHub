@@ -15,6 +15,9 @@ class User(Base):
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_uploaded_first_file = Column(Boolean, nullable=False, default=False)
     notification_prefs = Column(JSONB, nullable=True, default=dict)
+    # Billing columns — added to DB by migration 0025; also accessed via Supabase client in billing_repository
+    razorpay_customer_id = Column(String, nullable=True)
+    subscription_id = Column(String, nullable=True)
 
 
 class UserUsageDB(Base):
@@ -110,19 +113,6 @@ class ContextVersion(Base):
     glossary = Column(JSONB, nullable=False, default=dict)
     rules = Column(JSONB, nullable=False, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-
-# DEPRECATED: Old simple dashboard - use VizDashboardDB instead
-# Kept for backwards compatibility with existing data
-class Dashboard(Base):
-    __tablename__ = "dashboards"
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    widgets = Column(JSONB, nullable=False, default=list)
-    is_shared = Column(Boolean, nullable=False, default=False)
-    share_token = Column(String, nullable=True)
-    share_expires_at = Column(DateTime(timezone=True), nullable=True)
-    share_scope = Column(String, nullable=True)
 
 
 class DatasetMetaDB(Base):

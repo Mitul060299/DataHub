@@ -39,7 +39,8 @@ def list_jobs(
     db: Session = Depends(get_db),
 ) -> list[ScheduledJob]:
     role = get_current_role(authorization)
-    require_role("viewer", role)
+    # Admin-only: ScheduledJobDB has no user_id column.
+    require_role("admin", role)
     rows = db.query(ScheduledJobDB).order_by(ScheduledJobDB.created_at.desc()).all()
     return [
         ScheduledJob(

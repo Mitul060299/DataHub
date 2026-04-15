@@ -175,10 +175,14 @@ def list_connector_credentials(
     """List saved credentials for the current workspace (config is never returned)."""
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
     ws = workspace_id or "default"
     rows = (
         db.query(ConnectorCredentialDB)
-        .filter(ConnectorCredentialDB.workspace_id == ws)
+        .filter(
+            ConnectorCredentialDB.user_id == user_id,
+            ConnectorCredentialDB.workspace_id == ws,
+        )
         .order_by(ConnectorCredentialDB.created_at.desc())
         .all()
     )

@@ -39,7 +39,12 @@ router = APIRouter(prefix="/governance", tags=["governance"])
 
 
 @router.post("/audit")
-def add_audit(entry: AuditEntry) -> dict:
+def add_audit(
+    entry: AuditEntry,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("editor", role)
     audit_store.add(entry)
     return {"status": "logged"}
 
@@ -51,8 +56,11 @@ def list_audit(
     target: str | None = None,
     since_minutes: int | None = None,
     limit: int = 200,
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> list[AuditEntry]:
+    role = get_current_role(authorization)
+    require_role("admin", role)
     query = db.query(AuditLogDB)
     if action:
         query = query.filter(AuditLogDB.action == action)
@@ -80,7 +88,12 @@ def list_audit(
 
 
 @router.get("/usage", response_model=UsageSummary)
-def usage_summary(db: Session = Depends(get_db)) -> UsageSummary:
+def usage_summary(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> UsageSummary:
+    role = get_current_role(authorization)
+    require_role("admin", role)
     rows = db.query(AuditLogDB).all()
     total_events = len(rows)
     unique_actors = len({row.actor for row in rows})

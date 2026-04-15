@@ -58,12 +58,14 @@ class MLController:
         dataset_id: str,
         experiment_name: str,
         experiment_type: str,
-        db: Session = None
+        db: Session = None,
+        user_id: Optional[str] = None,
     ) -> str:
         """Create experiment record and return ID"""
         exp_id = str(uuid.uuid4())
         _experiments[exp_id] = {
             "id": exp_id,
+            "user_id": user_id,
             "dataset_id": dataset_id,
             "name": experiment_name,
             "experiment_type": experiment_type,
@@ -91,7 +93,8 @@ class MLController:
             request.dataset_id,
             request.experiment_name,
             request.experiment_type,
-            db
+            db,
+            user_id=current_user_id,
         )
 
         # Run in background
@@ -220,9 +223,11 @@ class MLController:
         return exp
 
     @staticmethod
-    async def get_experiments(dataset_id: Optional[str] = None):
-        """List experiments"""
+    async def get_experiments(dataset_id: Optional[str] = None, user_id: Optional[str] = None):
+        """List experiments scoped to the current user"""
         exps = list(_experiments.values())
+        if user_id:
+            exps = [e for e in exps if e.get("user_id") == user_id]
         if dataset_id:
             exps = [e for e in exps if e.get("dataset_id") == dataset_id]
         return {"experiments": exps}

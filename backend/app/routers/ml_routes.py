@@ -23,8 +23,8 @@ async def get_experiments(
     db: Session = Depends(get_db),
     current_user_id: str = Depends(get_current_subject)
 ):
-    """Get all ML experiments"""
-    return await MLController.get_experiments(dataset_id)
+    """Get all ML experiments for the current user"""
+    return await MLController.get_experiments(dataset_id, user_id=current_user_id)
 
 
 @router.get("/experiments/{experiment_id}")

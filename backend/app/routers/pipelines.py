@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import PipelineCreate, PipelineUpdate, PipelineSchedule, PipelineRun
 from ..models_db import PipelineDB, PipelineRunDB
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..services.plan_guard import resolve_user_plan, enforce_scheduling
 from ..services.pipelines import schedule_pipeline, run_pipeline_job
 
@@ -77,7 +77,9 @@ def list_pipelines(
     db: Session = Depends(get_db),
 ) -> list[PipelineSchedule]:
     role = get_current_role(authorization)
-    require_role("viewer", role)
+    # Admin-only: this legacy endpoint has no user_id column on PipelineDB.
+    # Regular users access their pipelines via /api/pipelines (pipeline_workflows).
+    require_role("admin", role)
     rows = db.query(PipelineDB).order_by(PipelineDB.created_at.desc()).all()
     return [_to_pipeline_out(row) for row in rows]
 

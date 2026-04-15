@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ..models import ApprovalRequestIn, ApprovalRequestOut
 from ..models_db import ApprovalRequestDB
 from ..db import get_db
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..services.audit import audit_store
 from ..models import AuditEntry
 
@@ -57,17 +57,21 @@ def create_request(
 @router.get("/", response_model=list[ApprovalRequestOut])
 def list_requests(
     status: str | None = None,
-    requester: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
     limit: int = 200,
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> list[ApprovalRequestOut]:
-    query = db.query(ApprovalRequestDB)
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    # Always scope to the authenticated user's own requests.
+    requester = get_current_user_id(authorization)
+    query = db.query(ApprovalRequestDB).filter(ApprovalRequestDB.requester == requester)
     if status:
         query = query.filter(ApprovalRequestDB.status == status)
-    if requester:
-        query = query.filter(ApprovalRequestDB.requester == requester)
+    if resource_type:
+        query = query.filter(ApprovalRequestDB.resource_type == resource_type)
     if resource_type:
         query = query.filter(ApprovalRequestDB.resource_type == resource_type)
     if resource_id:

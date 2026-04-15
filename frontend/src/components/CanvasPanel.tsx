@@ -41,6 +41,10 @@ interface CanvasPanelProps {
   onRunPipeline?: () => Promise<void>;
   /** True while replay is running */
   replayingPipeline?: boolean;
+  /** Error message from the most recent replay attempt */
+  replayError?: string | null;
+  /** Clear the replay error (e.g. when user dismisses) */
+  onClearReplayError?: () => void;
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -52,7 +56,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -396,7 +400,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {dataError && tab === "data" && (
+        {dataError && tab === "data" && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
           <div style={{ padding: "10px 16px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.2)", color: "var(--rd)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
             <span>⚠</span>
             <span>{dataError}</span>
@@ -467,15 +471,22 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         })()}
         {/* Green banner: steps exist but liveArtifact is gone (page refresh) — prompt user to re-run */}
         {tab === "data" && steps.length > 0 && !liveArtifact && !showingOriginal && viewingStepIndex === null && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
-          <div style={{ padding: "6px 14px", background: "rgba(34,197,94,0.08)", borderBottom: "1px solid rgba(34,197,94,0.2)", color: "#86efac", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            <span>🔄</span>
-            <span style={{ flex: 1 }}>Your pipeline has {steps.length} step{steps.length === 1 ? "" : "s"} — run it to restore the cleaned preview.</span>
+          <div style={{ padding: "6px 14px", background: replayError ? "rgba(248,113,113,0.08)" : "rgba(34,197,94,0.08)", borderBottom: `1px solid ${replayError ? "rgba(248,113,113,0.2)" : "rgba(34,197,94,0.2)"}`, color: replayError ? "var(--rd)" : "#86efac", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <span>{replayError ? "⚠" : "🔄"}</span>
+            <span style={{ flex: 1 }}>{replayError ?? `Your pipeline has ${steps.length} step${steps.length === 1 ? "" : "s"} — run it to restore the cleaned preview.`}</span>
+            {replayError && onClearReplayError && (
+              <button
+                onClick={onClearReplayError}
+                style={{ background: "transparent", border: "none", color: "var(--rd)", fontSize: 13, cursor: "pointer", padding: "2px 6px", flexShrink: 0, opacity: 0.7 }}
+                title="Dismiss"
+              >✕</button>
+            )}
             <button
-              onClick={() => { if (onRunPipeline && !replayingPipeline) void onRunPipeline(); }}
+              onClick={() => { if (onRunPipeline && !replayingPipeline) { onClearReplayError?.(); void onRunPipeline(); } }}
               disabled={replayingPipeline}
-              style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", borderRadius: 4, color: "#86efac", fontSize: 11, padding: "2px 10px", cursor: replayingPipeline ? "default" : "pointer", flexShrink: 0, opacity: replayingPipeline ? 0.6 : 1 }}
+              style={{ background: replayError ? "rgba(248,113,113,0.15)" : "rgba(34,197,94,0.15)", border: `1px solid ${replayError ? "rgba(248,113,113,0.35)" : "rgba(34,197,94,0.35)"}`, borderRadius: 4, color: replayError ? "var(--rd)" : "#86efac", fontSize: 11, padding: "2px 10px", cursor: replayingPipeline ? "default" : "pointer", flexShrink: 0, opacity: replayingPipeline ? 0.6 : 1 }}
             >
-              {replayingPipeline ? "Running…" : "▶ Run Pipeline"}
+              {replayingPipeline ? "Running…" : replayError ? "↺ Retry" : "▶ Run Pipeline"}
             </button>
           </div>
         )}

@@ -51,6 +51,7 @@ export function WorkspacePage() {
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const [showingOriginal, setShowingOriginal] = useState(false);
   const [replayingPipeline, setReplayingPipeline] = useState(false);
+  const [replayError, setReplayError] = useState<string | null>(null);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // Re-execute all pipeline steps and restore session preview.
@@ -77,6 +78,8 @@ export function WorkspacePage() {
       });
     } catch (err) {
       console.error("Pipeline replay failed", err);
+      const msg = err instanceof Error ? err.message : "Pipeline replay failed. Please try again.";
+      setReplayError(msg);
     } finally {
       setReplayingPipeline(false);
     }
@@ -297,6 +300,8 @@ export function WorkspacePage() {
         } : undefined}
         onRunPipeline={handleRunPipeline}
         replayingPipeline={replayingPipeline}
+        replayError={replayError}
+        onClearReplayError={() => setReplayError(null)}
       />
       {/* Pipeline column — dedicated panel between canvas and AI */}
       {pipelineOpen ? (

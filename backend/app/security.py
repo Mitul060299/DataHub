@@ -238,15 +238,18 @@ def _map_supabase_role(claims: Dict[str, Any]) -> str:
         raw_role = claims["app_metadata"].get("role")
     if not raw_role and isinstance(claims.get("user_metadata"), dict):
         raw_role = claims["user_metadata"].get("role")
-    if not raw_role:
-        raw_role = claims.get("role")
+    # NOTE: claims.get("role") is intentionally NOT checked here.
+    # Supabase always injects role="authenticated" (a PostgreSQL role) as a
+    # top-level JWT claim on every token.  Reading it would make raw_role
+    # truthy for every user, bypassing the "admin" default below and causing
+    # every authenticated user to be treated as "viewer".
     if not raw_role:
         # Any valid authenticated Supabase user is treated as admin of their
         # own account.  Explicit demotion (viewer/editor) must be set in
         # app_metadata or user_metadata to restrict a specific user.
         return "admin"
     normalized = str(raw_role).lower()
-    if normalized in {"service_role", "supabase_admin", "admin"}:
+    if normalized in {"service_role", "supabase_admin", "admin", "authenticated"}:
         return "admin"
     if normalized in {"editor", "writer"}:
         return "editor"

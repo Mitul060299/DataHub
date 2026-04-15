@@ -8,9 +8,10 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 interface PipelinePanelProps {
   width: number;
   onClose: () => void;
+  onRunPipeline?: () => Promise<void>;
 }
 
-export function PipelinePanel({ width, onClose }: PipelinePanelProps) {
+export function PipelinePanel({ width, onClose, onRunPipeline }: PipelinePanelProps) {
   const { steps, setScheduleInfo } = usePipelineContext();
   const { exportPipeline, schedule } = usePipeline();
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
@@ -100,6 +101,7 @@ export function PipelinePanel({ width, onClose }: PipelinePanelProps) {
           onSchedule={() => setScheduleModalOpen(true)}
           onExport={() => exportPipeline(steps)}
           hideHeader
+          onRunPipeline={onRunPipeline}
         />
       </div>
 

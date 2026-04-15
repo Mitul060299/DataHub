@@ -326,6 +326,7 @@ export function WorkspacePage() {
               setPipelineOpen(false);
               localStorage.setItem("pipelineOpen", "false");
             }}
+            onRunPipeline={handleRunPipeline}
           />
         </>
       ) : null}

@@ -26,6 +26,8 @@ interface PipelineSectionProps {
   onSchedule: () => void;
   onExport: () => void;
   hideHeader?: boolean;
+  /** Called when the user clicks "Run Applied Steps" — replays the pipeline via the cleaning API */
+  onRunPipeline?: () => Promise<void>;
 }
 
 type ServerWorkflowTemplate = {
@@ -39,7 +41,7 @@ type RunStatusSummary = {
   rows: number | null;
 };
 
-export function PipelineSection({ onSchedule, onExport, hideHeader = false }: PipelineSectionProps) {
+export function PipelineSection({ onSchedule, onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
   const { runPipelineWorkflow, getPipelineRunArtifact } = usePipeline();
@@ -926,7 +928,7 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
         </div>
       ) : null}
 
-      {open && (steps.length || activeDataset?.id) ? (
+      {open ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", padding: 8, display: "grid", gap: 8 }}>
 
@@ -1176,7 +1178,7 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
             {workflowMessage ? <div style={{ color: "var(--tx1)", fontSize: 11 }}>{workflowMessage}</div> : null}
           </div>
 
-          <button className="btn" style={{ width: "100%" }} onClick={() => void runPipeline()} disabled={!steps.length}>
+          <button className="btn" style={{ width: "100%" }} onClick={() => { if (onRunPipeline) void onRunPipeline(); else void runPipeline(); }} disabled={!steps.length}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconPlay size={14} />Run Applied Steps</span>
           </button>
 

@@ -37,6 +37,10 @@ interface CanvasPanelProps {
   onViewCleaned?: () => void;
   /** Called when user clicks Save in the amber preview banner */
   onSave?: () => void;
+  /** Replay all pipeline steps and restore session preview */
+  onRunPipeline?: () => Promise<void>;
+  /** True while replay is running */
+  replayingPipeline?: boolean;
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -48,8 +52,8 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave }: CanvasPanelProps) {
-  const { steps, liveArtifact, runPipeline } = usePipelineContext();
+export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline }: CanvasPanelProps) {
+  const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
@@ -467,10 +471,11 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             <span>🔄</span>
             <span style={{ flex: 1 }}>Your pipeline has {steps.length} step{steps.length === 1 ? "" : "s"} — run it to restore the cleaned preview.</span>
             <button
-              onClick={() => { void runPipeline(); }}
-              style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", borderRadius: 4, color: "#86efac", fontSize: 11, padding: "2px 10px", cursor: "pointer", flexShrink: 0 }}
+              onClick={() => { if (onRunPipeline && !replayingPipeline) void onRunPipeline(); }}
+              disabled={replayingPipeline}
+              style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", borderRadius: 4, color: "#86efac", fontSize: 11, padding: "2px 10px", cursor: replayingPipeline ? "default" : "pointer", flexShrink: 0, opacity: replayingPipeline ? 0.6 : 1 }}
             >
-              ▶ Run Pipeline
+              {replayingPipeline ? "Running…" : "▶ Run Pipeline"}
             </button>
           </div>
         )}

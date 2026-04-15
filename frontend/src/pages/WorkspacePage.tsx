@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../api";
+import { api, fetchDatasetPage } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
@@ -29,7 +29,7 @@ export function WorkspacePage() {
   const resolvedProject = projectId
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
-  const { runPipeline, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
+  const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -50,7 +50,37 @@ export function WorkspacePage() {
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const [showingOriginal, setShowingOriginal] = useState(false);
+  const [replayingPipeline, setReplayingPipeline] = useState(false);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
+
+  // Re-execute all pipeline steps and restore session preview.
+  // Called from the green banner when the user refreshes and liveArtifact is gone.
+  const handleRunPipeline = async () => {
+    if (!activeDataset?.id || !steps.length || replayingPipeline) return;
+    setReplayingPipeline(true);
+    try {
+      const replaySteps = steps
+        .map((s) => s.rawConfig ?? (s.sql ? { sql: s.sql } : null))
+        .filter(Boolean);
+      const result = await api.post<{ final_dataset_id: string; final_row_count: number }>(
+        `/datasets/${activeDataset.id}/replay`,
+        { steps: replaySteps },
+      );
+      const { final_dataset_id, final_row_count } = result.data;
+      const page = await fetchDatasetPage(final_dataset_id, 0, 500);
+      setSessionPreview({ rows: page.rows ?? [], columns: page.columns ?? [] });
+      setLiveArtifact({
+        tableName: final_dataset_id,
+        rowCount: final_row_count ?? page.total_rows ?? page.rows?.length ?? 0,
+        stepLabel: steps[steps.length - 1].description,
+        sessionId: "replayed",
+      });
+    } catch (err) {
+      console.error("Pipeline replay failed", err);
+    } finally {
+      setReplayingPipeline(false);
+    }
+  };
 
   // Show welcome modal on first visit
   useEffect(() => {
@@ -256,7 +286,7 @@ export function WorkspacePage() {
         showingOriginal={showingOriginal && !!sessionPreview}
         onViewOriginal={() => setShowingOriginal(true)}
         onViewCleaned={() => setShowingOriginal(false)}
-        onSave={liveArtifact ? async () => {
+        onSave={liveArtifact && liveArtifact.sessionId !== "replayed" ? async () => {
           await api.post("/api/artifacts/save-checkpoint", {
             session_id: liveArtifact.sessionId,
             table_name: liveArtifact.tableName,
@@ -265,6 +295,8 @@ export function WorkspacePage() {
           });
           setDatasetRefreshNonce((v) => v + 1);
         } : undefined}
+        onRunPipeline={handleRunPipeline}
+        replayingPipeline={replayingPipeline}
       />
       {/* Pipeline column — dedicated panel between canvas and AI */}
       {pipelineOpen ? (

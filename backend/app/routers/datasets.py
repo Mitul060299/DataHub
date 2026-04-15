@@ -618,8 +618,14 @@ def save_pipeline_steps(
         raise HTTPException(status_code=422, detail="steps must be a list")
     # Safety cap: don't persist more than 100 steps per dataset
     steps = steps[:100]
-    meta.pipeline_steps_json = json.dumps(steps)  # type: ignore[assignment]
-    db.commit()
+    try:
+        meta.pipeline_steps_json = json.dumps(steps)  # type: ignore[assignment]
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Column may not exist yet (migration 0049 pending) — return success
+        # so the frontend falls back to localStorage without showing an error.
+        return {"dataset_id": dataset_id, "saved": 0}
     return {"dataset_id": dataset_id, "saved": len(steps)}
 
 

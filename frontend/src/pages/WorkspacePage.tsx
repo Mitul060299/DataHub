@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
@@ -52,6 +52,11 @@ export function WorkspacePage() {
   const [showingOriginal, setShowingOriginal] = useState(false);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
+  // Track whether this is the very first activeDataset resolution on page load.
+  // We must NOT call clearSteps() on the initial restore — that would wipe
+  // localStorage steps before PipelineContext can read them back.
+  const isInitialDatasetRestoreRef = useRef(true);
+
   // Show welcome modal on first visit
   useEffect(() => {
     if (!hasCompletedOnboarding) {
@@ -81,8 +86,13 @@ export function WorkspacePage() {
     }
   }, [hasUploadedFirstFile, hasAskedFirstQuestion, hasCompletedOnboarding, markOnboardingComplete]);
 
-  // Clear session preview + live artifact whenever the user switches to a different source dataset
+  // Clear session preview + live artifact whenever the user switches to a different source dataset.
+  // Skip the very first resolution (page-load restore) so we don't wipe persisted steps.
   useEffect(() => {
+    if (isInitialDatasetRestoreRef.current) {
+      isInitialDatasetRestoreRef.current = false;
+      return;
+    }
     setSessionPreview(null);
     setLiveArtifact(null);
     setShowingOriginal(false);

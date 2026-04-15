@@ -49,7 +49,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 }
 
 export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave }: CanvasPanelProps) {
-  const { steps, liveArtifact } = usePipelineContext();
+  const { steps, liveArtifact, runPipeline } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
@@ -421,6 +421,19 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 Save ↑
               </button>
             )}
+          </div>
+        )}
+        {/* Green banner: steps exist but liveArtifact is gone (page refresh) — prompt user to re-run */}
+        {tab === "data" && steps.length > 0 && !liveArtifact && !showingOriginal && viewingStepIndex === null && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
+          <div style={{ padding: "6px 14px", background: "rgba(34,197,94,0.08)", borderBottom: "1px solid rgba(34,197,94,0.2)", color: "#86efac", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <span>🔄</span>
+            <span style={{ flex: 1 }}>Your pipeline has {steps.length} step{steps.length === 1 ? "" : "s"} — run it to restore the cleaned preview.</span>
+            <button
+              onClick={() => { void runPipeline(); }}
+              style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", borderRadius: 4, color: "#86efac", fontSize: 11, padding: "2px 10px", cursor: "pointer", flexShrink: 0 }}
+            >
+              ▶ Run Pipeline
+            </button>
           </div>
         )}
         {/* Blue banner: viewing original while a live artifact exists */}

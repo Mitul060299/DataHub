@@ -62,12 +62,18 @@ interface PipelineContextValue {
 }
 
 const PipelineContext = createContext<PipelineContextValue | undefined>(undefined);
-const PIPELINE_STEPS_STORAGE_KEY = "datahub_pipeline_steps_v1";
 
+// Per-dataset key so different datasets never overwrite each other's steps.
+// Falls back to the legacy global key on first load (one-time migration).
+const PIPELINE_STEPS_LEGACY_KEY = "datahub_pipeline_steps_v1";
+const stepsKey = (datasetId: string) => `datahub_steps_v2_${datasetId}`;
 
-const loadPersistedSteps = (): PipelineStep[] => {
+const loadPersistedSteps = (datasetId?: string | null): PipelineStep[] => {
   try {
-    const raw = localStorage.getItem(PIPELINE_STEPS_STORAGE_KEY);
+    // If we know the dataset, try the per-dataset key first, then fall back to legacy.
+    const key = datasetId ? stepsKey(datasetId) : null;
+    const raw = (key ? localStorage.getItem(key) : null)
+      ?? localStorage.getItem(PIPELINE_STEPS_LEGACY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>;
     if (!Array.isArray(parsed)) return [];
@@ -83,20 +89,26 @@ const loadPersistedSteps = (): PipelineStep[] => {
 export function PipelineProvider({ children }: { children: ReactNode }) {
   const { activeDataset } = useWorkspaceContext();
   const datasetId = activeDataset?.id ?? null;
-  const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps());
+  // On initial mount, peek at the stored activeDatasetId so we load the right
+  // per-dataset key before the React context has settled its first value.
+  const initialDatasetId = (() => {
+    if (activeDataset?.id) return activeDataset.id;
+    return localStorage.getItem("activeDatasetId") ?? null;
+  })();
+  const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps(initialDatasetId));
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
   const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null>(null);
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Write-through: localStorage (always) + DB (debounced 1.5s, when dataset known) ───
+  // ── Write-through: per-dataset localStorage (always) + DB (debounced 1.5s) ───
   useEffect(() => {
+    if (!datasetId) return;
     try {
-      localStorage.setItem(PIPELINE_STEPS_STORAGE_KEY, JSON.stringify(steps));
+      localStorage.setItem(stepsKey(datasetId), JSON.stringify(steps));
     } catch {
       // ignore quota errors
     }
-    if (!datasetId) return;
     // Debounce DB writes to avoid spamming during rapid step additions
     if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     dbSyncTimerRef.current = setTimeout(() => {
@@ -107,22 +119,22 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     };
   }, [steps, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── On dataset switch: load steps from DB, fall back to localStorage ───────────
+  // ── On dataset switch: load steps from DB, fall back to per-dataset localStorage ─
   const prevDatasetIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (datasetId === prevDatasetIdRef.current) return;
     prevDatasetIdRef.current = datasetId;
     if (!datasetId) {
-      setSteps(loadPersistedSteps());
+      setSteps(loadPersistedSteps(null));
       return;
     }
     fetchDatasetPipelineSteps(datasetId)
       .then((loaded) => {
         const parsed = (loaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
           .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
-        setSteps(parsed.length > 0 ? parsed : loadPersistedSteps());
+        setSteps(parsed.length > 0 ? parsed : loadPersistedSteps(datasetId));
       })
-      .catch(() => setSteps(loadPersistedSteps()));
+      .catch(() => setSteps(loadPersistedSteps(datasetId)));
   }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addStep = (step: PipelineStep) => {
@@ -178,6 +190,10 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const clearSteps = () => {
+    // Also clear the per-dataset localStorage key so old steps don't resurrect on switch
+    if (datasetId) {
+      try { localStorage.removeItem(stepsKey(datasetId)); } catch { /* ignore */ }
+    }
     setSteps([]);
   };
 

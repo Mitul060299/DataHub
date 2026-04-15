@@ -19,7 +19,6 @@ import { useDataset } from "../hooks/useDataset";
 import { useTour } from "../hooks/useTour";
 import { capture } from "../lib/posthog";
 
-const workspaceId = "default";
 
 export function WorkspacePage() {
   const { projectId, pipelineId } = useParams<{ projectId?: string; pipelineId?: string }>();

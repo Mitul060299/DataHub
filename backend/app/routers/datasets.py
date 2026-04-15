@@ -541,10 +541,12 @@ def list_datasets(
     require_role("viewer", role)
     query = db.query(DatasetMetaDB)
     if workspace_id:
-        # Include rows with NULL workspace_id (legacy / un-tagged datasets) as
-        # well as exact matches so uploads from any code path are always visible.
+        # Include exact matches, legacy NULL workspace_id rows, AND legacy
+        # "default"-tagged rows so datasets uploaded before workspaces existed
+        # are always visible regardless of which personal workspace is active.
         query = query.filter(
             (DatasetMetaDB.workspace_id == workspace_id)
+            | (DatasetMetaDB.workspace_id == "default")
             | DatasetMetaDB.workspace_id.is_(None)
         )
     rows = query.all()

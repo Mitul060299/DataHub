@@ -63,7 +63,7 @@ export function WorkspacePage() {
         .map((s) => s.rawConfig ?? (s.sql ? { sql: s.sql } : null))
         .filter(Boolean);
       const result = await api.post<{ final_dataset_id: string; final_row_count: number }>(
-        `/datasets/${activeDataset.id}/replay`,
+        `/cleaning/datasets/${activeDataset.id}/replay`,
         { steps: replaySteps },
       );
       const { final_dataset_id, final_row_count } = result.data;

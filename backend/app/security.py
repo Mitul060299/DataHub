@@ -241,10 +241,10 @@ def _map_supabase_role(claims: Dict[str, Any]) -> str:
     if not raw_role:
         raw_role = claims.get("role")
     if not raw_role:
-        # Default authenticated users to editor so they can run pipelines,
-        # save steps, and execute transformations. Elevation to admin must
-        # still be granted explicitly via app_metadata or user_metadata.
-        return "editor"
+        # Any valid authenticated Supabase user is treated as admin of their
+        # own account.  Explicit demotion (viewer/editor) must be set in
+        # app_metadata or user_metadata to restrict a specific user.
+        return "admin"
     normalized = str(raw_role).lower()
     if normalized in {"service_role", "supabase_admin", "admin"}:
         return "admin"

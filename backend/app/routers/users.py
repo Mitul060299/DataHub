@@ -59,9 +59,9 @@ def get_me(
     # Try to find user by username (email) first
     user = db.query(User).filter(User.username == subject).first()
     if not user:
-        # Create new user with Supabase user ID if available, otherwise use UUID
+        # New user — they authenticated themselves so they own their account → admin.
         user_id_to_use = user_id if user_id else str(uuid.uuid4())
-        user = User(id=user_id_to_use, username=subject, role=role, plan="Free")
+        user = User(id=user_id_to_use, username=subject, role="admin", plan="Free")
         db.add(user)
         try:
             db.commit()
@@ -70,10 +70,18 @@ def get_me(
             # Handle duplicate ID edge case
             db.rollback()
             logger.error("Failed to create user with ID %s: %s", user_id_to_use, str(e))
-            user = User(id=str(uuid.uuid4()), username=subject, role=role, plan="Free")
+            user = User(id=str(uuid.uuid4()), username=subject, role="admin", plan="Free")
             db.add(user)
             db.commit()
             db.refresh(user)
+    elif user.role == "viewer":
+        # Upgrade legacy viewer records — anyone who can authenticate is the
+        # owner of their account.  Explicit demotion must be done manually.
+        user.role = "admin"
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
     workspace_filter = workspace_id or "default"
     datasets_used = db.execute(
         text("SELECT COUNT(*) FROM dataset_meta WHERE workspace_id = :wid"),

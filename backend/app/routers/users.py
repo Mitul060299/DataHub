@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 import logging
 import uuid
@@ -74,11 +75,10 @@ def get_me(
             db.commit()
             db.refresh(user)
     workspace_filter = workspace_id or "default"
-    datasets_used = (
-        db.query(DatasetMetaDB)
-        .filter(DatasetMetaDB.workspace_id == workspace_filter)
-        .count()
-    )
+    datasets_used = db.execute(
+        text("SELECT COUNT(*) FROM dataset_meta WHERE workspace_id = :wid"),
+        {"wid": workspace_filter},
+    ).scalar() or 0
     storage_used = (
         db.query(ImportTableDB)
         .filter(ImportTableDB.workspace_id == workspace_filter)

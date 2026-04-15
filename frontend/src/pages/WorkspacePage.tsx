@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
@@ -29,7 +29,7 @@ export function WorkspacePage() {
   const resolvedProject = projectId
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
-  const { runPipeline, steps, liveArtifact, setLiveArtifact, clearSteps } = usePipelineContext();
+  const { runPipeline, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -51,11 +51,6 @@ export function WorkspacePage() {
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const [showingOriginal, setShowingOriginal] = useState(false);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
-
-  // Track whether this is the very first activeDataset resolution on page load.
-  // We must NOT call clearSteps() on the initial restore — that would wipe
-  // localStorage steps before PipelineContext can read them back.
-  const isInitialDatasetRestoreRef = useRef(true);
 
   // Show welcome modal on first visit
   useEffect(() => {
@@ -86,17 +81,12 @@ export function WorkspacePage() {
     }
   }, [hasUploadedFirstFile, hasAskedFirstQuestion, hasCompletedOnboarding, markOnboardingComplete]);
 
-  // Clear session preview + live artifact whenever the user switches to a different source dataset.
-  // Skip the very first resolution (page-load restore) so we don't wipe persisted steps.
+  // Clear in-session view state whenever the user switches to a different source dataset.
+  // PipelineContext handles loading the correct steps for each dataset independently.
   useEffect(() => {
-    if (isInitialDatasetRestoreRef.current) {
-      isInitialDatasetRestoreRef.current = false;
-      return;
-    }
     setSessionPreview(null);
     setLiveArtifact(null);
     setShowingOriginal(false);
-    clearSteps();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDataset?.id]);
 

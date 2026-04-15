@@ -100,6 +100,10 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null>(null);
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks which dataset ID was already hydrated by useState on mount.
+  // When the dataset-switch effect fires for this ID, we skip the DB reload
+  // because useState already loaded the correct steps from localStorage.
+  const hydratedForRef = useRef<string | null>(initialDatasetId);
 
   // ── Write-through: per-dataset localStorage (always) + DB (debounced 1.5s) ───
   useEffect(() => {
@@ -120,12 +124,21 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   }, [steps, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── On dataset switch: load steps from DB, fall back to per-dataset localStorage ─
-  const prevDatasetIdRef = useRef<string | null | undefined>(undefined);
+  // prevDatasetIdRef starts at null (same as initial datasetId) so the effect
+  // does NOT fire spuriously on mount — null === null → early return.
+  const prevDatasetIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (datasetId === prevDatasetIdRef.current) return;
     prevDatasetIdRef.current = datasetId;
     if (!datasetId) {
-      setSteps(loadPersistedSteps(null));
+      // No dataset selected — reset steps in memory only (don't touch localStorage).
+      setSteps([]);
+      return;
+    }
+    // If this is the same dataset that useState already hydrated from localStorage,
+    // skip the DB fetch entirely — the correct steps are already in state.
+    if (datasetId === hydratedForRef.current) {
+      hydratedForRef.current = null; // allow normal DB reload on subsequent switches
       return;
     }
     fetchDatasetPipelineSteps(datasetId)

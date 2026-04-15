@@ -53,8 +53,8 @@ interface PipelineContextValue {
   scheduleInfo: ScheduleInfo | null;
   setScheduleInfo: (info: ScheduleInfo | null) => void;
   /** The in-session DuckDB table representing the current pipeline leaf output */
-  liveArtifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null;
-  setLiveArtifact: (artifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null) => void;
+  liveArtifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null;
+  setLiveArtifact: (artifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null) => void;
   /** Pending join step awaiting user confirmation (null = no pending) */
   pendingJoinStep: PipelineStep | null;
   confirmJoin: () => void;
@@ -97,7 +97,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   })();
   const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps(initialDatasetId));
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
-  const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null>(null);
+  const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null>(null);
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

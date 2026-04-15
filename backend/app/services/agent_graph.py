@@ -311,6 +311,9 @@ class AgentGraphService:
                                     "step": last.get("step_number"),
                                     "operation": last.get("operation"),
                                     "session_table_name": last.get("session_table_name"),
+                                    "row_count_after": last.get("row_count_after"),
+                                    "row_count_before": last.get("row_count_before"),
+                                    "rows_changed": last.get("rows_changed"),
                                 }
                             yield {
                                 "type": "agent.step.done",

@@ -706,7 +706,8 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               const actualRowCount = Number(
                 event.row_count_after ?? event.total_rows ?? event.rows_affected ?? results.length
               );
-              setLiveArtifact({ tableName: sessionTableName, rowCount: actualRowCount, stepLabel: opLabel, sessionId: currentSid });
+              const rowsChanged = event.rows_changed != null ? Number(event.rows_changed) : undefined;
+              setLiveArtifact({ tableName: sessionTableName, rowCount: actualRowCount, stepLabel: opLabel, sessionId: currentSid, rowsChanged });
             }
           }
         }

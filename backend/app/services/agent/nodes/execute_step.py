@@ -573,6 +573,21 @@ async def execute_step(state: AgentState) -> dict:
                             ) or []
                         except Exception:
                             preview_rows = []
+
+                        # Count rows that actually changed (EXCEPT set difference).
+                        # For null-fill this returns the null count; for filter it
+                        # returns removed rows. Done only when source is known.
+                        rows_changed: int | None = None
+                        if _rb_src and rows_out is not None:
+                            try:
+                                _exc_result = execute_in_session(
+                                    session_id,
+                                    f"SELECT COUNT(*) AS n FROM ("
+                                    f"SELECT * FROM {_rb_src} EXCEPT SELECT * FROM {output_table})",
+                                )
+                                rows_changed = int(_exc_result[0]["n"]) if _exc_result else None
+                            except Exception:
+                                pass
                     else:
                         rows_out = None
                         out_cols = []
@@ -650,6 +665,7 @@ async def execute_step(state: AgentState) -> dict:
                         "operation": intent_key,
                         "success": True,
                         "rows_affected": rows_out,
+                        "rows_changed": rows_changed if session_id else None,
                         "run_id": None,
                         "output_dataset_id": state.get("dataset_id"),
                         "sql": step_sql,

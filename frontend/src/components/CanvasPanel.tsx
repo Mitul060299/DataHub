@@ -405,10 +405,32 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
           const trueTotal = lastStep?.row_count_after ?? liveArtifact?.rowCount ?? sessionPreviewRows.length;
           const isPreviewing = sessionPreviewRows.length < trueTotal;
-          // Verification line: rows before → after for the last step
+          // rows_changed = EXCEPT count from backend (set-difference between source and output).
+          // This gives: null-fill → nulls replaced; filter → rows removed; dedup → dupes removed.
+          const rowsChanged = liveArtifact?.rowsChanged;
           const rowsBefore = lastStep?.row_count_before;
           const rowsAfter = lastStep?.row_count_after;
           const rowDelta = rowsBefore != null && rowsAfter != null ? rowsAfter - rowsBefore : null;
+          // Build the insight string
+          let insight: string | null = null;
+          if (rowsChanged != null) {
+            if (rowDelta != null && rowDelta < 0) {
+              // rows were removed (filter/dedup) — rowsChanged == |rowDelta|
+              insight = `${Math.abs(rowDelta).toLocaleString()} rows removed`;
+            } else if (rowDelta != null && rowDelta > 0) {
+              insight = `${rowDelta.toLocaleString()} rows added`;
+            } else {
+              // In-place transform (null fill, value replacement, type cast, rename…)
+              insight = rowsChanged === 0
+                ? "no values changed"
+                : `${rowsChanged.toLocaleString()} value${rowsChanged === 1 ? "" : "s"} changed`;
+            }
+          } else if (rowDelta != null) {
+            // Fallback when rows_changed wasn't computed (older code path)
+            if (rowDelta === 0) insight = null; // don't show "no rows added or removed" — unhelpful
+            else if (rowDelta < 0) insight = `${Math.abs(rowDelta).toLocaleString()} rows removed`;
+            else insight = `${rowDelta.toLocaleString()} rows added`;
+          }
           return (
           <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
             <span>⚡</span>
@@ -416,13 +438,9 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               {isPreviewing
                 ? `Preview — first ${sessionPreviewRows.length.toLocaleString()} of ${trueTotal.toLocaleString()} rows. Not saved yet.`
                 : `Complete result — ${trueTotal.toLocaleString()} rows. Not saved yet.`}
-              {rowDelta !== null && (
-                <span style={{ marginLeft: 8, opacity: 0.75, fontSize: 11 }}>
-                  ({rowDelta === 0
-                    ? `${trueTotal.toLocaleString()} rows transformed, no rows added or removed`
-                    : rowDelta > 0
-                      ? `+${rowDelta.toLocaleString()} rows added`
-                      : `${Math.abs(rowDelta).toLocaleString()} rows removed`})
+              {insight && (
+                <span style={{ marginLeft: 8, opacity: 0.8, fontSize: 11 }}>
+                  ({insight})
                 </span>
               )}
             </span>

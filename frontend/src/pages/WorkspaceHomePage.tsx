@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteProject, fetchWorkspaceRecent, updateProject, listDashboardTemplates } from "../api";
+import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
@@ -52,17 +52,6 @@ export function WorkspaceHomePage() {
   const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
-
-  // Dashboard templates
-  const [templates, setTemplates] = useState<Array<{ id: string; name: string; description?: string }>>([]);
-  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
-
-  useEffect(() => {
-    if (!templatePanelOpen) return;
-    listDashboardTemplates()
-      .then((data) => setTemplates(Array.isArray(data) ? data : []))
-      .catch(() => setTemplates([]));
-  }, [templatePanelOpen]);
 
   useEffect(() => {
     setRecentLoading(true);
@@ -196,76 +185,6 @@ export function WorkspaceHomePage() {
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New Project
           </button>
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setTemplatePanelOpen((o) => !o)}
-              style={{
-                padding: "8px 14px",
-                borderRadius: 8,
-                border: "1px solid var(--bd2)",
-                background: "var(--bg2)",
-                color: "var(--tx1)",
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                flexShrink: 0,
-              }}
-            >
-              📋 Templates
-            </button>
-            {templatePanelOpen && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setTemplatePanelOpen(false)} />
-                <div style={{
-                  position: "absolute",
-                  top: "calc(100% + 6px)",
-                  right: 0,
-                  zIndex: 100,
-                  background: "var(--bg2)",
-                  border: "1px solid var(--bd2)",
-                  borderRadius: 10,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                  minWidth: 240,
-                  maxHeight: 320,
-                  overflowY: "auto",
-                  padding: 8,
-                }}>
-                  <p style={{ margin: "4px 8px 8px", fontSize: 11, color: "var(--tx2, #888)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Dashboard Templates</p>
-                  {templates.length === 0 ? (
-                    <p style={{ margin: 0, padding: "8px 8px", fontSize: 12, color: "var(--tx1)" }}>No templates available.</p>
-                  ) : templates.map((t) => (
-                    <button
-                      key={t.id}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "9px 12px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        color: "var(--tx0)",
-                        fontSize: 13,
-                        cursor: "pointer",
-                        borderRadius: 6,
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg3)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
-                      onClick={() => {
-                        setTemplatePanelOpen(false);
-                        navigate(`/dashboard/new?templateId=${t.id}`);
-                      }}
-                    >
-                      <div style={{ fontWeight: 500 }}>{t.name}</div>
-                      {t.description && <div style={{ fontSize: 11, color: "var(--tx1)", marginTop: 2 }}>{t.description}</div>}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
@@ -361,7 +280,6 @@ export function WorkspaceHomePage() {
                   )}
                   <div style={{ display: "flex", gap: 14, marginTop: 4, fontSize: 12, color: "var(--tx1)" }}>
                     <span>{p.pipelineCount} pipeline{p.pipelineCount !== 1 ? "s" : ""}</span>
-                    <span>{p.dashboardCount} dashboard{p.dashboardCount !== 1 ? "s" : ""}</span>
                     <span>{relativeTime(p.updatedAt)}</span>
                   </div>
                 </div>
@@ -447,50 +365,6 @@ export function WorkspaceHomePage() {
           </div>
         </section>
 
-        {/* ── Recent Dashboards ─────────────────────────────── */}
-        <section>
-          <h2 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 600, color: "var(--tx1)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Recent Dashboards
-          </h2>
-          {recentLoading ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
-              {[...Array(4)].map((_, i) => <Skeleton key={i} width="100%" height={80} style={{ borderRadius: 12 }} />)}
-            </div>
-          ) : (recent?.recent_dashboards ?? []).length === 0 ? (
-            <div style={{ padding: "24px 0", textAlign: "center", fontSize: 13, color: "var(--tx1)" }}>No dashboards yet.</div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
-              {(recent?.recent_dashboards ?? []).map((db) => (
-                <div
-                  key={db.id}
-                  onClick={() => navigate(`/dashboard/${db.id}`)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter") navigate(`/dashboard/${db.id}`); }}
-                  style={{
-                    background: "var(--bg2)",
-                    borderRadius: 12,
-                    padding: "14px 16px",
-                    border: "1px solid var(--bd)",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg3)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg2)"; }}
-                >
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--tx0)" }}>{db.name}</span>
-                  <div style={{ display: "flex", gap: 10, fontSize: 12, color: "var(--tx1)" }}>
-                    <span>{db.tile_count} tile{db.tile_count !== 1 ? "s" : ""}</span>
-                    {db.is_published && <span style={{ color: "#10b981" }}>Published</span>}
-                    <span>{relativeTime(db.updated_at)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
       </div>{/* end main content */}
 

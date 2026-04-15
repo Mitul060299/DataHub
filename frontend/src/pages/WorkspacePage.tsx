@@ -293,6 +293,7 @@ export function WorkspacePage() {
           setDatasetRefreshNonce((value) => value + 1);
         }}
         onSessionPreview={(rows, columns) => setSessionPreview({ rows, columns })}
+        onUploadClick={() => setImportOpen(true)}
       />
       <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (

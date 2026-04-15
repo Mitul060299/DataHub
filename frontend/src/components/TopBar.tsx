@@ -139,7 +139,7 @@ export function TopBar() {
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
         {session ? (
           <>
-            <button className="btn" style={{ width: 30, padding: 0 }} type="button" aria-label="Notifications">
+            <button className="btn" style={{ width: 30, padding: 0 }} type="button" aria-label="Notifications" onClick={() => navigate("/settings?section=notifications")} title="Notification preferences">
               <IconBell size={14} />
             </button>
             <div ref={menuRef} style={{ position: "relative" }}>

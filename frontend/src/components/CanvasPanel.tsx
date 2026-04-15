@@ -170,10 +170,10 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
 
               {/* BI destinations */}
               <ExportItem
-                label="Export to Power BI"
-                sub=".xlsx · Power BI Desktop"
+                label="Download as Excel (.xlsx)"
+                sub="For Power BI, Looker &amp; general use"
                 accent="#F2C811"
-                badge="BI"
+                badge="XLS"
                 onClick={() => void handleExport("powerbi")}
               />
               <ExportItem
@@ -197,7 +197,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               {/* Standard downloads */}
               <ExportItem
                 label="Download as CSV"
-                sub="Universal · Excel compatible"
+                sub="Universal · plain text"
                 accent="#9898b0"
                 onClick={() => void handleExport("csv")}
               />

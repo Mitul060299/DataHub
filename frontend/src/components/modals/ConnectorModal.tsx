@@ -4,6 +4,7 @@ import {
   saveConnection,
   listConnectionTables,
   importFromConnection,
+  submitFeedbackForm,
   type ConnectionTable,
 } from "../../api";
 
@@ -157,6 +158,11 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
   const [importing, setImporting] = useState<string | null>(null);
   const [importedTables, setImportedTables] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  // Waitlist for coming-soon connectors
+  const [waitlistConnector, setWaitlistConnector] = useState<string | null>(null);
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistDone, setWaitlistDone] = useState(false);
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
 
   if (!open) return null;
 
@@ -179,7 +185,12 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
   const handleClose = () => { reset(); onClose(); };
 
   const pickConnector = (c: ConnectorDef) => {
-    if (c.locked) return;
+    if (c.locked) {
+      setWaitlistConnector(c.label);
+      setWaitlistEmail("");
+      setWaitlistDone(false);
+      return;
+    }
     const defaults: Record<string, string> = {};
     for (const f of c.fields) {
       if (f.defaultValue !== undefined) defaults[f.key] = String(f.defaultValue);
@@ -190,6 +201,25 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
     setTestResult(null);
     setError(null);
     setStep("configure");
+  };
+
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistEmail.trim()) return;
+    setWaitlistSubmitting(true);
+    try {
+      await submitFeedbackForm({
+        name: "Connector waitlist",
+        email: waitlistEmail.trim(),
+        subject: `Connector waitlist: ${waitlistConnector}`,
+        message: `User wants ${waitlistConnector} connector.`,
+      });
+    } catch {
+      // Silently succeed — don't block the user
+    } finally {
+      setWaitlistSubmitting(false);
+      setWaitlistDone(true);
+    }
   };
 
   const buildConfig = (): Record<string, unknown> => {
@@ -338,35 +368,65 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
 
           {/* ── Step: pick ── */}
           {step === "pick" && (
+            <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {CONNECTORS.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => pickConnector(c)}
-                  disabled={c.locked}
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "flex-start",
                     gap: 6,
                     padding: "14px 14px",
-                    background: "var(--bg3, #18181e)",
-                    border: "1px solid var(--bd, #2e2e3a)",
+                    background: waitlistConnector === c.label ? "rgba(91,106,240,0.08)" : "var(--bg3, #18181e)",
+                    border: waitlistConnector === c.label ? "1px solid var(--ac, #5B6AF0)" : "1px solid var(--bd, #2e2e3a)",
                     borderRadius: 10,
-                    cursor: c.locked ? "default" : "pointer",
-                    opacity: c.locked ? 0.45 : 1,
+                    cursor: "pointer",
                     textAlign: "left",
                     transition: "border-color 0.15s",
                   }}
                 >
                   <span style={{ fontSize: 22 }}>{c.icon}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tx0, #e8e8f0)" }}>{c.label}</span>
-                  <span style={{ fontSize: 11, color: "var(--tx1, #8888a0)", lineHeight: 1.4 }}>
+                  <span style={{ fontSize: 11, color: c.locked ? "var(--ac, #818cf8)" : "var(--tx1, #8888a0)", lineHeight: 1.4 }}>
                     {c.locked ? c.lockedLabel : c.description}
                   </span>
                 </button>
               ))}
             </div>
+
+            {waitlistConnector && (
+              <div style={{ marginTop: 16, padding: "14px 16px", border: "1px solid var(--ac, #5B6AF0)", borderRadius: 10, background: "rgba(91,106,240,0.06)" }}>
+                {waitlistDone ? (
+                  <p style={{ margin: 0, fontSize: 13, color: "var(--tx0, #e8e8f0)" }}>
+                    ✓ You&apos;re on the {waitlistConnector} waitlist! We&apos;ll notify you when it launches.
+                  </p>
+                ) : (
+                  <form onSubmit={(e) => void handleWaitlistSubmit(e)} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--tx0, #e8e8f0)" }}>
+                      Get notified when {waitlistConnector} launches
+                    </p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        type="email"
+                        required
+                        autoFocus
+                        value={waitlistEmail}
+                        onChange={(e) => setWaitlistEmail(e.target.value)}
+                        placeholder="you@company.com"
+                        style={{ flex: 1, background: "var(--bg3)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--tx0)", fontSize: 13, padding: "7px 10px", outline: "none" }}
+                      />
+                      <button type="submit" disabled={waitlistSubmitting} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--ac, #5B6AF0)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: waitlistSubmitting ? 0.7 : 1 }}>
+                        {waitlistSubmitting ? "…" : "Notify me"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+            </>
           )}
 
           {/* ── Step: configure ── */}

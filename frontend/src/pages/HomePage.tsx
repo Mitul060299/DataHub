@@ -312,6 +312,10 @@ export function HomePage() {
   // Geo-based currency (display only — no payment logic)
   const [currency, setCurrency] = useState<"USD" | "INR">("USD");
   const [showWaitlistToast, setShowWaitlistToast] = useState(false);
+  const [waitlistModal, setWaitlistModal] = useState<{ plan: string } | null>(null);
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistDone, setWaitlistDone] = useState(false);
 
   // Animated demo queries in hero input bar
   const DEMO_QUERIES = [
@@ -342,9 +346,32 @@ export function HomePage() {
       .catch(() => {});
   }, []);
 
-  const handleWaitlist = () => {
-    setShowWaitlistToast(true);
-    setTimeout(() => setShowWaitlistToast(false), 4000);
+  const handleWaitlist = (planName: string) => {
+    setWaitlistEmail("");
+    setWaitlistDone(false);
+    setWaitlistModal({ plan: planName });
+  };
+
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistEmail.trim()) return;
+    setWaitlistSubmitting(true);
+    try {
+      await submitFeedbackForm({
+        name: "Waitlist signup",
+        email: waitlistEmail.trim(),
+        subject: `Waitlist: ${waitlistModal?.plan ?? "Unknown plan"}`,
+        message: `User requested to join the waitlist for the ${waitlistModal?.plan ?? "Unknown"} plan.`,
+      });
+      setWaitlistDone(true);
+      setShowWaitlistToast(true);
+      setTimeout(() => setShowWaitlistToast(false), 5000);
+    } catch {
+      // Still mark done — better to reassure the user than show error
+      setWaitlistDone(true);
+    } finally {
+      setWaitlistSubmitting(false);
+    }
   };
 
   const handleCheckout = () => {
@@ -1034,7 +1061,7 @@ export function HomePage() {
                       {plan.buttonLabel}
                     </button>
                   ) : plan.action === "waitlist" ? (
-                    <button type="button" className={buttonClass} onClick={handleWaitlist}>
+                    <button type="button" className={buttonClass} onClick={() => handleWaitlist(plan.tier)}>
                       {plan.buttonLabel}
                     </button>
                   ) : (
@@ -1279,6 +1306,42 @@ export function HomePage() {
           <span>© {new Date().getFullYear()} DataHub</span>
         </div>
       </footer>
+
+      {waitlistModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)" }}
+          onClick={() => { if (!waitlistSubmitting) setWaitlistModal(null); }}
+        >
+          <div style={{ background: "#18181e", border: "1px solid rgba(91,106,240,0.4)", borderRadius: 16, padding: "28px 32px", maxWidth: 420, width: "90vw" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {waitlistDone ? (
+              <>
+                <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#e8e8f0" }}>You're on the waitlist! 🎉</p>
+                <p style={{ margin: "10px 0 20px", fontSize: 14, color: "#8888a0" }}>We'll email you at <strong style={{ color: "#e8e8f0" }}>{waitlistEmail}</strong> when the {waitlistModal.plan} plan launches.</p>
+                <button onClick={() => setWaitlistModal(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#5B6AF0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Close</button>
+              </>
+            ) : (
+              <form onSubmit={(e) => void handleWaitlistSubmit(e)}>
+                <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#e8e8f0" }}>Join the {waitlistModal.plan} waitlist</p>
+                <p style={{ margin: "0 0 20px", fontSize: 14, color: "#8888a0" }}>Enter your email and we'll notify you the moment it's available.</p>
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", borderRadius: 8, border: "1px solid #2e2e3a", background: "#111115", color: "#e8e8f0", fontSize: 14, marginBottom: 14, outline: "none" }}
+                />
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button type="submit" disabled={waitlistSubmitting} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#5B6AF0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: waitlistSubmitting ? 0.7 : 1 }}>{waitlistSubmitting ? "Submitting…" : "Notify me"}</button>
+                  <button type="button" onClick={() => setWaitlistModal(null)} style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #2e2e3a", background: "none", color: "#8888a0", fontSize: 14, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {showWaitlistToast ? (
         <div

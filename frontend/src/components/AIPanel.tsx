@@ -73,7 +73,7 @@ function buildFollowUpChips(
   if (intent === "visualise") {
     return [
       `Show me a different chart type for ${name}`,
-      `Add this chart to a dashboard`,
+      `Save this chart to my Canvas`,
       `What are the top 5 values?`,
     ];
   }
@@ -218,9 +218,11 @@ interface AIPanelProps {
   onDatasetMutated?: () => void;
   /** Called after a write-op completes with a 50-row preview of the resulting table */
   onSessionPreview?: (rows: Record<string, unknown>[], columns: string[]) => void;
+  /** Opens the import/upload modal (wired from WorkspacePage) */
+  onUploadClick?: () => void;
 }
 
-export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview }: AIPanelProps) {
+export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick }: AIPanelProps) {
   const { addStep, steps, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -610,8 +612,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         break;
       }
       case "tile_created": {
-        window.dispatchEvent(new CustomEvent("datahub:dashboard:refresh"));
-        // Also render the chart inline if echarts_config is present on this event
+        // Chart rendered inline — no external event needed
         const tc = event as unknown as Record<string, unknown>;
         if (tc.echarts_config && tc.saveable) {
           const tileData: TileCreatedData = {
@@ -1050,7 +1051,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           <EmptyStateChatPanel
             hasDataset={false}
             onSuggestionSelect={(s) => { setInput(s); }}
-            onUploadClick={() => {}}
+            onUploadClick={() => onUploadClick?.()}
           />
         ) : messages.length === 0 ? (
           <EmptyStateChatPanel
@@ -1058,7 +1059,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
             datasetName={dataset.name}
             columnSchema={columnSchema}
             onSuggestionSelect={(s) => { setInput(s); void handleSend(s); }}
-            onUploadClick={() => {}}
+            onUploadClick={() => onUploadClick?.()}
           />
         ) : null}
 

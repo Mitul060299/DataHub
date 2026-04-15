@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 
 export function WorkspaceSwitcher() {
@@ -9,9 +10,11 @@ export function WorkspaceSwitcher() {
     createWorkspace,
   } = useWorkspaceContext();
 
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [planGated, setPlanGated] = useState(false);
 
   const personal = workspaces.filter((w) => w.workspace_type === "personal");
   const collab = workspaces.filter((w) => w.workspace_type === "collab");
@@ -21,6 +24,7 @@ export function WorkspaceSwitcher() {
     const name = newName.trim();
     if (!name) return;
     setError(null);
+    setPlanGated(false);
     try {
       const ws = await createWorkspace(name, "collab");
       setActiveWorkspaceId(ws.id);
@@ -30,7 +34,13 @@ export function WorkspaceSwitcher() {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail ?? "Failed to create workspace.";
-      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+      const msgStr = typeof msg === "string" ? msg : JSON.stringify(msg);
+      // Detect plan-gate errors from backend
+      if (/plan|upgrade|limit|tier|professional|team|business/i.test(msgStr)) {
+        setPlanGated(true);
+      } else {
+        setError(msgStr);
+      }
     }
   }
 
@@ -79,6 +89,27 @@ export function WorkspaceSwitcher() {
 
       {/* Create collab workspace */}
       {creating ? (
+        planGated ? (
+          <div className="ws-create-form" style={{ gap: 4 }}>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--tx1)", lineHeight: 1.5 }}>
+              Collab workspaces require a <strong>Team plan</strong> or higher.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/settings/billing")}
+              style={{ background: "var(--ac)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, padding: "6px 12px", cursor: "pointer", marginBottom: 4 }}
+            >
+              Upgrade plan
+            </button>
+            <button
+              type="button"
+              className="ws-create-cancel"
+              onClick={() => { setCreating(false); setNewName(""); setPlanGated(false); }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleCreateCollab} className="ws-create-form">
           <input
             autoFocus
@@ -97,6 +128,7 @@ export function WorkspaceSwitcher() {
           </button>
           {error && <div className="ws-create-error">{error}</div>}
         </form>
+        )
       ) : (
         <button
           className="ws-add-btn"

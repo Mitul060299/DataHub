@@ -19,6 +19,7 @@ type AuthContextValue = {
   ) => Promise<{ error: AuthError | null }>;
   signInWithProvider: (provider: "google" | "github") => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
+  resetPasswordEmail: (email: string) => Promise<{ error: AuthError | null }>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -108,6 +109,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  const resetPasswordEmail = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    return { error };
+  };
+
   const user = session?.user ?? null;
   const isSuperuser = useMemo(() => {
     const role = user?.app_metadata?.role || user?.user_metadata?.role;
@@ -125,6 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUpWithPassword,
         signInWithProvider,
         signOut,
+        resetPasswordEmail,
       }}
     >
       {children}

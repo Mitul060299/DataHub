@@ -48,6 +48,7 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
   const [selectedFileType, setSelectedFileType] = useState<FileType | null>(null);
   const [filePreview, setFilePreview]     = useState<FilePreview | null>(null);
   const [customDelimiter, setCustomDelimiter] = useState("");
+  const [isDragOver, setIsDragOver]       = useState(false);
 
   // Auto-load a sample file when preloadUrl is provided
   useEffect(() => {
@@ -116,6 +117,25 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
     for (const ref of [csvRef, excelRef, jsonRef, parquetRef]) {
       if (ref.current) ref.current.value = "";
     }
+  };
+
+  const detectFileType = (file: File): FileType => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) return "excel";
+    if (name.endsWith(".json")) return "json";
+    if (name.endsWith(".parquet")) return "parquet";
+    return "csv";
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (isUploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const ft = detectFileType(file);
+    setSelectedFileType(ft);
+    void handleFileSelect(file);
   };
 
 
@@ -248,8 +268,28 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
 
   return (
     <div style={overlay}>
-      <div style={modal}>
+      <div
+        style={{
+          ...modal,
+          outline: isDragOver ? "2px dashed var(--ac, #5B6AF0)" : "2px solid transparent",
+          outlineOffset: -2,
+          transition: "outline-color 0.15s",
+        }}
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+      >
         <h3 style={{ marginBottom: 10 }}>Import Data Source</h3>
+        {isDragOver && (
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: "var(--r12)", zIndex: 10,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(91,106,240,0.12)", backdropFilter: "blur(2px)",
+            pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ac, #5B6AF0)" }}>Drop file to import</span>
+          </div>
+        )}
 
         {/* One hidden input per file type so the accept filter is exact */}
         {FILE_TYPES.map((ft) => (
@@ -289,7 +329,7 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
 
         {/* File type selection buttons */}
         {!selectedFile && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 6 }}>
             {FILE_TYPES.map((ft) => (
               <button
                 key={ft.key}
@@ -315,6 +355,11 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
               </button>
             ))}
           </div>
+        )}
+        {!selectedFile && (
+          <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--tx2, #888)", textAlign: "center" }}>
+            Click a file type above or drag &amp; drop a file anywhere in this window
+          </p>
         )}
 
         {/* CSV custom delimiter — only shown when a CSV is selected and not yet previewed */}
@@ -394,6 +439,7 @@ const overlay: React.CSSProperties = {
 };
 
 const modal: React.CSSProperties = {
+  position: "relative",
   width: "min(680px, 92vw)",
   background: "var(--bg1)",
   border: "1px solid var(--bd2)",

@@ -38,26 +38,28 @@ export function WorkspaceSwitcher() {
     <div className="workspace-switcher">
       {/* Personal workspaces */}
       <div className="ws-section-label">Personal</div>
-      {/* Synthetic fallback: always show "My Workspace" for the default context */}
-      <button
-        className={`ws-item ${activeWorkspaceId === "default" || personal.length === 0 && !collab.find((w) => w.id === activeWorkspaceId) ? "ws-item--active" : ""}`}
-        onClick={() => setActiveWorkspaceId("default")}
-        title="My Workspace"
-      >
-        <span className="ws-icon">🏠</span>
-        <span className="ws-name">My Workspace</span>
-      </button>
       {personal.map((w) => (
         <button
           key={w.id}
-          className={`ws-item ${activeWorkspaceId === w.id ? "ws-item--active" : ""}`}
+          className={`ws-item ${activeWorkspaceId === w.id || (activeWorkspaceId === "default" && personal.length > 0 && w.id === personal[0].id) ? "ws-item--active" : ""}`}
           onClick={() => setActiveWorkspaceId(w.id)}
           title={w.name}
         >
           <span className="ws-icon">🏠</span>
-          <span className="ws-name">{w.name}</span>
+          <span className="ws-name">My Workspace</span>
         </button>
       ))}
+      {/* Fallback only if no personal workspace exists in DB yet */}
+      {personal.length === 0 && (
+        <button
+          className={`ws-item ${activeWorkspaceId === "default" ? "ws-item--active" : ""}`}
+          onClick={() => setActiveWorkspaceId("default")}
+          title="My Workspace"
+        >
+          <span className="ws-icon">🏠</span>
+          <span className="ws-name">My Workspace</span>
+        </button>
+      )}
 
       {/* Collab workspaces */}
       <div className="ws-section-label" style={{ marginTop: "0.75rem" }}>

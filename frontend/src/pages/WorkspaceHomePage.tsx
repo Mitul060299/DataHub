@@ -155,7 +155,7 @@ export function WorkspaceHomePage() {
         <div style={{ padding: "28px 32px 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--tx0)", letterSpacing: "-0.02em" }}>
-              {activeWorkspace ? activeWorkspace.name : "Workspace"}
+              {activeWorkspace?.workspace_type === "collab" ? activeWorkspace.name : (activeWorkspace ? "My Workspace" : "Workspace")}
             </h1>
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--tx1)" }}>
               {activeWorkspace?.workspace_type === "collab" ? "Collab workspace · shared projects" : "Your personal workspace"}

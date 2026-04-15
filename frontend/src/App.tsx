@@ -6,7 +6,7 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketplacePage } from "./pages/MarketplacePage";
 import { PricingPage } from "./pages/PricingPage";
-import { ProjectHomePage } from "./pages/ProjectHomePage";
+
 import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignupPage } from "./pages/SignupPage";
@@ -48,7 +48,7 @@ export function App() {
         <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<HomePage />} />
         <Route path="workspace" element={<WorkspaceHomePage />} />
-        <Route path="workspace/project/:projectId" element={<ProjectHomePage />} />
+        <Route path="workspace/project/:projectId" element={<Navigate to="pipeline/new" replace />} />
         <Route path="workspace/project/:projectId/pipeline/:pipelineId" element={<WorkspacePage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="pricing" element={<PricingPage />} />

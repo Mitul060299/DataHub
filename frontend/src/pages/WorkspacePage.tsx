@@ -22,7 +22,7 @@ import { capture } from "../lib/posthog";
 
 export function WorkspacePage() {
   const { projectId, pipelineId } = useParams<{ projectId?: string; pipelineId?: string }>();
-  const { activeProject, activeDataset, projects, activeWorkspaceId } = useWorkspaceContext();
+  const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects, activeWorkspaceId } = useWorkspaceContext();
   const workspaceId = activeWorkspaceId !== "default" ? activeWorkspaceId : "default";
 
   // Resolve project from URL param or fall back to activeProject
@@ -170,6 +170,33 @@ export function WorkspacePage() {
   return (
     <>
       <Breadcrumb segments={breadcrumbSegments} />
+      {/* ── Dataset Lane HUD ───────────────────────────────────────── */}
+      {activeLanes.length > 0 && (
+        <div style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 100, display: "flex", gap: 6 }}>
+          {activeLanes.map((lane) => {
+            const isActive = lane.id === activeDataset?.id;
+            return (
+              <div key={lane.id} style={{ display: "flex", alignItems: "center", gap: 0, borderRadius: 8, border: `1px solid ${isActive ? "var(--acg)" : "var(--bd)"}`, background: isActive ? "var(--acl)" : "var(--bg2)", boxShadow: "0 4px 16px rgba(0,0,0,0.45)", overflow: "hidden" }}>
+                <button
+                  onClick={() => setActiveDataset(lane)}
+                  style={{ padding: "6px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 11, color: isActive ? "var(--ac)" : "var(--tx1)", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: isActive ? "var(--ac)" : "var(--tx2)", flexShrink: 0 }} />
+                  <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lane.name}</span>
+                  {lane.rows > 0 && <span style={{ fontSize: 9, color: "var(--tx2)" }}>{lane.rows.toLocaleString()} rows</span>}
+                </button>
+                <button
+                  onClick={() => removeLane(lane.id)}
+                  title="Remove lane"
+                  style={{ width: 22, height: "100%", background: "none", border: "none", borderLeft: "1px solid var(--bd)", cursor: "pointer", color: "var(--tx2)", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <main style={{ height: "calc(100% - var(--th) - 36px)", display: "flex", minWidth: 0, minHeight: 0 }}>
       <ActivityBar
         explorerOpen={explorerOpen}

@@ -806,6 +806,16 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false }: Pi
                       </button>
                       <button
                         className="btn"
+                        style={{ height: 20, width: 20, padding: 0, fontSize: 10 }}
+                        title="Compare before/after"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("datahub:compare:step", { detail: step }));
+                        }}
+                      >
+                        ⊞
+                      </button>
+                      <button
+                        className="btn"
                         style={{ height: 20, width: 20, padding: 0 }}
                         title={steps.length > 1 && index < steps.length - 1 ? "Surgical remove (re-runs downstream steps)" : "Remove step"}
                         onClick={() => handleSurgicalRemove(step.id)}

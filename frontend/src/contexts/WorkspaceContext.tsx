@@ -47,6 +47,10 @@ export interface WorkspaceContextValue {
   setActiveProject: (project: Project) => void;
   activeDataset: Dataset | null;
   setActiveDataset: (dataset: Dataset | null) => void;
+  /** Up to 2 suspended/active dataset lanes for quick switching */
+  activeLanes: Dataset[];
+  addLane: (dataset: Dataset) => void;
+  removeLane: (datasetId: string) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
   workspaceMembers: WorkspaceMemberOut[];
@@ -83,10 +87,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [activeDataset, setActiveDatasetState] = useState<Dataset | null>(null);
+  const [activeLanes, setActiveLanes] = useState<Dataset[]>([]);
+
+  const addLane = useCallback((dataset: Dataset) => {
+    setActiveLanes((prev) => {
+      if (prev.some((d) => d.id === dataset.id)) return prev;
+      // Max 2 lanes — drop the oldest if at capacity
+      const next = [...prev, dataset];
+      return next.length > 2 ? next.slice(next.length - 2) : next;
+    });
+  }, []);
+
+  const removeLane = useCallback((datasetId: string) => {
+    setActiveLanes((prev) => prev.filter((d) => d.id !== datasetId));
+  }, []);
 
   const setActiveDataset = useCallback((dataset: Dataset | null) => {
     if (dataset) {
       localStorage.setItem("activeDatasetId", dataset.id);
+      // Track in lanes (max 2, newest wins)
+      setActiveLanes((prev) => {
+        if (prev.some((d) => d.id === dataset.id)) return prev;
+        const next = [...prev, dataset];
+        return next.length > 2 ? next.slice(next.length - 2) : next;
+      });
     } else {
       localStorage.removeItem("activeDatasetId");
     }
@@ -185,12 +209,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // Clear the selected dataset when switching projects so a stale ID from
-  // the previous project never hits the backend (which would return a 404).
-  // We intentionally do NOT clear localStorage here — ExplorerPanel will
-  // restore the correct dataset after it loads the new project's dataset list.
+  // Clear lanes when switching projects
   useEffect(() => {
     setActiveDatasetState(null);
+    setActiveLanes([]);
   }, [activeProject?.id]);
 
   const value = useMemo(
@@ -203,6 +225,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveProject,
       activeDataset,
       setActiveDataset,
+      activeLanes,
+      addLane,
+      removeLane,
       members,
       setMembers,
       workspaceMembers,
@@ -212,7 +237,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveWorkspaceId,
       createWorkspace,
     }),
-    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, members, workspaceMembers, refreshMembers, workspaces, activeWorkspaceId, setActiveWorkspaceId, createWorkspace],
+    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, activeLanes, addLane, removeLane, members, workspaceMembers, refreshMembers, workspaces, activeWorkspaceId, setActiveWorkspaceId, createWorkspace],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

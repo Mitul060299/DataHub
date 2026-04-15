@@ -629,6 +629,15 @@ export async function fetchDatasetPage(
   return response.data;
 }
 
+export async function fetchDatasetPipelineSteps(datasetId: string): Promise<unknown[]> {
+  const response = await api.get<{ steps: unknown[] }>(`/datasets/${datasetId}/pipeline-steps`);
+  return response.data.steps ?? [];
+}
+
+export async function saveDatasetPipelineSteps(datasetId: string, steps: unknown[]): Promise<void> {
+  await api.put(`/datasets/${datasetId}/pipeline-steps`, { steps });
+}
+
 export async function listCalculatedColumns(datasetId: string) {
   const response = await api.get(`/datasets/${datasetId}/columns`);
   return response.data as Array<{

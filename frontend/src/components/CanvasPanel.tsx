@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
+import type { PipelineStep } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import type { CalculatedColumn } from "../types";
 import { IconBarChart, IconDownload, IconGitBranch, IconTable } from "./Icons";
@@ -8,7 +9,7 @@ import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { DataVersionHistory } from "./DataVersionHistory";
-import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau } from "../api";
+import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage } from "../api";
 
 type CanvasTab = "data" | "pipeline" | "canvas" | "schedule" | "history";
 
@@ -54,6 +55,84 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // ── Export confirmation modal state ───────────────────────────────────────
+  const [exportConfirmTarget, setExportConfirmTarget] = useState<"csv" | "powerbi" | "tableau" | null>(null);
+  const [exportCheckpoint, setExportCheckpoint] = useState(false);
+
+  // ── Timeline breadcrumb state ─────────────────────────────────────────────
+  const [viewingStepIndex, setViewingStepIndex] = useState<number | null>(null);
+  const [timelineRows, setTimelineRows] = useState<Record<string, unknown>[] | null>(null);
+  const [timelineCols, setTimelineCols] = useState<string[] | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const timelineAbortRef = useRef<AbortController | null>(null);
+
+  // ── Before/After diff view state ──────────────────────────────────────────
+  const [diffStep, setDiffStep] = useState<PipelineStep | null>(null);
+  const [diffBefore, setDiffBefore] = useState<{ rows: Record<string, unknown>[]; cols: string[] } | null>(null);
+  const [diffAfter, setDiffAfter] = useState<{ rows: Record<string, unknown>[]; cols: string[] } | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+
+  // Listen for compare requests dispatched from PipelineSection
+  useEffect(() => {
+    function handleCompare(e: Event) {
+      const step = (e as CustomEvent<PipelineStep>).detail;
+      setDiffStep(step);
+      setTab("data");
+      setDiffBefore(null);
+      setDiffAfter(null);
+      if (!step.inputDataset?.id || !step.outputDataset?.id) return;
+      setDiffLoading(true);
+      Promise.all([
+        fetchDatasetPage(step.inputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>,
+        fetchDatasetPage(step.outputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>,
+      ])
+        .then(([before, after]) => {
+          setDiffBefore({ rows: before.rows ?? [], cols: before.columns ?? [] });
+          setDiffAfter({ rows: after.rows ?? [], cols: after.columns ?? [] });
+        })
+        .catch(() => { /* best-effort */ })
+        .finally(() => setDiffLoading(false));
+    }
+    window.addEventListener("datahub:compare:step", handleCompare);
+    return () => window.removeEventListener("datahub:compare:step", handleCompare);
+  }, []);
+
+  // Reset diff when steps change or dataset changes
+  useEffect(() => { setDiffStep(null); setDiffBefore(null); setDiffAfter(null); }, [dataset?.id]);
+
+  // Reset timeline when dataset or steps change
+  useEffect(() => { setViewingStepIndex(null); setTimelineRows(null); setTimelineCols(null); }, [dataset?.id]);
+
+  const handleTimelineClick = useCallback(async (idx: number) => {
+    const step = steps[idx];
+    if (!step?.outputDataset?.id) return;
+    // Cancel any in-flight request
+    timelineAbortRef.current?.abort();
+    const controller = new AbortController();
+    timelineAbortRef.current = controller;
+    setViewingStepIndex(idx);
+    setTimelineLoading(true);
+    try {
+      const data = await fetchDatasetPage(step.outputDataset.id, 0, 200) as { rows: Record<string, unknown>[]; columns: string[] };
+      if (!controller.signal.aborted) {
+        setTimelineRows(data.rows ?? []);
+        setTimelineCols(data.columns ?? []);
+      }
+    } catch {
+      if (!controller.signal.aborted) { setTimelineRows([]); setTimelineCols([]); }
+    } finally {
+      if (!controller.signal.aborted) setTimelineLoading(false);
+    }
+  }, [steps]);
+
+  const handleTimelineReset = useCallback(() => {
+    timelineAbortRef.current?.abort();
+    setViewingStepIndex(null);
+    setTimelineRows(null);
+    setTimelineCols(null);
+    setTimelineLoading(false);
+  }, []);
+
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -90,12 +169,66 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     }
   }, [dataset]);
 
+  // Opens the confirmation modal before exporting
+  const requestExport = (type: "csv" | "powerbi" | "tableau") => {
+    setIsExportOpen(false);
+    setExportCheckpoint(false);
+    setExportConfirmTarget(type);
+  };
+
+  const handleExportConfirm = useCallback(async () => {
+    if (!exportConfirmTarget) return;
+    const type = exportConfirmTarget;
+    setExportConfirmTarget(null);
+    if (exportCheckpoint) {
+      onSave?.();
+      // Brief yield so the save can start before the download triggers
+      await new Promise<void>((r) => setTimeout(r, 400));
+    }
+    void handleExport(type);
+  }, [exportConfirmTarget, exportCheckpoint, handleExport, onSave]);
+
   // dataset.rows is the authoritative count (always set by setActiveDataset callers)
   // dataset.row_count is the new optional field; fall back to rows if not present
   const rowCount = dataset?.rows ?? dataset?.row_count ?? null;
 
+  // Effective row/col data for the DataTable: timeline preview overrides live/session data
+  const effectiveRows = viewingStepIndex !== null && timelineRows ? timelineRows
+    : (sessionPreviewRows && sessionPreviewRows.length > 0 ? sessionPreviewRows : rows);
+  const effectiveCols = viewingStepIndex !== null && timelineCols ? timelineCols
+    : (sessionPreviewColumns && sessionPreviewColumns.length > 0 ? sessionPreviewColumns : columns);
+
   return (
     <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* ── Export Confirmation Modal ───────────────────────────────────── */}
+      {exportConfirmTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setExportConfirmTarget(null)}>
+          <div style={{ background: "var(--bg2)", border: "1px solid var(--bd)", borderRadius: 10, padding: "24px 28px", minWidth: 340, maxWidth: 420, boxShadow: "0 16px 48px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "var(--tx0)" }}>Export dataset</p>
+            <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--tx2)" }}>
+              {dataset?.name ?? "dataset"} &nbsp;·&nbsp;
+              {(liveArtifact?.rowCount ?? rowCount)?.toLocaleString() ?? "—"} rows &nbsp;·&nbsp;
+              {columns.length} columns
+              {liveArtifact?.stepLabel ? <> &nbsp;·&nbsp; <em style={{ color: "var(--ac)" }}>{liveArtifact.stepLabel}</em></> : null}
+            </p>
+            {liveArtifact && (
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--tx1)", marginBottom: 20, cursor: "pointer" }}>
+                <input type="checkbox" checked={exportCheckpoint} onChange={(e) => setExportCheckpoint(e.target.checked)} />
+                Save checkpoint before exporting
+              </label>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn" onClick={() => setExportConfirmTarget(null)}>Cancel</button>
+              <button className="btn" style={{ background: "var(--acl)", borderColor: "var(--acg)", color: "var(--ac)" }}
+                onClick={() => void handleExportConfirm()}>
+                Export {exportConfirmTarget === "csv" ? "CSV" : exportConfirmTarget === "powerbi" ? "Excel" : "Tableau"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
         <div style={{ display: "inline-flex", gap: 6 }}>
           <button className="btn" onClick={() => setTab("data")} style={{ background: tab === "data" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "data" ? "var(--acg)" : "var(--bd2)" }}>
@@ -174,14 +307,14 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 sub="For Power BI, Looker &amp; general use"
                 accent="#F2C811"
                 badge="XLS"
-                onClick={() => void handleExport("powerbi")}
+                onClick={() => requestExport("powerbi")}
               />
               <ExportItem
                 label="Export to Tableau"
                 sub=".hyper · Tableau Desktop"
                 accent="#E97627"
                 badge="VIZ"
-                onClick={() => void handleExport("tableau")}
+                onClick={() => requestExport("tableau")}
               />
               <ExportItem
                 label="Sync to Google Sheets"
@@ -199,12 +332,65 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 label="Download as CSV"
                 sub="Universal · plain text"
                 accent="#9898b0"
-                onClick={() => void handleExport("csv")}
+                onClick={() => requestExport("csv")}
               />
             </div>
           )}
         </div>
       </div>
+      {/* ── Timeline Breadcrumb ────────────────────────────────────────── */}
+      {steps.length > 0 && tab === "data" && (
+        <div style={{ height: 32, borderBottom: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", alignItems: "center", padding: "0 10px", gap: 0, overflowX: "auto", flexShrink: 0 }}>
+          <button
+            onClick={handleTimelineReset}
+            title="Go back to original source"
+            style={{ flexShrink: 0, fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--bd2)", background: viewingStepIndex === null ? "var(--bg3)" : "transparent", color: "var(--tx2)", cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            Original
+          </button>
+          {steps.map((step, idx) => {
+            const active = viewingStepIndex === idx;
+            const isLast = idx === steps.length - 1;
+            return (
+              <span key={step.id} style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+                <span style={{ color: "var(--tx2)", fontSize: 10, padding: "0 4px" }}>›</span>
+                <button
+                  onClick={() => { if (!step.outputDataset?.id) return; void handleTimelineClick(idx); }}
+                  title={step.description}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 10,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    border: `1px solid ${active ? "var(--acg)" : isLast && viewingStepIndex === null ? "var(--acg)" : "var(--bd2)"}`,
+                    background: active ? "var(--acl)" : isLast && viewingStepIndex === null ? "var(--acl)" : "transparent",
+                    color: active || (isLast && viewingStepIndex === null) ? "var(--ac)" : "var(--tx2)",
+                    cursor: step.outputDataset?.id ? "pointer" : "default",
+                    whiteSpace: "nowrap",
+                    maxWidth: 120,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {isLast && viewingStepIndex === null ? "▶ " : ""}{step.description || `Step ${idx + 1}`}
+                </button>
+              </span>
+            );
+          })}
+          {viewingStepIndex !== null && (
+            <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+              <span style={{ color: "var(--tx2)", fontSize: 10, padding: "0 4px" }}>›</span>
+              <button
+                onClick={handleTimelineReset}
+                style={{ flexShrink: 0, fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--bd2)", background: "transparent", color: "var(--tx2)", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                ← Current
+              </button>
+            </span>
+          )}
+          {timelineLoading && <span style={{ fontSize: 10, color: "var(--tx2)", marginLeft: 8, flexShrink: 0 }}>Loading…</span>}
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {dataError && tab === "data" && (
           <div style={{ padding: "10px 16px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.2)", color: "var(--rd)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
@@ -250,7 +436,58 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             </button>
           </div>
         )}
-        {tab === "pipeline" ? (
+        {/* ── Before/After diff view ── */}
+        {diffStep && tab === "data" ? (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "6px 12px", background: "rgba(91,106,240,0.07)", borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: "var(--tx1)", flex: 1 }}>
+                Comparing: <strong>{diffStep.description || diffStep.operation}</strong>
+                {diffStep.row_count_before != null && diffStep.row_count_after != null ? (
+                  <span style={{ marginLeft: 10, fontSize: 10, color: diffStep.row_count_after >= diffStep.row_count_before ? "var(--gr)" : "var(--rd)" }}>
+                    {diffStep.row_count_after >= diffStep.row_count_before ? "+" : ""}{(diffStep.row_count_after - diffStep.row_count_before).toLocaleString()} rows
+                  </span>
+                ) : null}
+              </span>
+              <button className="btn" style={{ height: 22, padding: "0 8px", fontSize: 10 }} onClick={() => { setDiffStep(null); setDiffBefore(null); setDiffAfter(null); }}>✕ Exit compare</button>
+            </div>
+            {diffLoading ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tx2)", fontSize: 12 }}>Loading comparison…</div>
+            ) : (
+              <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 1 }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--bd)" }}>
+                  <div style={{ padding: "4px 10px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)", fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
+                    BEFORE &nbsp;·&nbsp; {diffStep.inputDataset?.name ?? "input"} &nbsp;·&nbsp; {(diffStep.row_count_before ?? diffBefore?.rows.length ?? 0).toLocaleString()} rows
+                  </div>
+                  <DataTable
+                    datasetId={diffStep.inputDataset?.id}
+                    loading={false}
+                    rows={diffBefore?.rows ?? []}
+                    columns={diffBefore?.cols ?? []}
+                    calculatedColumns={[]}
+                    stepCount={0}
+                    lastAction=""
+                    onColumnsChanged={onColumnsChanged}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                  <div style={{ padding: "4px 10px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)", fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
+                    AFTER &nbsp;·&nbsp; {diffStep.outputDataset?.name ?? "output"} &nbsp;·&nbsp; {(diffStep.row_count_after ?? diffAfter?.rows.length ?? 0).toLocaleString()} rows
+                  </div>
+                  <DataTable
+                    datasetId={diffStep.outputDataset?.id}
+                    loading={false}
+                    rows={diffAfter?.rows ?? []}
+                    columns={diffAfter?.cols ?? []}
+                    calculatedColumns={[]}
+                    stepCount={0}
+                    lastAction=""
+                    onColumnsChanged={onColumnsChanged}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : tab === "pipeline" ? (
           <PipelineGraphTab />
         ) : tab === "schedule" && pipelineId ? (
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
@@ -263,12 +500,12 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         ) : tab === "data" ? (
           <DataTable
             datasetId={dataset?.id}
-            loading={loading}
-            rows={sessionPreviewRows && sessionPreviewRows.length > 0 ? sessionPreviewRows : rows}
-            columns={sessionPreviewColumns && sessionPreviewColumns.length > 0 ? sessionPreviewColumns : columns}
+            loading={viewingStepIndex !== null ? timelineLoading : loading}
+            rows={effectiveRows}
+            columns={effectiveCols}
             calculatedColumns={calculatedColumns}
             stepCount={steps.length}
-            lastAction={lastAction}
+            lastAction={viewingStepIndex !== null ? "" : lastAction}
             onColumnsChanged={onColumnsChanged}
           />
         ) : (

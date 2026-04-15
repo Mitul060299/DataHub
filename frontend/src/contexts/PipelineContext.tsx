@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { api } from "../api";
+import { api, fetchDatasetPipelineSteps, saveDatasetPipelineSteps } from "../api";
+import { useWorkspaceContext } from "./WorkspaceContext";
 
 export interface ScheduleInfo {
   label: string;
@@ -54,6 +55,10 @@ interface PipelineContextValue {
   /** The in-session DuckDB table representing the current pipeline leaf output */
   liveArtifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null;
   setLiveArtifact: (artifact: { tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null) => void;
+  /** Pending join step awaiting user confirmation (null = no pending) */
+  pendingJoinStep: PipelineStep | null;
+  confirmJoin: () => void;
+  cancelJoin: () => void;
 }
 
 const PipelineContext = createContext<PipelineContextValue | undefined>(undefined);
@@ -76,19 +81,60 @@ const loadPersistedSteps = (): PipelineStep[] => {
 };
 
 export function PipelineProvider({ children }: { children: ReactNode }) {
+  const { activeDataset } = useWorkspaceContext();
+  const datasetId = activeDataset?.id ?? null;
   const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps());
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
   const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string } | null>(null);
+  const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
+  const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Write-through: localStorage (always) + DB (debounced 1.5s, when dataset known) ───
   useEffect(() => {
     try {
       localStorage.setItem(PIPELINE_STEPS_STORAGE_KEY, JSON.stringify(steps));
     } catch {
+      // ignore quota errors
+    }
+    if (!datasetId) return;
+    // Debounce DB writes to avoid spamming during rapid step additions
+    if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+    dbSyncTimerRef.current = setTimeout(() => {
+      void saveDatasetPipelineSteps(datasetId, steps).catch(() => { /* best-effort */ });
+    }, 1500);
+    return () => {
+      if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+    };
+  }, [steps, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── On dataset switch: load steps from DB, fall back to localStorage ───────────
+  const prevDatasetIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (datasetId === prevDatasetIdRef.current) return;
+    prevDatasetIdRef.current = datasetId;
+    if (!datasetId) {
+      setSteps(loadPersistedSteps());
       return;
     }
-  }, [steps]);
+    fetchDatasetPipelineSteps(datasetId)
+      .then((loaded) => {
+        const parsed = (loaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
+          .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
+        setSteps(parsed.length > 0 ? parsed : loadPersistedSteps());
+      })
+      .catch(() => setSteps(loadPersistedSteps()));
+  }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addStep = (step: PipelineStep) => {
+    // Intercept join operations with multiple inputs for confirmation
+    if (step.operation === "join" && (step.input_tables?.length ?? 0) > 1 && !pendingJoinStep) {
+      setPendingJoinStep(step);
+      return;
+    }
+    commitStep(step);
+  };
+
+  const commitStep = (step: PipelineStep) => {
     setSteps((current) => {
       // If there's already a step with the same output dataset ID, replace it (retry dedup)
       if (step.outputDataset?.id) {
@@ -102,6 +148,12 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       return [...current, step];
     });
   };
+
+  const confirmJoin = () => {
+    if (pendingJoinStep) { commitStep(pendingJoinStep); setPendingJoinStep(null); }
+  };
+
+  const cancelJoin = () => { setPendingJoinStep(null); };
 
   const removeStep = (stepId: string) => {
     setSteps((current) => current.filter((step) => step.id !== stepId));
@@ -149,11 +201,53 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact }),
-    [steps, scheduleInfo, liveArtifact],  // eslint-disable-line react-hooks/exhaustive-deps
+    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact, pendingJoinStep, confirmJoin, cancelJoin }),
+    [steps, scheduleInfo, liveArtifact, pendingJoinStep],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  return <PipelineContext.Provider value={value}>{children}</PipelineContext.Provider>;
+  return (
+    <PipelineContext.Provider value={value}>
+      {children}
+      {/* Join confirmation modal */}
+      {pendingJoinStep && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={cancelJoin}>
+          <div style={{ background: "var(--bg2)", border: "1px solid var(--bd)", borderRadius: 10, padding: "24px 28px", minWidth: 360, maxWidth: 440, boxShadow: "0 16px 48px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "var(--tx0)" }}>Confirm multi-dataset join</p>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--tx2)" }}>
+              {pendingJoinStep.description || pendingJoinStep.operation}
+            </p>
+            <div style={{ background: "var(--bg3)", borderRadius: 6, padding: "10px 12px", marginBottom: 16, fontSize: 11, color: "var(--tx1)" }}>
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ color: "var(--tx2)" }}>Joining tables:&nbsp;</span>
+                {(pendingJoinStep.input_tables ?? []).join(" + ")}
+              </div>
+              {pendingJoinStep.rawConfig?.join_key != null && (
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{ color: "var(--tx2)" }}>Key:&nbsp;</span>
+                  <span className="mono">{String(pendingJoinStep.rawConfig.join_key)}</span>
+                </div>
+              )}
+              {pendingJoinStep.row_count_after != null && (
+                <div>
+                  <span style={{ color: "var(--tx2)" }}>Result rows:&nbsp;</span>
+                  {pendingJoinStep.row_count_after.toLocaleString()}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn" onClick={cancelJoin}>Cancel</button>
+              <button className="btn" style={{ background: "var(--acl)", borderColor: "var(--acg)", color: "var(--ac)" }}
+                onClick={confirmJoin}>
+                Confirm Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </PipelineContext.Provider>
+  );
 }
 
 export function usePipelineContext() {

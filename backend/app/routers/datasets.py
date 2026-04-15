@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from typing import Dict
+import json
 import logging
 import threading
 from io import StringIO
@@ -578,6 +579,48 @@ def list_datasets(
         )
 
     return datasets
+
+
+# ── Pipeline Steps persistence endpoints ─────────────────────────────────────
+
+@router.get("/{dataset_id}/pipeline-steps")
+def get_pipeline_steps(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the saved pipeline steps JSON for a dataset."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    raw = getattr(meta, "pipeline_steps_json", None)
+    steps = json.loads(raw) if raw else []
+    return {"dataset_id": dataset_id, "steps": steps}
+
+
+@router.put("/{dataset_id}/pipeline-steps")
+def save_pipeline_steps(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Persist the pipeline steps JSON for a dataset (upsert)."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    steps = payload.get("steps", [])
+    if not isinstance(steps, list):
+        raise HTTPException(status_code=422, detail="steps must be a list")
+    # Safety cap: don't persist more than 100 steps per dataset
+    steps = steps[:100]
+    meta.pipeline_steps_json = json.dumps(steps)  # type: ignore[assignment]
+    db.commit()
+    return {"dataset_id": dataset_id, "saved": len(steps)}
 
 
 # ── Version History endpoints ─────────────────────────────────────────────────

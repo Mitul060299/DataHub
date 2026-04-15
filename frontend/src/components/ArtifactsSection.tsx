@@ -41,6 +41,8 @@ interface ArtifactsSectionProps {
   onSelect: (dataset: Dataset) => void;
   onRemove: (dataset: Dataset) => void;
   onRename?: (dataset: Dataset, newName: string) => void;
+  /** Called when user wants to branch pipeline from an artifact */
+  onContinueFrom?: (dataset: Dataset) => void;
   /** The current in-session DuckDB table representing the pipeline leaf */
   liveArtifact?: { tableName: string; rowCount: number; stepLabel: string } | null;
   /** Called when the user clicks "Save ↑" on the live artifact */
@@ -72,6 +74,7 @@ export function ArtifactsSection({
   onSelect,
   onRemove,
   onRename,
+  onContinueFrom,
   liveArtifact,
   onSaveLive,
 }: ArtifactsSectionProps) {
@@ -313,6 +316,16 @@ export function ArtifactsSection({
                     Use
                   </button>
                 ) : null}
+                {onContinueFrom && editingId !== artifact.id && (
+                  <button
+                    className="btn"
+                    style={{ height: 22, padding: "0 6px", marginLeft: 4, fontSize: 10, color: "var(--ac)", borderColor: "var(--acg)" }}
+                    title="Load this artifact and reset your pipeline to branch from here"
+                    onClick={() => onContinueFrom(artifact)}
+                  >
+                    ▶ Continue
+                  </button>
+                )}
                 {onRename ? (
                   <button
                     className="btn"
@@ -422,13 +435,23 @@ export function ArtifactsSection({
                     {deletingId === artifact.id ? "…" : "×"}
                   </button>
                 </div>
-                {/* Meta row */}
-                {(artifact.row_count != null || artifact.created_at) ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 19, color: "var(--tx2)", fontSize: 10 }}>
+                {/* Meta row + Continue from here */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 19 }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, color: "var(--tx2)", fontSize: 10 }}>
                     {artifact.row_count != null ? <span>{artifact.row_count.toLocaleString()} rows</span> : null}
                     {artifact.created_at ? <span>{relativeTime(artifact.created_at)}</span> : null}
                   </div>
-                ) : null}
+                  {onContinueFrom && artifact.dataset_id && (
+                    <button
+                      className="btn"
+                      style={{ height: 18, padding: "0 6px", fontSize: 9, color: "var(--ac)", borderColor: "var(--acg)", flexShrink: 0 }}
+                      title="Load this artifact and reset your pipeline to branch from here"
+                      onClick={() => onContinueFrom({ id: artifact.dataset_id!, name: artifact.name, rows: artifact.row_count ?? 0 })}
+                    >
+                      ▶ Continue
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}

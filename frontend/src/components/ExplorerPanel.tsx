@@ -21,7 +21,7 @@ interface ExplorerPanelProps {
 
 export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, workspaceMembers, refreshMembers, projectsLoading } = useWorkspaceContext();
-  const { steps, liveArtifact } = usePipelineContext();
+  const { steps, liveArtifact, clearSteps } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -351,6 +351,10 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             void loadDatasets();
           }}
           liveArtifact={liveArtifact}
+          onContinueFrom={(dataset) => {
+            setActiveDataset(dataset);
+            clearSteps();
+          }}
           onSaveLive={async (tableName, label) => {
             if (!liveArtifact?.sessionId) return;
             await api.post("/api/artifacts/save-checkpoint", {

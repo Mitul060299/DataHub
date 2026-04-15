@@ -595,8 +595,15 @@ def get_pipeline_steps(
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    raw = getattr(meta, "pipeline_steps_json", None)
-    steps = json.loads(raw) if raw else []
+    try:
+        result = db.execute(
+            text("SELECT pipeline_steps_json FROM dataset_meta WHERE id = :id"),
+            {"id": dataset_id},
+        ).fetchone()
+        raw = result[0] if result else None
+        steps = json.loads(raw) if raw else []
+    except Exception:
+        steps = []
     return {"dataset_id": dataset_id, "steps": steps}
 
 
@@ -618,8 +625,17 @@ def save_pipeline_steps(
         raise HTTPException(status_code=422, detail="steps must be a list")
     # Safety cap: don't persist more than 100 steps per dataset
     steps = steps[:100]
-    meta.pipeline_steps_json = json.dumps(steps)  # type: ignore[assignment]
-    db.commit()
+    try:
+        db.execute(
+            text(
+                "UPDATE dataset_meta SET pipeline_steps_json = :v WHERE id = :id"
+            ),
+            {"v": json.dumps(steps), "id": dataset_id},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        return {"dataset_id": dataset_id, "saved": 0}
     return {"dataset_id": dataset_id, "saved": len(steps)}
 
 

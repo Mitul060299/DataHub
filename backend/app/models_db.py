@@ -145,7 +145,8 @@ class DatasetMetaDB(Base):
     connector_credential_id = Column(String, nullable=True)  # FK to connector_credentials.id
     import_mode = Column(String, nullable=False, server_default="cached")  # 'cached' | 'live'
     connector_config = Column(JSONB, nullable=True)  # stores original import config for fold/live
-    pipeline_steps_json = Column(Text, nullable=True)  # added by migration 0050
+    # pipeline_steps_json is NOT in the ORM — accessed via raw SQL in datasets.py
+    # to avoid crashing every SELECT while migration 0050 is pending on prod.
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

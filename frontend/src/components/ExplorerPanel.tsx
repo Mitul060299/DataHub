@@ -211,6 +211,17 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     void loadDatasets();
   }, [loadDatasets, refreshNonce, projectsLoading]);
 
+  // After datasets load, auto-restore the last selected dataset from localStorage
+  // so chat history and pipeline context survive page reloads.
+  useEffect(() => {
+    if (datasetsLoading || datasets.length === 0 || activeDataset) return;
+    const lastId = localStorage.getItem("activeDatasetId");
+    if (!lastId) return;
+    const match = datasets.find((d) => d.id === lastId);
+    if (match) setActiveDataset(match);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetsLoading, datasets]);
+
   useEffect(() => {
     if (typeof searchFocusNonce !== "number") return;
     searchInputRef.current?.focus();

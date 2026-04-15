@@ -539,7 +539,8 @@ def list_datasets(
 ) -> list[DatasetMeta]:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    query = db.query(DatasetMetaDB)
+    user_id = get_current_user_id(authorization)
+    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.user_id == user_id)
     if workspace_id:
         # Include exact matches, legacy NULL workspace_id rows, AND legacy
         # "default"-tagged rows so datasets uploaded before workspaces existed

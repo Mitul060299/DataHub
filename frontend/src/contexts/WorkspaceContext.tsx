@@ -82,7 +82,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
-  const [activeDataset, setActiveDataset] = useState<Dataset | null>(null);
+  const [activeDataset, setActiveDatasetState] = useState<Dataset | null>(null);
+
+  const setActiveDataset = useCallback((dataset: Dataset | null) => {
+    if (dataset) {
+      localStorage.setItem("activeDatasetId", dataset.id);
+    } else {
+      localStorage.removeItem("activeDatasetId");
+    }
+    setActiveDatasetState(dataset);
+  }, []);
   const [members, setMembers] = useState<Member[]>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberOut[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceOut[]>([]);
@@ -178,8 +187,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // Clear the selected dataset when switching projects so a stale ID from
   // the previous project never hits the backend (which would return a 404).
+  // We intentionally do NOT clear localStorage here — ExplorerPanel will
+  // restore the correct dataset after it loads the new project's dataset list.
   useEffect(() => {
-    setActiveDataset(null);
+    setActiveDatasetState(null);
   }, [activeProject?.id]);
 
   const value = useMemo(

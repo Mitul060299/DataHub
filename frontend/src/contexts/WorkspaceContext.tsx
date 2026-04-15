@@ -42,7 +42,7 @@ export interface WorkspaceContextValue {
   projects: Project[];
   projectsLoading: boolean;
   refreshProjects: () => Promise<void>;
-  createProject: (payload: { name: string; description?: string; colour?: string; icon?: string }) => Promise<Project>;
+  createProject: (payload: { name: string; description?: string; colour?: string; icon?: string; workspace_id?: string }) => Promise<Project>;
   activeProject: Project | null;
   setActiveProject: (project: Project) => void;
   activeDataset: Dataset | null;
@@ -135,7 +135,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     setProjectsLoading(true);
     try {
-      const data = await fetchProjects();
+      const wsId = localStorage.getItem("activeWorkspaceId") || "default";
+      const data = await fetchProjects(wsId);
       const mapped = data.map(toProject);
       setProjects(mapped);
       // If activeProject not loaded yet, default to first
@@ -159,8 +160,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     void refreshProjects();
   }, [refreshProjects]);
 
+  // Re-fetch projects whenever the active workspace changes
+  useEffect(() => {
+    if (session) void refreshProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId]);
+
   const createProject = useCallback(
-    async (payload: { name: string; description?: string; colour?: string; icon?: string }) => {
+    async (payload: { name: string; description?: string; colour?: string; icon?: string; workspace_id?: string }) => {
       const raw = await apiCreateProject(payload);
       const project = toProject(raw);
       setProjects((prev) => [project, ...prev]);

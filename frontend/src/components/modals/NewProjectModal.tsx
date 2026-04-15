@@ -13,7 +13,7 @@ interface NewProjectModalProps {
 }
 
 export function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
-  const { createProject } = useWorkspaceContext();
+  const { createProject, activeWorkspaceId } = useWorkspaceContext();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [colour, setColour] = useState(PRESET_COLOURS[0]);
@@ -33,7 +33,7 @@ export function NewProjectModal({ open, onClose, onCreated }: NewProjectModalPro
     setSaving(true);
     setError(null);
     try {
-      const project = await createProject({ name: trimmed, description: description.trim() || undefined, colour, icon });
+      const project = await createProject({ name: trimmed, description: description.trim() || undefined, colour, icon, workspace_id: activeWorkspaceId !== "default" ? activeWorkspaceId : undefined });
       // Reset form
       setName("");
       setDescription("");

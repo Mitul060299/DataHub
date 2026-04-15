@@ -1253,8 +1253,10 @@ export interface ProjectDetailOut {
   sources: ProjectSourceOut[];
 }
 
-export async function fetchProjects(): Promise<ProjectOut[]> {
-  const response = await api.get("/projects");
+export async function fetchProjects(workspaceId?: string): Promise<ProjectOut[]> {
+  const response = await api.get("/projects", {
+    params: workspaceId && workspaceId !== "default" ? { workspace_id: workspaceId } : undefined,
+  });
   return response.data;
 }
 

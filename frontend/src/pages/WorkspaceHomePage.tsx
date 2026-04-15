@@ -75,7 +75,15 @@ export function WorkspaceHomePage() {
   // Filter projects to only those belonging to the active workspace
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
   const workspaceProjects = projects.filter((p) => {
-    if (!activeWorkspaceId || activeWorkspaceId === "default") return true;
+    if (!activeWorkspaceId || activeWorkspaceId === "default") {
+      // Synthetic "My Workspace": show only legacy "default" projects + personal-typed workspaces
+      return p.workspaceId === "default" || workspaces.find((w) => w.id === p.workspaceId)?.workspace_type === "personal";
+    }
+    if (activeWorkspace?.workspace_type === "collab") {
+      // Collab workspace: strict — only this workspace's projects
+      return p.workspaceId === activeWorkspaceId;
+    }
+    // Personal DB workspace: include this workspace + legacy "default" tagged projects
     return p.workspaceId === activeWorkspaceId || p.workspaceId === "default";
   });
 

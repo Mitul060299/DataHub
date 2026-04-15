@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, text as _sql_text
 from sqlalchemy.orm import Session
 
@@ -90,16 +90,20 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
 
 @router.get("", response_model=List[ProjectOut])
 def list_projects(
+    workspace_id: str | None = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> List[ProjectOut]:
-    visible = get_visible_user_ids(db, current_user.id, "default")
-    projects = (
-        db.query(ProjectDB)
-        .filter(ProjectDB.user_id.in_(visible))
-        .order_by(ProjectDB.updated_at.desc())
-        .all()
-    )
+    visible = get_visible_user_ids(db, current_user.id, workspace_id or "default")
+    q = db.query(ProjectDB).filter(ProjectDB.user_id.in_(visible))
+    if workspace_id and workspace_id != "default":
+        # Collab workspaces: strict — only their own projects.
+        # Personal DB workspace: also include legacy "default"-tagged projects.
+        q = q.filter(
+            (ProjectDB.workspace_id == workspace_id)
+            | (ProjectDB.workspace_id == "default")
+        )
+    projects = q.order_by(ProjectDB.updated_at.desc()).all()
     return [_project_out(p, db) for p in projects]
 
 

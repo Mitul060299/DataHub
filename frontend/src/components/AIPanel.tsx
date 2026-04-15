@@ -698,10 +698,15 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
             onSessionPreview(results, Object.keys(results[0]));
           }
           // Set the LIVE artifact entry so the sidebar shows the editable save card.
+          // Use row_count_after from the server for the true total — results[] is
+          // capped at 50 rows (preview), so results.length is NOT the full count.
           if (sessionTableName && WRITE_OPS.has(String(event.operation ?? ""))) {
             const currentSid = sessionIdRef.current || sessionId;
             if (currentSid) {
-              setLiveArtifact({ tableName: sessionTableName, rowCount: results.length, stepLabel: opLabel, sessionId: currentSid });
+              const actualRowCount = Number(
+                event.row_count_after ?? event.total_rows ?? event.rows_affected ?? results.length
+              );
+              setLiveArtifact({ tableName: sessionTableName, rowCount: actualRowCount, stepLabel: opLabel, sessionId: currentSid });
             }
           }
         }

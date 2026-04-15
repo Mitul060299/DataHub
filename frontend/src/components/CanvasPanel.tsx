@@ -399,13 +399,32 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         )}
         {/* Amber banner: cleaned preview mode */}
-        {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (
-          <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (() => {
+          // True total: prefer last step's row_count_after (always from the server),
+          // fall back to liveArtifact.rowCount, then preview length as last resort.
+          const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+          const trueTotal = lastStep?.row_count_after ?? liveArtifact?.rowCount ?? sessionPreviewRows.length;
+          const isPreviewing = sessionPreviewRows.length < trueTotal;
+          // Verification line: rows before → after for the last step
+          const rowsBefore = lastStep?.row_count_before;
+          const rowsAfter = lastStep?.row_count_after;
+          const rowDelta = rowsBefore != null && rowsAfter != null ? rowsAfter - rowsBefore : null;
+          return (
+          <div style={{ padding: "6px 14px", background: "rgba(234,179,8,0.1)", borderBottom: "1px solid rgba(234,179,8,0.25)", color: "#fde68a", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
             <span>⚡</span>
             <span style={{ flex: 1 }}>
-              {sessionPreviewRows.length === (liveArtifact?.rowCount ?? -1)
-                ? `Complete result — ${sessionPreviewRows.length} rows. Not saved yet.`
-                : `Preview — ${sessionPreviewRows.length}${liveArtifact?.rowCount != null ? ` of ${liveArtifact.rowCount}` : ""} rows. Not saved yet.`}
+              {isPreviewing
+                ? `Preview — first ${sessionPreviewRows.length.toLocaleString()} of ${trueTotal.toLocaleString()} rows. Not saved yet.`
+                : `Complete result — ${trueTotal.toLocaleString()} rows. Not saved yet.`}
+              {rowDelta !== null && (
+                <span style={{ marginLeft: 8, opacity: 0.75, fontSize: 11 }}>
+                  ({rowDelta === 0
+                    ? `${trueTotal.toLocaleString()} rows transformed, no rows added or removed`
+                    : rowDelta > 0
+                      ? `+${rowDelta.toLocaleString()} rows added`
+                      : `${Math.abs(rowDelta).toLocaleString()} rows removed`})
+                </span>
+              )}
             </span>
             <button
               onClick={onViewOriginal}
@@ -422,7 +441,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               </button>
             )}
           </div>
-        )}
+          );
+        })()}
         {/* Green banner: steps exist but liveArtifact is gone (page refresh) — prompt user to re-run */}
         {tab === "data" && steps.length > 0 && !liveArtifact && !showingOriginal && viewingStepIndex === null && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
           <div style={{ padding: "6px 14px", background: "rgba(34,197,94,0.08)", borderBottom: "1px solid rgba(34,197,94,0.2)", color: "#86efac", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>

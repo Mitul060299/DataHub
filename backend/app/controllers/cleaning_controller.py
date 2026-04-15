@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -8,6 +10,39 @@ from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
 from ..security import get_current_role, get_current_subject, get_current_user_id, require_role
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_alias_for_replay(name: str) -> str:
+    """Mirror context_loader._sanitize_alias — converts a dataset name to its DuckDB alias."""
+    s = re.sub(r"[^A-Za-z0-9_]", "_", (name or "").strip()).lower()
+    s = re.sub(r"_+", "_", s).strip("_")
+    if not s or s[0].isdigit():
+        s = "ds_" + s
+    return s or "dataset"
+
+
+def _normalize_sql_for_replay(sql: str, alias: str | None) -> str:
+    """Replace the primary dataset alias in *sql* with the generic 'dataset'.
+
+    The agent stores SQL that references named DuckDB aliases (e.g. 'customers_csv',
+    'clean_1_abc123') registered in the live DuckDB session.  When replaying via
+    DataTransformationService.execute_transformation, only a temp table called
+    'dataset' is available, so every alias-based FROM/JOIN reference fails with a
+    DuckDB "Table not found" error.
+
+    This function replaces all word-boundary occurrences of *alias* with 'dataset'
+    so the existing transform_rows path works correctly.
+    """
+    # Standard legacy normalizations
+    sql = re.sub(r"\btable\b", "dataset", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bdataset_rows\b", "dataset", sql, flags=re.IGNORECASE)
+    if not alias or alias == "dataset":
+        return sql
+    # Replace alias → dataset throughout the SQL (column names never match
+    # the generated alias so this replacement is safe in practice)
+    return re.sub(rf"\b{re.escape(alias)}\b", "dataset", sql, flags=re.IGNORECASE)
 from ..models_db import DatasetMetaDB, TransformationHistoryDB
 from ..services.ai_agent_service import AIAgentService
 from ..services.agent_graph import AgentGraphService
@@ -207,6 +242,15 @@ class CleaningController:
         current_dataset_id = pivot_dataset_id
         replayed: list[dict[str, Any]] = []
 
+        # Compute the alias used by the agent for the pivot dataset.
+        # The agent derives aliases via _sanitize_alias(dataset.name).
+        # For step 0 the alias is from the base dataset name; for step N it
+        # is the output_table / session_table_name stored in step N-1's rawConfig.
+        base_dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == pivot_dataset_id).first()
+        current_alias: str = _sanitize_alias_for_replay(
+            str(base_dataset.name or pivot_dataset_id) if base_dataset else pivot_dataset_id
+        )
+
         for idx, step in enumerate(steps):
             sql = step.get("sql")
             if not sql and isinstance(step.get("transformation"), dict):
@@ -222,7 +266,16 @@ class CleaningController:
                 })
                 continue
 
-            transformation = {**step, "sql": sql}
+            # Normalize alias → 'dataset' so the SQL works through transform_rows.
+            # The agent registered the dataset under a named alias (e.g. 'customers_csv')
+            # rather than the generic 'dataset'; transform_rows only creates 'dataset'.
+            normalized_sql = _normalize_sql_for_replay(sql, current_alias)
+            if normalized_sql != sql:
+                logger.debug(
+                    "replay step %d: normalized alias '%s' → 'dataset' in SQL", idx, current_alias
+                )
+
+            transformation = {**step, "sql": normalized_sql}
             dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_dataset_id).first()
             if not dataset:
                 raise HTTPException(status_code=404, detail=f"Dataset {current_dataset_id} not found during replay")
@@ -232,6 +285,7 @@ class CleaningController:
                     current_dataset_id, user_id, transformation, db
                 )
             except Exception as exc:
+                logger.exception("replay step %d failed for dataset %s", idx, current_dataset_id)
                 raise HTTPException(status_code=422, detail=f"Step {idx} failed: {exc}")
 
             # For immediate (non-large) datasets, result["result"]["outputDataset"]["id"]
@@ -247,6 +301,18 @@ class CleaningController:
                 "row_count": row_count,
                 "skipped": False,
             })
+
+            # Update the alias for the next step: prefer the session table name
+            # stored in the step's rawConfig (set by the agent's execute_step node)
+            # so follow-on steps that reference the prior step's output table are
+            # also correctly normalized.
+            next_alias = (
+                step.get("output_table")
+                or step.get("session_table_name")
+            )
+            current_alias = str(next_alias) if next_alias else _sanitize_alias_for_replay(
+                str(dataset.name or current_dataset_id)
+            )
             current_dataset_id = new_dataset_id
 
         final_dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_dataset_id).first()

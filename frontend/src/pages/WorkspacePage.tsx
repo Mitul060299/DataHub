@@ -78,7 +78,8 @@ export function WorkspacePage() {
       });
     } catch (err) {
       console.error("Pipeline replay failed", err);
-      const msg = err instanceof Error ? err.message : "Pipeline replay failed. Please try again.";
+      const axiosDetail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+      const msg = axiosDetail ?? (err instanceof Error ? err.message : "Pipeline replay failed. Please try again.");
       setReplayError(msg);
     } finally {
       setReplayingPipeline(false);

@@ -33,13 +33,24 @@ _lock = threading.Lock()
 _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
 _last_used: dict[str, float] = {}
 
-MAX_SESSION_AGE_SECONDS = 1800  # 30 minutes
-_CLEANUP_INTERVAL_SECONDS = 900  # run background cleanup every 15 minutes
+MAX_SESSION_AGE_SECONDS = 900   # 15 minutes — reduced to trim idle session memory
+_CLEANUP_INTERVAL_SECONDS = 300  # run background cleanup every 5 minutes
+
+# Hard cap on concurrent open DuckDB sessions.  Each session can use up to
+# 96 MB (SET memory_limit below), so 3 sessions = ~288 MB from sessions alone.
+# The oldest-idle session is evicted when this limit would be exceeded.
+_MAX_SESSIONS: int = int(os.environ.get("DUCKDB_MAX_SESSIONS", "3"))
 
 # Evict oldest sessions more aggressively when process RSS exceeds this.
-# Default 400 MB = 80 % of a 512 MB Render instance.
+# Set to 280 MB (55 % of a 512 MB Render free instance) so eviction fires
+# *before* the heap can corrupt itself at ~400 MB.
 # Override via DUCKDB_HIGH_MEMORY_MB env var to match your instance tier.
-_HIGH_MEMORY_THRESHOLD_MB: float = float(os.environ.get("DUCKDB_HIGH_MEMORY_MB", "400"))
+_HIGH_MEMORY_THRESHOLD_MB: float = float(os.environ.get("DUCKDB_HIGH_MEMORY_MB", "280"))
+
+# Under pressure: aggressively evict sessions idle longer than this many seconds.
+# Default 120 s = 2 minutes, so any session that hasn't been touched recently
+# is dropped before the heap corrupts.
+_HIGH_PRESSURE_TTL_SECONDS: int = int(os.environ.get("DUCKDB_HIGH_PRESSURE_TTL_S", "120"))
 
 
 class SessionExpiredError(RuntimeError):
@@ -77,7 +88,9 @@ def _cleanup_stale(max_age_seconds: int = MAX_SESSION_AGE_SECONDS) -> int:
     rss_mb = _process_rss_mb()
     effective_ttl = max_age_seconds
     if rss_mb > 0 and rss_mb > _HIGH_MEMORY_THRESHOLD_MB:
-        effective_ttl = max_age_seconds // 2
+        # Use a very short TTL under pressure to free memory fast and prevent
+        # the heap-corruption crash ("corrupted size vs. prev_size").
+        effective_ttl = _HIGH_PRESSURE_TTL_SECONDS
         _logger.warning(
             "DUCKDB_HIGH_MEMORY_PRESSURE: RSS=%.1f MB > threshold=%.0f MB — "
             "evicting sessions idle > %ds (normal TTL %ds)",
@@ -117,15 +130,32 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
                 _sessions.pop(session_id, None)
                 _last_used.pop(session_id, None)
                 raise SessionExpiredError(
-                    "Your workspace session has expired. "
-                    "Please re-upload your files to start a new session."
+                    "Your AI session has expired (server restarted or memory was reclaimed). "
+                    "Please re-run your pipeline steps to restore the session, then try again."
                 )
 
+        # Enforce the concurrent-session cap before creating a new connection.
+        # If at the limit, evict the oldest-idle session to make room.
+        if len(_sessions) >= _MAX_SESSIONS:
+            oldest_sid = min(_last_used, key=_last_used.get)  # type: ignore[arg-type]
+            try:
+                old = _sessions.pop(oldest_sid, None)
+                if old is not None:
+                    old.close()
+            except Exception:
+                pass
+            _last_used.pop(oldest_sid, None)
+
         # Create a new in-memory connection.
-        # The memory limit prevents a runaway query from OOM-killing the whole
-        # OS process — DuckDB throws a catchable exception instead.
+        # Keep the per-session limit low (96 MB) so that even 2–3 concurrent
+        # sessions stay well below the 512 MB Render free-tier process limit.
+        # DuckDB throws a catchable OutOfMemoryError instead of corrupting the heap.
         new_conn = duckdb.connect(database=":memory:")
-        new_conn.execute("SET memory_limit='256MB'")
+        new_conn.execute("SET memory_limit='96MB'")
+        try:
+            new_conn.execute("SET threads=1")
+        except Exception:
+            pass
         # Install/load httpfs so views over S3/HTTPS-signed-URL parquet files work.
         try:
             new_conn.execute("INSTALL httpfs;")

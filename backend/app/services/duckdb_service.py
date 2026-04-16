@@ -28,8 +28,8 @@ class DuckDBService:
                     import duckdb  # noqa: PLC0415 — lazy to avoid native-ext load at startup
                     cls._db = duckdb.connect(database=":memory:")
                     try:
-                        cls._db.execute("SET memory_limit='160MB';")
-                        cls._db.execute("SET threads=2;")
+                        cls._db.execute("SET memory_limit='80MB';")
+                        cls._db.execute("SET threads=1;")
                     except Exception:
                         pass
                     try:

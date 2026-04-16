@@ -171,7 +171,7 @@ function DataProfileCard({ profile, issues }: { profile: DataProfile; issues?: Q
         </div>
       ) : null}
 
-      {/* Per-column breakdown toggle */
+      {/* Per-column breakdown toggle */}
       <button
         onClick={() => setOpen((v) => !v)}
         style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "#18181b", borderTop: "1px solid #27272a", color: "#a1a1aa", fontSize: 11, cursor: "pointer" }}

@@ -629,14 +629,22 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           ? event.error.trim()
           : "The AI agent encountered an unexpected error. Please try again.";
         capture("ai_error", { error_type: "agent.error", message: errorText.slice(0, 200) });
+        // Session-expired errors are routed through ErrorBubble so the user gets
+        // a retry button. The DB-backed session replay in context_loader will
+        // automatically reconstruct the DuckDB tables on the next request.
+        const isSessionExpired = /session has expired|session.*expired|expired.*session/i.test(errorText);
         setMessages((previous) => [
           ...previous,
           {
             id: crypto.randomUUID(),
-            role: "assistant",
-            content: errorText,
+            role: "assistant" as const,
+            content: isSessionExpired ? `Error: ${errorText}` : errorText,
           },
         ]);
+        break;
+      }
+      case "ping": {
+        // Server-sent keep-alive — silently ignore.
         break;
       }
       case "column_added": {

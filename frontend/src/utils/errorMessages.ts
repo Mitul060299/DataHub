@@ -63,6 +63,7 @@ export function isRetryableError(error: unknown): boolean {
     message.includes("500") ||
     message.includes("502") ||
     message.includes("503") ||
-    /taking longer than usual|complex request/i.test(message)
+    /taking longer than usual|complex request/i.test(message) ||
+    /session has expired|session.*expired|expired.*session/i.test(message)
   );
 }

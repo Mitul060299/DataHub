@@ -125,29 +125,72 @@ async def context_loader(state: AgentState) -> dict:
                 "is_view": True,
             }
 
-        # Re-register artifact tables from prior turns so their DuckDB views survive
-        # a session restart (e.g. server restart, session age > 2 h).
-        if session_id and table_registry:
-            _art_db = SessionLocal()
+        # DB-backed session replay: reconstruct intermediate pipeline tables from
+        # PipelineStepDB whenever the in-memory table_registry has no derived entries.
+        # This fires after a server restart, MemorySaver eviction, or a page refresh
+        # when the LangChain checkpoint is gone — recovering the DuckDB session from
+        # the SQL that was already executed and persisted to the steps table.
+        _has_derived = any(
+            isinstance(v, dict) and int(v.get("pipeline_step_number", 0)) > 0
+            for v in table_registry.values()
+        )
+        if session_id and not _has_derived:
+            from ....models_db import PipelineStepDB as _PipelineStepDB
+            import re as _re_replay
+            _replay_db = SessionLocal()
             try:
-                for _entry in list(table_registry.values()):
-                    if not isinstance(_entry, dict):
-                        continue
-                    if _entry.get("pipeline_step_number", 0) > 0:
-                        _art_ds_id = _entry.get("dataset_id", "")
-                        if not _art_ds_id:
-                            continue
-                        _art_ds = _art_db.query(DatasetMetaDB).filter(
-                            DatasetMetaDB.id == _art_ds_id
-                        ).first()
-                        if _art_ds and _art_ds.storage_path:
-                            _register_dataset_view(
-                                _art_ds_id,
-                                _entry["duckdb_name"],
-                                storage_path=_art_ds.storage_path,
+                _prior_steps = (
+                    _replay_db.query(_PipelineStepDB)
+                    .filter(
+                        _PipelineStepDB.session_id == session_id,
+                        _PipelineStepDB.output_table.isnot(None),
+                        _PipelineStepDB.duckdb_sql.isnot(None),
+                        _PipelineStepDB.status == "completed",
+                    )
+                    .order_by(_PipelineStepDB.step_number)
+                    .all()
+                )
+                if _prior_steps:
+                    _replay_conn = get_connection(session_id)
+                    for _ps in _prior_steps:
+                        _out_table = str(_ps.output_table)
+                        _raw_sql = str(_ps.duckdb_sql).strip()
+                        # Strip CREATE [OR REPLACE] TABLE/VIEW <name> AS prefix
+                        # to obtain the plain SELECT body for re-execution.
+                        _ct_m = _re_replay.match(
+                            r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                            _raw_sql,
+                        )
+                        _select_sql = _raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql
+                        try:
+                            _replay_conn.execute(
+                                f'CREATE OR REPLACE TABLE "{_out_table}" AS ({_select_sql})'
                             )
+                            table_registry[_out_table] = {
+                                "duckdb_name": _out_table,
+                                "dataset_id": "",
+                                "display_name": _ps.description or _out_table,
+                                "source_intent": _ps.operation or "transform",
+                                "parent_tables": list(_ps.input_tables or []),
+                                "row_count": int(_ps.row_count_after or 0),
+                                "column_names": [],
+                                "pipeline_step_number": int(_ps.step_number or 0),
+                                "is_artifact": False,
+                                "is_view": False,
+                            }
+                            _logger.info(
+                                "SESSION_REPLAY: restored table=%s step=%d session=%s",
+                                _out_table, int(_ps.step_number or 0), session_id,
+                            )
+                        except Exception as _replay_err:
+                            _logger.warning(
+                                "SESSION_REPLAY_FAILED: table=%s step=%d error=%s",
+                                _out_table, int(_ps.step_number or 0), _replay_err,
+                            )
+                            # Stop replay chain — later steps depend on this one
+                            break
             finally:
-                _art_db.close()
+                _replay_db.close()
 
     # Store the primary alias in the state so execute_step can rewrite
     # any residual "FROM dataset" references at runtime.

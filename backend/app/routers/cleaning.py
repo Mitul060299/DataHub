@@ -54,6 +54,7 @@ async def process_command(
     authorization: str | None = Header(default=None),
 ):
     async def event_stream():
+        import asyncio as _asyncio
         last_run_id: str | None = None
         try:
             stream = await CleaningController.process_command_stream(
@@ -69,38 +70,56 @@ async def process_command(
                 conversation_history=payload.conversation_history or [],
                 plan_pending_modification=payload.plan_pending_modification,
             )
-            async for event in stream:
-                if isinstance(event, dict):
-                    event_run_id = event.get("run_id")
-                    if isinstance(event_run_id, str) and event_run_id:
-                        last_run_id = event_run_id
+            # Drive the async iterator manually so we can inject ": keep-alive\n\n"
+            # SSE comments every 15 s.  This prevents Render / Caddy / nginx from
+            # closing the connection during slow LLM inference (30 s no-data timeout).
+            _aiter = stream.__aiter__()
+            _next_task: _asyncio.Task = _asyncio.create_task(_aiter.__anext__())
+            try:
+                while True:
+                    _done, _ = await _asyncio.wait({_next_task}, timeout=15.0)
+                    if not _done:
+                        yield ": keep-alive\n\n"
+                        continue
+                    try:
+                        event = _next_task.result()
+                    except StopAsyncIteration:
+                        break
+                    _next_task = _asyncio.create_task(_aiter.__anext__())
+                    if isinstance(event, dict):
+                        event_run_id = event.get("run_id")
+                        if isinstance(event_run_id, str) and event_run_id:
+                            last_run_id = event_run_id
 
-                    if event.get("type") == "agent.done":
-                        done_run_id = event.get("run_id")
-                        if not done_run_id and isinstance(event.get("pipeline_steps"), list):
-                            for step in event.get("pipeline_steps", []):
-                                if isinstance(step, dict) and isinstance(step.get("run_id"), str) and step.get("run_id"):
-                                    done_run_id = step.get("run_id")
-                                    break
-                        if not done_run_id and payload.plan_approved:
-                            _db = SessionLocal()
-                            try:
-                                latest_agent_run = (
-                                    _db.query(PipelineRunV2DB)
-                                    .filter(PipelineRunV2DB.input_dataset_id == dataset_id)
-                                    .filter(PipelineRunV2DB.triggered_by == "agent")
-                                    .order_by(PipelineRunV2DB.created_at.desc())
-                                    .first()
-                                )
-                                if latest_agent_run:
-                                    done_run_id = str(latest_agent_run.id)
-                            finally:
-                                _db.close()
-                        event = {
-                            **event,
-                            "run_id": done_run_id or last_run_id,
-                        }
-                yield _sse(event)
+                        if event.get("type") == "agent.done":
+                            done_run_id = event.get("run_id")
+                            if not done_run_id and isinstance(event.get("pipeline_steps"), list):
+                                for step in event.get("pipeline_steps", []):
+                                    if isinstance(step, dict) and isinstance(step.get("run_id"), str) and step.get("run_id"):
+                                        done_run_id = step.get("run_id")
+                                        break
+                            if not done_run_id and payload.plan_approved:
+                                _db = SessionLocal()
+                                try:
+                                    latest_agent_run = (
+                                        _db.query(PipelineRunV2DB)
+                                        .filter(PipelineRunV2DB.input_dataset_id == dataset_id)
+                                        .filter(PipelineRunV2DB.triggered_by == "agent")
+                                        .order_by(PipelineRunV2DB.created_at.desc())
+                                        .first()
+                                    )
+                                    if latest_agent_run:
+                                        done_run_id = str(latest_agent_run.id)
+                                finally:
+                                    _db.close()
+                            event = {
+                                **event,
+                                "run_id": done_run_id or last_run_id,
+                            }
+                    yield _sse(event)
+            finally:
+                if not _next_task.done():
+                    _next_task.cancel()
         except HTTPException:
             raise
         except Exception as exc:

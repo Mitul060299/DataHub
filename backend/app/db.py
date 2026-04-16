@@ -53,8 +53,8 @@ if _IS_TRANSACTION_MODE:
     engine = create_engine(
         _DB_URL,
         pool_pre_ping=True,
-        pool_size=8,
-        max_overflow=12,
+        pool_size=3,        # reduced from 8 — each idle connection holds ~5 MB
+        max_overflow=5,     # reduced from 12 — burst headroom
         pool_recycle=300,
         pool_timeout=15,
         connect_args=_CONNECT_ARGS,

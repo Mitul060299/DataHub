@@ -357,6 +357,13 @@ async def create_tables() -> None:
     logger.warning("CORS ORIGINS LOADED: %s", settings.cors_origins)
     logger.warning("GROQ KEY SET: %s", bool(settings.groq_api_key))
     logger.warning("APP ENV: %s", settings.app_env)
+    # Log process RSS so we can diagnose OOM kills on Render free tier (512 MB cap).
+    try:
+        import psutil as _psutil
+        _rss = _psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+        logger.warning("STARTUP_RSS: %.0f MB (after all module imports)", _rss)
+    except Exception:
+        pass
     if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
         # Run as a background task so it never blocks uvicorn from binding the
         # port.  On Render, if this awaits synchronously (~30 Supabase round-

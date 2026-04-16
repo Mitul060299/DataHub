@@ -27,7 +27,10 @@ _BLOCKED_DML = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-import duckdb
+# duckdb is imported lazily inside get_connection() so the ~100 MB native
+# library is not loaded into process RSS until the first AI pipeline query.
+# Type annotations stay correct because this file uses `from __future__ import
+# annotations` (all annotations are treated as strings at runtime).
 
 _lock = threading.Lock()
 _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
@@ -150,6 +153,7 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
         # Keep the per-session limit low (96 MB) so that even 2–3 concurrent
         # sessions stay well below the 512 MB Render free-tier process limit.
         # DuckDB throws a catchable OutOfMemoryError instead of corrupting the heap.
+        import duckdb  # lazy import — defers ~100 MB native library load until first AI query
         new_conn = duckdb.connect(database=":memory:")
         new_conn.execute("SET memory_limit='96MB'")
         try:

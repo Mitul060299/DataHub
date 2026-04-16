@@ -205,7 +205,7 @@ function VersionRow({
           <p style={{ margin: 0, fontSize: 12, color: "var(--tx0)" }}>{version.version_note}</p>
         ) : null}
         <p style={{ margin: 0, fontSize: 11, color: "var(--tx2)" }}>
-          {version.row_count.toLocaleString()} rows · {version.columns.length} cols · {date}
+          {(version.row_count ?? 0).toLocaleString()} rows · {(version.columns ?? []).length} cols · {date}
           {version.uploaded_by ? ` · by ${version.uploaded_by}` : ""}
         </p>
       </div>

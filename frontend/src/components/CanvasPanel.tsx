@@ -237,14 +237,14 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         </div>
       )}
-      <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
-        <div style={{ display: "inline-flex", gap: 6 }}>
-          <button className="btn" onClick={() => setTab("data")} style={{ background: tab === "data" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "data" ? "var(--acg)" : "var(--bd2)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconTable size={14} />Data</span>
+      <div style={{ height: 38, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", background: "var(--bg1)" }}>
+        <div style={{ display: "inline-flex", gap: 4 }}>
+          <button className="btn" onClick={() => setTab("data")} style={{ height: 28, padding: "0 10px", background: tab === "data" ? "var(--acl)" : "transparent", borderColor: tab === "data" ? "var(--acg)" : "transparent", color: tab === "data" ? "var(--ac)" : "var(--tx1)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}><IconTable size={13} />Data</span>
           </button>
-          <button className="btn" onClick={() => setTab("pipeline")} style={{ background: tab === "pipeline" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "pipeline" ? "var(--acg)" : "var(--bd2)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <IconGitBranch size={14} />Pipeline
+          <button className="btn" onClick={() => setTab("pipeline")} style={{ height: 28, padding: "0 10px", background: tab === "pipeline" ? "var(--acl)" : "transparent", borderColor: tab === "pipeline" ? "var(--acg)" : "transparent", color: tab === "pipeline" ? "var(--ac)" : "var(--tx1)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+              <IconGitBranch size={13} />Pipeline
               {steps.length > 0 && (
                 <span style={{ background: "var(--acg)", color: "var(--ac)", fontSize: 9, fontWeight: 700, borderRadius: 999, padding: "0 4px", lineHeight: "14px" }}>
                   {steps.length}
@@ -252,26 +252,19 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               )}
             </span>
           </button>
-          <button data-tour="canvas-tab" className="btn" onClick={() => setTab("canvas")} style={{ background: tab === "canvas" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "canvas" ? "var(--acg)" : "var(--bd2)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconBarChart size={14} />Canvas</span>
+          <button data-tour="canvas-tab" className="btn" onClick={() => setTab("canvas")} style={{ height: 28, padding: "0 10px", background: tab === "canvas" ? "var(--acl)" : "transparent", borderColor: tab === "canvas" ? "var(--acg)" : "transparent", color: tab === "canvas" ? "var(--ac)" : "var(--tx1)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}><IconBarChart size={13} />Canvas</span>
           </button>
           {pipelineId && (
-            <button className="btn" onClick={() => setTab("schedule")} style={{ background: tab === "schedule" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "schedule" ? "var(--acg)" : "var(--bd2)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>⏱ Schedule</span>
+            <button className="btn" onClick={() => setTab("schedule")} style={{ height: 28, padding: "0 10px", background: tab === "schedule" ? "var(--acl)" : "transparent", borderColor: tab === "schedule" ? "var(--acg)" : "transparent", color: tab === "schedule" ? "var(--ac)" : "var(--tx1)" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>⏱ Schedule</span>
             </button>
           )}
           {dataset?.id && (
-            <button className="btn" onClick={() => setTab("history")} style={{ background: tab === "history" ? "var(--acl)" : "var(--bg3)", borderColor: tab === "history" ? "var(--acg)" : "var(--bd2)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>🕘 History</span>
+            <button className="btn" onClick={() => setTab("history")} style={{ height: 28, padding: "0 10px", background: tab === "history" ? "var(--acl)" : "transparent", borderColor: tab === "history" ? "var(--acg)" : "transparent", color: tab === "history" ? "var(--ac)" : "var(--tx1)" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>🕘 History</span>
             </button>
           )}
-          <span className="mono" style={{ height: 30, padding: "0 10px", borderRadius: "var(--r6)", background: "var(--bg3)", border: "1px solid var(--bd2)", display: "inline-flex", alignItems: "center", color: "var(--tx1)" }}>
-            {sessionPreviewRows && sessionPreviewRows.length > 0
-              ? (liveArtifact?.stepLabel ?? "cleaned preview")
-              : showingOriginal
-              ? `${dataset?.name ?? "dataset"} (original)`
-              : (dataset?.name ?? "No dataset")}
-          </span>
         </div>
 
         {/* Export dropdown */}

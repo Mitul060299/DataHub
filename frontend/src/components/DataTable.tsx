@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCalculatedColumn, deleteCalculatedColumn } from "../api";
 import type { CalculatedColumn } from "../types";
-import { IconFilter, IconSearch } from "./Icons";
+import { IconFilter } from "./Icons";
 
 type SortDirection = "asc" | "desc";
 
@@ -27,8 +27,7 @@ const statusColor: Record<string, string> = {
 };
 
 export function DataTable({ datasetId, loading, rows, columns, calculatedColumns, stepCount, lastAction, onColumnsChanged }: DataTableProps) {
-  // ── search & sort ─────────────────────────────────────────────────────────
-  const [query, setQuery] = useState("");
+  // ── sort ────────────────────────────────────────────────────────────────────
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -48,21 +47,8 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
   const [columnsError, setColumnsError] = useState<string | null>(null);
 
   // ── refs ─────────────────────────────────────────────────────────────────
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const filterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Global search shortcut
-  useEffect(() => {
-    const focusHandler = () => {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-    };
-    window.addEventListener("datahub:datatable:focus-search", focusHandler);
-    return () => {
-      window.removeEventListener("datahub:datatable:focus-search", focusHandler);
-    };
-  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -102,11 +88,7 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
   }, [rows, columns]);
 
   const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
     let nextRows = rows;
-    if (q) {
-      nextRows = rows.filter((row) => Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(q)));
-    }
     // Per-column checkbox filters
     for (const [col, selected] of Object.entries(columnFilters)) {
       const selectedSet = new Set(selected);
@@ -126,7 +108,7 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
       });
     }
     return nextRows;
-  }, [rows, query, columnFilters, sortKey, sortDirection]);
+  }, [rows, columnFilters, sortKey, sortDirection]);
 
   const handleSort = (column: string) => {
     if (sortKey === column) {
@@ -252,30 +234,20 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
 
   return (
     <div className="panel" style={{ margin: 8, display: "flex", flexDirection: "column", minHeight: 0, height: "calc(100% - 16px)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: 8, borderBottom: "1px solid var(--bd)" }}>
-        <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
-          <IconSearch size={14} className="search-icon" />
-          <input
-            ref={searchInputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search rows…"
-            style={{ width: "100%", height: 28, border: "1px solid var(--bd2)", borderRadius: "var(--r6)", background: "var(--bg2)", padding: "0 10px 0 28px" }}
-          />
-          <style>{".search-icon { position: absolute; left: 8px; top: 7px; color: var(--tx1); }"}</style>
-        </div>
-        {activeFilterCount > 0 && (
+      {activeFilterCount > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "4px 8px", borderBottom: "1px solid var(--bd)", gap: 6, flexShrink: 0 }}>
+          <span className="mono" style={{ fontSize: 11, color: "var(--tx2)" }}>{activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active</span>
           <button
             className="btn"
-            style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", color: "var(--ac)", border: "1px solid var(--ac)" }}
+            style={{ height: 24, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", color: "var(--ac)", border: "1px solid var(--ac)", padding: "0 8px" }}
             onClick={clearAllFilters}
             title="Clear all column filters"
           >
-            <IconFilter size={12} />
-            <span className="mono" style={{ fontSize: 11 }}>Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}</span>
+            <IconFilter size={11} />
+            <span className="mono" style={{ fontSize: 11 }}>Clear all</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div style={{ padding: 8, borderBottom: "1px solid var(--bd)", display: "grid", gap: 8 }}>
         <div className="mono" style={{ color: "var(--tx1)", fontSize: 11 }}>Calculated columns</div>
@@ -422,7 +394,7 @@ export function DataTable({ datasetId, loading, rows, columns, calculatedColumns
       </div>
 
       <div className="mono" style={{ borderTop: "1px solid var(--bd)", padding: "7px 10px", color: "var(--tx1)", fontSize: 11 }}>
-        {filteredRows.length}{activeFilterCount > 0 || query ? ` of ${rows.length}` : ""} rows · {columns.length} cols · {stepCount} steps applied · Last: {lastAction}
+        {filteredRows.length}{activeFilterCount > 0 ? ` of ${rows.length}` : ""} rows · {columns.length} cols · {stepCount} steps applied · Last: {lastAction}
       </div>
 
       {/* Column filter dropdown — position:fixed so it escapes the scroll container */}

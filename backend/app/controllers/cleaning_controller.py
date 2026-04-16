@@ -65,9 +65,9 @@ def _normalize_sql_for_replay(sql: str, alias: str | None) -> str:
             return re.sub(rf"\b{re.escape(detected)}\b", "dataset", sql, flags=re.IGNORECASE)
     return sql
 from ..models_db import DatasetMetaDB, TransformationHistoryDB
-from ..services.ai_agent_service import AIAgentService
-from ..services.agent_graph import AgentGraphService
-from ..services.data_transformation_service import DataTransformationService
+# AIAgentService, AgentGraphService, DataTransformationService are imported
+# lazily inside the static methods that use them so that langgraph, pandas,
+# and redis are NOT loaded at startup — they save ~30-40 MB of startup RSS.
 
 
 class CleaningController:
@@ -82,6 +82,7 @@ class CleaningController:
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
+        from ..services.ai_agent_service import AIAgentService  # lazy
         return AIAgentService.analyze_dataset(dataset_id, db)
 
     @staticmethod
@@ -99,6 +100,7 @@ class CleaningController:
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
+        from ..services.agent_graph import AgentGraphService  # lazy: loads langgraph on first AI call
         return AgentGraphService.process_command(dataset_id, message, conversation_history, db)
 
     @staticmethod
@@ -128,6 +130,7 @@ class CleaningController:
         finally:
             _db.close()
 
+        from ..services.agent_graph import AgentGraphService  # lazy: loads langgraph on first AI call
         return AgentGraphService.process_command_stream(
             dataset_id=dataset_id,
             user_message=message,
@@ -157,6 +160,7 @@ class CleaningController:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         user_id = get_current_subject(authorization) or "unknown"
+        from ..services.data_transformation_service import DataTransformationService  # lazy
         return DataTransformationService.execute_transformation(
             dataset_id,
             user_id,
@@ -168,6 +172,7 @@ class CleaningController:
     def get_job_status(job_id: str, authorization: str | None) -> dict[str, Any]:
         role = get_current_role(authorization)
         require_role("viewer", role)
+        from ..services.data_transformation_service import DataTransformationService  # lazy
         return DataTransformationService.get_job_status(job_id)
 
     @staticmethod
@@ -226,6 +231,7 @@ class CleaningController:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         user_id = get_current_subject(authorization) or "unknown"
+        from ..services.data_transformation_service import DataTransformationService  # lazy
         try:
             return DataTransformationService.undo_last_transformation(dataset_id, user_id, db)
         except ValueError as exc:
@@ -259,6 +265,7 @@ class CleaningController:
         role = get_current_role(authorization)
         require_role("editor", role)
 
+        from ..services.data_transformation_service import DataTransformationService  # lazy
         user_id = get_current_subject(authorization) or "unknown"
         current_dataset_id = pivot_dataset_id
         replayed: list[dict[str, Any]] = []

@@ -494,8 +494,7 @@ async def execute_step(state: AgentState) -> dict:
                     # Write ops: clean, filter, transform, pivot, union, reconcile
                     # SQL may be a bare SELECT or a CREATE TABLE AS SELECT — strip any
                     # CREATE [OR REPLACE] TABLE/VIEW <name> AS prefix so that
-                    # register_table_from_sql (which adds its own CREATE OR REPLACE TABLE)
-                    # receives only the query body.
+                    # register_view_from_sql receives only the query body.
                     output_table = str(
                         parameters.get("output_table")
                         or parameters.get("output_name")
@@ -504,13 +503,33 @@ async def execute_step(state: AgentState) -> dict:
                     if not step_sql:
                         raise ValueError(f"No SQL provided for {intent_key} step")
 
+                    # Keep original SQL for display; strip prefix for execution.
+                    original_step_sql = step_sql
                     import re as _re_step
+                    _ddl_name: str | None = None  # the name from the CREATE TABLE clause, if any
                     _ct_match = _re_step.match(
-                        r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                        r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+(\S+)\s+AS\s+",
                         step_sql,
                     )
                     if _ct_match:
+                        _ddl_name = _ct_match.group(1).strip('"\'`')
                         step_sql = step_sql[_ct_match.end():].strip()
+
+                    # If this step's SQL references a DDL-named table created by a prior
+                    # step (which was registered under its generated output_table name),
+                    # rewrite those references → the actual registered name.
+                    for _reg_name, _reg_entry in list(table_registry.items()):
+                        if not isinstance(_reg_entry, dict):
+                            continue
+                        _reg_duckdb = _reg_entry.get("duckdb_name", "")
+                        _reg_ddl = _reg_entry.get("ddl_name", "")
+                        if _reg_ddl and _reg_ddl != _reg_duckdb:
+                            # Replace references to the DDL name with the actual view name
+                            step_sql = _re_step.sub(
+                                rf"\b{_re_step.escape(_reg_ddl)}\b",
+                                _reg_duckdb,
+                                step_sql,
+                            )
 
                     preview_rows: list = []
                     column_schema: list = []
@@ -544,6 +563,16 @@ async def execute_step(state: AgentState) -> dict:
 
                     if session_id:
                         register_view_from_sql(session_id, output_table, step_sql)
+                        # If the agent named a CREATE TABLE, also register that name
+                        # as an alias view → the generated output_table so follow-on
+                        # steps can reference either name without "Table not found".
+                        if _ddl_name and _ddl_name != output_table:
+                            try:
+                                get_connection(session_id).execute(
+                                    f'CREATE OR REPLACE VIEW "{_ddl_name}" AS SELECT * FROM "{output_table}"'
+                                )
+                            except Exception:
+                                pass
                         # Try to get row count from new table
                         try:
                             count_rows = execute_in_session(session_id, f"SELECT COUNT(*) AS n FROM {output_table}")
@@ -649,7 +678,7 @@ async def execute_step(state: AgentState) -> dict:
                     new_entry: TableRegistryEntry = {
                         "duckdb_name": output_table,
                         "dataset_id": "",
-                        "display_name": str(parameters.get("display_name") or output_table),
+                        "display_name": str(parameters.get("display_name") or _ddl_name or output_table),
                         "source_intent": intent_key,
                         "parent_tables": input_tables,
                         "row_count": rows_out or 0,
@@ -657,6 +686,7 @@ async def execute_step(state: AgentState) -> dict:
                         "pipeline_step_number": step["step_number"],
                         "is_artifact": False,
                         "is_view": False,
+                        "ddl_name": _ddl_name or "",  # original CREATE TABLE name for cross-step resolution
                     }
                     table_registry[output_table] = new_entry
 
@@ -668,7 +698,7 @@ async def execute_step(state: AgentState) -> dict:
                         "rows_changed": rows_changed if session_id else None,
                         "run_id": None,
                         "output_dataset_id": state.get("dataset_id"),
-                        "sql": step_sql,
+                        "sql": original_step_sql,  # show original (with CREATE TABLE prefix) to user
                         "error": None,
                         "output_table": output_table,
                         "session_table_name": output_table,

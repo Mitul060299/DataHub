@@ -1,3 +1,5 @@
+import logging as _logging
+
 from ..state import AgentState, TableRegistryEntry
 from ...duckdb_service import DuckDBService
 from ...calculated_columns_service import CalculatedColumnsService
@@ -7,6 +9,8 @@ from ...object_storage import StorageService
 from ....db import SessionLocal
 from ....models_db import ChatTemplateDB, DatasetMetaDB
 import re as _re
+
+_logger = _logging.getLogger(__name__)
 
 
 def _sanitize_alias(name: str) -> str:
@@ -80,8 +84,11 @@ async def context_loader(state: AgentState) -> dict:
         try:
             file_path = StorageService.get_query_path(storage_path)
             register_view(session_id, alias, file_path)
-        except Exception:
-            pass
+        except Exception as _exc:
+            _logger.warning(
+                "VIEW_REGISTER_FAILED: alias=%s storage_path=%s error=%s",
+                alias, storage_path, _exc,
+            )
 
     if session_id:
         try:

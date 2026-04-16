@@ -999,10 +999,24 @@ class PipelineEngine:
         output_dataset_id = dataset_id
 
         # ── pandas-based transform / ai_transform (template steps) ──────────
-        if step_type in {'transform', 'ai_transform'} and not sql:
+        # NL pipeline steps use types: filter, sort, aggregate, ai_analysis.
+        # These are aliases for transform/ai_transform in _apply_pipeline_operation.
+        _NL_TYPE_MAP = {
+            'filter': 'transform',
+            'sort': 'transform',
+            'aggregate': 'transform',
+            'ai_analysis': 'ai_transform',
+        }
+        _PANDAS_TYPES = {'transform', 'ai_transform'} | set(_NL_TYPE_MAP.keys())
+        if step_type in _PANDAS_TYPES and not sql:
+            # Map NL pipeline types to the internal names _apply_pipeline_operation uses.
+            # validate_rules is implemented under "transform" even though NL emits ai_analysis.
+            _eff_type = _NL_TYPE_MAP.get(step_type, step_type)
+            if step_type == 'ai_analysis' and operation == 'validate_rules':
+                _eff_type = 'transform'
             df = pd.DataFrame(current_rows)
             if not df.empty:
-                df = _apply_pipeline_operation(df, step_type, operation, config)
+                df = _apply_pipeline_operation(df, _eff_type, operation, config)
             step_result_rows = (
                 df.astype(object).where(pd.notnull(df), None).to_dict(orient='records')
                 if not df.empty else []

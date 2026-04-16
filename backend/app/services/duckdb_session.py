@@ -126,6 +126,31 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
         # OS process — DuckDB throws a catchable exception instead.
         new_conn = duckdb.connect(database=":memory:")
         new_conn.execute("SET memory_limit='256MB'")
+        # Install/load httpfs so views over S3/HTTPS-signed-URL parquet files work.
+        try:
+            new_conn.execute("INSTALL httpfs;")
+            new_conn.execute("LOAD httpfs;")
+        except Exception:
+            pass
+        # Mirror DuckDBService storage-credential configuration so session views
+        # can reach the same S3/R2 bucket that uploaded the parquet files.
+        try:
+            from ..config import settings as _settings
+            _provider = (_settings.storage_provider or "local").lower()
+            if _provider == "r2":
+                new_conn.execute(
+                    "SET s3_endpoint=?",
+                    [f"{_settings.r2_account_id}.r2.cloudflarestorage.com"],
+                )
+                new_conn.execute("SET s3_access_key_id=?", [_settings.r2_access_key_id])
+                new_conn.execute("SET s3_secret_access_key=?", [_settings.r2_secret_access_key])
+                new_conn.execute("SET s3_url_style='path'")
+            elif _provider == "s3":
+                new_conn.execute("SET s3_region=?", [_settings.s3_region])
+                new_conn.execute("SET s3_access_key_id=?", [_settings.s3_access_key_id])
+                new_conn.execute("SET s3_secret_access_key=?", [_settings.s3_secret_access_key])
+        except Exception:
+            pass
         _sessions[session_id] = new_conn
         _last_used[session_id] = time.monotonic()
         return new_conn

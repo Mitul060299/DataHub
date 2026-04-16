@@ -299,7 +299,19 @@ class DuckDBService:
         normalized = (sql or "").strip()
         if not normalized:
             return normalized
-        normalized = re.sub(r"\btable\b", "dataset", normalized, flags=re.IGNORECASE)
+        # Strip "CREATE [OR REPLACE] [TEMP] TABLE <name> AS" prefix.
+        # In the transform_rows context only the SELECT result matters;
+        # the source table is always registered as 'dataset', so the CREATE
+        # would fail anyway.  Extracting the bare SELECT fixes the error and
+        # ensures the right rows are returned.
+        normalized = re.sub(
+            r"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+\S+\s+AS\s+",
+            "", normalized, flags=re.IGNORECASE,
+        )
+        # Replace bare `table` or `dataset_rows` used as a table-name alias.
+        # Restrict to FROM/JOIN positions so we don't corrupt any remaining DDL
+        # keywords (e.g. DROP TABLE, CREATE TABLE in multi-statement SQL).
+        normalized = re.sub(r"\b(FROM|JOIN)\s+table\b", r"\1 dataset", normalized, flags=re.IGNORECASE)
         return re.sub(r"\bdataset_rows\b", "dataset", normalized, flags=re.IGNORECASE)
 
     @staticmethod

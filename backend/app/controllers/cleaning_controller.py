@@ -35,8 +35,13 @@ def _normalize_sql_for_replay(sql: str, alias: str | None) -> str:
     This function replaces all word-boundary occurrences of *alias* with 'dataset'
     so the existing transform_rows path works correctly.
     """
-    # Standard legacy normalizations
-    sql = re.sub(r"\btable\b", "dataset", sql, flags=re.IGNORECASE)
+    # Strip CREATE TABLE ... AS prefix — only the SELECT part is needed.
+    sql = re.sub(
+        r"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+\S+\s+AS\s+",
+        "", sql, flags=re.IGNORECASE,
+    )
+    # Legacy alias normalizations (safe: only FROM/JOIN positions)
+    sql = re.sub(r"\b(FROM|JOIN)\s+table\b", r"\1 dataset", sql, flags=re.IGNORECASE)
     sql = re.sub(r"\bdataset_rows\b", "dataset", sql, flags=re.IGNORECASE)
     if not alias or alias == "dataset":
         return sql

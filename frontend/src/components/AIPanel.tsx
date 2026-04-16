@@ -150,10 +150,10 @@ function DataProfileCard({ profile, issues }: { profile: DataProfile; issues?: Q
         </div>
       ) : null}
 
-      {/* Issues breakdown */}
-      {issues && issues.length > 0 ? (
+      {/* Issues breakdown — only show issues that actually have occurrences */}
+      {issues && issues.filter((iss) => (iss.count ?? 1) > 0).length > 0 ? (
         <div style={{ borderTop: "1px solid #27272a" }}>
-          {issues.map((issue, i) => {
+          {issues.filter((iss) => (iss.count ?? 1) > 0).map((issue, i) => {
             const severityColor = issue.severity === "high" ? "#f87171" : issue.severity === "medium" ? "#fbbf24" : "#a3a3a3";
             const typeLabel = issue.type.replace(/_/g, " ");
             return (

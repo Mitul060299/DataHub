@@ -276,14 +276,9 @@ export function WorkspacePage() {
         dataError={datasetError ?? undefined}
         columns={data?.columns ?? []}
         rows={data?.rows ?? []}
-        calculatedColumns={data?.calculatedColumns ?? []}
         lastAction={steps.length ? steps[steps.length - 1].operation : "Idle"}
         onSheetsExport={() => setSheetsExportOpen(true)}
         onImport={() => setImportOpen(true)}
-        onColumnsChanged={() => {
-          setDatasetRefreshNonce((value) => value + 1);
-          void refetch();
-        }}
         onArtifactSaved={() => setDatasetRefreshNonce((value) => value + 1)}
         sessionPreviewRows={showingOriginal ? undefined : sessionPreview?.rows}
         sessionPreviewColumns={showingOriginal ? undefined : sessionPreview?.columns}

@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchDatasetPage, listCalculatedColumns } from "../api";
-import type { CalculatedColumn } from "../types";
+import { fetchDatasetPage } from "../api";
 
 export type DatasetPreviewResult = {
   columns: string[];
   rows: Record<string, unknown>[];
   totalRows: number;
-  calculatedColumns: CalculatedColumn[];
 };
 
 export function useDataset(datasetId?: string) {
@@ -27,16 +25,12 @@ export function useDataset(datasetId?: string) {
     setLoading(true);
     setError(null);
     try {
-      const [response, calculatedColumns] = await Promise.all([
-        fetchDatasetPage(datasetId, 0, 100),
-        listCalculatedColumns(datasetId),
-      ]);
+      const response = await fetchDatasetPage(datasetId, 0, 100);
       if (gen !== genRef.current) return; // superseded by a newer load
       setData({
         columns: response.columns ?? [],
         rows: response.rows ?? [],
         totalRows: response.total_rows ?? 0,
-        calculatedColumns,
       });
     } catch (err) {
       if (gen !== genRef.current) return;

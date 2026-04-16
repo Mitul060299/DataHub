@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import type { PipelineStep } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
-import type { CalculatedColumn } from "../types";
 import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
@@ -22,10 +21,8 @@ interface CanvasPanelProps {
   dataError?: string;
   columns: string[];
   rows: Record<string, unknown>[];
-  calculatedColumns: CalculatedColumn[];
   lastAction: string;
   onImport: () => void;
-  onColumnsChanged: () => void;
   onSheetsExport?: () => void;
   onArtifactSaved?: () => void;
   /** 50-row preview from the latest AI transform (session-only, not persisted) */
@@ -56,7 +53,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, calculatedColumns, lastAction, onImport, onColumnsChanged, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -533,14 +530,11 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                     BEFORE &nbsp;·&nbsp; {diffStep.inputDataset?.name ?? "input"} &nbsp;·&nbsp; {(diffStep.row_count_before ?? diffBefore?.rows.length ?? 0).toLocaleString()} rows
                   </div>
                   <DataTable
-                    datasetId={diffStep.inputDataset?.id}
                     loading={false}
                     rows={diffBefore?.rows ?? []}
                     columns={diffBefore?.cols ?? []}
-                    calculatedColumns={[]}
                     stepCount={0}
                     lastAction=""
-                    onColumnsChanged={onColumnsChanged}
                   />
                 </div>
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -548,14 +542,11 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                     AFTER &nbsp;·&nbsp; {diffStep.outputDataset?.name ?? "output"} &nbsp;·&nbsp; {(diffStep.row_count_after ?? diffAfter?.rows.length ?? 0).toLocaleString()} rows
                   </div>
                   <DataTable
-                    datasetId={diffStep.outputDataset?.id}
                     loading={false}
                     rows={diffAfter?.rows ?? []}
                     columns={diffAfter?.cols ?? []}
-                    calculatedColumns={[]}
                     stepCount={0}
                     lastAction=""
-                    onColumnsChanged={onColumnsChanged}
                   />
                 </div>
               </div>
@@ -573,14 +564,11 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         ) : tab === "data" ? (
           <DataTable
-            datasetId={dataset?.id}
             loading={viewingStepIndex !== null ? timelineLoading : loading}
             rows={effectiveRows}
             columns={effectiveCols}
-            calculatedColumns={calculatedColumns}
             stepCount={steps.length}
             lastAction={viewingStepIndex !== null ? "" : lastAction}
-            onColumnsChanged={onColumnsChanged}
           />
         ) : (
           <CanvasView workspaceId={workspaceId} projectId={projectId} />

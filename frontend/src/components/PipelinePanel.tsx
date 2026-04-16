@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { IconLayers, IconX } from "./Icons";
 import { PipelineSection } from "./PipelineSection";
-import { ScheduleModal } from "./modals/ScheduleModal";
 import { usePipeline } from "../hooks/usePipeline";
 import { usePipelineContext } from "../contexts/PipelineContext";
 
@@ -12,9 +11,8 @@ interface PipelinePanelProps {
 }
 
 export function PipelinePanel({ width, onClose, onRunPipeline }: PipelinePanelProps) {
-  const { steps, setScheduleInfo } = usePipelineContext();
-  const { exportPipeline, schedule } = usePipeline();
-  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const { steps } = usePipelineContext();
+  const { exportPipeline } = usePipeline();
 
   const lastStep = steps[steps.length - 1];
   const lastRowCount = lastStep?.outputDataset?.rowCount ?? lastStep?.row_count_after ?? null;
@@ -98,21 +96,11 @@ export function PipelinePanel({ width, onClose, onRunPipeline }: PipelinePanelPr
       {/* ── Pipeline steps content ── */}
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         <PipelineSection
-          onSchedule={() => setScheduleModalOpen(true)}
           onExport={() => exportPipeline(steps)}
           hideHeader
           onRunPipeline={onRunPipeline}
         />
       </div>
-
-      <ScheduleModal
-        open={scheduleModalOpen}
-        onClose={() => setScheduleModalOpen(false)}
-        onConfirm={(payload) => {
-          setScheduleInfo(payload);
-          void schedule("default", payload.cron, payload.autoRefreshOnUpload);
-        }}
-      />
     </aside>
   );
 }

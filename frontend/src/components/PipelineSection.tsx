@@ -8,8 +8,6 @@ import { api } from "../api";
 import { TemplatePickerModal } from "./modals/TemplatePickerModal";
 import { WORKFLOW_TEMPLATES } from "../lib/workflowTemplates";
 
-const FLAT_FILE_FORMATS = new Set(["csv", "xlsx", "xls", "excel", "json", "parquet", "txt", "tsv"]);
-
 function getOperationIcon(op: string) {
   const n = op.toLowerCase();
   if (n.includes("filter")) return <IconFilter size={12} />;
@@ -23,17 +21,15 @@ function getOperationIcon(op: string) {
 }
 
 interface PipelineSectionProps {
-  onSchedule: () => void;
   onExport: () => void;
   hideHeader?: boolean;
   /** Called when the user clicks "Run Applied Steps" — replays the pipeline via the cleaning API */
   onRunPipeline?: () => Promise<void>;
 }
 
-export function PipelineSection({ onSchedule, onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
+export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact } = usePipelineContext();
   const { activeDataset, setActiveDataset } = useWorkspaceContext();
-  const { limits } = useUser();
 
   const [open, setOpen] = useState(true);
   const [undoing, setUndoing] = useState(false);
@@ -48,18 +44,6 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false, onRu
   const importFileRef = useRef<HTMLInputElement>(null);
   const [pendingAction, setPendingAction] = useState<{ message: string; run: () => Promise<void> } | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
-
-  const planAllowsScheduling = limits.features.scheduledPipelines;
-  const isFlatFile = Boolean(
-    activeDataset?.format &&
-    FLAT_FILE_FORMATS.has(activeDataset.format.toLowerCase()),
-  );
-  const canSchedule = planAllowsScheduling && !isFlatFile;
-  const scheduleDisabledReason = !planAllowsScheduling
-    ? "Upgrade to Professional or higher to enable pipeline scheduling."
-    : isFlatFile
-    ? "Scheduling is only available for database connections, not flat files (CSV, Excel, etc.)."
-    : "";
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -606,16 +590,7 @@ export function PipelineSection({ onSchedule, onExport, hideHeader = false, onRu
             {undoing ? "Undoing..." : "Undo Last"}
           </button>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-            <button
-              className="btn"
-              onClick={canSchedule ? onSchedule : undefined}
-              disabled={!canSchedule}
-              title={canSchedule ? "Schedule pipeline" : scheduleDisabledReason}
-              style={{ opacity: canSchedule ? 1 : 0.35, cursor: canSchedule ? "pointer" : "not-allowed" }}
-            >
-              Schedule
-            </button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
             <button className="btn" onClick={() => importFileRef.current?.click()}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconUpload size={14} />Import</span></button>
           </div>

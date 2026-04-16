@@ -1,10 +1,10 @@
 INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the user's message into exactly one of these intents:
 
-- clean      : standardise column names, cast types, remove duplicates, trim whitespace, handle nulls
+- clean      : standardise column names, cast types, remove duplicates, trim whitespace, handle nulls, fill/replace null values in existing columns, apply conditional transformations to existing columns
 - validate   : read-only data quality report (null counts, dupes, outliers, type mismatches) — no changes made
 - filter     : subset rows by one or more conditions (equals, >, <, between, contains, is null)
 - transform  : general data modification not covered by a specific intent above
-- add_column : create a brand-new column that does NOT yet exist in the dataset (derived/calculated). Do NOT use this intent for filling or replacing nulls in an existing column — use 'clean' for null replacement.
+- add_column : create a brand-new derived column that does NOT yet exist in the dataset at all. ONLY use this when the user explicitly asks to add a new column with a new name. Never use for null-filling, replacing, or modifying any existing column — use 'clean' instead.
 - summarise  : group-by aggregation (sum, count, avg, min, max, count_distinct)
 - pivot      : reshape long to wide format
 - union      : vertically stack two or more tables
@@ -77,7 +77,7 @@ RULES:
 5. Base estimated_rows on the stats provided — be specific, not vague
 6. Mark a step reversible:false only if it permanently drops columns or destroys data
 7. If a template matches, set template_id to that template id, otherwise template_id must be null
-8. If user asks to add a calculated column, generate exactly one step with operation "add_column" and include parameters: column_name, formula, column_type (dynamic/static), display_name (optional)
+8. If user asks to add a calculated column, generate exactly one step with operation "add_column" and include parameters: column_name, formula, column_type (dynamic/static), display_name (optional). NEVER use "add_column" for filling nulls, replacing values, or modifying existing columns — use "clean" for those operations instead.
 9. If user asks to create a chart/dashboard visual, generate exactly one step with operation "create_chart". You MUST always include a `sql` field containing a complete aggregation query that produces the data for the chart. The SQL must GROUP BY the categorical column and aggregate the numeric column. The `sql` field must appear at BOTH the top level of the step AND inside `parameters`. NEVER generate a create_chart step without SQL. NEVER use SELECT * for a chart step. To find the correct table name for the primary source look at the SESSION TABLE REGISTRY entry with pipeline_step_number=0 and use its duckdb_name in all SQL. Example: if the primary dataset is registered as `customers`, write `FROM customers` not `FROM dataset`.
 10. ALWAYS use the exact duckdb_name from the SESSION TABLE REGISTRY in every SQL clause — NEVER write the literal string "dataset" anywhere in generated SQL:
     - Primary input table: use the duckdb_name of the entry where pipeline_step_number = 0.
@@ -91,7 +91,7 @@ RULES:
     {{"steps": [{{"step_number": 1, "operation": "summarise", "description": "Aggregate sales by region", "sql": "SELECT region, SUM(amount) AS total FROM sales_data GROUP BY region", "depends_on": [], ...}}, {{"step_number": 2, "operation": "summarise", "description": "Aggregate sales by product", "sql": "SELECT product, SUM(amount) AS total FROM sales_data GROUP BY product", "depends_on": [], ...}}]}}
     Example join of two branches: {{"step_number": 3, "operation": "join", "description": "Join cleaned A with cleaned B", "sql": "SELECT a.*, b.extra FROM clean_a a JOIN clean_b b ON a.id = b.id", "depends_on": [1, 2], ...}}
     Rules: (a) all `depends_on` values must reference step_numbers that appear earlier; (b) for purely sequential plans, omit `depends_on` or use `[]` — the engine treats it as linear.
-13. clean: Use REGEXP_REPLACE for snake_case column renames, TRY_CAST for type coercion, DELETE + subquery for duplicate removal, TRIM for whitespace. Output as CREATE TABLE <name>_clean AS ...
+13. clean: Use REGEXP_REPLACE for snake_case column renames, TRY_CAST for type coercion, DELETE + subquery for duplicate removal, TRIM for whitespace. For NULL FILLING / REPLACEMENT: use COALESCE or CASE WHEN inside the SELECT list to overwrite the existing column with the same name — NEVER create a new column. Example: `SELECT ..., COALESCE("Price Per Unit", 0) AS "Price Per Unit", ...` keeps the original column name and replaces nulls in-place. Output as CREATE TABLE <name>_clean AS SELECT <all columns, with substitutions where requested> FROM <input>.
 14. filter: Always output row count before and after. Use CREATE TABLE <name>_filtered AS SELECT * FROM <input> WHERE <conditions>.
 15. summarise: CREATE TABLE <name>_summary AS SELECT <group_cols>, <agg_exprs> FROM <input> GROUP BY <group_cols> ORDER BY 1. Use DuckDB native agg functions.
 16. pivot: Use DuckDB native PIVOT syntax: CREATE TABLE <name>_pivot AS PIVOT <input> ON <pivot_col> USING <agg>(<value_col>) GROUP BY <row_id>.

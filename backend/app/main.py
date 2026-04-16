@@ -364,7 +364,12 @@ async def create_tables() -> None:
         logger.warning("STARTUP_RSS: %.0f MB (after all module imports)", _rss)
     except Exception:
         pass
-    if settings.app_env != "production" or os.getenv("AUTO_CREATE_TABLES") == "1":
+    # Render injects RENDER=true; skip create_all there — Alembic handles schema.
+    # Running create_all on Render fires a background thread making 30+ DB
+    # round-trips at the same moment as the first user request burst, which
+    # pushes RSS over the 512 MB OOM-kill limit on Starter instances.
+    _on_render = bool(os.getenv("RENDER"))
+    if (settings.app_env != "production" and not _on_render) or os.getenv("AUTO_CREATE_TABLES") == "1":
         # Run as a background task so it never blocks uvicorn from binding the
         # port.  On Render, if this awaits synchronously (~30 Supabase round-
         # trips) the deploy health-check times out before the port opens.

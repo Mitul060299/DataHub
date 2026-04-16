@@ -5,9 +5,6 @@ from typing import Optional
 import os
 import logging
 
-import boto3
-from botocore.config import Config
-
 from ..config import settings
 from ..services.storage_tiering import storage_tier_service
 
@@ -19,6 +16,7 @@ _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 class StorageService:
     @staticmethod
     def _s3_client():
+        import boto3  # lazy — defers ~35 MB AWS SDK load until first upload
         return boto3.client(
             "s3",
             region_name=settings.s3_region or "ap-south-1",
@@ -28,6 +26,8 @@ class StorageService:
 
     @staticmethod
     def _r2_client():
+        import boto3  # lazy — defers ~35 MB AWS SDK load until first upload
+        from botocore.config import Config  # lazy
         endpoint = f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
         return boto3.client(
             "s3",

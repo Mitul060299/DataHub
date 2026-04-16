@@ -43,6 +43,16 @@ interface ColProfile {
   top_values?: Array<{ value: string; count: number }>;
 }
 
+interface QualityIssue {
+  type: string;
+  column?: string | null;
+  severity: "high" | "medium" | "low";
+  count?: number;
+  percentage?: number;
+  description: string;
+  examples?: string[];
+}
+
 interface DataProfile {
   row_count: number;
   sample_size: number;
@@ -106,10 +116,10 @@ function buildFollowUpChips(
   ];
 }
 
-function DataProfileCard({ profile }: { profile: DataProfile }) {
+function DataProfileCard({ profile, issues }: { profile: DataProfile; issues?: QualityIssue[] }) {
   const [open, setOpen] = useState(false);
   const cols = Object.entries(profile.columns);
-  const highNullCols = cols.filter(([, c]) => c.null_pct >= 20).length;
+  const highNullCols = cols.filter(([, c]) => c.null_pct > 0).length;
   const colsWithOutliers = cols.filter(([, c]) => (c.outlier_count ?? 0) > 0).length;
 
   return (
@@ -140,7 +150,28 @@ function DataProfileCard({ profile }: { profile: DataProfile }) {
         </div>
       ) : null}
 
-      {/* Per-column breakdown toggle */}
+      {/* Issues breakdown */}
+      {issues && issues.length > 0 ? (
+        <div style={{ borderTop: "1px solid #27272a" }}>
+          {issues.map((issue, i) => {
+            const severityColor = issue.severity === "high" ? "#f87171" : issue.severity === "medium" ? "#fbbf24" : "#a3a3a3";
+            const typeLabel = issue.type.replace(/_/g, " ");
+            return (
+              <div key={i} style={{ padding: "5px 10px", borderTop: i > 0 ? "1px solid #1f1f22" : undefined, display: "grid", gap: 2 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: severityColor, flexShrink: 0, display: "inline-block" }} />
+                  <span className="mono" style={{ fontSize: 11, color: "#d4d4d8", textTransform: "capitalize", fontWeight: 600 }}>{typeLabel}</span>
+                  {issue.column ? <span className="mono" style={{ fontSize: 10, color: "#71717a" }}>· {issue.column}</span> : null}
+                  {issue.count != null ? <span className="mono" style={{ fontSize: 10, color: "#71717a", marginLeft: "auto" }}>{issue.count.toLocaleString()}{issue.percentage != null ? ` (${issue.percentage}%)` : ""}</span> : null}
+                </div>
+                <div style={{ fontSize: 11, color: "#a1a1aa", paddingLeft: 12 }}>{issue.description}</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/* Per-column breakdown toggle */
       <button
         onClick={() => setOpen((v) => !v)}
         style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "#18181b", borderTop: "1px solid #27272a", color: "#a1a1aa", fontSize: 11, cursor: "pointer" }}
@@ -205,6 +236,7 @@ type Message = ConversationMessage & {
   queryResults?: Array<Record<string, unknown>>;
   sessionTableName?: string;
   dataProfile?: DataProfile;
+  qualityIssues?: QualityIssue[];
   followUpChips?: string[];
   isClarification?: boolean;
 };
@@ -922,7 +954,8 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         error?: string;
       }>(`/cleaning/datasets/${dataset.id}/analyze`);
       const profile = res.data.data_profile;
-      const issueCount = (res.data.issues ?? []).length;
+      const issues = (res.data.issues ?? []) as QualityIssue[];
+      const issueCount = issues.length;
       const content = profile
         ? `Found ${issueCount} issue${issueCount !== 1 ? "s" : ""} in your dataset. Here is the data quality report:`
         : res.data.error ?? "Analysis complete.";
@@ -933,6 +966,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           role: "assistant",
           content,
           dataProfile: profile,
+          qualityIssues: issueCount > 0 ? issues : undefined,
         },
       ]);
     } catch (err: unknown) {
@@ -1292,7 +1326,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                 </div>
               ) : null}
               {message.dataProfile ? (
-                <DataProfileCard profile={message.dataProfile} />
+                <DataProfileCard profile={message.dataProfile} issues={message.qualityIssues} />
               ) : null}
               {message.followUpChips && message.followUpChips.length > 0 && !sending ? (
                 <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>

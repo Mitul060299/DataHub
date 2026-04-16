@@ -3,7 +3,7 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import type { PipelineStep } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import type { CalculatedColumn } from "../types";
-import { IconBarChart, IconDownload, IconGitBranch, IconTable } from "./Icons";
+import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
@@ -238,33 +238,47 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         </div>
       )}
       <div style={{ height: 38, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", background: "var(--bg1)" }}>
-        <div style={{ display: "inline-flex", gap: 4 }}>
-          <button className="btn" onClick={() => setTab("data")} style={{ height: 28, padding: "0 10px", background: tab === "data" ? "var(--acl)" : "transparent", borderColor: tab === "data" ? "var(--acg)" : "transparent", color: tab === "data" ? "var(--ac)" : "var(--tx1)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}><IconTable size={13} />Data</span>
-          </button>
-          <button className="btn" onClick={() => setTab("pipeline")} style={{ height: 28, padding: "0 10px", background: tab === "pipeline" ? "var(--acl)" : "transparent", borderColor: tab === "pipeline" ? "var(--acg)" : "transparent", color: tab === "pipeline" ? "var(--ac)" : "var(--tx1)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>
-              <IconGitBranch size={13} />Pipeline
-              {steps.length > 0 && (
-                <span style={{ background: "var(--acg)", color: "var(--ac)", fontSize: 9, fontWeight: 700, borderRadius: 999, padding: "0 4px", lineHeight: "14px" }}>
-                  {steps.length}
-                </span>
-              )}
-            </span>
-          </button>
-          <button data-tour="canvas-tab" className="btn" onClick={() => setTab("canvas")} style={{ height: 28, padding: "0 10px", background: tab === "canvas" ? "var(--acl)" : "transparent", borderColor: tab === "canvas" ? "var(--acg)" : "transparent", color: tab === "canvas" ? "var(--ac)" : "var(--tx1)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}><IconBarChart size={13} />Canvas</span>
-          </button>
-          {pipelineId && (
-            <button className="btn" onClick={() => setTab("schedule")} style={{ height: 28, padding: "0 10px", background: tab === "schedule" ? "var(--acl)" : "transparent", borderColor: tab === "schedule" ? "var(--acg)" : "transparent", color: tab === "schedule" ? "var(--ac)" : "var(--tx1)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>⏱ Schedule</span>
-            </button>
-          )}
-          {dataset?.id && (
-            <button className="btn" onClick={() => setTab("history")} style={{ height: 28, padding: "0 10px", background: tab === "history" ? "var(--acl)" : "transparent", borderColor: tab === "history" ? "var(--acg)" : "transparent", color: tab === "history" ? "var(--ac)" : "var(--tx1)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>🕘 History</span>
-            </button>
-          )}
+        <div style={{ display: "inline-flex", gap: 1 }}>
+          {([
+            { key: "data",     icon: <IconTable size={16} />,     label: "Data" },
+            { key: "pipeline", icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null },
+            { key: "canvas",   icon: <IconBarChart size={16} />,  label: "Canvas",   tourAttr: true },
+            ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),
+            ...(dataset?.id  ? [{ key: "history",  icon: <IconRefresh size={16} />, label: "History"  }] : []),
+          ] as { key: string; icon: React.ReactNode; label: string; badge?: number | null; tourAttr?: boolean }[]).map(({ key, icon, label, badge, tourAttr }) => {
+            const active = tab === key;
+            return (
+              <button
+                key={key}
+                title={label}
+                {...(tourAttr ? { "data-tour": "canvas-tab" } : {})}
+                onClick={() => setTab(key as CanvasTab)}
+                style={{
+                  position: "relative",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 34,
+                  height: 34,
+                  border: "none",
+                  borderBottom: active ? "2px solid var(--ac)" : "2px solid transparent",
+                  borderRadius: 0,
+                  background: "transparent",
+                  color: active ? "var(--ac)" : "var(--tx2)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "color 0.15s, border-color 0.15s",
+                }}
+              >
+                {icon}
+                {badge != null && (
+                  <span style={{ position: "absolute", top: 5, right: 4, background: "var(--ac)", color: "var(--bg1)", fontSize: 8, fontWeight: 800, borderRadius: 999, minWidth: 13, height: 13, lineHeight: "13px", textAlign: "center", padding: "0 3px" }}>
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Export dropdown */}

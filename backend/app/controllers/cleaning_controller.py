@@ -42,7 +42,23 @@ def _normalize_sql_for_replay(sql: str, alias: str | None) -> str:
         return sql
     # Replace alias → dataset throughout the SQL (column names never match
     # the generated alias so this replacement is safe in practice)
-    return re.sub(rf"\b{re.escape(alias)}\b", "dataset", sql, flags=re.IGNORECASE)
+    replaced = re.sub(rf"\b{re.escape(alias)}\b", "dataset", sql, flags=re.IGNORECASE)
+    if replaced != sql:
+        return replaced
+    # Fallback: the computed alias didn't appear verbatim in the SQL (e.g. the
+    # dataset name in the DB includes a file extension that was stripped when the
+    # agent registered the table).  Extract the primary table name straight from
+    # the first non-subquery FROM clause and replace it.
+    from_match = re.search(r"\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)\b", sql, re.IGNORECASE)
+    if from_match:
+        detected = from_match.group(1)
+        if detected.lower() not in ("dataset", "dual", "sqlite_master", "information_schema"):
+            logger.debug(
+                "replay alias fallback: alias '%s' not found; replacing detected table '%s' → 'dataset'",
+                alias, detected,
+            )
+            return re.sub(rf"\b{re.escape(detected)}\b", "dataset", sql, flags=re.IGNORECASE)
+    return sql
 from ..models_db import DatasetMetaDB, TransformationHistoryDB
 from ..services.ai_agent_service import AIAgentService
 from ..services.agent_graph import AgentGraphService

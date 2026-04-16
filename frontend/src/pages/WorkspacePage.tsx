@@ -63,8 +63,11 @@ export function WorkspacePage() {
       const replaySteps = steps
         .map((s) => s.rawConfig ?? (s.sql ? { sql: s.sql } : null))
         .filter(Boolean);
+      // Use the root dataset (first step's input) as the pivot so the alias
+      // computed from its name matches the SQL written by the agent at capture time.
+      const pivotId = steps[0]?.inputDataset?.id ?? activeDataset.id;
       const result = await api.post<{ final_dataset_id: string; final_row_count: number }>(
-        `/cleaning/datasets/${activeDataset.id}/replay`,
+        `/cleaning/datasets/${pivotId}/replay`,
         { steps: replaySteps },
       );
       const { final_dataset_id, final_row_count } = result.data;

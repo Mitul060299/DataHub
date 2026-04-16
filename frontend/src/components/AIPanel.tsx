@@ -726,7 +726,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           // Push transformed preview to the Canvas Data tab for write operations.
           // agent.done never carries execution_results, so this is the correct hook.
           const WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile"]);
-          if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview) {
+          if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview && results[0]) {
             onSessionPreview(results, Object.keys(results[0]));
           }
           // Set the LIVE artifact entry so the sidebar shows the editable save card.

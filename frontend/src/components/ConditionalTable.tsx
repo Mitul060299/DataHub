@@ -30,6 +30,8 @@ export function ConditionalTable({
   className = "",
   maxHeight = 400,
 }: ConditionalTableProps) {
+  // Guard against undefined/null columns prop (e.g. from malformed backend response)
+  const safeCols = columns ?? [];
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -78,7 +80,7 @@ export function ConditionalTable({
       )}
 
       <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
-        {columns.length === 0 ? (
+        {safeCols.length === 0 ? (
           <div style={{ padding: 24, textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
             No data
           </div>
@@ -88,12 +90,12 @@ export function ConditionalTable({
               width: "100%",
               borderCollapse: "collapse",
               fontSize: 12,
-              minWidth: columns.length * 100,
+              minWidth: safeCols.length * 100,
             }}
           >
             <thead style={{ position: "sticky", top: 0, background: "#0F1117", zIndex: 1 }}>
               <tr>
-                {columns.map((col, i) => (
+                {safeCols.map((col, i) => (
                   <th
                     key={i}
                     onClick={() => handleSort(i)}

@@ -161,7 +161,7 @@ async def context_loader(state: AgentState) -> dict:
                             r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
                             _raw_sql,
                         )
-                        _select_sql = _raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql
+                        _select_sql = (_raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql).rstrip("; \t\r\n")
                         try:
                             _replay_conn.execute(
                                 f'CREATE OR REPLACE TABLE "{_out_table}" AS ({_select_sql})'

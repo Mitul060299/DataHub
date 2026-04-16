@@ -1,4 +1,4 @@
-﻿"""
+"""
 DuckDB Session Manager
 Maintains a module-level dict of persistent in-memory DuckDB connections
 keyed by session_id (f"{user_id}:{chat_session_id}").

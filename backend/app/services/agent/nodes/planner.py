@@ -161,7 +161,19 @@ async def planner(state: AgentState) -> dict:
     else:
         plan = []
 
-    _logger.info("PLANNER_OUTPUT: steps=%d", len(plan))
+    # ── Offset step numbers so they continue from existing pipeline ───────
+    # The LLM always numbers from 1, but we need cumulative numbering.
+    _existing_ps = state.get("pipeline_steps") or []
+    _step_offset = max((s.get("step_number", 0) for s in _existing_ps), default=0)
+    if _step_offset and plan:
+        # Also remap depends_on references so DAG plans stay consistent
+        for step in plan:
+            old_num = step["step_number"]
+            step["step_number"] = old_num + _step_offset
+            if step.get("depends_on"):
+                step["depends_on"] = [d + _step_offset for d in step["depends_on"]]
+
+    _logger.info("PLANNER_OUTPUT: steps=%d offset=%d", len(plan), _step_offset)
 
     # ── Chart type auto-selection (post-processing) ───────────────────────
     table_registry: dict = dict(state.get("table_registry") or {})

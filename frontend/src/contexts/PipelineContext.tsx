@@ -218,7 +218,14 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
           return next;
         }
       }
-      resolved = [...current, step];
+      // 3. Defensive: if stepNumber already exists (different run), renumber to avoid
+      //    visual collision — continue from the highest existing stepNumber.
+      let incoming = step;
+      if (incoming.stepNumber && current.some((s) => s.stepNumber === incoming.stepNumber)) {
+        const maxNum = Math.max(0, ...current.map((s) => s.stepNumber));
+        incoming = { ...incoming, stepNumber: maxNum + 1 };
+      }
+      resolved = [...current, incoming];
       return resolved;
     });
     // Structural change — flush to DB immediately using the resolved array

@@ -11,13 +11,20 @@ async def pipeline_recorder(state: AgentState) -> dict:
     plan = state.get("plan", [])
     root_dataset_id = state.get("root_dataset_id") or state.get("dataset_id")
 
+    # Build a lookup by step_number (not by index) because step numbers may
+    # be offset to continue from prior pipeline steps across commands.
+    plan_by_step: dict[int, dict] = {
+        s.get("step_number", i + 1): s for i, s in enumerate(plan)
+    }
+
     saved_steps = []
     current_dataset_id = root_dataset_id
     for result in results:
         if result["success"]:
-            step_idx = result["step_number"] - 1
-            if step_idx < len(plan):
-                plan_step = plan[step_idx]
+            snum = result["step_number"]
+            plan_step = plan_by_step.get(snum)
+            if plan_step is None:
+                continue
                 next_dataset_id = result.get("output_dataset_id") or current_dataset_id
                 params = plan_step.get("parameters") if isinstance(plan_step.get("parameters"), dict) else {}
                 saved_steps.append(

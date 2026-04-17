@@ -240,7 +240,7 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
             {filteredRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length + 1}
+                  colSpan={(columns ?? []).length + 1}
                   style={{ padding: "32px 0", textAlign: "center", color: "var(--tx2)", fontSize: 13, fontStyle: "italic" }}
                 >
                   {rows.length === 0 ? "No data loaded" : "No rows match your filters"}
@@ -275,7 +275,7 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
       </div>
 
       <div className="mono" style={{ borderTop: "1px solid var(--bd)", padding: "7px 10px", color: "var(--tx1)", fontSize: 11 }}>
-        {filteredRows.length}{activeFilterCount > 0 ? ` of ${rows.length}` : ""} rows · {columns.length} cols · {stepCount} steps applied · Last: {lastAction}
+        {filteredRows.length}{activeFilterCount > 0 ? ` of ${rows.length}` : ""} rows · {(columns ?? []).length} cols · {stepCount} steps applied · Last: {lastAction}
       </div>
 
       {/* Column filter dropdown — position:fixed so it escapes the scroll container */}

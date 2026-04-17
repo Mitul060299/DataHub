@@ -215,7 +215,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--tx2)" }}>
               {dataset?.name ?? "dataset"} &nbsp;·&nbsp;
               {(liveArtifact?.rowCount ?? rowCount)?.toLocaleString() ?? "—"} rows &nbsp;·&nbsp;
-              {columns.length} columns
+              {(columns ?? []).length} columns
               {liveArtifact?.stepLabel ? <> &nbsp;·&nbsp; <em style={{ color: "var(--ac)" }}>{liveArtifact.stepLabel}</em></> : null}
             </p>
             {liveArtifact && (
@@ -283,7 +283,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           <button
             className="btn"
             title="Export dataset"
-            disabled={!columns.length || isExporting !== null}
+            disabled={!(columns ?? []).length || isExporting !== null}
             onClick={() => setIsExportOpen((o) => !o)}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -565,8 +565,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         ) : tab === "data" ? (
           <DataTable
             loading={viewingStepIndex !== null ? timelineLoading : loading}
-            rows={effectiveRows}
-            columns={effectiveCols}
+            rows={effectiveRows ?? []}
+            columns={effectiveCols ?? []}
             stepCount={steps.length}
             lastAction={viewingStepIndex !== null ? "" : lastAction}
           />

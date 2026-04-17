@@ -1350,7 +1350,7 @@ def preview_dataset(
                     pass
             return DatasetPage(
                 dataset_id=dataset_id,
-                columns=meta.columns,
+                columns=list(meta.columns or []),
                 offset=offset,
                 limit=limit,
                 rows=page_rows,

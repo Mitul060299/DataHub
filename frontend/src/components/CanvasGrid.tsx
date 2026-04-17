@@ -21,6 +21,7 @@ import type { CanvasTileItem, SavedVisualization } from "../api";
 import { fetchTileData } from "../api";
 import type { DatasetMeta } from "../types";
 import { EChartsRenderer } from "./EChartsRenderer";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 const COLS = 12;
 const ROW_H = 80;
@@ -651,7 +652,9 @@ export function CanvasGrid({ tiles, onChange, availableDatasets }: CanvasGridPro
                   </div>
                 )
               ) : tile.echarts_config ? (
-                <EChartsRenderer config={tile.echarts_config} height={chartH} />
+                <ErrorBoundary fallback={<p style={{ padding: 8, fontSize: 11, color: "var(--rd, #f87171)" }}>Chart render failed</p>}>
+                  <EChartsRenderer config={tile.echarts_config} height={chartH} />
+                </ErrorBoundary>
               ) : (
                 <p style={{ padding: 8, fontSize: 11, color: "var(--tx1)" }}>
                   No chart config

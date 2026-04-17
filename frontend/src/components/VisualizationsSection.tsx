@@ -15,6 +15,7 @@ import {
   type SavedVisualization,
 } from "../api";
 import { EChartsRenderer } from "./EChartsRenderer";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { IconBarChart, IconX } from "./Icons";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -74,7 +75,9 @@ function PreviewPopover({ viz, anchorRect, onClose }: PreviewPopoverProps) {
       >
         {viz.name}
       </p>
-      <EChartsRenderer config={viz.echarts_config} height={220} />
+      <ErrorBoundary fallback={<p style={{ fontSize: 11, color: "var(--tx2)" }}>Preview unavailable</p>}>
+        <EChartsRenderer config={viz.echarts_config} height={220} />
+      </ErrorBoundary>
       <p style={{ margin: "8px 0 0", fontSize: 10, color: "var(--tx1)" }}>
         {chartTypeLabel(viz.chart_type)} · Drag onto Canvas to add
       </p>

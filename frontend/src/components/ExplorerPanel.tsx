@@ -77,7 +77,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     const lowered = searchQuery.trim().toLowerCase();
     const base = datasets.filter((dataset) => !dataset.parentId || !datasetsById.has(dataset.parentId));
     if (!lowered) return base;
-    return base.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
+    return base.filter((dataset) => (dataset.name ?? "").toLowerCase().includes(lowered));
   }, [datasets, datasetsById, searchQuery]);
 
   const artifacts = useMemo<ArtifactItem[]>(() => {
@@ -118,7 +118,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
 
     const lowered = searchQuery.trim().toLowerCase();
     if (!lowered) return derived;
-    return derived.filter((dataset) => dataset.name.toLowerCase().includes(lowered));
+    return derived.filter((dataset) => (dataset.name ?? "").toLowerCase().includes(lowered));
   }, [datasets, datasetsById, operationByOutputDataset, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {

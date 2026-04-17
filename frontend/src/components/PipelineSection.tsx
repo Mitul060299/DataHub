@@ -29,7 +29,7 @@ interface PipelineSectionProps {
 
 export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact } = usePipelineContext();
-  const { activeDataset, setActiveDataset } = useWorkspaceContext();
+  const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
 
   const [open, setOpen] = useState(true);
   const [undoing, setUndoing] = useState(false);

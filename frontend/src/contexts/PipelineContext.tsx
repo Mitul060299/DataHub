@@ -191,6 +191,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const commitStep = (step: PipelineStep) => {
+    let resolved: PipelineStep[] = [];
     setSteps((current) => {
       // Dedup strategy (ordered by specificity):
       // 1. By outputDataset.id (when backend creates derived datasets)
@@ -199,6 +200,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
         if (existingIdx >= 0) {
           const next = [...current];
           next[existingIdx] = step;
+          resolved = next;
           return next;
         }
       }
@@ -212,19 +214,18 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
         if (existingIdx >= 0) {
           const next = [...current];
           next[existingIdx] = step;
+          resolved = next;
           return next;
         }
       }
-      return [...current, step];
+      resolved = [...current, step];
+      return resolved;
     });
-    // Structural change — flush to DB immediately
+    // Structural change — flush to DB immediately using the resolved array
+    // (don't read from localStorage which may not have been updated yet).
     structuralChangeRef.current += 1;
-    if (datasetId) {
-      // Read from localStorage after React batches the setSteps update
-      queueMicrotask(() => {
-        const latest = loadPersistedSteps(datasetId);
-        if (latest.length > 0) flushStepsToDb(datasetId, latest);
-      });
+    if (datasetId && resolved.length > 0) {
+      flushStepsToDb(datasetId, resolved);
     }
   };
 
@@ -235,14 +236,13 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   const cancelJoin = () => { setPendingJoinStep(null); };
 
   const removeStep = (stepId: string) => {
-    setSteps((current) => current.filter((step) => step.id !== stepId));
+    let resolved: PipelineStep[] = [];
+    setSteps((current) => {
+      resolved = current.filter((step) => step.id !== stepId);
+      return resolved;
+    });
     structuralChangeRef.current += 1;
-    if (datasetId) {
-      queueMicrotask(() => {
-        const latest = loadPersistedSteps(datasetId);
-        flushStepsToDb(datasetId, latest);
-      });
-    }
+    if (datasetId) flushStepsToDb(datasetId, resolved);
   };
 
   const renameStep = (stepId: string, newLabel: string) => {
@@ -256,18 +256,15 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const keepStepsThrough = (stepId: string) => {
+    let resolved: PipelineStep[] = [];
     setSteps((current) => {
       const index = current.findIndex((step) => step.id === stepId);
-      if (index < 0) return current;
-      return current.slice(0, index + 1);
+      if (index < 0) { resolved = current; return current; }
+      resolved = current.slice(0, index + 1);
+      return resolved;
     });
     structuralChangeRef.current += 1;
-    if (datasetId) {
-      queueMicrotask(() => {
-        const latest = loadPersistedSteps(datasetId);
-        flushStepsToDb(datasetId, latest);
-      });
-    }
+    if (datasetId) flushStepsToDb(datasetId, resolved);
   };
 
   const clearSteps = () => {
@@ -293,23 +290,20 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const moveStep = (stepId: string, direction: "up" | "down") => {
+    let resolved: PipelineStep[] = [];
     setSteps((current) => {
       const idx = current.findIndex((s) => s.id === stepId);
-      if (idx < 0) return current;
+      if (idx < 0) { resolved = current; return current; }
       const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= current.length) return current;
+      if (targetIdx < 0 || targetIdx >= current.length) { resolved = current; return current; }
       const next = [...current];
       [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
       // Re-number stepNumber to keep them sequential
-      return next.map((s, i) => ({ ...s, stepNumber: i + 1 }));
+      resolved = next.map((s, i) => ({ ...s, stepNumber: i + 1 }));
+      return resolved;
     });
     structuralChangeRef.current += 1;
-    if (datasetId) {
-      queueMicrotask(() => {
-        const latest = loadPersistedSteps(datasetId);
-        flushStepsToDb(datasetId, latest);
-      });
-    }
+    if (datasetId && resolved.length > 0) flushStepsToDb(datasetId, resolved);
   };
 
   const runPipeline = async () => {

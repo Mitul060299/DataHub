@@ -91,20 +91,19 @@ RULES:
     {{"steps": [{{"step_number": 1, "operation": "summarise", "description": "Aggregate sales by region", "sql": "SELECT region, SUM(amount) AS total FROM sales_data GROUP BY region", "depends_on": [], ...}}, {{"step_number": 2, "operation": "summarise", "description": "Aggregate sales by product", "sql": "SELECT product, SUM(amount) AS total FROM sales_data GROUP BY product", "depends_on": [], ...}}]}}
     Example join of two branches: {{"step_number": 3, "operation": "join", "description": "Join cleaned A with cleaned B", "sql": "SELECT a.*, b.extra FROM clean_a a JOIN clean_b b ON a.id = b.id", "depends_on": [1, 2], ...}}
     Rules: (a) all `depends_on` values must reference step_numbers that appear earlier; (b) for purely sequential plans, omit `depends_on` or use `[]` — the engine treats it as linear.
-13. clean: Use REGEXP_REPLACE for snake_case column renames, TRY_CAST for type coercion, DELETE + subquery for duplicate removal, TRIM for whitespace. For NULL FILLING / REPLACEMENT: use COALESCE or CASE WHEN inside the SELECT list to overwrite the existing column with the same name — NEVER create a new column. Example: `SELECT ..., COALESCE("Price Per Unit", 0) AS "Price Per Unit", ...` keeps the original column name and replaces nulls in-place. Output as CREATE TABLE <name>_clean AS SELECT <all columns, with substitutions where requested> FROM <input>.
-14. filter: Always output row count before and after. Use CREATE TABLE <name>_filtered AS SELECT * FROM <input> WHERE <conditions>.
+13. clean: Use REGEXP_REPLACE for snake_case column renames, TRY_CAST for type coercion, DELETE + subquery for duplicate removal, TRIM for whitespace. For NULL FILLING / REPLACEMENT: use COALESCE or CASE WHEN inside the SELECT list to overwrite the existing column with the same name — NEVER create a new column. Example: `SELECT ..., COALESCE("Price Per Unit", 0) AS "Price Per Unit", ...` keeps the original column name and replaces nulls in-place. Output as a plain SELECT: SELECT <all columns, with substitutions where requested> FROM <input>. The engine registers it as a lazy VIEW automatically — NEVER wrap in CREATE TABLE.
+14. filter: Always output row count before and after. Output a plain SELECT: SELECT * FROM <input> WHERE <conditions>. The engine registers it as a lazy VIEW — NEVER wrap in CREATE TABLE.
 15. summarise: CREATE TABLE <name>_summary AS SELECT <group_cols>, <agg_exprs> FROM <input> GROUP BY <group_cols> ORDER BY 1. Use DuckDB native agg functions.
-16. pivot: Use DuckDB native PIVOT syntax: CREATE TABLE <name>_pivot AS PIVOT <input> ON <pivot_col> USING <agg>(<value_col>) GROUP BY <row_id>.
-17. union: Validate columns across all source tables first. Apply rename sub-steps if needed. CREATE TABLE <name>_union AS SELECT ... UNION ALL SELECT ....
-18. reconcile: CREATE TABLE <name>_recon AS SELECT COALESCE(l.key,r.key) AS key, l.val AS left_value, r.val AS right_value, (r.val-l.val) AS variance, (r.val=l.val) AS reconciled FROM left_table l FULL OUTER JOIN right_table r ON l.key=r.key.
+16. pivot: Use DuckDB native PIVOT syntax: PIVOT <input> ON <pivot_col> USING <agg>(<value_col>) GROUP BY <row_id>. The engine registers it as a lazy VIEW — NEVER wrap in CREATE TABLE.
+17. union: Validate columns across all source tables first. Apply rename sub-steps if needed. Output a plain SELECT: SELECT ... UNION ALL SELECT .... The engine registers it as a lazy VIEW — NEVER wrap in CREATE TABLE.
+18. reconcile: Output a plain SELECT: SELECT COALESCE(l.key,r.key) AS key, l.val AS left_value, r.val AS right_value, (r.val-l.val) AS variance, (r.val=l.val) AS reconciled FROM left_table l FULL OUTER JOIN right_table r ON l.key=r.key. The engine registers it as a lazy VIEW — NEVER wrap in CREATE TABLE.
 19. export: Set operation to 'export'. Include parameters: duckdb_name (table to export), format ('csv'|'excel'|'parquet'), display_name.
 20. join: When user says "join X and Y" or "merge X with Y" or similar:
     - Identify both tables from the SESSION TABLE REGISTRY by name matching
     - Auto-detect the join key: find columns with the same name in both tables
     - If multiple common columns exist, prefer columns named *_id, id, key, code
     - If no common columns exist: the planner cannot auto-detect; leave join_key as null and note in description
-    - Generate complete DuckDB SQL:
-      CREATE TABLE joined_result AS
+    - Generate a plain SELECT (the engine registers it as a lazy VIEW — NEVER wrap in CREATE TABLE):
       SELECT a.*, b.<non_overlapping_cols>
       FROM <table_a> a
       LEFT JOIN <table_b> b ON a.<key_col> = b.<key_col>

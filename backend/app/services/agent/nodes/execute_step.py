@@ -635,7 +635,7 @@ async def execute_step(state: AgentState) -> dict:
                         "rows_changed": rows_changed if session_id else None,
                         "run_id": None,
                         "output_dataset_id": state.get("dataset_id"),
-                        "sql": original_step_sql,
+                        "sql": step_sql,
                         "error": None,
                         "output_table": output_table,
                         "session_table_name": output_table,

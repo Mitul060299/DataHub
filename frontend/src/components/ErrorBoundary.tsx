@@ -9,21 +9,23 @@ interface Props {
 interface State {
   error: Error | null;
   componentStack: string | null;
+  errorStack: string | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { error: null, componentStack: null };
+    this.state = { error: null, componentStack: null, errorStack: null };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { error, componentStack: null };
+    return { error, componentStack: null, errorStack: error.stack ?? null };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
-    this.setState({ componentStack: info.componentStack ?? null });
+    console.error("[ErrorBoundary] JS stack:", error.stack);
+    this.setState({ componentStack: info.componentStack ?? null, errorStack: error.stack ?? null });
   }
 
   render() {
@@ -58,10 +60,18 @@ export class ErrorBoundary extends Component<Props, State> {
               </pre>
             </details>
           )}
+          {this.state.errorStack && (
+            <details style={{ maxWidth: 600, textAlign: "left" }}>
+              <summary style={{ fontSize: 11, color: "var(--tx2, #8888a0)", cursor: "pointer" }}>JS stack trace</summary>
+              <pre style={{ fontSize: 10, color: "var(--tx2, #8888a0)", whiteSpace: "pre-wrap", marginTop: 4, maxHeight: 200, overflowY: "auto", userSelect: "all" }}>
+                {this.state.errorStack}
+              </pre>
+            </details>
+          )}
           <button
             className="btn"
             style={{ marginTop: 4 }}
-            onClick={() => this.setState({ error: null, componentStack: null })}
+            onClick={() => this.setState({ error: null, componentStack: null, errorStack: null })}
           >
             Try again
           </button>

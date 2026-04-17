@@ -9,6 +9,7 @@ import PlanCard from "./PlanCard";
 import PlanDAG from "./PlanDAG";
 import { StepCard } from "./StepCard";
 import { EChartsRenderer } from "./EChartsRenderer";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { api, saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
 import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
@@ -1202,10 +1203,12 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               ) : null}
               {message.tileCreated?.echarts_config ? (
                 <div style={{ marginTop: 8 }}>
-                  <EChartsRenderer
-                    config={message.tileCreated.echarts_config}
-                    height={280}
-                  />
+                  <ErrorBoundary fallback={<div style={{ padding: "8px 12px", fontSize: 12, color: "var(--tx2)", border: "1px solid var(--bd)", borderRadius: 6 }}>Chart render failed — the config may be unsupported.</div>}>
+                    <EChartsRenderer
+                      config={message.tileCreated.echarts_config}
+                      height={280}
+                    />
+                  </ErrorBoundary>
                   {(() => {
                     const chartId = message.tileCreated!.chart_id;
                     const isSaving = savingVizIds.has(chartId);

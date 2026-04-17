@@ -36,24 +36,24 @@ _lock = threading.Lock()
 _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
 _last_used: dict[str, float] = {}
 
-MAX_SESSION_AGE_SECONDS = 900   # 15 minutes — reduced to trim idle session memory
+MAX_SESSION_AGE_SECONDS = 1800  # 30 minutes — comfortable on 2 GB Standard
 _CLEANUP_INTERVAL_SECONDS = 300  # run background cleanup every 5 minutes
 
 # Hard cap on concurrent open DuckDB sessions.  Each session can use up to
-# 96 MB (SET memory_limit below), so 3 sessions = ~288 MB from sessions alone.
+# 256 MB (SET memory_limit below).  8 sessions × 256 MB = 2 GB max, but
+# realistic peak on a single-worker instance is 3-4 concurrent users.
 # The oldest-idle session is evicted when this limit would be exceeded.
-_MAX_SESSIONS: int = int(os.environ.get("DUCKDB_MAX_SESSIONS", "3"))
+_MAX_SESSIONS: int = int(os.environ.get("DUCKDB_MAX_SESSIONS", "8"))
 
-# Evict oldest sessions more aggressively when process RSS exceeds this.
-# Set to 280 MB (55 % of a 512 MB Render free instance) so eviction fires
-# *before* the heap can corrupt itself at ~400 MB.
+# Evict oldest sessions aggressively when process RSS exceeds this.
+# Set to 1400 MB (70% of a 2 GB Render Standard instance) so eviction fires
+# well before the OS OOM-killer fires at 2048 MB.
 # Override via DUCKDB_HIGH_MEMORY_MB env var to match your instance tier.
-_HIGH_MEMORY_THRESHOLD_MB: float = float(os.environ.get("DUCKDB_HIGH_MEMORY_MB", "280"))
+_HIGH_MEMORY_THRESHOLD_MB: float = float(os.environ.get("DUCKDB_HIGH_MEMORY_MB", "1400"))
 
-# Under pressure: aggressively evict sessions idle longer than this many seconds.
-# Default 120 s = 2 minutes, so any session that hasn't been touched recently
-# is dropped before the heap corrupts.
-_HIGH_PRESSURE_TTL_SECONDS: int = int(os.environ.get("DUCKDB_HIGH_PRESSURE_TTL_S", "120"))
+# Under pressure: evict sessions idle longer than this many seconds.
+# 300 s = 5 minutes on 2 GB — less aggressive than the 512 MB era.
+_HIGH_PRESSURE_TTL_SECONDS: int = int(os.environ.get("DUCKDB_HIGH_PRESSURE_TTL_S", "300"))
 
 
 class SessionExpiredError(RuntimeError):
@@ -150,12 +150,11 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
             _last_used.pop(oldest_sid, None)
 
         # Create a new in-memory connection.
-        # Keep the per-session limit low (96 MB) so that even 2–3 concurrent
-        # sessions stay well below the 512 MB Render free-tier process limit.
+        # 256 MB per session — comfortable on the 2 GB Standard instance.
         # DuckDB throws a catchable OutOfMemoryError instead of corrupting the heap.
         import duckdb  # lazy import — defers ~100 MB native library load until first AI query
         new_conn = duckdb.connect(database=":memory:")
-        new_conn.execute("SET memory_limit='96MB'")
+        new_conn.execute("SET memory_limit='256MB'")
         try:
             new_conn.execute("SET threads=1")
         except Exception:

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -8,6 +9,8 @@ from langchain_groq import ChatGroq
 from ..prompts import INTENT_CLASSIFIER_PROMPT
 from ..state import AgentState
 from .planner import _dumps
+
+_logger = logging.getLogger(__name__)
 
 _llm = ChatGroq(
     model=os.getenv("GROQ_INTENT_MODEL", "llama-3.1-8b-instant"),
@@ -42,15 +45,16 @@ async def intent_classifier(state: AgentState) -> dict:
         )
         intent = str(response.content).strip().lower()
     except asyncio.TimeoutError:
-        import logging
-        logging.getLogger(__name__).warning("intent_classifier timed out, defaulting to converse")
+        _logger.warning("intent_classifier timed out, defaulting to converse")
         intent = "converse"
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).error("intent_classifier LLM error: %s", exc)
+        _logger.error("intent_classifier LLM error: %s", exc)
         intent = "converse"
     if intent not in VALID_INTENTS:
+        _logger.warning("INTENT_INVALID: raw=%s, defaulting to converse", intent)
         intent = "converse"
+
+    _logger.info("INTENT_CLASSIFIED: intent=%s message=%s", intent, last_message[:100])
 
     # Never overwrite plan_approved=True that was set by the resume path.
     return {"intent": intent}

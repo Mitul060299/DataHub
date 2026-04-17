@@ -1,6 +1,8 @@
 import asyncio
 import json
+import logging
 import os
+import re as _re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
@@ -8,6 +10,8 @@ from langchain_groq import ChatGroq
 from ..prompts import PLANNER_SYSTEM_PROMPT
 from ..state import AgentState, PlanStep
 from ...echarts_builder import infer_chart_type
+
+_logger = logging.getLogger(__name__)
 
 
 class _SafeEncoder(json.JSONEncoder):
@@ -47,6 +51,13 @@ async def planner(state: AgentState) -> dict:
     user_goal = messages[-1].content if messages else ""
     requested_approval = bool(state.get("plan_approved", False))
 
+    _ps = state.get("pipeline_steps", [])
+    _tr = state.get("table_registry", {})
+    _logger.info(
+        "PLANNER_INPUT: pipeline_steps=%d table_registry=%d goal=%s",
+        len(_ps), len(_tr), user_goal[:120],
+    )
+
     # Check if this is a plan modification request
     existing_plan = state.get("plan", [])
     is_modification = bool(
@@ -57,12 +68,12 @@ async def planner(state: AgentState) -> dict:
         schema=_dumps(state.get("schema", {})),
         stats=_dumps(state.get("stats", {})),
         sample_rows=_dumps(state.get("sample_rows", [])[:10]),
-        pipeline_steps=_dumps(state.get("pipeline_steps", [])),
+        pipeline_steps=_dumps(_ps),
         available_templates=_dumps(state.get("available_templates", [])),
         calculated_columns=_dumps(state.get("calculated_columns", [])),
         dashboards=_dumps(state.get("dashboards", [])),
         secondary_datasets=_dumps(state.get("secondary_schemas", {})),
-        table_registry=_dumps(state.get("table_registry", {})),
+        table_registry=_dumps(_tr),
         user_goal=user_goal,
     )
 
@@ -91,21 +102,36 @@ async def planner(state: AgentState) -> dict:
         )
         raw = str(response.content).strip()
     except asyncio.TimeoutError:
-        import logging
-        logging.getLogger(__name__).error("planner LLM timed out after 30s")
+        _logger.error("planner LLM timed out after 30s")
         raise RuntimeError("AI service timed out while building plan. Please try again.")
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).error("planner LLM error: %s", exc)
+        _logger.error("planner LLM error: %s", exc)
         raise RuntimeError(f"AI service error while building plan: {exc}") from exc
+
+    _logger.info("PLANNER_RAW_RESPONSE: len=%d first200=%s", len(raw), raw[:200])
+
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
     raw = raw.strip()
 
+    # Try standard JSON parse first, then fall back to regex extraction
+    parsed = None
     try:
         parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Try to extract JSON object from within the response text
+        _json_match = _re.search(r'\{[\s\S]*\}', raw)
+        if _json_match:
+            try:
+                parsed = json.loads(_json_match.group())
+            except json.JSONDecodeError:
+                pass
+        if parsed is None:
+            _logger.error("PLANNER_JSON_PARSE_FAILED: raw=%s", raw[:500])
+
+    if parsed is not None:
         raw_steps = parsed.get("steps", []) if isinstance(parsed, dict) else []
         plan: list[PlanStep] = []
         for index, step in enumerate(raw_steps, start=1):
@@ -132,8 +158,10 @@ async def planner(state: AgentState) -> dict:
                     "depends_on": [int(d) for d in step.get("depends_on", [])] if step.get("depends_on") else [],
                 }
             )
-    except json.JSONDecodeError:
+    else:
         plan = []
+
+    _logger.info("PLANNER_OUTPUT: steps=%d", len(plan))
 
     # ── Chart type auto-selection (post-processing) ───────────────────────
     table_registry: dict = dict(state.get("table_registry") or {})

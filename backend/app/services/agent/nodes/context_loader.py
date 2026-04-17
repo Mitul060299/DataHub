@@ -223,12 +223,10 @@ async def context_loader(state: AgentState) -> dict:
             finally:
                 _replay_db.close()
 
-        # If the frontend sent no pipeline_steps but we have prior steps in the DB,
-        # restore them so the planner knows what transformations already happened.
-        # This covers both replay (views rebuilt) and non-replay (views still live)
-        # scenarios where the frontend lost its step history.
-        _existing_steps = state.get("pipeline_steps") or []
-        if not _existing_steps and session_id and not _restored_pipeline_steps:
+        # Always restore authoritative pipeline_steps from DB when available.
+        # The frontend may send steps but they lack output_table / step_number
+        # which the planner needs to construct correct SQL (FROM the right table).
+        if session_id and not _restored_pipeline_steps:
             from ....models_db import PipelineStepDB as _PipelineStepDB2
             _ps_db = SessionLocal()
             try:
@@ -250,6 +248,10 @@ async def context_loader(state: AgentState) -> dict:
                         "output_table": _ps2.output_table or "",
                         "row_count_after": int(_ps2.row_count_after or 0),
                     })
+                _logger.info(
+                    "PIPELINE_STEPS_RESTORED: count=%d session=%s source=db_fallback",
+                    len(_restored_pipeline_steps), session_id,
+                )
             finally:
                 _ps_db.close()
 

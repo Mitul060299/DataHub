@@ -49,6 +49,7 @@ interface PipelineContextValue {
   clearSteps: () => void;
   replaceSteps: (newSteps: PipelineStep[]) => void;
   updateStep: (stepId: string, updates: Partial<PipelineStep>) => void;
+  moveStep: (stepId: string, direction: "up" | "down") => void;
   runPipeline: () => Promise<void>;
   scheduleInfo: ScheduleInfo | null;
   setScheduleInfo: (info: ScheduleInfo | null) => void;
@@ -104,8 +105,20 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   // When the dataset-switch effect fires for this ID, we skip the DB reload
   // because useState already loaded the correct steps from localStorage.
   const hydratedForRef = useRef<string | null>(initialDatasetId);
+  // Counter that increments on every structural change (add/remove/clear).
+  // The write-through effect uses this to decide between immediate vs debounced save.
+  const structuralChangeRef = useRef(0);
 
-  // ── Write-through: per-dataset localStorage (always) + DB (debounced 1.5s) ───
+  // Immediately persist to localStorage + DB. Used for structural changes
+  // (step add/remove) where a 1.5s debounce would risk data loss.
+  const flushStepsToDb = (dsId: string, stepsToSave: PipelineStep[]) => {
+    // Cancel any pending debounced write — we're saving now.
+    if (dbSyncTimerRef.current) { clearTimeout(dbSyncTimerRef.current); dbSyncTimerRef.current = null; }
+    try { localStorage.setItem(stepsKey(dsId), JSON.stringify(stepsToSave)); } catch { /* quota */ }
+    void saveDatasetPipelineSteps(dsId, stepsToSave).catch(() => { /* best-effort */ });
+  };
+
+  // ── Write-through: per-dataset localStorage (always) + DB (debounced 1.5s for cosmetic changes) ───
   useEffect(() => {
     if (!datasetId) return;
     try {
@@ -113,7 +126,14 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore quota errors
     }
-    // Debounce DB writes to avoid spamming during rapid step additions
+    // Structural changes (add/remove/clear) flush immediately via flushStepsToDb.
+    // This effect only runs the debounced path for cosmetic edits (rename, etc.).
+    if (structuralChangeRef.current > 0) {
+      // Already flushed by the structural change handler — skip debounce.
+      structuralChangeRef.current = 0;
+      return;
+    }
+    // Debounce DB writes for cosmetic changes (renames, etc.)
     if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     dbSyncTimerRef.current = setTimeout(() => {
       void saveDatasetPipelineSteps(datasetId, steps).catch(() => { /* best-effort */ });
@@ -123,13 +143,24 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     };
   }, [steps, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── On dataset switch: load steps from DB, fall back to per-dataset localStorage ─
-  // prevDatasetIdRef starts at null (same as initial datasetId) so the effect
-  // does NOT fire spuriously on mount — null === null → early return.
+  // ── On dataset switch: flush pending save, then load steps from DB ─
   const prevDatasetIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (datasetId === prevDatasetIdRef.current) return;
+    const prevId = prevDatasetIdRef.current;
     prevDatasetIdRef.current = datasetId;
+
+    // Flush any pending debounced save for the PREVIOUS dataset before switching.
+    if (prevId && dbSyncTimerRef.current) {
+      clearTimeout(dbSyncTimerRef.current);
+      dbSyncTimerRef.current = null;
+      // Read current localStorage (most recent) and save it to DB immediately.
+      const prevSteps = loadPersistedSteps(prevId);
+      if (prevSteps.length > 0) {
+        void saveDatasetPipelineSteps(prevId, prevSteps).catch(() => { /* best-effort */ });
+      }
+    }
+
     if (!datasetId) {
       // No dataset selected — reset steps in memory only (don't touch localStorage).
       setSteps([]);
@@ -161,7 +192,8 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   const commitStep = (step: PipelineStep) => {
     setSteps((current) => {
-      // If there's already a step with the same output dataset ID, replace it (retry dedup)
+      // Dedup strategy (ordered by specificity):
+      // 1. By outputDataset.id (when backend creates derived datasets)
       if (step.outputDataset?.id) {
         const existingIdx = current.findIndex((s) => s.outputDataset?.id === step.outputDataset?.id);
         if (existingIdx >= 0) {
@@ -170,8 +202,30 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
           return next;
         }
       }
+      // 2. By run_id + stepNumber (stable backend identity for session transforms)
+      const stepRunId = step.rawConfig?.run_id ?? step.rawConfig?.agent_run_id;
+      if (stepRunId && step.stepNumber) {
+        const existingIdx = current.findIndex((s) => {
+          const sRunId = s.rawConfig?.run_id ?? s.rawConfig?.agent_run_id;
+          return sRunId === stepRunId && s.stepNumber === step.stepNumber;
+        });
+        if (existingIdx >= 0) {
+          const next = [...current];
+          next[existingIdx] = step;
+          return next;
+        }
+      }
       return [...current, step];
     });
+    // Structural change — flush to DB immediately
+    structuralChangeRef.current += 1;
+    if (datasetId) {
+      // Read from localStorage after React batches the setSteps update
+      queueMicrotask(() => {
+        const latest = loadPersistedSteps(datasetId);
+        if (latest.length > 0) flushStepsToDb(datasetId, latest);
+      });
+    }
   };
 
   const confirmJoin = () => {
@@ -182,6 +236,13 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   const removeStep = (stepId: string) => {
     setSteps((current) => current.filter((step) => step.id !== stepId));
+    structuralChangeRef.current += 1;
+    if (datasetId) {
+      queueMicrotask(() => {
+        const latest = loadPersistedSteps(datasetId);
+        flushStepsToDb(datasetId, latest);
+      });
+    }
   };
 
   const renameStep = (stepId: string, newLabel: string) => {
@@ -200,6 +261,13 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       if (index < 0) return current;
       return current.slice(0, index + 1);
     });
+    structuralChangeRef.current += 1;
+    if (datasetId) {
+      queueMicrotask(() => {
+        const latest = loadPersistedSteps(datasetId);
+        flushStepsToDb(datasetId, latest);
+      });
+    }
   };
 
   const clearSteps = () => {
@@ -208,16 +276,40 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       try { localStorage.removeItem(stepsKey(datasetId)); } catch { /* ignore */ }
     }
     setSteps([]);
+    structuralChangeRef.current += 1;
+    if (datasetId) flushStepsToDb(datasetId, []);
   };
 
   const replaceSteps = (newSteps: PipelineStep[]) => {
     setSteps(newSteps);
+    structuralChangeRef.current += 1;
+    if (datasetId) flushStepsToDb(datasetId, newSteps);
   };
 
   const updateStep = (stepId: string, updates: Partial<PipelineStep>) => {
     setSteps((current) =>
       current.map((step) => (step.id === stepId ? { ...step, ...updates } : step))
     );
+  };
+
+  const moveStep = (stepId: string, direction: "up" | "down") => {
+    setSteps((current) => {
+      const idx = current.findIndex((s) => s.id === stepId);
+      if (idx < 0) return current;
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= current.length) return current;
+      const next = [...current];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      // Re-number stepNumber to keep them sequential
+      return next.map((s, i) => ({ ...s, stepNumber: i + 1 }));
+    });
+    structuralChangeRef.current += 1;
+    if (datasetId) {
+      queueMicrotask(() => {
+        const latest = loadPersistedSteps(datasetId);
+        flushStepsToDb(datasetId, latest);
+      });
+    }
   };
 
   const runPipeline = async () => {
@@ -230,7 +322,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact, pendingJoinStep, confirmJoin, cancelJoin }),
+    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, moveStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact, pendingJoinStep, confirmJoin, cancelJoin }),
     [steps, scheduleInfo, liveArtifact, pendingJoinStep],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 

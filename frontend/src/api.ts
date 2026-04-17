@@ -638,6 +638,38 @@ export async function saveDatasetPipelineSteps(datasetId: string, steps: unknown
   await api.put(`/datasets/${datasetId}/pipeline-steps`, { steps });
 }
 
+// ── Power Query-inspired step preview / materialize ──────────────────────────
+
+export async function fetchStepPreview(
+  datasetId: string,
+  sessionId: string,
+  tableName: string,
+  limit = 200,
+  offset = 0,
+): Promise<{ rows: Record<string, unknown>[]; columns: string[]; count: number }> {
+  const response = await api.post(`/datasets/${datasetId}/step-preview`, {
+    session_id: sessionId,
+    table_name: tableName,
+    limit,
+    offset,
+  });
+  return response.data as { rows: Record<string, unknown>[]; columns: string[]; count: number };
+}
+
+export async function materializeStep(
+  datasetId: string,
+  sessionId: string,
+  tableName: string,
+  snapshot = false,
+): Promise<{ table_name: string; row_count: number; materialized: boolean; snapshot_url: string | null }> {
+  const response = await api.post(`/datasets/${datasetId}/step-materialize`, {
+    session_id: sessionId,
+    table_name: tableName,
+    snapshot,
+  });
+  return response.data as { table_name: string; row_count: number; materialized: boolean; snapshot_url: string | null };
+}
+
 export async function listCalculatedColumns(datasetId: string) {
   const response = await api.get(`/datasets/${datasetId}/columns`);
   return response.data as Array<{

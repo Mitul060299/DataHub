@@ -18,6 +18,8 @@ import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import {
   IconBarChart,
   IconCode,
+  IconChevronDown,
+  IconChevronUp,
   IconCopy,
   IconFilter,
   IconGitBranch,
@@ -301,12 +303,57 @@ function StepDetailPanel({
   step,
   onClose,
   onRunToHere,
+  onMoveUp,
+  onMoveDown,
 }: {
   step: PipelineStep | null;
   onClose: () => void;
   onRunToHere?: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [materializing, setMaterializing] = useState(false);
+  const [previewRows, setPreviewRows] = useState<Record<string, unknown>[]>([]);
+  const [previewCols, setPreviewCols] = useState<string[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Fetch preview when step changes
+  useEffect(() => {
+    if (!step?.rawConfig) {
+      setPreviewRows([]);
+      setPreviewCols([]);
+      setPreviewError(null);
+      return;
+    }
+    const sessionId = String(step.rawConfig.session_id ?? step.rawConfig.run_id ?? "");
+    const tableName = String(step.rawConfig.session_table_name ?? step.rawConfig.output_table ?? "");
+    const datasetId = String(step.rawConfig.dataset_id ?? step.rawConfig.output_dataset_id ?? step.inputDataset?.id ?? "");
+    if (!sessionId || !tableName || !datasetId) {
+      setPreviewRows([]);
+      setPreviewCols([]);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    import("../api").then(({ fetchStepPreview }) =>
+      fetchStepPreview(datasetId, sessionId, tableName, 100)
+    ).then((res) => {
+      if (cancelled) return;
+      setPreviewCols(res.columns);
+      setPreviewRows(res.rows);
+    }).catch((err) => {
+      if (cancelled) return;
+      setPreviewError(err instanceof Error ? err.message : "Preview unavailable");
+      setPreviewRows([]);
+      setPreviewCols([]);
+    }).finally(() => {
+      if (!cancelled) setPreviewLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [step?.id, step?.rawConfig]);
 
   const handleCopy = async () => {
     if (!step?.sql) return;
@@ -319,13 +366,33 @@ function StepDetailPanel({
     }
   };
 
+  const handleMaterialize = async () => {
+    if (!step?.rawConfig) return;
+    const sessionId = String(step.rawConfig.session_id ?? step.rawConfig.run_id ?? "");
+    const tableName = String(step.rawConfig.session_table_name ?? step.rawConfig.output_table ?? "");
+    const datasetId = String(step.rawConfig.dataset_id ?? step.rawConfig.output_dataset_id ?? step.inputDataset?.id ?? "");
+    if (!sessionId || !tableName || !datasetId) return;
+    setMaterializing(true);
+    try {
+      const { materializeStep } = await import("../api");
+      await materializeStep(datasetId, sessionId, tableName, true);
+    } catch {
+      // best-effort
+    } finally {
+      setMaterializing(false);
+    }
+  };
+
+  // Detect if this step is a lazy view (Power Query pattern)
+  const isView = step?.rawConfig?.is_view === true;
+
   return (
     <div
       style={{
         position: "absolute",
         top: 0,
         right: 0,
-        width: 300,
+        width: 460,
         height: "100%",
         background: "var(--bg1)",
         borderLeft: "1px solid var(--bd)",
@@ -367,6 +434,46 @@ function StepDetailPanel({
               </div>
               <div style={{ fontSize: 10, color: "var(--tx2)" }}>Step {step.stepNumber}</div>
             </div>
+            {(onMoveUp || onMoveDown) && (
+              <div style={{ display: "flex", gap: 2 }}>
+                <button
+                  onClick={onMoveUp}
+                  disabled={!onMoveUp}
+                  title="Move step up"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: onMoveUp ? "pointer" : "not-allowed",
+                    color: onMoveUp ? "var(--tx1)" : "var(--bd2)",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 3,
+                    borderRadius: 4,
+                    opacity: onMoveUp ? 1 : 0.4,
+                  }}
+                >
+                  <IconChevronUp size={14} />
+                </button>
+                <button
+                  onClick={onMoveDown}
+                  disabled={!onMoveDown}
+                  title="Move step down"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: onMoveDown ? "pointer" : "not-allowed",
+                    color: onMoveDown ? "var(--tx1)" : "var(--bd2)",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 3,
+                    borderRadius: 4,
+                    opacity: onMoveDown ? 1 : 0.4,
+                  }}
+                >
+                  <IconChevronDown size={14} />
+                </button>
+              </div>
+            )}
             <button
               onClick={onClose}
               style={{
@@ -397,6 +504,23 @@ function StepDetailPanel({
           >
             {/* Stats */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {isView && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "#818cf8",
+                    background: "rgba(129,140,248,0.08)",
+                    border: "1px solid rgba(129,140,248,0.3)",
+                    borderRadius: 6,
+                    padding: "2px 8px",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Lazy View
+                </span>
+              )}
               {step.row_count_after != null && (
                 <span
                   style={{
@@ -509,6 +633,111 @@ function StepDetailPanel({
               </div>
             )}
 
+            {/* Data Preview */}
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 6,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--tx2)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Preview
+                </span>
+                {previewRows.length > 0 && (
+                  <span style={{ fontSize: 10, color: "var(--tx2)" }}>
+                    {previewRows.length} rows
+                  </span>
+                )}
+              </div>
+              {previewLoading ? (
+                <div style={{ fontSize: 11, color: "var(--tx2)", padding: "8px 0" }}>
+                  Loading preview…
+                </div>
+              ) : previewError ? (
+                <div style={{ fontSize: 11, color: "var(--tx2)", fontStyle: "italic", padding: "8px 0" }}>
+                  {previewError}
+                </div>
+              ) : previewCols.length > 0 ? (
+                <div
+                  style={{
+                    maxHeight: 220,
+                    overflow: "auto",
+                    border: "1px solid var(--bd)",
+                    borderRadius: 6,
+                    background: "var(--bg0)",
+                  }}
+                >
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: 10,
+                      fontFamily: "var(--font-mono, 'Fira Code', monospace)",
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        {previewCols.map((col) => (
+                          <th
+                            key={col}
+                            style={{
+                              position: "sticky",
+                              top: 0,
+                              background: "var(--bg2)",
+                              padding: "4px 6px",
+                              borderBottom: "1px solid var(--bd)",
+                              textAlign: "left",
+                              fontWeight: 600,
+                              color: "var(--tx1)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewRows.map((row, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid var(--bd)" }}>
+                          {previewCols.map((col) => (
+                            <td
+                              key={col}
+                              style={{
+                                padding: "3px 6px",
+                                whiteSpace: "nowrap",
+                                maxWidth: 120,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                color: "var(--tx0)",
+                              }}
+                            >
+                              {row[col] == null ? "" : String(row[col])}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "var(--tx2)", fontStyle: "italic", padding: "8px 0" }}>
+                  No preview available — session may have expired.
+                </div>
+              )}
+            </div>
+
             <button
               onClick={onRunToHere}
               disabled={!onRunToHere}
@@ -527,6 +756,26 @@ function StepDetailPanel({
             >
               Trim pipeline to here
             </button>
+            {isView && (
+              <button
+                onClick={() => void handleMaterialize()}
+                disabled={materializing}
+                title="Materialize this step's view into a concrete table (equivalent to Power Query's Full Refresh)"
+                style={{
+                  marginTop: 6,
+                  padding: "7px 12px",
+                  fontSize: 12,
+                  background: materializing ? "var(--bg3)" : "rgba(52,211,153,0.08)",
+                  border: `1px solid ${materializing ? "var(--bd2)" : "rgba(52,211,153,0.35)"}`,
+                  borderRadius: "var(--r6)",
+                  color: materializing ? "var(--tx2)" : "var(--gr)",
+                  cursor: materializing ? "not-allowed" : "pointer",
+                  opacity: materializing ? 0.6 : 1,
+                }}
+              >
+                {materializing ? "Materializing…" : "Full Refresh"}
+              </button>
+            )}
           </div>
         </>
       )}
@@ -536,7 +785,7 @@ function StepDetailPanel({
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner() {
-  const { steps, removeStep, keepStepsThrough } = usePipelineContext();
+  const { steps, removeStep, keepStepsThrough, moveStep } = usePipelineContext();
   const { activeDataset, setActiveDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -627,7 +876,7 @@ function PipelineGraphTabInner() {
         style={{
           position: "absolute",
           top: 10,
-          right: selectedStep ? 310 : 10,
+          right: selectedStep ? 470 : 10,
           zIndex: 10,
           transition: "right 0.22s cubic-bezier(0.4,0,0.2,1)",
         }}
@@ -669,6 +918,16 @@ function PipelineGraphTabInner() {
                 }
                 setSelectedStep(null);
               }
+            : undefined
+        }
+        onMoveUp={
+          selectedStep && steps.findIndex((s) => s.id === selectedStep.id) > 0
+            ? () => moveStep(selectedStep.id, "up")
+            : undefined
+        }
+        onMoveDown={
+          selectedStep && steps.findIndex((s) => s.id === selectedStep.id) < steps.length - 1
+            ? () => moveStep(selectedStep.id, "down")
             : undefined
         }
       />

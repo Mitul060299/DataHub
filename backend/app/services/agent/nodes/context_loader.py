@@ -163,8 +163,13 @@ async def context_loader(state: AgentState) -> dict:
                         )
                         _select_sql = (_raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql).rstrip("; \t\r\n")
                         try:
+                            # Power Query pattern: replay as lazy VIEW, not TABLE.
+                            # VIEWs chain with zero RAM — DuckDB folds the entire
+                            # view stack into a single optimized query plan on first
+                            # SELECT.  This makes session restore instant instead of
+                            # re-materializing every intermediate step.
                             _replay_conn.execute(
-                                f'CREATE OR REPLACE TABLE "{_out_table}" AS ({_select_sql})'
+                                f'CREATE OR REPLACE VIEW "{_out_table}" AS ({_select_sql})'
                             )
                             table_registry[_out_table] = {
                                 "duckdb_name": _out_table,
@@ -176,10 +181,10 @@ async def context_loader(state: AgentState) -> dict:
                                 "column_names": [],
                                 "pipeline_step_number": int(_ps.step_number or 0),
                                 "is_artifact": False,
-                                "is_view": False,
+                                "is_view": True,
                             }
                             _logger.info(
-                                "SESSION_REPLAY: restored table=%s step=%d session=%s",
+                                "SESSION_REPLAY_VIEW: restored view=%s step=%d session=%s",
                                 _out_table, int(_ps.step_number or 0), session_id,
                             )
                         except Exception as _replay_err:

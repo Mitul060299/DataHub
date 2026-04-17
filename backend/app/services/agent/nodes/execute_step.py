@@ -492,9 +492,12 @@ async def execute_step(state: AgentState) -> dict:
 
                 else:
                     # Write ops: clean, filter, transform, pivot, union, reconcile
-                    # SQL may be a bare SELECT or a CREATE TABLE AS SELECT — strip any
-                    # CREATE [OR REPLACE] TABLE/VIEW <name> AS prefix so that
-                    # register_view_from_sql receives only the query body.
+                    # ─── Power Query-inspired lazy execution ───────────────────
+                    # All transforms are composable SQL views (non-destructive).
+                    # Preview uses LIMIT sampling (query folding through view chain).
+                    # Full materialization only on explicit export / save.
+                    from ...step_engine import StepEngine
+
                     output_table = str(
                         parameters.get("output_table")
                         or parameters.get("output_name")
@@ -506,7 +509,7 @@ async def execute_step(state: AgentState) -> dict:
                     # Keep original SQL for display; strip prefix for execution.
                     original_step_sql = step_sql
                     import re as _re_step
-                    _ddl_name: str | None = None  # the name from the CREATE TABLE clause, if any
+                    _ddl_name: str | None = None
                     _ct_match = _re_step.match(
                         r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+(\S+)\s+AS\s+",
                         step_sql,
@@ -515,115 +518,76 @@ async def execute_step(state: AgentState) -> dict:
                         _ddl_name = _ct_match.group(1).strip('"\'`')
                         step_sql = step_sql[_ct_match.end():].strip()
 
-                    # If this step's SQL references a DDL-named table created by a prior
-                    # step (which was registered under its generated output_table name),
-                    # rewrite those references → the actual registered name.
+                    # Rewrite DDL-named references to registered table names.
                     for _reg_name, _reg_entry in list(table_registry.items()):
                         if not isinstance(_reg_entry, dict):
                             continue
                         _reg_duckdb = _reg_entry.get("duckdb_name", "")
                         _reg_ddl = _reg_entry.get("ddl_name", "")
                         if _reg_ddl and _reg_ddl != _reg_duckdb:
-                            # Replace references to the DDL name with the actual view name
                             step_sql = _re_step.sub(
                                 rf"\b{_re_step.escape(_reg_ddl)}\b",
                                 _reg_duckdb,
                                 step_sql,
                             )
 
-                    preview_rows: list = []
-                    column_schema: list = []
-                    row_count_before: int | None = None
-                    if session_id:
-                        _rb_src = (
-                            parameters.get("source_table")
-                            or parameters.get("input_table")
-                            or next(
-                                (
-                                    v["duckdb_name"]
-                                    for v in sorted(
-                                        (e for e in table_registry.values() if isinstance(e, dict)),
-                                        key=lambda _x: _x.get("pipeline_step_number", 0),
-                                        reverse=True,
-                                    )
-                                    if 0 <= v.get("pipeline_step_number", 0) < step["step_number"]
-                                ),
-                                None,
-                            )
+                    # Resolve the source table for this step.
+                    _rb_src = (
+                        parameters.get("source_table")
+                        or parameters.get("input_table")
+                        or next(
+                            (
+                                v["duckdb_name"]
+                                for v in sorted(
+                                    (e for e in table_registry.values() if isinstance(e, dict)),
+                                    key=lambda _x: _x.get("pipeline_step_number", 0),
+                                    reverse=True,
+                                )
+                                if 0 <= v.get("pipeline_step_number", 0) < step["step_number"]
+                            ),
+                            None,
                         )
-                        if _rb_src:
-                            try:
-                                _rb_cnt = execute_in_session(
-                                    session_id, f"SELECT COUNT(*) AS n FROM {_rb_src}"
-                                )
-                                row_count_before = int(_rb_cnt[0]["n"]) if _rb_cnt else None
-                            except Exception:
-                                pass
-                    _step_start_ts = datetime.now(timezone.utc)
+                    ) if session_id else None
+
+                    # Infer input_tables for registry tracking.
+                    input_tables = list(parameters.get("input_tables") or [])
+                    if not input_tables:
+                        primary_alias = next(
+                            (k for k, v in table_registry.items() if isinstance(v, dict) and v.get("dataset_id") == str(state.get("dataset_id"))),
+                            None,
+                        )
+                        if primary_alias:
+                            input_tables = [primary_alias]
 
                     if session_id:
-                        register_view_from_sql(session_id, output_table, step_sql)
-                        # If the agent named a CREATE TABLE, also register that name
-                        # as an alias view → the generated output_table so follow-on
-                        # steps can reference either name without "Table not found".
-                        if _ddl_name and _ddl_name != output_table:
-                            try:
-                                get_connection(session_id).execute(
-                                    f'CREATE OR REPLACE VIEW "{_ddl_name}" AS SELECT * FROM "{output_table}"'
-                                )
-                            except Exception:
-                                pass
-                        # Try to get row count from new table
-                        try:
-                            count_rows = execute_in_session(session_id, f"SELECT COUNT(*) AS n FROM {output_table}")
-                            rows_out = int(count_rows[0]["n"]) if count_rows else None
-                        except Exception:
-                            rows_out = None
-
-                        # Try to get column schema via DESCRIBE
-                        try:
-                            desc_rows = execute_in_session(session_id, f"DESCRIBE {output_table}")
-                            out_cols = [r["column_name"] for r in desc_rows] if desc_rows else []
-                            column_schema = [
-                                {"name": r.get("column_name"), "type": r.get("column_type")}
-                                for r in (desc_rows or [])
-                            ]
-                        except Exception:
-                            try:
-                                sample = execute_in_session(session_id, f"SELECT * FROM {output_table} LIMIT 1")
-                                out_cols = list(sample[0].keys()) if sample else []
-                            except Exception:
-                                out_cols = []
-
-                        # Fetch inline preview rows for the chat table card
-                        try:
-                            preview_rows = execute_in_session(
-                                session_id, f"SELECT * FROM {output_table} LIMIT 50"
-                            ) or []
-                        except Exception:
-                            preview_rows = []
-
-                        # Count rows that actually changed (EXCEPT set difference).
-                        # For null-fill this returns the null count; for filter it
-                        # returns removed rows. Done only when source is known.
-                        rows_changed: int | None = None
-                        if _rb_src and rows_out is not None:
-                            try:
-                                _exc_result = execute_in_session(
-                                    session_id,
-                                    f"SELECT COUNT(*) AS n FROM ("
-                                    f"SELECT * FROM {_rb_src} EXCEPT SELECT * FROM {output_table})",
-                                )
-                                rows_changed = int(_exc_result[0]["n"]) if _exc_result else None
-                            except Exception:
-                                pass
+                        # Apply step as lazy VIEW via StepEngine
+                        # (Power Query pattern: non-destructive, composable, sampled preview)
+                        engine = StepEngine(session_id, table_registry)
+                        step_result = engine.apply_step(
+                            sql=step_sql,
+                            output_name=output_table,
+                            source_table=_rb_src or "",
+                            step_number=step["step_number"],
+                            operation=intent_key,
+                            input_tables=input_tables,
+                            ddl_name=_ddl_name,
+                            display_name=str(parameters.get("display_name") or _ddl_name or output_table),
+                        )
+                        rows_out = step_result.row_count
+                        out_cols = [c["name"] for c in step_result.column_schema]
+                        column_schema = step_result.column_schema
+                        preview_rows = step_result.preview_rows
+                        row_count_before = step_result.row_count_before
+                        rows_changed = step_result.rows_changed
+                        _exec_time_ms = step_result.execution_time_ms
                     else:
                         rows_out = None
                         out_cols = []
-
-                    _exec_time_ms = int(
-                        (datetime.now(timezone.utc) - _step_start_ts).total_seconds() * 1000
-                    )
+                        column_schema = []
+                        preview_rows = []
+                        row_count_before = None
+                        rows_changed = None
+                        _exec_time_ms = 0
 
                     # ── Scan byte tracking ────────────────────────────────────
                     # Charge the source dataset's size to the billing account ONCE per
@@ -642,8 +606,6 @@ async def execute_step(state: AgentState) -> dict:
                                 _ds_meta = _scan_db_session.query(DatasetMetaDB).filter(
                                     DatasetMetaDB.id == _scan_ds_id
                                 ).first()
-                                # Prefer raw file size; fall back to compressed; connector
-                                # datasets with no size get a synthetic floor: 500 bytes × row_count.
                                 if _ds_meta:
                                     _scan_bytes = (
                                         _ds_meta.file_size_bytes
@@ -663,32 +625,7 @@ async def execute_step(state: AgentState) -> dict:
                         except Exception:
                             pass  # scan tracking is non-blocking
 
-                    # Update table_registry — dataset_id stays blank for pipeline
-                    # step tables; only user-saved checkpoints get a real DatasetMetaDB.
-                    input_tables = list(parameters.get("input_tables") or [])
-                    if not input_tables:
-                        # infer from current primary table
-                        primary_alias = next(
-                            (k for k, v in table_registry.items() if isinstance(v, dict) and v.get("dataset_id") == str(state.get("dataset_id"))),
-                            None,
-                        )
-                        if primary_alias:
-                            input_tables = [primary_alias]
-
-                    new_entry: TableRegistryEntry = {
-                        "duckdb_name": output_table,
-                        "dataset_id": "",
-                        "display_name": str(parameters.get("display_name") or _ddl_name or output_table),
-                        "source_intent": intent_key,
-                        "parent_tables": input_tables,
-                        "row_count": rows_out or 0,
-                        "column_names": out_cols,
-                        "pipeline_step_number": step["step_number"],
-                        "is_artifact": False,
-                        "is_view": False,
-                        "ddl_name": _ddl_name or "",  # original CREATE TABLE name for cross-step resolution
-                    }
-                    table_registry[output_table] = new_entry
+                    # table_registry is already updated by StepEngine.apply_step()
 
                     execution_result = {
                         "step_number": step["step_number"],
@@ -698,7 +635,7 @@ async def execute_step(state: AgentState) -> dict:
                         "rows_changed": rows_changed if session_id else None,
                         "run_id": None,
                         "output_dataset_id": state.get("dataset_id"),
-                        "sql": original_step_sql,  # show original (with CREATE TABLE prefix) to user
+                        "sql": original_step_sql,
                         "error": None,
                         "output_table": output_table,
                         "session_table_name": output_table,
@@ -708,6 +645,7 @@ async def execute_step(state: AgentState) -> dict:
                         "execution_time_ms": _exec_time_ms,
                         "column_schema": column_schema,
                         "query_results": preview_rows,
+                        "is_view": True,  # Power Query: steps are always lazy views
                     }
                     _prev_charged = list(state.get("scan_charged_dataset_ids") or [])
                     _new_charged = (

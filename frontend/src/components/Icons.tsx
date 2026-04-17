@@ -57,6 +57,7 @@ export const IconBarChart = makeIcon(<><path d="M5 19V9" /><path d="M12 19V5" />
 export const IconLayers = makeIcon(<><path d="m12 4 9 5-9 5-9-5 9-5z" /><path d="m3 14 9 5 9-5" /></>);
 export const IconCode = makeIcon(<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14" />);
 export const IconChevronDown = makeIcon(<path d="m6 9 6 6 6-6" />);
+export const IconChevronUp = makeIcon(<path d="m6 15 6-6 6 6" />);
 export const IconChevronRight = makeIcon(<path d="m9 6 6 6-6 6" />);
 export const IconMoreHoriz = makeIcon(<><circle cx="6" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="18" cy="12" r="1" /></>);
 export const IconUser = makeIcon(<><circle cx="12" cy="8" r="4" /><path d="M4 20c1.8-3 4.6-4.5 8-4.5S18.2 17 20 20" /></>);

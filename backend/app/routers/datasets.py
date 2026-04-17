@@ -285,16 +285,20 @@ async def upload_dataset(
     # This makes the dataset first-class: DuckDB can stream pages directly from
     # S3 without loading the full file, and preview_dataset takes the fast path.
     _parquet_s3_path: str | None = None
+    _compressed_size: int | None = None
     try:
         import io as _io
         _parquet_buf = _io.BytesIO()
         df.to_parquet(_parquet_buf, index=False, engine="pyarrow")
+        _parquet_bytes = _parquet_buf.getvalue()
+        _compressed_size = len(_parquet_bytes)
         _parquet_s3_path = StorageService.upload(
             user_id=user_id or "anonymous",
             dataset_id=dataset_id,
-            buffer=_parquet_buf.getvalue(),
+            buffer=_parquet_bytes,
             file_name=f"{dataset_id}.parquet",
         )
+        del _parquet_bytes  # free early
     except Exception:
         pass  # Degraded to DB-chunk fallback — preview still works via get_dataset_from_db
     # ─────────────────────────────────────────────────────────────────────────
@@ -309,19 +313,24 @@ async def upload_dataset(
             access_tier=initial_tier,
             storage_path=_parquet_s3_path,
             parent_id=None,
+            file_size_bytes=len(content),
+            compressed_size_bytes=_compressed_size,
         )
     )
+    # Only persist DB chunks as fallback when Parquet upload failed.
+    # When storage_path is set, DuckDB reads directly from S3 — chunks are redundant.
     rows = df.to_dict(orient="records")
-    chunks = _chunk_rows(rows, _CHUNK_SIZE)
-    for index, chunk in enumerate(chunks):
-        db.add(
-            DatasetChunkDB(
-                id=f"{dataset_id}:{index}",
-                dataset_id=dataset_id,
-                chunk_index=index,
-                rows=chunk,
+    if not _parquet_s3_path:
+        chunks = _chunk_rows(rows, _CHUNK_SIZE)
+        for index, chunk in enumerate(chunks):
+            db.add(
+                DatasetChunkDB(
+                    id=f"{dataset_id}:{index}",
+                    dataset_id=dataset_id,
+                    chunk_index=index,
+                    rows=chunk,
+                )
             )
-        )
     if len(rows) <= 5000:
         db.add(
             DatasetDataDB(
@@ -637,6 +646,74 @@ def save_pipeline_steps(
         db.rollback()
         return {"dataset_id": dataset_id, "saved": 0}
     return {"dataset_id": dataset_id, "saved": len(steps)}
+
+
+# ── Step Preview / Materialize (Power Query pattern) ──────────────────────────
+
+@router.post("/{dataset_id}/step-preview")
+def step_preview(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Preview a pipeline step's output using lazy evaluation (sampled rows).
+
+    Power Query pattern: LIMIT pushes through the entire view chain, so
+    DuckDB only scans the minimum rows needed from the base Parquet file.
+
+    Body: { "session_id": str, "table_name": str, "limit": int?, "offset": int? }
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    session_id = payload.get("session_id", "")
+    table_name = payload.get("table_name", "")
+    limit = min(int(payload.get("limit", 200)), 1000)  # cap at 1000
+    offset = max(int(payload.get("offset", 0)), 0)
+    if not session_id or not table_name:
+        raise HTTPException(status_code=422, detail="session_id and table_name required")
+    try:
+        from ..services.step_engine import StepEngine
+        engine = StepEngine(session_id, {})
+        rows = engine.preview(table_name, limit=limit, offset=offset)
+        columns = list(rows[0].keys()) if rows else []
+        return {"rows": rows, "columns": columns, "count": len(rows)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/{dataset_id}/step-materialize")
+def step_materialize(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Materialize a lazy view into a TABLE (Power Query 'Full Refresh').
+
+    This converts the zero-RAM view chain into a concrete in-memory table.
+    Use sparingly — this is the expensive operation (equivalent to PQ Refresh).
+
+    Body: { "session_id": str, "table_name": str, "snapshot": bool? }
+    """
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    session_id = payload.get("session_id", "")
+    table_name = payload.get("table_name", "")
+    snapshot = bool(payload.get("snapshot", False))
+    if not session_id or not table_name:
+        raise HTTPException(status_code=422, detail="session_id and table_name required")
+    try:
+        from ..services.step_engine import StepEngine
+        engine = StepEngine(session_id, {})
+        row_count = engine.materialize(table_name)
+        snapshot_url = None
+        if snapshot:
+            user_id = get_current_user_id(authorization)
+            snapshot_url = engine.snapshot_to_parquet(table_name, dataset_id, user_id)
+        return {"table_name": table_name, "row_count": row_count, "materialized": True, "snapshot_url": snapshot_url}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ── Version History endpoints ─────────────────────────────────────────────────
@@ -1060,6 +1137,8 @@ def export_dataset(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     def row_iter():
+        import csv as _csv
+        import io as _sio
         if meta.storage_path:
             query_path = StorageService.get_query_path(meta.storage_path)
             conn = DuckDBService._ensure_db()
@@ -1088,30 +1167,44 @@ def export_dataset(
             sql = f"SELECT * FROM read_parquet('{query_path}'){where}{order}"
             result = conn.execute(sql)
             col_names = [desc[0] for desc in result.description]
-            yield ",".join(col_names) + "\n"
+
+            buf = _sio.StringIO()
+            writer = _csv.writer(buf, lineterminator='\n')
+            writer.writerow(col_names)
+            yield buf.getvalue()
+
             for batch in result.fetch_arrow_reader(1000):
+                buf = _sio.StringIO()
+                writer = _csv.writer(buf, lineterminator='\n')
                 for row in batch.to_pylist():
-                    yield ",".join(str(row.get(c, "") or "") for c in col_names) + "\n"
+                    writer.writerow(row.get(c, "") or "" for c in col_names)
+                yield buf.getvalue()
         else:
-            # Legacy fallback: reconstruct from DatasetChunkDB chunks
+            # Legacy fallback: stream from DatasetChunkDB chunks (no bulk load)
             col_names_raw = meta.columns or []
             # meta.columns may be list[str] or list[dict]
             if col_names_raw and isinstance(col_names_raw[0], dict):
                 col_names = [c.get("name", "") for c in col_names_raw]
             else:
                 col_names = list(col_names_raw)
-            yield ",".join(col_names) + "\n"
+
+            buf = _sio.StringIO()
+            writer = _csv.writer(buf, lineterminator='\n')
+            writer.writerow(col_names)
+            yield buf.getvalue()
+
             chunks = (
                 db.query(DatasetChunkDB)
                 .filter(DatasetChunkDB.dataset_id == dataset_id)
                 .order_by(DatasetChunkDB.chunk_index.asc())
                 .all()
             )
-            rows: list[dict] = []
             for chunk in chunks:
-                rows.extend(chunk.rows or [])
-            for row in rows:
-                yield ",".join(str(row.get(c, "") or "") for c in col_names) + "\n"
+                buf = _sio.StringIO()
+                writer = _csv.writer(buf, lineterminator='\n')
+                for row in (chunk.rows or []):
+                    writer.writerow(str(row.get(c, "") or "") for c in col_names)
+                yield buf.getvalue()
 
     emit_event("dataset.exported", {"dataset_id": dataset_id})
     display_name = (meta.name or dataset_id).replace('"', "")

@@ -353,6 +353,7 @@ class AgentGraphService:
                         "output_dataset_id": output.get("output_dataset_id"),
                         "run_steps": output.get("run_steps", []),
                         "pipeline_steps": output.get("pipeline_steps", []),
+                        "execution_results": input_state.get("execution_results", []),
                     }
 
         except Exception as exc:

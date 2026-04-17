@@ -35,6 +35,9 @@ async def pipeline_recorder(state: AgentState) -> dict:
                         "rows_affected": result.get("rows_affected"),
                         "input_tables": list(params.get("input_tables") or []),
                         "output_table": params.get("output_table") or params.get("output_name") or result.get("output_table") or None,
+                        "session_table_name": result.get("session_table_name"),
+                        "row_count_before": result.get("row_count_before"),
+                        "execution_time_ms": result.get("execution_time_ms"),
                         "timestamp": datetime.utcnow().isoformat(),
                         # Frontend rendering extras
                         "tile_created": result.get("tile_created"),

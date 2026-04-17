@@ -107,6 +107,8 @@ _executor = ThreadPoolExecutor(max_workers=2)
 _CHUNK_SIZE = 1000
 _UNDO_SNAPSHOT_PREFIX = "__UNDO_SNAPSHOT__:"
 _UNDO_MAX_ROWS = 50000
+_PARQUET_TRANSFORM_MEMORY_LIMIT = "512MB"
+_PARQUET_STATS_SAMPLE = 10_000
 
 
 def _chunk_rows(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
@@ -217,6 +219,168 @@ def _create_transformed_dataset_version(
     return output_dataset
 
 
+def _transform_via_parquet(
+    source_dataset: DatasetMetaDB,
+    user_id: str,
+    transformation: dict[str, Any],
+    db: Session,
+) -> dict[str, Any]:
+    """Push a SQL transformation fully into DuckDB by reading directly from the
+    source Parquet file in object storage.
+
+    This never materialises all rows as Python dicts, so it handles 1M+ row
+    datasets without OOM.  The result is written as a new Parquet file and a
+    new ``DatasetMetaDB`` row with ``storage_path`` set — so subsequent
+    transforms on the output also use this fast path.
+
+    No ``DatasetChunkDB`` / ``DatasetDataDB`` rows are written for the output.
+    Undo is not supported for Parquet-backed transforms (same as the existing
+    behaviour for datasets with > ``_UNDO_MAX_ROWS`` rows).
+    """
+    import io
+
+    import duckdb as _duckdb
+    import pyarrow.parquet as pq
+
+    from ..services.calculated_columns_service import CalculatedColumnsService
+    from ..services.data_conversion import DataConversionService
+    from ..services.object_storage import StorageService
+
+    sql = transformation.get("sql") or ""
+    # get_query_path returns a filesystem path (local) or a pre-signed HTTPS
+    # URL (S3/R2/GCS).  Both are readable by DuckDB without extra credentials.
+    source_path = StorageService.get_query_path(source_dataset.storage_path)
+    # SQL-escape single quotes that could appear in filesystem paths on Windows.
+    safe_path = source_path.replace("'", "''")
+
+    start_time = time.time()
+
+    conn = _duckdb.connect(database=":memory:")
+    try:
+        conn.execute(f"SET memory_limit='{_PARQUET_TRANSFORM_MEMORY_LIMIT}';")
+        conn.execute("SET threads=2;")
+        # httpfs is needed for HTTPS (pre-signed) URLs; ignore if already loaded.
+        try:
+            conn.execute("LOAD httpfs;")
+        except Exception:
+            try:
+                conn.execute("INSTALL httpfs;")
+                conn.execute("LOAD httpfs;")
+            except Exception:
+                pass  # local file paths don't need httpfs
+
+        # Register the source Parquet as a VIEW called `dataset` — the name
+        # expected by all user-generated SQL.  Inject any calculated columns
+        # the same way transform_rows does.
+        base_sql = f"SELECT * FROM read_parquet('{safe_path}')"
+        if source_dataset.id:
+            base_sql = CalculatedColumnsService.inject_calculated_columns(
+                base_sql, source_dataset.id
+            )
+        DuckDBService._execute_statement(
+            conn,
+            f"CREATE VIEW dataset AS {base_sql}",
+            allowed_paths=[source_path],
+        )
+
+        # Normalise user SQL (strips CREATE TABLE wrappers, fixes alias quirks).
+        normalized_sql = DuckDBService._normalize_dataset_sql(sql)
+        if not normalized_sql:
+            normalized_sql = "SELECT * FROM dataset"
+
+        # Materialise the full transform result inside DuckDB.
+        conn.execute(f"CREATE TABLE result AS {normalized_sql}")
+
+        total_rows: int = conn.execute("SELECT COUNT(*) FROM result").fetchone()[0]  # type: ignore[index]
+
+        # Fetch a small sample for schema and stats inference — avoids loading
+        # millions of rows into pandas.
+        sample_df: pd.DataFrame = conn.execute(
+            f"SELECT * FROM result LIMIT {_PARQUET_STATS_SAMPLE}"
+        ).fetchdf()
+        schema = DataConversionService._infer_schema(sample_df) if not sample_df.empty else {}
+        stats = DataConversionService._generate_stats(sample_df, schema) if not sample_df.empty else {}
+        columns: list[str] = list(sample_df.columns)
+
+        # Build an API-safe preview from the already-fetched sample.
+        preview_df = sample_df.head(100)
+        preview_rows: list[dict[str, Any]] = (
+            preview_df.astype(object)
+            .where(pd.notnull(preview_df), None)
+            .to_dict(orient="records")
+        )
+
+        # Write the full result to Parquet via Arrow — columnar, never Python dicts.
+        arrow_table = conn.execute("SELECT * FROM result").fetch_arrow_table()
+        buf = io.BytesIO()
+        pq.write_table(arrow_table, buf, compression="zstd")
+        parquet_bytes = buf.getvalue()
+
+    finally:
+        conn.close()
+
+    execution_time_ms = int((time.time() - start_time) * 1000)
+
+    # Upload the new Parquet file to object storage.
+    new_dataset_id = str(uuid.uuid4())
+    new_storage_path = StorageService.upload(
+        user_id=user_id,
+        dataset_id=new_dataset_id,
+        buffer=parquet_bytes,
+        file_name=f"{new_dataset_id}.parquet",
+        storage_tier=source_dataset.access_tier or "hot",
+    )
+
+    # Persist the output dataset.  storage_path is set so future transforms
+    # also take this fast path.  No DB chunk rows are written.
+    output_dataset = DatasetMetaDB(
+        id=new_dataset_id,
+        user_id=source_dataset.user_id,
+        workspace_id=source_dataset.workspace_id or "default",
+        name=(source_dataset.name or "dataset") + " (transformed)",
+        description=source_dataset.description,
+        source_type=source_dataset.source_type,
+        storage_provider=source_dataset.storage_provider,
+        storage_path=new_storage_path,
+        file_format="parquet",
+        schema_json=schema,
+        stats_json=stats,
+        columns=columns,
+        row_count=int(total_rows),
+        status="ready",
+        error_message=None,
+        access_tier=source_dataset.access_tier or "hot",
+        parent_id=source_dataset.id,
+    )
+    db.add(output_dataset)
+    db.flush()
+
+    DataTransformationService._save_history(
+        db,
+        output_dataset.id,
+        user_id,
+        transformation,
+        affected_rows=str(total_rows),
+        status="completed",
+        error_message=None,  # no undo snapshot for Parquet-backed transforms
+        execution_time_ms=execution_time_ms,
+    )
+    db.commit()
+
+    return {
+        "success": True,
+        "rowCount": int(total_rows),
+        "previewData": preview_rows,
+        "columns": columns,
+        "outputDataset": {
+            "id": output_dataset.id,
+            "name": output_dataset.name,
+            "rowCount": output_dataset.row_count,
+            "parentId": output_dataset.parent_id,
+        },
+    }
+
+
 class DataTransformationService:
     @staticmethod
     def execute_transformation(
@@ -230,7 +394,9 @@ class DataTransformationService:
             raise ValueError("Dataset not found")
 
         is_large = int(dataset.row_count or 0) > 1_000_000
-        if is_large:
+        if is_large and not dataset.storage_path:
+            # Large chunk-only dataset: run in a background thread to avoid
+            # blocking the request for the duration of the transform.
             job_id = _job_store.create(dataset_id, user_id, transformation)
             _executor.submit(_run_background_job, job_id, dataset_id, user_id, transformation)
             return {"jobId": job_id}
@@ -250,6 +416,11 @@ class DataTransformationService:
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
             raise ValueError("Dataset not found")
+
+        # Fast path: dataset is backed by a Parquet file in object storage.
+        # Push the SQL entirely into DuckDB without loading rows into Python.
+        if dataset.storage_path:
+            return _transform_via_parquet(dataset, user_id, transformation, db)
 
         current_rows = _load_dataset_rows(dataset, db)
         undo_snapshot = _build_undo_snapshot(dataset, current_rows)
@@ -420,6 +591,12 @@ def _run_background_job(
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
             raise ValueError("Dataset not found")
+        # Fast path: Parquet-backed dataset — push transform into DuckDB.
+        if dataset.storage_path:
+            _job_store.update(job_id, progress=20)
+            result = _transform_via_parquet(dataset, user_id, transformation, db)
+            _job_store.update(job_id, status="completed", progress=100, result=result)
+            return
         current_rows = _load_dataset_rows(dataset, db)
 
         start_time = time.time()

@@ -126,15 +126,35 @@ async def context_loader(state: AgentState) -> dict:
             }
 
         # DB-backed session replay: reconstruct intermediate pipeline tables from
-        # PipelineStepDB whenever the in-memory table_registry has no derived entries.
-        # This fires after a server restart, MemorySaver eviction, or a page refresh
-        # when the LangChain checkpoint is gone — recovering the DuckDB session from
-        # the SQL that was already executed and persisted to the steps table.
-        _has_derived = any(
-            isinstance(v, dict) and int(v.get("pipeline_step_number", 0)) > 0
-            for v in table_registry.values()
-        )
-        if session_id and not _has_derived:
+        # PipelineStepDB whenever the DuckDB session has lost its views.
+        # This fires after a server restart, TTL eviction, MemorySaver eviction,
+        # or a page refresh when the LangChain checkpoint is gone — recovering
+        # the DuckDB session from the SQL that was persisted to the steps table.
+        #
+        # We can't just check table_registry emptiness — the LangChain checkpoint
+        # may preserve the registry even after the in-memory DuckDB connection was
+        # evicted/recreated (losing all views).  Instead, probe the session for the
+        # first derived view; if it's gone, replay everything.
+        _derived_entries = [
+            v for v in table_registry.values()
+            if isinstance(v, dict) and int(v.get("pipeline_step_number", 0)) > 0
+        ]
+        _needs_replay = not _derived_entries  # registry empty → definitely need replay
+        if _derived_entries and session_id:
+            # Registry says derived views exist — verify at least one is live in DuckDB
+            _probe_name = _derived_entries[0].get("duckdb_name", "")
+            if _probe_name:
+                try:
+                    get_connection(session_id).execute(
+                        f'SELECT 1 FROM "{_probe_name}" LIMIT 0'
+                    )
+                except Exception:
+                    _needs_replay = True
+                    _logger.info(
+                        "SESSION_PROBE_MISS: view=%s gone from DuckDB, will replay",
+                        _probe_name,
+                    )
+        if session_id and _needs_replay:
             from ....models_db import PipelineStepDB as _PipelineStepDB
             import re as _re_replay
             _replay_db = SessionLocal()

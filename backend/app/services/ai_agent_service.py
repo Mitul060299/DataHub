@@ -453,6 +453,67 @@ class AIAgentService:
         return re.sub(r"\btable\b", "dataset", normalized, flags=re.IGNORECASE)
 
     @staticmethod
+    def _replay_session_views(session_id: str, dataset: Any) -> bool:
+        """Re-register the source Parquet + replay pipeline VIEWs from PipelineStepDB.
+
+        Called when the DuckDB session lost its views (TTL eviction, server restart).
+        Returns True if at least one view was replayed.
+        """
+        import re as _re_replay
+        from .duckdb_session import get_connection, register_view
+        from .object_storage import StorageService
+        from ..db import SessionLocal
+        from ..models_db import PipelineStepDB as _PipelineStepDB
+
+        conn = get_connection(session_id)
+
+        # 1. Re-register the source dataset view
+        if dataset and dataset.storage_path:
+            try:
+                file_path = StorageService.get_query_path(dataset.storage_path)
+                _sanitized = _re_replay.sub(r"[^A-Za-z0-9_]", "_", (dataset.name or "dataset").strip()).lower()
+                _sanitized = _re_replay.sub(r"_+", "_", _sanitized).strip("_") or "dataset"
+                if _sanitized[0].isdigit():
+                    _sanitized = "ds_" + _sanitized
+                register_view(session_id, _sanitized, file_path)
+                if _sanitized != "dataset":
+                    register_view(session_id, "dataset", file_path)
+            except Exception:
+                return False
+
+        # 2. Replay derived views from PipelineStepDB
+        _db = SessionLocal()
+        try:
+            steps = (
+                _db.query(_PipelineStepDB)
+                .filter(
+                    _PipelineStepDB.session_id == session_id,
+                    _PipelineStepDB.output_table.isnot(None),
+                    _PipelineStepDB.duckdb_sql.isnot(None),
+                    _PipelineStepDB.status == "completed",
+                )
+                .order_by(_PipelineStepDB.step_number)
+                .all()
+            )
+            if not steps:
+                return False
+            for ps in steps:
+                out_table = str(ps.output_table)
+                raw_sql = str(ps.duckdb_sql).strip()
+                ct_m = _re_replay.match(
+                    r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                    raw_sql,
+                )
+                select_sql = (raw_sql[ct_m.end():].strip() if ct_m else raw_sql).rstrip("; \t\r\n")
+                try:
+                    conn.execute(f'CREATE OR REPLACE VIEW "{out_table}" AS ({select_sql})')
+                except Exception:
+                    break  # later steps depend on this one
+            return True
+        finally:
+            _db.close()
+
+    @staticmethod
     def _get_dataset_context(
         dataset_id: str,
         db: Session,
@@ -492,7 +553,26 @@ class AIAgentService:
                     except Exception:
                         pass
             except Exception:
-                pass  # session expired — fall back to original data
+                # View may have been lost due to DuckDB session eviction.
+                # Attempt to replay pipeline steps from the DB before falling back.
+                try:
+                    _replayed = AIAgentService._replay_session_views(session_id, dataset)
+                    if _replayed:
+                        from .duckdb_session import execute_in_session as _exec2
+                        sample_data = _exec2(
+                            session_id,
+                            f'SELECT * FROM "{table_name}" LIMIT {sample_size}',
+                        ) or []
+                        if sample_data:
+                            _used_session = True
+                            try:
+                                cnt = _exec2(session_id, f'SELECT COUNT(*) AS n FROM "{table_name}"')
+                                if cnt:
+                                    row_count = int(cnt[0]["n"])
+                            except Exception:
+                                pass
+                except Exception:
+                    pass  # replay failed — fall back to original data
         if not _used_session:
             if dataset.storage_path:
                 sample_query = (

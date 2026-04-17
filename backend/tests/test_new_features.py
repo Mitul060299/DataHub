@@ -391,7 +391,7 @@ class TestReplaySteps(unittest.TestCase):
         with patch("app.controllers.cleaning_controller.get_current_role", return_value="editor"), \
              patch("app.controllers.cleaning_controller.require_role"), \
              patch("app.controllers.cleaning_controller.get_current_subject", return_value="user-1"), \
-             patch("app.controllers.cleaning_controller.DataTransformationService", mock_dts):
+             patch("app.services.data_transformation_service.DataTransformationService", mock_dts):
             result = CleaningController.replay_steps("ds-pivot", steps, self._auth(), db)
 
         self.assertEqual(call_count[0], 2)
@@ -409,7 +409,7 @@ class TestReplaySteps(unittest.TestCase):
         with patch("app.controllers.cleaning_controller.get_current_role", return_value="editor"), \
              patch("app.controllers.cleaning_controller.require_role"), \
              patch("app.controllers.cleaning_controller.get_current_subject", return_value="user-1"), \
-             patch("app.controllers.cleaning_controller.DataTransformationService", mock_dts):
+             patch("app.services.data_transformation_service.DataTransformationService", mock_dts):
             result = CleaningController.replay_steps("ds-pivot", steps, self._auth(), db)
 
         mock_dts.execute_transformation.assert_not_called()
@@ -444,7 +444,7 @@ class TestReplaySteps(unittest.TestCase):
         with patch("app.controllers.cleaning_controller.get_current_role", return_value="editor"), \
              patch("app.controllers.cleaning_controller.require_role"), \
              patch("app.controllers.cleaning_controller.get_current_subject", return_value="user-1"), \
-             patch("app.controllers.cleaning_controller.DataTransformationService", mock_dts):
+             patch("app.services.data_transformation_service.DataTransformationService", mock_dts):
             with self.assertRaises(HTTPException) as ctx:
                 CleaningController.replay_steps("ds-pivot", steps, self._auth(), db)
 
@@ -475,7 +475,7 @@ class TestReplaySteps(unittest.TestCase):
         with patch("app.controllers.cleaning_controller.get_current_role", return_value="editor"), \
              patch("app.controllers.cleaning_controller.require_role"), \
              patch("app.controllers.cleaning_controller.get_current_subject", return_value="user-1"), \
-             patch("app.controllers.cleaning_controller.DataTransformationService", mock_dts):
+             patch("app.services.data_transformation_service.DataTransformationService", mock_dts):
             result = CleaningController.replay_steps(ids[0], steps, self._auth(), db)
 
         self.assertEqual(result["replayed_steps"][0]["input_dataset_id"], ids[0])

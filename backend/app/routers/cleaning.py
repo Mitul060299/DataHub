@@ -36,13 +36,23 @@ class TransformationRequest(BaseModel):
     transformation: dict[str, Any]
 
 
+class AnalyzeRequest(BaseModel):
+    session_id: str | None = None
+    table_name: str | None = None
+
+
 @router.post("/datasets/{dataset_id}/analyze")
 def analyze_dataset(
     dataset_id: str,
+    payload: AnalyzeRequest | None = None,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    return CleaningController.analyze_dataset(dataset_id, authorization, db)
+    return CleaningController.analyze_dataset(
+        dataset_id, authorization, db,
+        session_id=payload.session_id if payload else None,
+        table_name=payload.table_name if payload else None,
+    )
 
 
 @router.post("/datasets/{dataset_id}/chat", response_class=StreamingResponse)

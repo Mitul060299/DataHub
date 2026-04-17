@@ -30,8 +30,14 @@ class AIAgentService:
         return aliases.get(normalized, model)
 
     @staticmethod
-    def analyze_dataset(dataset_id: str, db: Session) -> dict[str, Any]:
-        context = AIAgentService._get_dataset_context(dataset_id, db)
+    def analyze_dataset(
+        dataset_id: str,
+        db: Session,
+        *,
+        session_id: str | None = None,
+        table_name: str | None = None,
+    ) -> dict[str, Any]:
+        context = AIAgentService._get_dataset_context(dataset_id, db, session_id=session_id, table_name=table_name)
         provider, api_key, model = AIAgentService._provider_config()
         if not provider or not api_key:
             return {
@@ -447,7 +453,13 @@ class AIAgentService:
         return re.sub(r"\btable\b", "dataset", normalized, flags=re.IGNORECASE)
 
     @staticmethod
-    def _get_dataset_context(dataset_id: str, db: Session) -> dict[str, Any]:
+    def _get_dataset_context(
+        dataset_id: str,
+        db: Session,
+        *,
+        session_id: str | None = None,
+        table_name: str | None = None,
+    ) -> dict[str, Any]:
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
             raise ValueError("Dataset not found")
@@ -457,16 +469,41 @@ class AIAgentService:
         sample_size = 1000 if is_large else max(1, min(row_count, 10000))
 
         sample_data: list[dict[str, Any]] = []
-        if dataset.storage_path:
-            sample_query = (
-                f"SELECT * FROM dataset USING SAMPLE {sample_size} ROWS"
-                if is_large
-                else f"SELECT * FROM dataset LIMIT {sample_size}"
-            )
-            sample_data = DuckDBService.query_parquet(dataset.storage_path, sample_query)
-        else:
-            df = AIAgentService._load_dataframe(dataset_id, db)
-            sample_data = df.head(sample_size).to_dict(orient="records")
+        # When a live DuckDB session has pipeline output, query that instead of
+        # the original Parquet — the user expects the report on transformed data.
+        _used_session = False
+        if session_id and table_name:
+            try:
+                from .duckdb_session import execute_in_session
+                sample_data = execute_in_session(
+                    session_id,
+                    f'SELECT * FROM "{table_name}" LIMIT {sample_size}',
+                ) or []
+                if sample_data:
+                    _used_session = True
+                    # Update row_count from the session table for accurate profile.
+                    try:
+                        cnt = execute_in_session(
+                            session_id,
+                            f'SELECT COUNT(*) AS n FROM "{table_name}"',
+                        )
+                        if cnt:
+                            row_count = int(cnt[0]["n"])
+                    except Exception:
+                        pass
+            except Exception:
+                pass  # session expired — fall back to original data
+        if not _used_session:
+            if dataset.storage_path:
+                sample_query = (
+                    f"SELECT * FROM dataset USING SAMPLE {sample_size} ROWS"
+                    if is_large
+                    else f"SELECT * FROM dataset LIMIT {sample_size}"
+                )
+                sample_data = DuckDBService.query_parquet(dataset.storage_path, sample_query)
+            else:
+                df = AIAgentService._load_dataframe(dataset_id, db)
+                sample_data = df.head(sample_size).to_dict(orient="records")
 
         schema = dataset.schema_json or DataConversionService._infer_schema(
             pd.DataFrame(sample_data)

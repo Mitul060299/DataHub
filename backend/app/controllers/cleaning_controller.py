@@ -74,7 +74,14 @@ class CleaningController:
     _UNDO_SNAPSHOT_PREFIX = "__UNDO_SNAPSHOT__:"
 
     @staticmethod
-    def analyze_dataset(dataset_id: str, authorization: str | None, db: Session) -> dict[str, Any]:
+    def analyze_dataset(
+        dataset_id: str,
+        authorization: str | None,
+        db: Session,
+        *,
+        session_id: str | None = None,
+        table_name: str | None = None,
+    ) -> dict[str, Any]:
         role = get_current_role(authorization)
         require_role("viewer", role)
 
@@ -83,7 +90,7 @@ class CleaningController:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         from ..services.ai_agent_service import AIAgentService  # lazy
-        return AIAgentService.analyze_dataset(dataset_id, db)
+        return AIAgentService.analyze_dataset(dataset_id, db, session_id=session_id, table_name=table_name)
 
     @staticmethod
     def process_command(

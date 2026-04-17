@@ -256,7 +256,7 @@ interface AIPanelProps {
 }
 
 export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick }: AIPanelProps) {
-  const { addStep, steps, setLiveArtifact } = usePipelineContext();
+  const { addStep, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
   const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId, sessionIdRef } = useChatSession();
@@ -961,7 +961,9 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         suggestions: unknown[];
         data_profile?: DataProfile;
         error?: string;
-      }>(`/cleaning/datasets/${dataset.id}/analyze`);
+      }>(`/cleaning/datasets/${dataset.id}/analyze`, liveArtifact
+        ? { session_id: liveArtifact.sessionId, table_name: liveArtifact.tableName }
+        : {});
       const profile = res.data.data_profile;
       const issues = (res.data.issues ?? []) as QualityIssue[];
       const issueCount = issues.length;

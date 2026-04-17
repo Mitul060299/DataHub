@@ -154,6 +154,7 @@ async def context_loader(state: AgentState) -> dict:
                         "SESSION_PROBE_MISS: view=%s gone from DuckDB, will replay",
                         _probe_name,
                     )
+        _restored_pipeline_steps: list[dict] = []
         if session_id and _needs_replay:
             from ....models_db import PipelineStepDB as _PipelineStepDB
             import re as _re_replay
@@ -183,11 +184,6 @@ async def context_loader(state: AgentState) -> dict:
                         )
                         _select_sql = (_raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql).rstrip("; \t\r\n")
                         try:
-                            # Power Query pattern: replay as lazy VIEW, not TABLE.
-                            # VIEWs chain with zero RAM — DuckDB folds the entire
-                            # view stack into a single optimized query plan on first
-                            # SELECT.  This makes session restore instant instead of
-                            # re-materializing every intermediate step.
                             _replay_conn.execute(
                                 f'CREATE OR REPLACE VIEW "{_out_table}" AS ({_select_sql})'
                             )
@@ -203,6 +199,16 @@ async def context_loader(state: AgentState) -> dict:
                                 "is_artifact": False,
                                 "is_view": True,
                             }
+                            # Also restore into pipeline_steps so the planner knows
+                            # what transformations were already applied.
+                            _restored_pipeline_steps.append({
+                                "step_number": int(_ps.step_number or 0),
+                                "operation": _ps.operation or "transform",
+                                "description": _ps.description or "",
+                                "sql": _raw_sql,
+                                "output_table": _out_table,
+                                "row_count_after": int(_ps.row_count_after or 0),
+                            })
                             _logger.info(
                                 "SESSION_REPLAY_VIEW: restored view=%s step=%d session=%s",
                                 _out_table, int(_ps.step_number or 0), session_id,
@@ -216,6 +222,36 @@ async def context_loader(state: AgentState) -> dict:
                             break
             finally:
                 _replay_db.close()
+
+        # If the frontend sent no pipeline_steps but we have prior steps in the DB,
+        # restore them so the planner knows what transformations already happened.
+        # This covers both replay (views rebuilt) and non-replay (views still live)
+        # scenarios where the frontend lost its step history.
+        _existing_steps = state.get("pipeline_steps") or []
+        if not _existing_steps and session_id and not _restored_pipeline_steps:
+            from ....models_db import PipelineStepDB as _PipelineStepDB2
+            _ps_db = SessionLocal()
+            try:
+                _db_steps = (
+                    _ps_db.query(_PipelineStepDB2)
+                    .filter(
+                        _PipelineStepDB2.session_id == session_id,
+                        _PipelineStepDB2.status == "completed",
+                    )
+                    .order_by(_PipelineStepDB2.step_number)
+                    .all()
+                )
+                for _ps2 in _db_steps:
+                    _restored_pipeline_steps.append({
+                        "step_number": int(_ps2.step_number or 0),
+                        "operation": _ps2.operation or "transform",
+                        "description": _ps2.description or "",
+                        "sql": _ps2.duckdb_sql or "",
+                        "output_table": _ps2.output_table or "",
+                        "row_count_after": int(_ps2.row_count_after or 0),
+                    })
+            finally:
+                _ps_db.close()
 
     # Store the primary alias in the state so execute_step can rewrite
     # any residual "FROM dataset" references at runtime.
@@ -282,6 +318,8 @@ async def context_loader(state: AgentState) -> dict:
             "dashboards": dashboards,
             "table_registry": table_registry,
         }
+        if _restored_pipeline_steps:
+            early["pipeline_steps"] = _restored_pipeline_steps
         if secondary_schemas:
             early["secondary_schemas"] = secondary_schemas
         return early
@@ -302,6 +340,8 @@ async def context_loader(state: AgentState) -> dict:
             "dashboards": dashboards,
             "error": str(exc),
         }
+        if _restored_pipeline_steps:
+            base_err["pipeline_steps"] = _restored_pipeline_steps
         if secondary_schemas:
             base_err["secondary_schemas"] = secondary_schemas
         return base_err
@@ -355,6 +395,8 @@ async def context_loader(state: AgentState) -> dict:
         "dashboards": dashboards,
         "table_registry": table_registry,
     }
+    if _restored_pipeline_steps:
+        base["pipeline_steps"] = _restored_pipeline_steps
     if secondary_schemas:
         base["secondary_schemas"] = secondary_schemas
 

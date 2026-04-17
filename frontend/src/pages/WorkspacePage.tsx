@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, fetchDatasetPage } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
@@ -53,6 +53,12 @@ export function WorkspacePage() {
   const [replayingPipeline, setReplayingPipeline] = useState(false);
   const [replayError, setReplayError] = useState<string | null>(null);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
+
+  // When agent.done sets sessionPreview/liveArtifact AND switches the active
+  // dataset in the same React batch, the clearing useEffect on activeDataset?.id
+  // would destroy that freshly-set state. This ref tells the effect to skip one
+  // clearing cycle so the agent-provided preview survives the dataset switch.
+  const skipNextClearRef = useRef(false);
 
   // Re-execute all pipeline steps and restore session preview.
   // Called from the green banner when the user refreshes and liveArtifact is gone.
@@ -120,7 +126,13 @@ export function WorkspacePage() {
 
   // Clear in-session view state whenever the user switches to a different source dataset.
   // PipelineContext handles loading the correct steps for each dataset independently.
+  // Skip clearing when agent.done triggered the switch (skipNextClearRef is set).
   useEffect(() => {
+    if (skipNextClearRef.current) {
+      skipNextClearRef.current = false;
+      setShowingOriginal(false);
+      return;
+    }
     setSessionPreview(null);
     setLiveArtifact(null);
     setShowingOriginal(false);
@@ -356,7 +368,10 @@ export function WorkspacePage() {
         onDatasetMutated={() => {
           setDatasetRefreshNonce((value) => value + 1);
         }}
-        onSessionPreview={(rows, columns) => setSessionPreview({ rows, columns })}
+        onSessionPreview={(rows, columns) => {
+          skipNextClearRef.current = true;
+          setSessionPreview({ rows, columns });
+        }}
         onUploadClick={() => setImportOpen(true)}
       />
       <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />

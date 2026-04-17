@@ -544,7 +544,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           const previewRows = Array.isArray(lastWriteResult.query_results)
             ? (lastWriteResult.query_results as Record<string, unknown>[])
             : [];
-          if (previewRows.length > 0) {
+          if (previewRows.length > 0 && previewRows[0]) {
             const previewColumns = Object.keys(previewRows[0]);
             onSessionPreview(previewRows, previewColumns);
           }
@@ -735,7 +735,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
           // Push transformed preview to the Canvas Data tab for write operations.
           // agent.done never carries execution_results, so this is the correct hook.
           const WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile"]);
-          if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview && results[0]) {
+          if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview && results.length > 0 && results[0]) {
             onSessionPreview(results, Object.keys(results[0]));
           }
           // Set the LIVE artifact entry so the sidebar shows the editable save card.
@@ -1265,12 +1265,12 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                   </a>
                 </div>
               ) : null}
-              {message.queryResults && message.queryResults.length > 0 ? (
+              {message.queryResults && message.queryResults.length > 0 && message.queryResults[0] ? (
                 <div style={{ marginTop: 8, overflowX: "auto", maxHeight: 220 }}>
                   <table style={{ borderCollapse: "collapse", fontSize: 11, whiteSpace: "nowrap" }}>
                     <thead>
                       <tr>
-                        {Object.keys(message.queryResults[0]).map((col) => (
+                        {Object.keys(message.queryResults[0] ?? {}).map((col) => (
                           <th
                             key={col}
                             style={{ border: "1px solid var(--bd)", padding: "3px 8px", background: "var(--bg1)", fontWeight: 600 }}
@@ -1281,7 +1281,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                       </tr>
                     </thead>
                     <tbody>
-                      {message.queryResults.slice(0, showAllRowsIds.has(message.id) ? undefined : 20).map((row, ri) => (
+                      {(message.queryResults ?? []).slice(0, showAllRowsIds.has(message.id) ? undefined : 20).map((row, ri) => (
                         <tr key={ri}>
                           {Object.values(row).map((val, ci) => (
                             <td key={ci} style={{ border: "1px solid var(--bd)", padding: "2px 8px" }}>
@@ -1292,12 +1292,12 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                       ))}
                     </tbody>
                   </table>
-                  {message.queryResults.length > 20 ? (
+                  {(message.queryResults?.length ?? 0) > 20 ? (
                     <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: 11, color: "var(--tx1)" }}>
                         {showAllRowsIds.has(message.id)
-                          ? `All ${message.queryResults.length} rows`
-                          : `Showing first 20 of ${message.queryResults.length} rows`}
+                          ? `All ${message.queryResults?.length ?? 0} rows`
+                          : `Showing first 20 of ${message.queryResults?.length ?? 0} rows`}
                       </span>
                       <button
                         onClick={() => setShowAllRowsIds((prev) => {

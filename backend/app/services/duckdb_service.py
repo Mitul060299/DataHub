@@ -38,7 +38,12 @@ class DuckDBService:
                     except Exception:
                         pass
                     cls._configure_storage()
-        return cls._db
+        # Return a fresh cursor that shares the underlying in-memory database
+        # (inheriting httpfs, S3 credentials and memory_limit set above) but has
+        # its own isolated execution state.  This makes every call thread-safe:
+        # concurrent requests no longer share a single DuckDBPyConnection which
+        # is NOT thread-safe and causes native crashes (segfaults) under load.
+        return cls._db.cursor()
 
     @classmethod
     def _configure_storage(cls) -> None:
@@ -178,9 +183,8 @@ class DuckDBService:
 
             return rows, total
         except Exception:
-            # Reset the singleton so the next request gets a fresh connection
-            # rather than hitting a corrupted/hung state.
-            cls._db = None
+            # The cursor is isolated — a failed query here does not corrupt the
+            # parent DB or any other in-flight cursor.  Simply re-raise.
             raise
 
     @classmethod

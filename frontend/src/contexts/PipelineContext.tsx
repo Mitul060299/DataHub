@@ -102,6 +102,22 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null>(null);
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Restore liveArtifact from the latest pipeline step that has output_table.
+  // This bridges the gap after page refresh where liveArtifact (React state)
+  // is lost but steps are persisted in localStorage / DB.
+  const restoreLiveArtifact = (loadedSteps: PipelineStep[], dsId: string) => {
+    const lastWithOutput = [...loadedSteps].reverse().find((s) => s.output_table);
+    if (!lastWithOutput) return;
+    const sid = localStorage.getItem(`datahub_chat_session_${dsId}`);
+    if (!sid) return;
+    setLiveArtifact({
+      tableName: lastWithOutput.output_table!,
+      rowCount: lastWithOutput.row_count_after ?? Number(lastWithOutput.affectedRows) || 0,
+      stepLabel: lastWithOutput.description || lastWithOutput.operation,
+      sessionId: sid,
+    });
+  };
   // Tracks which dataset ID was already hydrated by useState on mount.
   // Only skip DB fetch when localStorage actually had steps; otherwise
   // fall through to DB so steps saved by prior sessions are recovered.
@@ -173,15 +189,23 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     // skip the DB fetch entirely — the correct steps are already in state.
     if (datasetId === hydratedForRef.current) {
       hydratedForRef.current = null; // allow normal DB reload on subsequent switches
+      // Restore liveArtifact from the steps that were loaded from localStorage
+      restoreLiveArtifact(steps, datasetId);
       return;
     }
     fetchDatasetPipelineSteps(datasetId)
       .then((loaded) => {
         const parsed = (loaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
           .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
-        setSteps(parsed.length > 0 ? parsed : loadPersistedSteps(datasetId));
+        const resolved = parsed.length > 0 ? parsed : loadPersistedSteps(datasetId);
+        setSteps(resolved);
+        restoreLiveArtifact(resolved, datasetId);
       })
-      .catch(() => setSteps(loadPersistedSteps(datasetId)));
+      .catch(() => {
+        const fallback = loadPersistedSteps(datasetId);
+        setSteps(fallback);
+        restoreLiveArtifact(fallback, datasetId);
+      });
   }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addStep = (step: PipelineStep) => {

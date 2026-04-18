@@ -96,15 +96,16 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     if (activeDataset?.id) return activeDataset.id;
     return localStorage.getItem("activeDatasetId") ?? null;
   })();
-  const [steps, setSteps] = useState<PipelineStep[]>(() => loadPersistedSteps(initialDatasetId));
+  const initialLocalSteps = loadPersistedSteps(initialDatasetId);
+  const [steps, setSteps] = useState<PipelineStep[]>(() => initialLocalSteps);
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
   const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null>(null);
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks which dataset ID was already hydrated by useState on mount.
-  // When the dataset-switch effect fires for this ID, we skip the DB reload
-  // because useState already loaded the correct steps from localStorage.
-  const hydratedForRef = useRef<string | null>(initialDatasetId);
+  // Only skip DB fetch when localStorage actually had steps; otherwise
+  // fall through to DB so steps saved by prior sessions are recovered.
+  const hydratedForRef = useRef<string | null>(initialLocalSteps.length > 0 ? initialDatasetId : null);
   // Counter that increments on every structural change (add/remove/clear).
   // The write-through effect uses this to decide between immediate vs debounced save.
   const structuralChangeRef = useRef(0);

@@ -21,7 +21,7 @@ interface ExplorerPanelProps {
 
 export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, workspaceMembers, refreshMembers, projectsLoading } = useWorkspaceContext();
-  const { steps, liveArtifact, clearSteps } = usePipelineContext();
+  const { steps, liveArtifact } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -353,7 +353,6 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
           liveArtifact={liveArtifact}
           onContinueFrom={(dataset) => {
             setActiveDataset(dataset);
-            clearSteps();
           }}
           onSaveLive={async (tableName, label) => {
             if (!liveArtifact?.sessionId) return;

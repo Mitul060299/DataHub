@@ -969,7 +969,17 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         error?: string;
       }>(`/cleaning/datasets/${dataset.id}/analyze`, liveArtifact
         ? { session_id: liveArtifact.sessionId, table_name: liveArtifact.tableName }
-        : {});
+        : (() => {
+            // After a page refresh liveArtifact is null, but the pipeline may
+            // already have session views. Use the latest step's output_table so
+            // the report reflects transformed data, not the raw source.
+            const currentSid = sessionIdRef.current || sessionId;
+            const lastStep = [...steps].reverse().find((s) => s.output_table);
+            if (currentSid && lastStep?.output_table) {
+              return { session_id: currentSid, table_name: lastStep.output_table };
+            }
+            return {};
+          })());
       const profile = res.data.data_profile;
       const issues = (res.data.issues ?? []) as QualityIssue[];
       const issueCount = issues.length;

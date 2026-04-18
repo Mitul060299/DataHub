@@ -25,35 +25,35 @@ async def pipeline_recorder(state: AgentState) -> dict:
             plan_step = plan_by_step.get(snum)
             if plan_step is None:
                 continue
-                next_dataset_id = result.get("output_dataset_id") or current_dataset_id
-                params = plan_step.get("parameters") if isinstance(plan_step.get("parameters"), dict) else {}
-                saved_steps.append(
-                    {
-                        "dataset_id": next_dataset_id,
-                        "input_dataset_id": current_dataset_id,
-                        "output_dataset_id": next_dataset_id,
-                        "agent_run_id": None,
-                        "step_number": plan_step.get("step_number", result.get("step_number")),
-                        "operation": plan_step["operation"],
-                        "intent": state.get("intent") or plan_step["operation"],
-                        "description": plan_step["description"],
-                        "sql": result.get("sql"),
-                        "run_id": result.get("run_id"),
-                        "rows_affected": result.get("rows_affected"),
-                        "input_tables": list(params.get("input_tables") or []),
-                        "output_table": params.get("output_table") or params.get("output_name") or result.get("output_table") or None,
-                        "session_table_name": result.get("session_table_name"),
-                        "row_count_before": result.get("row_count_before"),
-                        "execution_time_ms": result.get("execution_time_ms"),
-                        "timestamp": datetime.utcnow().isoformat(),
-                        # Frontend rendering extras
-                        "tile_created": result.get("tile_created"),
-                        "artifact_url": result.get("artifact_url"),
-                        "query_results": result.get("query_results"),
-                        "row_count_after": result.get("row_count_after"),
-                    }
-                )
-                current_dataset_id = next_dataset_id
+            next_dataset_id = result.get("output_dataset_id") or current_dataset_id
+            params = plan_step.get("parameters") if isinstance(plan_step.get("parameters"), dict) else {}
+            saved_steps.append(
+                {
+                    "dataset_id": next_dataset_id,
+                    "input_dataset_id": current_dataset_id,
+                    "output_dataset_id": next_dataset_id,
+                    "agent_run_id": None,
+                    "step_number": plan_step.get("step_number", result.get("step_number")),
+                    "operation": plan_step["operation"],
+                    "intent": state.get("intent") or plan_step["operation"],
+                    "description": plan_step["description"],
+                    "sql": result.get("sql"),
+                    "run_id": result.get("run_id"),
+                    "rows_affected": result.get("rows_affected"),
+                    "input_tables": list(params.get("input_tables") or []),
+                    "output_table": params.get("output_table") or params.get("output_name") or result.get("output_table") or None,
+                    "session_table_name": result.get("session_table_name"),
+                    "row_count_before": result.get("row_count_before"),
+                    "execution_time_ms": result.get("execution_time_ms"),
+                    "timestamp": datetime.utcnow().isoformat(),
+                    # Frontend rendering extras
+                    "tile_created": result.get("tile_created"),
+                    "artifact_url": result.get("artifact_url"),
+                    "query_results": result.get("query_results"),
+                    "row_count_after": result.get("row_count_after"),
+                }
+            )
+            current_dataset_id = next_dataset_id
 
     run_id = None
     if saved_steps:

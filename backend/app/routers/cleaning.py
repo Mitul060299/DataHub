@@ -39,6 +39,14 @@ class TransformationRequest(BaseModel):
 class AnalyzeRequest(BaseModel):
     session_id: str | None = None
     table_name: str | None = None
+    pipeline_steps: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Client-known pipeline steps with sql + output_table. Used to replay "
+            "the DuckDB session if it was lost (refresh / restart) without depending "
+            "on the previous request's PipelineStepDB write being committed yet."
+        ),
+    )
 
 
 @router.post("/datasets/{dataset_id}/analyze")
@@ -52,6 +60,7 @@ def analyze_dataset(
         dataset_id, authorization, db,
         session_id=payload.session_id if payload else None,
         table_name=payload.table_name if payload else None,
+        client_pipeline_steps=(payload.pipeline_steps if payload else None) or None,
     )
 
 

@@ -68,6 +68,29 @@ const PipelineContext = createContext<PipelineContextValue | undefined>(undefine
 // Falls back to the legacy global key on first load (one-time migration).
 const PIPELINE_STEPS_LEGACY_KEY = "datahub_pipeline_steps_v1";
 const stepsKey = (datasetId: string) => `datahub_steps_v2_${datasetId}`;
+const liveArtifactKey = (datasetId: string) => `datahub_live_artifact_${datasetId}`;
+
+type LiveArtifactState = { tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null;
+
+const loadPersistedLiveArtifact = (datasetId?: string | null): LiveArtifactState => {
+  if (!datasetId) return null;
+  try {
+    const raw = localStorage.getItem(liveArtifactKey(datasetId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.tableName !== "string" || typeof parsed.sessionId !== "string") return null;
+    return {
+      tableName: parsed.tableName,
+      rowCount: Number(parsed.rowCount) || 0,
+      stepLabel: typeof parsed.stepLabel === "string" ? parsed.stepLabel : "",
+      sessionId: parsed.sessionId,
+      rowsChanged: typeof parsed.rowsChanged === "number" ? parsed.rowsChanged : null,
+    };
+  } catch {
+    return null;
+  }
+};
 
 const loadPersistedSteps = (datasetId?: string | null): PipelineStep[] => {
   try {
@@ -99,7 +122,20 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   const initialLocalSteps = loadPersistedSteps(initialDatasetId);
   const [steps, setSteps] = useState<PipelineStep[]>(() => initialLocalSteps);
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
-  const [liveArtifact, setLiveArtifact] = useState<{ tableName: string; rowCount: number; stepLabel: string; sessionId: string; rowsChanged?: number | null } | null>(null);
+  const [liveArtifact, setLiveArtifactRaw] = useState<LiveArtifactState>(() => loadPersistedLiveArtifact(initialDatasetId));
+  // Stable wrapper that mirrors writes into localStorage so liveArtifact
+  // survives a page refresh even if the chat-session localStorage key is missing.
+  const setLiveArtifact = (artifact: LiveArtifactState) => {
+    setLiveArtifactRaw(artifact);
+    if (!datasetId) return;
+    try {
+      if (artifact) {
+        localStorage.setItem(liveArtifactKey(datasetId), JSON.stringify(artifact));
+      } else {
+        localStorage.removeItem(liveArtifactKey(datasetId));
+      }
+    } catch { /* quota */ }
+  };
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -107,9 +143,13 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   // This bridges the gap after page refresh where liveArtifact (React state)
   // is lost but steps are persisted in localStorage / DB.
   const restoreLiveArtifact = (loadedSteps: PipelineStep[], dsId: string) => {
-    // Check multiple possible sources for the output table name:
-    // - step.output_table (set after commit 99322df)
-    // - step.rawConfig.output_table / session_table_name (backend data persisted in rawConfig)
+    // 1. Prefer the directly-persisted liveArtifact (race-immune across refreshes)
+    const persisted = loadPersistedLiveArtifact(dsId);
+    if (persisted) {
+      setLiveArtifactRaw(persisted);
+      return;
+    }
+    // 2. Fall back to reconstructing from the latest pipeline step that has output_table
     const getOutputTable = (s: PipelineStep): string | undefined =>
       s.output_table
       || (typeof s.rawConfig?.output_table === "string" ? s.rawConfig.output_table : undefined)
@@ -117,14 +157,18 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     const lastWithOutput = [...loadedSteps].reverse().find((s) => getOutputTable(s));
     if (!lastWithOutput) return;
     const tableName = getOutputTable(lastWithOutput)!;
-    const sid = localStorage.getItem(`datahub_chat_session_${dsId}`);
+    // sessionId may live in localStorage (from chat) OR in the step's rawConfig
+    const sid = localStorage.getItem(`datahub_chat_session_${dsId}`)
+      || (typeof lastWithOutput.rawConfig?.session_id === "string" ? (lastWithOutput.rawConfig.session_id as string) : null);
     if (!sid) return;
-    setLiveArtifact({
+    const reconstructed: LiveArtifactState = {
       tableName,
       rowCount: lastWithOutput.row_count_after ?? (Number(lastWithOutput.affectedRows) || 0),
       stepLabel: lastWithOutput.description || lastWithOutput.operation,
       sessionId: sid,
-    });
+    };
+    setLiveArtifactRaw(reconstructed);
+    try { localStorage.setItem(liveArtifactKey(dsId), JSON.stringify(reconstructed)); } catch { /* quota */ }
   };
   // Tracks which dataset ID was already hydrated by useState on mount.
   // Only skip DB fetch when localStorage actually had steps; otherwise
@@ -313,8 +357,10 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     // Also clear the per-dataset localStorage key so old steps don't resurrect on switch
     if (datasetId) {
       try { localStorage.removeItem(stepsKey(datasetId)); } catch { /* ignore */ }
+      try { localStorage.removeItem(liveArtifactKey(datasetId)); } catch { /* ignore */ }
     }
     setSteps([]);
+    setLiveArtifactRaw(null);
     structuralChangeRef.current += 1;
     if (datasetId) flushStepsToDb(datasetId, []);
   };

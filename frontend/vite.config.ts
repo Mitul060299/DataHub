@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 1200,
+    // Emit source maps in production so runtime stack traces in user reports
+    // map back to real component / line numbers (e.g. PlanDAG.tsx:97) instead
+    // of the minified `DM`/`KM` chunk names.  "hidden" keeps the //# comment
+    // out of the deployed bundle so source paths aren't exposed in DevTools
+    // by default — upload the .map files to Sentry / your error tracker.
+    sourcemap: "hidden",
     rollupOptions: {
       output: {
         manualChunks(id) {

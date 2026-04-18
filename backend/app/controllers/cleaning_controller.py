@@ -81,6 +81,7 @@ class CleaningController:
         *,
         session_id: str | None = None,
         table_name: str | None = None,
+        client_pipeline_steps: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         role = get_current_role(authorization)
         require_role("viewer", role)
@@ -90,7 +91,12 @@ class CleaningController:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         from ..services.ai_agent_service import AIAgentService  # lazy
-        return AIAgentService.analyze_dataset(dataset_id, db, session_id=session_id, table_name=table_name)
+        return AIAgentService.analyze_dataset(
+            dataset_id, db,
+            session_id=session_id,
+            table_name=table_name,
+            client_pipeline_steps=client_pipeline_steps,
+        )
 
     @staticmethod
     def process_command(

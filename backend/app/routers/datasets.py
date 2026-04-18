@@ -670,6 +670,11 @@ def step_preview(
     table_name = payload.get("table_name", "")
     limit = min(int(payload.get("limit", 200)), 1000)  # cap at 1000
     offset = max(int(payload.get("offset", 0)), 0)
+    # Optional: client-known pipeline_steps with sql + output_table.  Used to
+    # replay views without depending on the previous request's PipelineStepDB
+    # commit having landed yet (race-immune restore after refresh).
+    raw_client_steps = payload.get("pipeline_steps") or []
+    client_steps = [s for s in raw_client_steps if isinstance(s, dict)] or None
     if not session_id or not table_name:
         raise HTTPException(status_code=422, detail="session_id and table_name required")
     try:
@@ -685,7 +690,9 @@ def step_preview(
             _ds = db.query(_DSMeta).filter(_DSMeta.id == dataset_id).first()
             if _ds:
                 from ..services.ai_agent_service import AIAgentService
-                AIAgentService._replay_session_views(session_id, _ds)
+                AIAgentService._replay_session_views(
+                    session_id, _ds, client_steps=client_steps,
+                )
         from ..services.step_engine import StepEngine
         engine = StepEngine(session_id, {})
         rows = engine.preview(table_name, limit=limit, offset=offset)

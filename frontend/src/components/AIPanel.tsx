@@ -345,7 +345,32 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const handleAgentEvent = (event: AgentEvent) => {
     switch (event.type) {
       case "agent.plan": {
-        const plan = (event.plan as PlanStep[] | undefined) || [];
+        const rawPlan = (event.plan as PlanStep[] | undefined) || [];
+        // Defense-in-depth: sanitize the plan payload at the boundary so
+        // PlanDAG / PlanCard never receive malformed step_number / depends_on.
+        // (Backend planner is the primary source of truth — see planner.py
+        // depends_on sanitizer — but stale in-flight responses or future
+        // regressions could still emit holes/forward-refs that crash the
+        // sparse-array depth grouping.)
+        const validNumbers = new Set<number>();
+        const cleanedPlan: PlanStep[] = [];
+        for (const step of rawPlan) {
+          if (!step || typeof step !== "object") continue;
+          const sn = Number((step as Record<string, unknown>).step_number);
+          if (!Number.isInteger(sn) || sn <= 0) continue;
+          validNumbers.add(sn);
+          cleanedPlan.push(step);
+        }
+        const plan: PlanStep[] = cleanedPlan.map((step) => {
+          const sn = Number((step as Record<string, unknown>).step_number);
+          const rawDeps = (step as Record<string, unknown>).depends_on;
+          const deps = Array.isArray(rawDeps)
+            ? rawDeps
+                .map((d) => Number(d))
+                .filter((d) => Number.isInteger(d) && d > 0 && d < sn && validNumbers.has(d))
+            : [];
+          return { ...step, depends_on: deps } as PlanStep;
+        });
         const planType = (event.plan_type as "linear" | "dag" | undefined) ?? "linear";
         setMessages((previous) => [
           ...previous,
@@ -998,14 +1023,23 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         issues: unknown[];
         suggestions: unknown[];
         data_profile?: DataProfile;
+        used_session_data?: boolean;
+        session_fallback_reason?: string | null;
         error?: string;
       }>(`/cleaning/datasets/${analyzeDatasetId}/analyze`, analyzeBody);
       const profile = res.data.data_profile;
       const issues = (res.data.issues ?? []) as QualityIssue[];
       const issueCount = issues.length;
-      const content = profile
+      const fallbackReason = res.data.session_fallback_reason || undefined;
+      const baseContent = profile
         ? `Found ${issueCount} issue${issueCount !== 1 ? "s" : ""} in your dataset. Here is the data quality report:`
         : res.data.error ?? "Analysis complete.";
+      // Surface a banner when the backend silently fell back to the raw dataset
+      // because the session table could not be restored (the user's "I cleaned
+      // this earlier but the report shows the original" failure mode).
+      const content = fallbackReason
+        ? `⚠️ ${fallbackReason}\n\n${baseContent}`
+        : baseContent;
       setMessages((prev) => [
         ...prev,
         {

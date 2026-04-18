@@ -36,14 +36,22 @@ class AIAgentService:
         *,
         session_id: str | None = None,
         table_name: str | None = None,
+        client_pipeline_steps: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        context = AIAgentService._get_dataset_context(dataset_id, db, session_id=session_id, table_name=table_name)
+        context = AIAgentService._get_dataset_context(
+            dataset_id, db,
+            session_id=session_id,
+            table_name=table_name,
+            client_pipeline_steps=client_pipeline_steps,
+        )
         provider, api_key, model = AIAgentService._provider_config()
         if not provider or not api_key:
             return {
                 "issues": [],
                 "suggestions": [],
                 "data_profile": AIAgentService._compute_data_profile(context),
+                "used_session_data": bool(context.get("usedSessionData")),
+                "session_fallback_reason": context.get("sessionFallbackReason"),
                 "error": "Groq is not configured. Set LLM_PROVIDER=groq and GROQ_API_KEY.",
             }
 
@@ -115,6 +123,8 @@ class AIAgentService:
                 "issues": [],
                 "suggestions": [],
                 "data_profile": AIAgentService._compute_data_profile(context),
+                "used_session_data": bool(context.get("usedSessionData")),
+                "session_fallback_reason": context.get("sessionFallbackReason"),
                 "error": f"Groq request failed: {str(exc)}",
             }
 
@@ -125,6 +135,11 @@ class AIAgentService:
         payload.setdefault("suggestions", [])
         # Always include the computed profile — it is ground-truth, not LLM-estimated
         payload["data_profile"] = AIAgentService._compute_data_profile(context)
+        # Surface session-fallback so the UI can show a banner instead of silently
+        # presenting a quality report on the original (uncleaned) dataset.
+        payload["used_session_data"] = bool(context.get("usedSessionData"))
+        if context.get("sessionFallbackReason"):
+            payload["session_fallback_reason"] = context["sessionFallbackReason"]
         return payload
 
     @staticmethod
@@ -452,11 +467,33 @@ class AIAgentService:
             return normalized
         return re.sub(r"\btable\b", "dataset", normalized, flags=re.IGNORECASE)
 
-    @staticmethod
-    def _replay_session_views(session_id: str, dataset: Any) -> bool:
-        """Re-register the source Parquet + replay pipeline VIEWs from PipelineStepDB.
+    # Track which session_ids have had their views replayed at least once in
+    # *this* process.  When the DuckDB session is disk-backed, view definitions
+    # survive a restart but any signed S3/R2 URLs they reference will have
+    # expired — re-registering the source view with a fresh signed URL on the
+    # first request per process keeps queries working without forcing the
+    # client to re-upload or re-run the pipeline.
+    _warmed_sessions: set[str] = set()
+    _warmed_lock = __import__("threading").Lock()
 
-        Called when the DuckDB session lost its views (TTL eviction, server restart).
+    @staticmethod
+    def _replay_session_views(
+        session_id: str,
+        dataset: Any,
+        client_steps: list[dict[str, Any]] | None = None,
+    ) -> bool:
+        """Re-register the source Parquet + replay pipeline VIEWs.
+
+        Sources, in priority order:
+          1. ``client_steps`` — pipeline_steps sent by the frontend in this request
+             (race-immune: we don't depend on the previous request's DB commit).
+          2. ``PipelineStepDB`` rows for this session (cross-device fallback).
+
+        A step is replayable when it has both an ``output_table`` and a
+        non-empty ``sql``/``duckdb_sql`` field.  Steps that fail to replay are
+        logged and SKIPPED — we no longer break the whole chain on the first
+        bad step, since later independent branches may still be valid.
+
         Returns True if at least one view was replayed.
         """
         import re as _re_replay
@@ -464,6 +501,8 @@ class AIAgentService:
         from .object_storage import StorageService
         from ..db import SessionLocal
         from ..models_db import PipelineStepDB as _PipelineStepDB
+        import logging as _rlog
+        _logger = _rlog.getLogger(__name__)
 
         conn = get_connection(session_id)
 
@@ -478,51 +517,93 @@ class AIAgentService:
                 register_view(session_id, _sanitized, file_path)
                 if _sanitized != "dataset":
                     register_view(session_id, "dataset", file_path)
-            except Exception:
-                return False
+            except Exception as _src_exc:
+                _logger.warning(
+                    "replay: source view registration failed for session %s: %s",
+                    session_id[:8], _src_exc,
+                )
+                # Source registration may fail for connector-only datasets;
+                # derived steps that don't reference the source can still replay.
 
-        # 2. Replay derived views from PipelineStepDB
-        _db = SessionLocal()
-        try:
-            steps = (
-                _db.query(_PipelineStepDB)
-                .filter(
-                    _PipelineStepDB.session_id == session_id,
-                    _PipelineStepDB.output_table.isnot(None),
-                    _PipelineStepDB.duckdb_sql.isnot(None),
-                    _PipelineStepDB.status == "completed",
+        # 2. Build the canonical step list
+        normalized: list[dict[str, Any]] = []
+
+        def _add_norm(step_number: Any, output_table: Any, sql: Any) -> None:
+            try:
+                sn = int(step_number or 0)
+            except Exception:
+                sn = 0
+            ot = str(output_table or "").strip()
+            sq = str(sql or "").strip()
+            if not ot or not sq:
+                return
+            normalized.append({"step_number": sn, "output_table": ot, "sql": sq})
+
+        if client_steps:
+            for cs in client_steps:
+                if not isinstance(cs, dict):
+                    continue
+                _add_norm(
+                    cs.get("step_number"),
+                    cs.get("output_table") or cs.get("session_table_name"),
+                    cs.get("sql") or cs.get("duckdb_sql"),
                 )
-                .order_by(_PipelineStepDB.step_number)
-                .all()
-            )
-            if not steps:
-                import logging as _rlog
-                _rlog.getLogger(__name__).info(
-                    "replay: no completed steps with SQL found for session %s", session_id[:8],
-                )
-                return False
-            replayed_count = 0
-            for ps in steps:
-                out_table = str(ps.output_table)
-                raw_sql = str(ps.duckdb_sql).strip()
-                ct_m = _re_replay.match(
-                    r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
-                    raw_sql,
-                )
-                select_sql = (raw_sql[ct_m.end():].strip() if ct_m else raw_sql).rstrip("; \t\r\n")
-                try:
-                    conn.execute(f'CREATE OR REPLACE VIEW "{out_table}" AS ({select_sql})')
-                    replayed_count += 1
-                except Exception as _view_exc:
-                    import logging as _rlog
-                    _rlog.getLogger(__name__).warning(
-                        "replay: failed to create view %s (step %s): %s",
-                        out_table, ps.step_number, _view_exc,
+
+        if not normalized:
+            _db = SessionLocal()
+            try:
+                rows = (
+                    _db.query(_PipelineStepDB)
+                    .filter(
+                        _PipelineStepDB.session_id == session_id,
+                        _PipelineStepDB.output_table.isnot(None),
+                        _PipelineStepDB.duckdb_sql.isnot(None),
+                        _PipelineStepDB.status == "completed",
                     )
-                    break  # later steps depend on this one
-            return replayed_count > 0
-        finally:
-            _db.close()
+                    .order_by(_PipelineStepDB.step_number)
+                    .all()
+                )
+                for ps in rows:
+                    _add_norm(ps.step_number, ps.output_table, ps.duckdb_sql)
+            finally:
+                _db.close()
+
+        if not normalized:
+            _logger.info(
+                "replay: no replayable steps for session %s (client=%d)",
+                session_id[:8], len(client_steps or []),
+            )
+            return False
+
+        normalized.sort(key=lambda s: s["step_number"])
+
+        # 3. Re-create each VIEW.  Skip-and-continue rather than break — a later
+        # step that doesn't depend on a failed predecessor can still succeed.
+        replayed_count = 0
+        failures: list[tuple[int, str]] = []
+        for step in normalized:
+            out_table = step["output_table"]
+            raw_sql = step["sql"]
+            ct_m = _re_replay.match(
+                r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                raw_sql,
+            )
+            select_sql = (raw_sql[ct_m.end():].strip() if ct_m else raw_sql).rstrip("; \t\r\n")
+            try:
+                conn.execute(f'CREATE OR REPLACE VIEW "{out_table}" AS ({select_sql})')
+                replayed_count += 1
+            except Exception as _view_exc:
+                failures.append((step["step_number"], str(_view_exc)[:200]))
+                _logger.warning(
+                    "replay: failed to create view %s (step %s): %s",
+                    out_table, step["step_number"], _view_exc,
+                )
+        if failures:
+            _logger.warning(
+                "replay: session %s replayed %d/%d views, failures=%s",
+                session_id[:8], replayed_count, len(normalized), failures,
+            )
+        return replayed_count > 0
 
     @staticmethod
     def _get_dataset_context(
@@ -531,6 +612,7 @@ class AIAgentService:
         *,
         session_id: str | None = None,
         table_name: str | None = None,
+        client_pipeline_steps: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
         if not dataset:
@@ -544,10 +626,32 @@ class AIAgentService:
         # When a live DuckDB session has pipeline output, query that instead of
         # the original Parquet — the user expects the report on transformed data.
         _used_session = False
+        _fallback_reason: str | None = None
         if session_id and table_name:
             from .duckdb_session import execute_in_session, table_exists
             import logging as _ctx_log
             _logger = _ctx_log.getLogger(__name__)
+
+            # First request per process for this session: replay views so any
+            # disk-persisted view definitions referencing expired signed URLs
+            # are refreshed.  Subsequent requests skip this.  CREATE OR REPLACE
+            # makes the operation idempotent even if a table_exists check below
+            # also triggers a replay.
+            _warmed = False
+            with AIAgentService._warmed_lock:
+                if session_id not in AIAgentService._warmed_sessions:
+                    AIAgentService._warmed_sessions.add(session_id)
+                    _warmed = True
+            if _warmed:
+                try:
+                    AIAgentService._replay_session_views(
+                        session_id, dataset, client_steps=client_pipeline_steps,
+                    )
+                except Exception as _warm_exc:
+                    _logger.warning(
+                        "session-warmup: replay failed for %s: %s",
+                        session_id[:8], _warm_exc,
+                    )
 
             # Proactively replay views if the target table is missing from the
             # DuckDB session (server restart, TTL eviction, memory pressure).
@@ -558,9 +662,21 @@ class AIAgentService:
                         "quality-report: view %s missing in session %s — replaying from DB",
                         table_name, session_id[:8],
                     )
-                    AIAgentService._replay_session_views(session_id, dataset)
+                    _replayed = AIAgentService._replay_session_views(
+                        session_id, dataset, client_steps=client_pipeline_steps,
+                    )
+                    if not _replayed:
+                        _fallback_reason = (
+                            f"The cleaned/transformed table '{table_name}' could not be "
+                            "restored from history (no completed pipeline steps were found "
+                            "for this session). Showing results on the original dataset instead."
+                        )
             except Exception as _replay_exc:
                 _logger.warning("quality-report: proactive replay failed: %s", _replay_exc)
+                _fallback_reason = (
+                    f"Could not restore the transformed table '{table_name}' "
+                    f"({type(_replay_exc).__name__}). Showing results on the original dataset instead."
+                )
 
             try:
                 sample_data = execute_in_session(
@@ -584,11 +700,21 @@ class AIAgentService:
                         "quality-report: session query returned 0 rows for %s in session %s",
                         table_name, session_id[:8],
                     )
+                    if _fallback_reason is None:
+                        _fallback_reason = (
+                            f"The transformed table '{table_name}' is empty in the current "
+                            "session. Showing results on the original dataset instead."
+                        )
             except Exception as _sess_exc:
                 _logger.warning(
                     "quality-report: session query failed after replay for %s: %s",
                     table_name, _sess_exc,
                 )
+                if _fallback_reason is None:
+                    _fallback_reason = (
+                        f"Could not query the transformed table '{table_name}' "
+                        f"({type(_sess_exc).__name__}). Showing results on the original dataset instead."
+                    )
         if not _used_session:
             if dataset.storage_path:
                 sample_query = (
@@ -617,6 +743,12 @@ class AIAgentService:
             "sampleData": sample_data,
             "isLargeDataset": is_large,
             "columns": columns,
+            # Visibility into session fallback so callers can warn the user
+            # rather than silently returning a report on the wrong data.
+            "usedSessionData": _used_session,
+            "sessionFallbackReason": (
+                _fallback_reason if (session_id and table_name and not _used_session) else None
+            ),
         }
 
     @staticmethod

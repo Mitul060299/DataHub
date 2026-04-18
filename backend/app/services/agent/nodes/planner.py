@@ -39,6 +39,48 @@ class _SafeEncoder(json.JSONEncoder):
 def _dumps(obj) -> str:
     return json.dumps(obj, indent=2, cls=_SafeEncoder)
 
+
+def _sanitize_depends_on(plan: list[dict], logger=None) -> list[dict]:
+    """Drop self / forward / dangling / non-int `depends_on` references.
+
+    Mutates the steps in `plan` in place AND returns the list for caller
+    convenience.  Invariants enforced for every step:
+      • every value in depends_on is an int
+      • no value equals the step's own step_number
+      • no value is greater than the step's own step_number (forward ref)
+      • no value points to a step_number not present elsewhere in the plan
+    """
+    valid_step_numbers = {int(s["step_number"]) for s in plan if isinstance(s, dict) and "step_number" in s}
+    for step in plan:
+        if not isinstance(step, dict) or "step_number" not in step:
+            continue
+        raw = step.get("depends_on") or []
+        cleaned: list[int] = []
+        try:
+            self_sn = int(step["step_number"])
+        except (TypeError, ValueError):
+            step["depends_on"] = []
+            continue
+        for d in raw:
+            try:
+                di = int(d)
+            except (TypeError, ValueError):
+                continue
+            if di == self_sn:
+                continue  # self-reference — would create a cycle
+            if di not in valid_step_numbers:
+                continue  # dangling
+            if di > self_sn:
+                continue  # forward reference — violates DAG topology
+            cleaned.append(di)
+        if logger is not None and len(cleaned) != len(raw):
+            logger.info(
+                "PLANNER_DEPENDS_ON_SANITIZED: step=%d before=%s after=%s",
+                self_sn, raw, cleaned,
+            )
+        step["depends_on"] = cleaned
+    return plan
+
 _llm = ChatGroq(
     model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
     temperature=0.1,
@@ -172,6 +214,14 @@ async def planner(state: AgentState) -> dict:
             step["step_number"] = old_num + _step_offset
             if step.get("depends_on"):
                 step["depends_on"] = [d + _step_offset for d in step["depends_on"]]
+
+    # ── Sanitize depends_on so the frontend DAG renderer never sees a
+    # reference to a step that isn't in the plan.  This was the source of
+    # the "Cannot read properties of undefined (reading 'length')" crash:
+    # `PlanDAG.computeDepths` produces a sparse byDepth array when a step's
+    # depends_on points outside the plan, and the layout code then tried to
+    # access `.length` on the undefined hole.  Guard at the source instead.
+    plan = _sanitize_depends_on(plan, logger=_logger)
 
     _logger.info("PLANNER_OUTPUT: steps=%d offset=%d", len(plan), _step_offset)
 

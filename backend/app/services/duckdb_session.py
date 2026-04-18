@@ -8,12 +8,56 @@ to prevent memory leaks on long-running Render instances.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+import tempfile
 import time
 import threading
 import concurrent.futures
+from pathlib import Path
 from typing import Optional
+
+# ── Disk persistence ─────────────────────────────────────────────────────────
+# Each session gets a `.duckdb` file on disk so VIEWs survive process restarts
+# and brief Render free-tier suspensions.  Set DUCKDB_SESSION_DIR=":memory:" to
+# fall back to the legacy in-memory behaviour (faster but loses state on any
+# process restart, requiring a full PipelineStepDB replay on the next request).
+_SESSION_DIR_ENV = os.environ.get("DUCKDB_SESSION_DIR", "").strip()
+if _SESSION_DIR_ENV == ":memory:":
+    _SESSION_DIR: Optional[Path] = None
+else:
+    _SESSION_DIR = Path(_SESSION_DIR_ENV) if _SESSION_DIR_ENV else (
+        Path(tempfile.gettempdir()) / "datahub_duckdb_sessions"
+    )
+    try:
+        _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # Disk unavailable (read-only FS, permissions) — fall back to in-memory.
+        _SESSION_DIR = None
+
+
+def _session_db_path(session_id: str) -> Optional[Path]:
+    """Return the on-disk path for *session_id*, or None if persistence is off."""
+    if _SESSION_DIR is None:
+        return None
+    # session_id typically looks like "user_id:chat_session_id" — colons are
+    # unsafe on Windows.  Hash to keep filenames short and filesystem-safe.
+    digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+    return _SESSION_DIR / f"sess_{digest}.duckdb"
+
+
+def _delete_session_file(session_id: str) -> None:
+    """Best-effort delete of the on-disk session db (and its WAL sidecar)."""
+    p = _session_db_path(session_id)
+    if p is None:
+        return
+    for path in (p, p.with_suffix(p.suffix + ".wal")):
+        try:
+            if path.exists():
+                path.unlink()
+        except Exception:
+            pass
 
 # Maximum seconds a single DuckDB query may run before being cancelled.
 # Override via DUCKDB_QUERY_TIMEOUT_S env var (0 = disabled).
@@ -110,6 +154,7 @@ def _cleanup_stale(max_age_seconds: int = MAX_SESSION_AGE_SECONDS) -> int:
         except Exception:
             pass
         _last_used.pop(sid, None)
+        _delete_session_file(sid)
     return len(stale)
 
 
@@ -148,12 +193,31 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
             except Exception:
                 pass
             _last_used.pop(oldest_sid, None)
+            _delete_session_file(oldest_sid)
 
-        # Create a new in-memory connection.
+        # Create a new connection.  Disk-backed by default so VIEWs survive
+        # process restarts; falls back to :memory: when DUCKDB_SESSION_DIR=:memory:
+        # or when the chosen directory is unwritable.
         # 256 MB per session — comfortable on the 2 GB Standard instance.
         # DuckDB throws a catchable OutOfMemoryError instead of corrupting the heap.
         import duckdb  # lazy import — defers ~100 MB native library load until first AI query
-        new_conn = duckdb.connect(database=":memory:")
+        _db_path = _session_db_path(session_id)
+        _db_target = str(_db_path) if _db_path is not None else ":memory:"
+        try:
+            new_conn = duckdb.connect(database=_db_target)
+        except Exception as _disk_exc:
+            # Disk file may be corrupt (killed mid-write) — remove it and retry
+            # in-memory so the user is never left without a working session.
+            import logging as _dlog
+            _dlog.getLogger(__name__).warning(
+                "DUCKDB_DISK_OPEN_FAILED: %s — falling back to in-memory", _disk_exc,
+            )
+            if _db_path is not None:
+                try:
+                    _db_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            new_conn = duckdb.connect(database=":memory:")
         new_conn.execute("SET memory_limit='256MB'")
         try:
             new_conn.execute("SET threads=1")
@@ -199,6 +263,7 @@ def close_session(session_id: str) -> None:
                 conn.close()
             except Exception:
                 pass
+    _delete_session_file(session_id)
 
 
 def register_view(session_id: str, view_name: str, parquet_path: str) -> None:

@@ -103,6 +103,11 @@ async def pipeline_recorder(state: AgentState) -> dict:
                     step["run_id"] = run_id
 
             # ── Write per-step rows ──────────────────────────────────────────
+            # Commit each row INDIVIDUALLY (not in a single batch at the end).
+            # Rationale: if the next request lands in the brief window between
+            # step 1's commit and step N's commit, the context_loader still
+            # sees a partial-but-consistent prefix of the pipeline.  This
+            # eliminates the "second command sees no prior steps" race.
             # Build a lookup of execution_result by step_number for extra fields
             result_by_step: dict[int, dict] = {
                 r["step_number"]: r for r in results
@@ -131,9 +136,22 @@ async def pipeline_recorder(state: AgentState) -> dict:
                     row_count_after=result.get("row_count_after") or result.get("rows_affected"),
                     artifact_id=None,
                 )
-                db.add(step_row)
-
-            db.commit()
+                try:
+                    db.add(step_row)
+                    db.commit()
+                except Exception as _step_commit_exc:
+                    # Don't let one bad row sink the whole pipeline record.
+                    # The view still exists in the live DuckDB session and the
+                    # frontend will keep its own copy in localStorage.
+                    import logging as _pr_log
+                    _pr_log.getLogger(__name__).warning(
+                        "PIPELINE_STEP_COMMIT_FAILED: step=%s error=%s",
+                        snum, _step_commit_exc,
+                    )
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
         finally:
             db.close()
 

@@ -155,105 +155,170 @@ async def context_loader(state: AgentState) -> dict:
                         _probe_name,
                     )
         _restored_pipeline_steps: list[dict] = []
-        if session_id and _needs_replay:
-            from ....models_db import PipelineStepDB as _PipelineStepDB
-            import re as _re_replay
-            _replay_db = SessionLocal()
-            try:
-                _prior_steps = (
-                    _replay_db.query(_PipelineStepDB)
-                    .filter(
-                        _PipelineStepDB.session_id == session_id,
-                        _PipelineStepDB.output_table.isnot(None),
-                        _PipelineStepDB.duckdb_sql.isnot(None),
-                        _PipelineStepDB.status == "completed",
-                    )
-                    .order_by(_PipelineStepDB.step_number)
-                    .all()
-                )
-                if _prior_steps:
-                    _replay_conn = get_connection(session_id)
-                    for _ps in _prior_steps:
-                        _out_table = str(_ps.output_table)
-                        _raw_sql = str(_ps.duckdb_sql).strip()
-                        # Strip CREATE [OR REPLACE] TABLE/VIEW <name> AS prefix
-                        # to obtain the plain SELECT body for re-execution.
-                        _ct_m = _re_replay.match(
-                            r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
-                            _raw_sql,
-                        )
-                        _select_sql = (_raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql).rstrip("; \t\r\n")
-                        try:
-                            _replay_conn.execute(
-                                f'CREATE OR REPLACE VIEW "{_out_table}" AS ({_select_sql})'
-                            )
-                            table_registry[_out_table] = {
-                                "duckdb_name": _out_table,
-                                "dataset_id": "",
-                                "display_name": _ps.description or _out_table,
-                                "source_intent": _ps.operation or "transform",
-                                "parent_tables": list(_ps.input_tables or []),
-                                "row_count": int(_ps.row_count_after or 0),
-                                "column_names": [],
-                                "pipeline_step_number": int(_ps.step_number or 0),
-                                "is_artifact": False,
-                                "is_view": True,
-                            }
-                            # Also restore into pipeline_steps so the planner knows
-                            # what transformations were already applied.
-                            _restored_pipeline_steps.append({
-                                "step_number": int(_ps.step_number or 0),
-                                "operation": _ps.operation or "transform",
-                                "description": _ps.description or "",
-                                "sql": _raw_sql,
-                                "output_table": _out_table,
-                                "row_count_after": int(_ps.row_count_after or 0),
-                            })
-                            _logger.info(
-                                "SESSION_REPLAY_VIEW: restored view=%s step=%d session=%s",
-                                _out_table, int(_ps.step_number or 0), session_id,
-                            )
-                        except Exception as _replay_err:
-                            _logger.warning(
-                                "SESSION_REPLAY_FAILED: table=%s step=%d error=%s",
-                                _out_table, int(_ps.step_number or 0), _replay_err,
-                            )
-                            # Stop replay chain — later steps depend on this one
-                            break
-            finally:
-                _replay_db.close()
 
-        # Always restore authoritative pipeline_steps from DB when available.
-        # The frontend may send steps but they lack output_table / step_number
-        # which the planner needs to construct correct SQL (FROM the right table).
-        if session_id and not _restored_pipeline_steps:
-            from ....models_db import PipelineStepDB as _PipelineStepDB2
-            _ps_db = SessionLocal()
+        # ── Build the canonical "what should exist" list for replay ──────────
+        # PRIORITY 1: pipeline_steps sent by the frontend in this very request.
+        # The frontend persists every executed step (sql + output_table) to
+        # localStorage, so this is *immune* to the race where the previous
+        # request's pipeline_recorder commit hasn't landed yet.
+        # PRIORITY 2: PipelineStepDB rows for this session_id.
+        _client_steps_raw = state.get("pipeline_steps") or []
+        _client_replayable: list[dict] = []
+        for _cs in _client_steps_raw:
+            if not isinstance(_cs, dict):
+                continue
+            _cs_table = str(_cs.get("output_table") or _cs.get("session_table_name") or "").strip()
+            _cs_sql = str(_cs.get("sql") or _cs.get("duckdb_sql") or "").strip()
+            if not _cs_table or not _cs_sql:
+                continue
             try:
-                _db_steps = (
-                    _ps_db.query(_PipelineStepDB2)
-                    .filter(
-                        _PipelineStepDB2.session_id == session_id,
-                        _PipelineStepDB2.status == "completed",
+                _cs_sn = int(_cs.get("step_number") or 0)
+            except Exception:
+                _cs_sn = 0
+            _client_replayable.append({
+                "step_number": _cs_sn,
+                "operation": str(_cs.get("operation") or "transform"),
+                "description": str(_cs.get("description") or ""),
+                "sql": _cs_sql,
+                "output_table": _cs_table,
+                "row_count_after": int(_cs.get("row_count_after") or _cs.get("rows_affected") or 0)
+                    if str(_cs.get("row_count_after") or _cs.get("rows_affected") or "0").lstrip("-").isdigit() else 0,
+                "input_tables": list(_cs.get("input_tables") or []),
+            })
+
+        if session_id and _needs_replay:
+            import re as _re_replay
+            _replay_steps: list[dict] = list(_client_replayable)
+            if not _replay_steps:
+                from ....models_db import PipelineStepDB as _PipelineStepDB
+                _replay_db = SessionLocal()
+                try:
+                    _prior_steps = (
+                        _replay_db.query(_PipelineStepDB)
+                        .filter(
+                            _PipelineStepDB.session_id == session_id,
+                            _PipelineStepDB.output_table.isnot(None),
+                            _PipelineStepDB.duckdb_sql.isnot(None),
+                            _PipelineStepDB.status == "completed",
+                        )
+                        .order_by(_PipelineStepDB.step_number)
+                        .all()
                     )
-                    .order_by(_PipelineStepDB2.step_number)
-                    .all()
-                )
-                for _ps2 in _db_steps:
-                    _restored_pipeline_steps.append({
-                        "step_number": int(_ps2.step_number or 0),
-                        "operation": _ps2.operation or "transform",
-                        "description": _ps2.description or "",
-                        "sql": _ps2.duckdb_sql or "",
-                        "output_table": _ps2.output_table or "",
-                        "row_count_after": int(_ps2.row_count_after or 0),
-                    })
+                    for _ps in _prior_steps:
+                        _replay_steps.append({
+                            "step_number": int(_ps.step_number or 0),
+                            "operation": _ps.operation or "transform",
+                            "description": _ps.description or "",
+                            "sql": str(_ps.duckdb_sql or ""),
+                            "output_table": str(_ps.output_table or ""),
+                            "row_count_after": int(_ps.row_count_after or 0),
+                            "input_tables": list(_ps.input_tables or []),
+                        })
+                finally:
+                    _replay_db.close()
+
+            _replay_steps.sort(key=lambda s: s.get("step_number") or 0)
+            if _replay_steps:
+                _replay_conn = get_connection(session_id)
+                _failures: list[tuple[int, str]] = []
+                for _step in _replay_steps:
+                    _out_table = _step["output_table"]
+                    _raw_sql = _step["sql"]
+                    _ct_m = _re_replay.match(
+                        r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                        _raw_sql,
+                    )
+                    _select_sql = (_raw_sql[_ct_m.end():].strip() if _ct_m else _raw_sql).rstrip("; \t\r\n")
+                    try:
+                        _replay_conn.execute(
+                            f'CREATE OR REPLACE VIEW "{_out_table}" AS ({_select_sql})'
+                        )
+                        table_registry[_out_table] = {
+                            "duckdb_name": _out_table,
+                            "dataset_id": "",
+                            "display_name": _step.get("description") or _out_table,
+                            "source_intent": _step.get("operation") or "transform",
+                            "parent_tables": list(_step.get("input_tables") or []),
+                            "row_count": int(_step.get("row_count_after") or 0),
+                            "column_names": [],
+                            "pipeline_step_number": int(_step.get("step_number") or 0),
+                            "is_artifact": False,
+                            "is_view": True,
+                        }
+                        _restored_pipeline_steps.append({
+                            "step_number": int(_step.get("step_number") or 0),
+                            "operation": _step.get("operation") or "transform",
+                            "description": _step.get("description") or "",
+                            "sql": _raw_sql,
+                            "output_table": _out_table,
+                            "row_count_after": int(_step.get("row_count_after") or 0),
+                        })
+                        _logger.info(
+                            "SESSION_REPLAY_VIEW: restored view=%s step=%d session=%s",
+                            _out_table, int(_step.get("step_number") or 0), session_id,
+                        )
+                    except Exception as _replay_err:
+                        # Skip-and-continue rather than break.  A later, independent
+                        # branch may still be reconstructable; if a downstream step
+                        # truly needs this view it will fail loudly when it executes.
+                        _failures.append((int(_step.get("step_number") or 0), str(_replay_err)[:200]))
+                        _logger.warning(
+                            "SESSION_REPLAY_FAILED: table=%s step=%d error=%s",
+                            _out_table, int(_step.get("step_number") or 0), _replay_err,
+                        )
+                if _failures:
+                    _logger.warning(
+                        "SESSION_REPLAY_PARTIAL: session=%s failures=%s",
+                        session_id, _failures,
+                    )
+
+        # Always restore authoritative pipeline_steps when nothing was replayed.
+        # Prefer client-sent steps (race-immune) over the DB.
+        if session_id and not _restored_pipeline_steps:
+            if _client_replayable:
+                _restored_pipeline_steps = [
+                    {
+                        "step_number": s["step_number"],
+                        "operation": s["operation"],
+                        "description": s["description"],
+                        "sql": s["sql"],
+                        "output_table": s["output_table"],
+                        "row_count_after": s["row_count_after"],
+                    }
+                    for s in _client_replayable
+                ]
                 _logger.info(
-                    "PIPELINE_STEPS_RESTORED: count=%d session=%s source=db_fallback",
+                    "PIPELINE_STEPS_RESTORED: count=%d session=%s source=client_payload",
                     len(_restored_pipeline_steps), session_id,
                 )
-            finally:
-                _ps_db.close()
+            else:
+                from ....models_db import PipelineStepDB as _PipelineStepDB2
+                _ps_db = SessionLocal()
+                try:
+                    _db_steps = (
+                        _ps_db.query(_PipelineStepDB2)
+                        .filter(
+                            _PipelineStepDB2.session_id == session_id,
+                            _PipelineStepDB2.status == "completed",
+                        )
+                        .order_by(_PipelineStepDB2.step_number)
+                        .all()
+                    )
+                    for _ps2 in _db_steps:
+                        _restored_pipeline_steps.append({
+                            "step_number": int(_ps2.step_number or 0),
+                            "operation": _ps2.operation or "transform",
+                            "description": _ps2.description or "",
+                            "sql": _ps2.duckdb_sql or "",
+                            "output_table": _ps2.output_table or "",
+                            "row_count_after": int(_ps2.row_count_after or 0),
+                        })
+                    _logger.info(
+                        "PIPELINE_STEPS_RESTORED: count=%d session=%s source=db_fallback",
+                        len(_restored_pipeline_steps), session_id,
+                    )
+                finally:
+                    _ps_db.close()
 
     # Store the primary alias in the state so execute_step can rewrite
     # any residual "FROM dataset" references at runtime.

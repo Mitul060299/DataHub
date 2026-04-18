@@ -107,12 +107,20 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   // This bridges the gap after page refresh where liveArtifact (React state)
   // is lost but steps are persisted in localStorage / DB.
   const restoreLiveArtifact = (loadedSteps: PipelineStep[], dsId: string) => {
-    const lastWithOutput = [...loadedSteps].reverse().find((s) => s.output_table);
+    // Check multiple possible sources for the output table name:
+    // - step.output_table (set after commit 99322df)
+    // - step.rawConfig.output_table / session_table_name (backend data persisted in rawConfig)
+    const getOutputTable = (s: PipelineStep): string | undefined =>
+      s.output_table
+      || (typeof s.rawConfig?.output_table === "string" ? s.rawConfig.output_table : undefined)
+      || (typeof s.rawConfig?.session_table_name === "string" ? s.rawConfig.session_table_name : undefined);
+    const lastWithOutput = [...loadedSteps].reverse().find((s) => getOutputTable(s));
     if (!lastWithOutput) return;
+    const tableName = getOutputTable(lastWithOutput)!;
     const sid = localStorage.getItem(`datahub_chat_session_${dsId}`);
     if (!sid) return;
     setLiveArtifact({
-      tableName: lastWithOutput.output_table!,
+      tableName,
       rowCount: lastWithOutput.row_count_after ?? (Number(lastWithOutput.affectedRows) || 0),
       stepLabel: lastWithOutput.description || lastWithOutput.operation,
       sessionId: sid,

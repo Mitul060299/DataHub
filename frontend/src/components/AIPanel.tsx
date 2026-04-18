@@ -962,24 +962,40 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       { id: crypto.randomUUID(), role: "user", content: "📊 Run data quality report" },
     ]);
     try {
+      // Determine the right dataset + session params for the quality report.
+      // Priority: liveArtifact (restored or live) → steps rawConfig → raw dataset.
+      let analyzeDatasetId = dataset.id;
+      let analyzeBody: Record<string, unknown> = {};
+      if (liveArtifact) {
+        if (liveArtifact.sessionId === "replayed") {
+          // After "Run Pipeline", tableName is the replayed dataset_id.
+          // Analyze that dataset directly (it's a physical Parquet file).
+          analyzeDatasetId = liveArtifact.tableName;
+        } else {
+          // Live DuckDB session — query the session view.
+          analyzeBody = { session_id: liveArtifact.sessionId, table_name: liveArtifact.tableName };
+        }
+      } else {
+        // No liveArtifact — try to find session + output_table from steps.
+        const currentSid = sessionIdRef.current || sessionId;
+        const lastStep = [...steps].reverse().find((s) =>
+          s.output_table
+          || typeof s.rawConfig?.output_table === "string"
+          || typeof s.rawConfig?.session_table_name === "string"
+        );
+        const tableName = lastStep?.output_table
+          || (typeof lastStep?.rawConfig?.output_table === "string" ? lastStep.rawConfig.output_table as string : undefined)
+          || (typeof lastStep?.rawConfig?.session_table_name === "string" ? lastStep.rawConfig.session_table_name as string : undefined);
+        if (currentSid && tableName) {
+          analyzeBody = { session_id: currentSid, table_name: tableName };
+        }
+      }
       const res = await api.post<{
         issues: unknown[];
         suggestions: unknown[];
         data_profile?: DataProfile;
         error?: string;
-      }>(`/cleaning/datasets/${dataset.id}/analyze`, liveArtifact
-        ? { session_id: liveArtifact.sessionId, table_name: liveArtifact.tableName }
-        : (() => {
-            // After a page refresh liveArtifact is null, but the pipeline may
-            // already have session views. Use the latest step's output_table so
-            // the report reflects transformed data, not the raw source.
-            const currentSid = sessionIdRef.current || sessionId;
-            const lastStep = [...steps].reverse().find((s) => s.output_table);
-            if (currentSid && lastStep?.output_table) {
-              return { session_id: currentSid, table_name: lastStep.output_table };
-            }
-            return {};
-          })());
+      }>(`/cleaning/datasets/${analyzeDatasetId}/analyze`, analyzeBody);
       const profile = res.data.data_profile;
       const issues = (res.data.issues ?? []) as QualityIssue[];
       const issueCount = issues.length;

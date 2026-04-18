@@ -86,6 +86,12 @@ export default function PlanDAG({
     if (!byDepth[d]) byDepth[d] = [];
     byDepth[d].push(step);
   }
+  // Fill any holes in the sparse array (can happen when depends_on references
+  // a step number that is not present in the plan — computeDepths still assigns
+  // a non-zero depth, leaving lower indices unpopulated).
+  for (let i = 0; i < byDepth.length; i++) {
+    if (!byDepth[i]) byDepth[i] = [];
+  }
 
   const numDepths = byDepth.length;
   const maxCols = Math.max(...byDepth.map((row) => row.length), 1);

@@ -113,7 +113,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     if (!sid) return;
     setLiveArtifact({
       tableName: lastWithOutput.output_table!,
-      rowCount: lastWithOutput.row_count_after ?? Number(lastWithOutput.affectedRows) || 0,
+      rowCount: lastWithOutput.row_count_after ?? (Number(lastWithOutput.affectedRows) || 0),
       stepLabel: lastWithOutput.description || lastWithOutput.operation,
       sessionId: sid,
     });

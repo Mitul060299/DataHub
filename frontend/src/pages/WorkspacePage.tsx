@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, fetchDatasetPage } from "../api";
+import { api, fetchDatasetPage, fetchStepPreview } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
@@ -127,17 +127,50 @@ export function WorkspacePage() {
   // Clear in-session view state whenever the user switches to a different source dataset.
   // PipelineContext handles loading the correct steps for each dataset independently.
   // Skip clearing when agent.done triggered the switch (skipNextClearRef is set).
+  const prevActiveDatasetRef = useRef<string | null>(activeDataset?.id ?? null);
   useEffect(() => {
+    const prev = prevActiveDatasetRef.current;
+    prevActiveDatasetRef.current = activeDataset?.id ?? null;
     if (skipNextClearRef.current) {
       skipNextClearRef.current = false;
       setShowingOriginal(false);
       return;
     }
+    // On initial mount (prev === null) don't clear — PipelineContext may have
+    // already restored liveArtifact from persisted steps.
+    if (prev === null) return;
     setSessionPreview(null);
     setLiveArtifact(null);
     setShowingOriginal(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDataset?.id]);
+
+  // When liveArtifact is restored (e.g. page refresh) but sessionPreview is
+  // empty, auto-fetch the preview from the DuckDB session so the data grid
+  // shows transformed data immediately — no manual "Run Pipeline" needed.
+  useEffect(() => {
+    if (!liveArtifact || !activeDataset?.id || sessionPreview) return;
+    // "replayed" is a sentinel from handleRunPipeline — already handled.
+    if (liveArtifact.sessionId === "replayed") return;
+    let cancelled = false;
+    fetchStepPreview(
+      activeDataset.id,
+      liveArtifact.sessionId,
+      liveArtifact.tableName,
+      500,
+    )
+      .then((result) => {
+        if (cancelled) return;
+        if (result.rows?.length) {
+          setSessionPreview({ rows: result.rows, columns: result.columns });
+        }
+      })
+      .catch(() => {
+        // Session may have been evicted — user can click "Run Pipeline".
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveArtifact, activeDataset?.id]);
 
   // Clear session preview when the live artifact is cleared (step deleted or artifact saved).
   // When a NEW live artifact is set (user ran another step while viewing original),

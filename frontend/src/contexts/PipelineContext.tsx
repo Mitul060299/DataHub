@@ -130,8 +130,10 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     // Structural changes (add/remove/clear) flush immediately via flushStepsToDb.
     // This effect only runs the debounced path for cosmetic edits (rename, etc.).
     if (structuralChangeRef.current > 0) {
-      // Already flushed by the structural change handler — skip debounce.
       structuralChangeRef.current = 0;
+      // Always flush to DB — commitStep's immediate flush may have been
+      // skipped when React 18 deferred the setSteps updater in batch mode.
+      void saveDatasetPipelineSteps(datasetId, steps).catch(() => { /* best-effort */ });
       return;
     }
     // Debounce DB writes for cosmetic changes (renames, etc.)

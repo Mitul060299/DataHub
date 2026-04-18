@@ -297,6 +297,9 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
     if (!dataset?.id) return;
     const storedId = localStorage.getItem(`datahub_chat_session_${dataset.id}`);
     if (!storedId) return;
+    // Restore session ID synchronously so it's available for sendMessage
+    // immediately — don't wait for the async chat history fetch.
+    restoreSession(storedId);
     let cancelled = false;
     const token = getAuthToken();
     fetch(`/api/chat/sessions/${storedId}`, {
@@ -305,7 +308,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       .then((r) => (r.ok ? r.json() : null))
       .then((json: { data?: { messages?: Array<{ role: string; content: string }> } } | null) => {
         if (cancelled || !json?.data?.messages?.length) return;
-        restoreSession(storedId);
         setMessages(
           json.data.messages.map((m) => ({
             id: crypto.randomUUID(),
@@ -464,6 +466,8 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
             affectedRows,
             appliedAt: new Date(),
             rawConfig: stepRecord,
+            output_table: typeof stepRecord.output_table === "string" ? stepRecord.output_table : undefined,
+            input_tables: Array.isArray(stepRecord.input_tables) ? (stepRecord.input_tables as string[]) : undefined,
             inputDataset: dataset
               ? {
                   id: inputDatasetId || dataset.id,
@@ -814,10 +818,12 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         project_id: projectId,
         conversation_history: [...history, ...(content && !approvePlan ? [{ role: "user" as const, content }] : [])],
         pipeline_steps: steps.map((step) => ({
+          step_number: step.stepNumber,
           operation: step.operation,
           description: step.description,
           sql: step.sql,
           rows_affected: step.affectedRows,
+          output_table: step.output_table,
         })),
         plan_approved: approvePlan ?? false,
         plan_pending_modification: isPlanModification ?? false,

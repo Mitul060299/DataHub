@@ -496,7 +496,12 @@ class AIAgentService:
                 .all()
             )
             if not steps:
+                import logging as _rlog
+                _rlog.getLogger(__name__).info(
+                    "replay: no completed steps with SQL found for session %s", session_id[:8],
+                )
                 return False
+            replayed_count = 0
             for ps in steps:
                 out_table = str(ps.output_table)
                 raw_sql = str(ps.duckdb_sql).strip()
@@ -507,9 +512,15 @@ class AIAgentService:
                 select_sql = (raw_sql[ct_m.end():].strip() if ct_m else raw_sql).rstrip("; \t\r\n")
                 try:
                     conn.execute(f'CREATE OR REPLACE VIEW "{out_table}" AS ({select_sql})')
-                except Exception:
+                    replayed_count += 1
+                except Exception as _view_exc:
+                    import logging as _rlog
+                    _rlog.getLogger(__name__).warning(
+                        "replay: failed to create view %s (step %s): %s",
+                        out_table, ps.step_number, _view_exc,
+                    )
                     break  # later steps depend on this one
-            return True
+            return replayed_count > 0
         finally:
             _db.close()
 
@@ -534,8 +545,24 @@ class AIAgentService:
         # the original Parquet — the user expects the report on transformed data.
         _used_session = False
         if session_id and table_name:
+            from .duckdb_session import execute_in_session, table_exists
+            import logging as _ctx_log
+            _logger = _ctx_log.getLogger(__name__)
+
+            # Proactively replay views if the target table is missing from the
+            # DuckDB session (server restart, TTL eviction, memory pressure).
+            # This is idempotent — CREATE OR REPLACE VIEW is safe on existing views.
             try:
-                from .duckdb_session import execute_in_session
+                if not table_exists(session_id, table_name):
+                    _logger.info(
+                        "quality-report: view %s missing in session %s — replaying from DB",
+                        table_name, session_id[:8],
+                    )
+                    AIAgentService._replay_session_views(session_id, dataset)
+            except Exception as _replay_exc:
+                _logger.warning("quality-report: proactive replay failed: %s", _replay_exc)
+
+            try:
                 sample_data = execute_in_session(
                     session_id,
                     f'SELECT * FROM "{table_name}" LIMIT {sample_size}',
@@ -552,27 +579,16 @@ class AIAgentService:
                             row_count = int(cnt[0]["n"])
                     except Exception:
                         pass
-            except Exception:
-                # View may have been lost due to DuckDB session eviction.
-                # Attempt to replay pipeline steps from the DB before falling back.
-                try:
-                    _replayed = AIAgentService._replay_session_views(session_id, dataset)
-                    if _replayed:
-                        from .duckdb_session import execute_in_session as _exec2
-                        sample_data = _exec2(
-                            session_id,
-                            f'SELECT * FROM "{table_name}" LIMIT {sample_size}',
-                        ) or []
-                        if sample_data:
-                            _used_session = True
-                            try:
-                                cnt = _exec2(session_id, f'SELECT COUNT(*) AS n FROM "{table_name}"')
-                                if cnt:
-                                    row_count = int(cnt[0]["n"])
-                            except Exception:
-                                pass
-                except Exception:
-                    pass  # replay failed — fall back to original data
+                else:
+                    _logger.warning(
+                        "quality-report: session query returned 0 rows for %s in session %s",
+                        table_name, session_id[:8],
+                    )
+            except Exception as _sess_exc:
+                _logger.warning(
+                    "quality-report: session query failed after replay for %s: %s",
+                    table_name, _sess_exc,
+                )
         if not _used_session:
             if dataset.storage_path:
                 sample_query = (

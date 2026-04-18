@@ -10,38 +10,44 @@ interface TourStep {
 const STEPS: TourStep[] = [
   {
     target: "data-section",
-    title: "Upload your data",
-    content: "Start by uploading a CSV, Excel, or JSON file. This becomes your working dataset.",
+    title: "Upload or connect your data",
+    content: "Start by uploading a CSV/Excel file or connecting to a database, Google Sheets, or S3. This becomes your working dataset.",
     position: "right",
   },
   {
     target: "ai-agent-header",
     title: "Talk to the AI Agent",
-    content: "Describe what you want in plain English. 'Clean nulls', 'summarise by region', 'create a pie chart of revenue' — just type it.",
+    content: "Describe what you want in plain English — 'remove duplicates', 'group by region', 'run a quality report', 'create a bar chart'. The agent handles the rest.",
     position: "left",
   },
   {
-    target: "ai-agent-header",
+    target: "approve-button",
     title: "Review & approve plans",
-    content: "DataHub shows you a step-by-step plan before touching your data. Review and approve — you're always in control.",
+    content: "Before touching your data, DataHub shows you a step-by-step plan. Review each query, modify anything, then approve — you're always in control.",
     position: "left",
   },
   {
-    target: "pipeline-section",
+    target: "activity-pipeline",
     title: "Replayable pipeline",
-    content: "Every transformation is recorded here as a replayable pipeline step. Run it again on new data anytime.",
+    content: "Every transformation is captured in a replayable pipeline. Open it with this button, re-run on fresh data, or surgically remove a step and re-run downstream automatically.",
+    position: "right",
+  },
+  {
+    target: "artifacts-section",
+    title: "Saved outputs",
+    content: "Processed tables are saved here as artifacts. Continue from any artifact to branch your analysis, or load them straight into a dashboard.",
     position: "right",
   },
   {
     target: "canvas-tab",
     title: "Build a dashboard",
-    content: "Switch to Canvas to build a dashboard. Drag your saved charts here and share with clients via a link.",
+    content: "Switch to Canvas to arrange your saved charts and tables into a dashboard. Share it with clients via a public link — no login needed.",
     position: "bottom",
   },
   {
     target: "viz-section",
     title: "Saved visualizations",
-    content: "Charts you save during analysis appear here. Drag them onto the Canvas to build your dashboard.",
+    content: "Charts you save during analysis live here. Drag them onto the Canvas or embed them in a report.",
     position: "right",
   },
 ];

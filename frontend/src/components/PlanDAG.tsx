@@ -75,6 +75,7 @@ export default function PlanDAG({
   }
 
   // --- Layout computation ---
+  if (!steps || !steps.length) return null;
   const depthMap = computeDepths(steps);
   const sorted = [...steps].sort((a, b) => a.step_number - b.step_number);
 

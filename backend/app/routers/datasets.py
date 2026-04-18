@@ -673,6 +673,19 @@ def step_preview(
     if not session_id or not table_name:
         raise HTTPException(status_code=422, detail="session_id and table_name required")
     try:
+        from ..services.duckdb_session import table_exists
+        # Replay views from PipelineStepDB if the session was evicted
+        # (server restart, TTL, memory pressure).  Idempotent.
+        if not table_exists(session_id, table_name):
+            import logging as _sp_log
+            _sp_log.getLogger(__name__).info(
+                "step-preview: view %s missing — replaying from DB", table_name,
+            )
+            from ..models_db import DatasetMetaDB as _DSMeta
+            _ds = db.query(_DSMeta).filter(_DSMeta.id == dataset_id).first()
+            if _ds:
+                from ..services.ai_agent_service import AIAgentService
+                AIAgentService._replay_session_views(session_id, _ds)
         from ..services.step_engine import StepEngine
         engine = StepEngine(session_id, {})
         rows = engine.preview(table_name, limit=limit, offset=offset)

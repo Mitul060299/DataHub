@@ -119,6 +119,7 @@ function buildFollowUpChips(
 
 function DataProfileCard({ profile, issues }: { profile: DataProfile; issues?: QualityIssue[] }) {
   const [open, setOpen] = useState(false);
+  if (!profile?.columns) return null;
   const cols = Object.entries(profile.columns);
   const highNullCols = cols.filter(([, c]) => c.null_pct > 0).length;
   const colsWithOutliers = cols.filter(([, c]) => (c.outlier_count ?? 0) > 0).length;
@@ -277,6 +278,9 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   const [showAllRowsIds, setShowAllRowsIds] = useState<Set<string>>(new Set());
   // Tracks dataset IDs that have already been auto-analyzed on first load
   const autoQualityRunRef = useRef<Set<string>>(new Set());
+  // Stable ref to the latest runDataQualityReport so setTimeout doesn't
+  // capture a stale closure where liveArtifact is still null from mount.
+  const runQualityRef = useRef<() => Promise<void>>();
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const [autoSaveStatus, setAutoSaveStatus] = useState<{ savedAt: Date; tableName: string } | null>(null);
   // Tracks what we last saved so we skip unchanged state
@@ -306,13 +310,13 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((json: { data?: { messages?: Array<{ role: string; content: string }> } } | null) => {
+      .then((json: { data?: { messages?: Array<{ role: string; content: string | null }> } } | null) => {
         if (cancelled || !json?.data?.messages?.length) return;
         setMessages(
           json.data.messages.map((m) => ({
             id: crypto.randomUUID(),
             role: m.role as "user" | "assistant",
-            content: m.content,
+            content: m.content ?? "",
           }))
         );
       })
@@ -1022,6 +1026,8 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       setAnalyzingDataset(false);
     }
   };
+  // Keep ref in sync so deferred callbacks always call the latest version.
+  runQualityRef.current = runDataQualityReport;
 
   // Auto-trigger quality report for fresh datasets with no prior chat history
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1033,7 +1039,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
     if (storedId) return;
     autoQualityRunRef.current.add(dataset.id);
     // Small delay so any in-flight history restore can settle first
-    const t = setTimeout(() => { void runDataQualityReport(); }, 800);
+    const t = setTimeout(() => { void runQualityRef.current?.(); }, 800);
     return () => clearTimeout(t);
   }, [dataset?.id]); // intentionally omit runDataQualityReport — stable enough for one-shot
 
@@ -1182,10 +1188,11 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                 <IconEdit size={11} />
               </button>
             ) : null}
-            {message.role === "assistant" && message.content.startsWith("Error:") ? (
+            <ErrorBoundary key={message.id} fallback={<div style={{ padding: "6px 10px", fontSize: 12, color: "var(--tx2)", border: "1px solid var(--bd)", borderRadius: 6, opacity: 0.7 }}>⚠ Message render failed</div>}>
+            {message.role === "assistant" && message.content?.startsWith("Error:") ? (
               <ErrorBubble
-                message={message.content.replace(/^Error:\s*/, "")}
-                onRetry={isRetryableError(message.content) ? () => {
+                message={(message.content ?? "").replace(/^Error:\s*/, "")}
+                onRetry={isRetryableError(message.content ?? "") ? () => {
                   const last = [...messages].reverse().find((m) => m.role === "user");
                   if (last) void handleSend(last.content);
                 } : undefined}
@@ -1195,7 +1202,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               {message.isClarification ? (
                 <div style={{ fontSize: 10, color: "#7c3aed", fontWeight: 700, marginBottom: 6, letterSpacing: "0.04em" }}>❓ NEEDS YOUR INPUT</div>
               ) : null}
-              <div className="ai-message-body"><ReactMarkdown>{message.content}</ReactMarkdown></div>
+              <div className="ai-message-body"><ReactMarkdown>{message.content ?? ""}</ReactMarkdown></div>
               {message.isClarification ? (
                 <div style={{ marginTop: 6, fontSize: 11, color: "var(--tx1)" }}>↓ Type your answer below</div>
               ) : null}
@@ -1399,6 +1406,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
               ) : null}
             </div>
             )}
+            </ErrorBoundary>
           </div>
         ))}
         {sending ? (

@@ -31,6 +31,7 @@ export default function PlanCard({
   onReject,
   onModify,
 }: PlanCardProps) {
+  if (!steps || !steps.length) return null;
   const borderColor = approved ? "var(--gr)" : rejected ? "var(--rd)" : "var(--yl)";
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [modifying, setModifying] = useState(false);

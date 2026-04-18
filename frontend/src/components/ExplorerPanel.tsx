@@ -340,6 +340,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         />
         </div>
         )}
+        <div data-tour="artifacts-section">
         <ArtifactsSection
           artifacts={artifacts}
           activeDatasetId={activeDataset?.id}
@@ -365,6 +366,8 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             void loadDatasets();
           }}
         />
+
+        </div>
 
         <div data-tour="viz-section">
         <VisualizationsSection />

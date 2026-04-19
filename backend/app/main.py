@@ -58,7 +58,7 @@ app.add_middleware(
     allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Workspace-Id", "X-Request-Id"],
+    allow_headers=["Authorization", "Content-Type", "X-Workspace-Id", "X-Project-Id", "X-Request-Id"],
     expose_headers=["X-Request-Id"],
 )
 
@@ -425,6 +425,11 @@ async def _apply_startup_ddl_bg() -> None:
     await asyncio.to_thread(_apply_startup_ddl)
 
 
+# Hard refs to fire-and-forget startup tasks so Python's garbage collector
+# can't reap them before they finish (asyncio.create_task only holds a weak
+# reference internally — see https://bugs.python.org/issue44665).
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
 @app.on_event("startup")
 async def create_tables() -> None:
     logger.warning("CORS ORIGINS LOADED: %s", settings.cors_origins)
@@ -446,13 +451,20 @@ async def create_tables() -> None:
         # Run as a background task so it never blocks uvicorn from binding the
         # port.  On Render, if this awaits synchronously (~30 Supabase round-
         # trips) the deploy health-check times out before the port opens.
-        asyncio.create_task(asyncio.to_thread(Base.metadata.create_all, engine))
+        # Hold the task reference so Python's GC can't collect it mid-flight
+        # (asyncio only weakly tracks tasks).
+        _t = asyncio.create_task(asyncio.to_thread(Base.metadata.create_all, engine))
+        _BACKGROUND_TASKS.add(_t)
+        _t.add_done_callback(_BACKGROUND_TASKS.discard)
 
     # Schema safety-net DDL is run in a background task so that uvicorn can
     # bind to the port immediately.  On Render free tier, ALTER TABLE statements
     # can time out after ~2 minutes each; running them synchronously here would
     # push total startup past Render's port-scan deadline and kill the deploy.
-    asyncio.create_task(_apply_startup_ddl_bg())
+    _t2 = asyncio.create_task(_apply_startup_ddl_bg())
+    _BACKGROUND_TASKS.add(_t2)
+    _t2.add_done_callback(_BACKGROUND_TASKS.discard)
+    logger.warning("STARTUP: uvicorn ready, port bound, background DDL task scheduled")
 
 
 @app.middleware("http")

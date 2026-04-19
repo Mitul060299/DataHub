@@ -1235,7 +1235,10 @@ class PipelineEngine:
         # Truncate long AI-generated descriptions for readable sidebar names
         output_name = raw_output_name if len(raw_output_name) <= 40 else raw_output_name[:38] + "\u2026"
 
-        meta = DatasetMetaDB(
+        from .persistence_policy import materialize_dataset
+        meta = materialize_dataset(
+            self.db,
+            triggered_by="pipeline_step",
             id=output_dataset_id,
             user_id=source_dataset.user_id,
             workspace_id=source_dataset.workspace_id or "default",
@@ -1254,7 +1257,6 @@ class PipelineEngine:
             access_tier=source_dataset.access_tier or "hot",
             parent_id=source_dataset.id,
         )
-        self.db.add(meta)
 
         normalized_rows = (
             df.astype(object).where(pd.notnull(df), None).to_dict(orient='records')

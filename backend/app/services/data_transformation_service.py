@@ -195,7 +195,10 @@ def _create_transformed_dataset_version(
     schema = DataConversionService._infer_schema(df) if not df.empty else {}
     stats = DataConversionService._generate_stats(df, schema) if not df.empty else {}
 
-    output_dataset = DatasetMetaDB(
+    from .persistence_policy import materialize_dataset
+    output_dataset = materialize_dataset(
+        db,
+        triggered_by="transform",
         id=str(uuid.uuid4()),
         user_id=source_dataset.user_id,
         workspace_id=source_dataset.workspace_id or "default",
@@ -214,7 +217,6 @@ def _create_transformed_dataset_version(
         access_tier=source_dataset.access_tier or "hot",
         parent_id=source_dataset.id,
     )
-    db.add(output_dataset)
     db.flush()
     return output_dataset
 
@@ -333,7 +335,10 @@ def _transform_via_parquet(
 
     # Persist the output dataset.  storage_path is set so future transforms
     # also take this fast path.  No DB chunk rows are written.
-    output_dataset = DatasetMetaDB(
+    from .persistence_policy import materialize_dataset
+    output_dataset = materialize_dataset(
+        db,
+        triggered_by="transform",
         id=new_dataset_id,
         user_id=source_dataset.user_id,
         workspace_id=source_dataset.workspace_id or "default",
@@ -352,7 +357,6 @@ def _transform_via_parquet(
         access_tier=source_dataset.access_tier or "hot",
         parent_id=source_dataset.id,
     )
-    db.add(output_dataset)
     db.flush()
 
     DataTransformationService._save_history(

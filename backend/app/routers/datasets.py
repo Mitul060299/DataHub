@@ -302,20 +302,21 @@ async def upload_dataset(
     except Exception:
         pass  # Degraded to DB-chunk fallback — preview still works via get_dataset_from_db
     # ─────────────────────────────────────────────────────────────────────────
-    db.add(
-        DatasetMetaDB(
-            id=dataset_id,
-            user_id=user_id,
-            workspace_id=workspace_id or "default",
-            name=resolved_name,
-            columns=list(df.columns),
-            row_count=int(df.shape[0]),
-            access_tier=initial_tier,
-            storage_path=_parquet_s3_path,
-            parent_id=None,
-            file_size_bytes=len(content),
-            compressed_size_bytes=_compressed_size,
-        )
+    from ..services.persistence_policy import materialize_dataset
+    materialize_dataset(
+        db,
+        triggered_by="user_upload",
+        id=dataset_id,
+        user_id=user_id,
+        workspace_id=workspace_id or "default",
+        name=resolved_name,
+        columns=list(df.columns),
+        row_count=int(df.shape[0]),
+        access_tier=initial_tier,
+        storage_path=_parquet_s3_path,
+        parent_id=None,
+        file_size_bytes=len(content),
+        compressed_size_bytes=_compressed_size,
     )
     # Only persist DB chunks as fallback when Parquet upload failed.
     # When storage_path is set, DuckDB reads directly from S3 — chunks are redundant.
@@ -417,7 +418,8 @@ def save_dataset(
     }
     if meta_extra:
         meta_kwargs.update(meta_extra)
-    db.add(DatasetMetaDB(**meta_kwargs))
+    from ..services.persistence_policy import materialize_dataset
+    materialize_dataset(db, triggered_by="user_upload", **meta_kwargs)
 
     if store_rows:
         rows = df.to_dict(orient="records")
@@ -846,20 +848,21 @@ async def upload_new_version(
     new_id = str(uuid.uuid4())
     next_version = (getattr(parent, "version_number", 1) or 1) + 1
 
-    db.add(
-        DatasetMetaDB(
-            id=new_id,
-            user_id=user_id,
-            workspace_id=workspace_id or parent.workspace_id or "default",
-            name=parent.name,
-            columns=list(df.columns),
-            row_count=int(df.shape[0]),
-            access_tier=parent.access_tier or "hot",
-            parent_id=dataset_id,
-            version_number=next_version,
-            version_note=version_note or None,
-            uploaded_by=user_id,
-        )
+    from ..services.persistence_policy import materialize_dataset
+    materialize_dataset(
+        db,
+        triggered_by="user_upload",
+        id=new_id,
+        user_id=user_id,
+        workspace_id=workspace_id or parent.workspace_id or "default",
+        name=parent.name,
+        columns=list(df.columns),
+        row_count=int(df.shape[0]),
+        access_tier=parent.access_tier or "hot",
+        parent_id=dataset_id,
+        version_number=next_version,
+        version_note=version_note or None,
+        uploaded_by=user_id,
     )
     rows = df.to_dict(orient="records")
     if rows:

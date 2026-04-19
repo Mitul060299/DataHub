@@ -393,7 +393,10 @@ async def presign_upload(
         raise HTTPException(status_code=501, detail=str(exc)) from exc
 
     # Create a pending row so /finalize can look it up and only the owner can finalize it
-    db.add(DatasetMetaDB(
+    from ..services.persistence_policy import materialize_dataset
+    materialize_dataset(
+        db,
+        triggered_by="user_upload",
         id=dataset_id,
         user_id=user_id,
         workspace_id=workspace_id or "default",
@@ -407,7 +410,7 @@ async def presign_upload(
         file_format=source_format,
         file_size_bytes=file_size_bytes,
         access_tier="hot",
-    ))
+    )
     db.commit()
 
     return {

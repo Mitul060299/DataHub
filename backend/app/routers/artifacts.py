@@ -328,9 +328,12 @@ def save_checkpoint(
         )
 
     # 4. Persist DatasetMetaDB so dataset appears in the datasets list
+    from ..services.persistence_policy import materialize_artifact, materialize_dataset
     ds_id = str(_uuid.uuid4())
     try:
-        ds_row = DatasetMetaDB(
+        ds_row = materialize_dataset(
+            db,
+            triggered_by="user_save",
             id=ds_id,
             user_id=current_user.id,
             workspace_id=getattr(current_user, "workspace_id", None) or "default",
@@ -343,14 +346,15 @@ def save_checkpoint(
             status="ready",
             parent_id=source_dataset_id,
         )
-        db.add(ds_row)
         db.flush()
     except Exception as exc:
         logger.warning("DatasetMetaDB persist failed for checkpoint %s: %s", checkpoint_id, exc)
         ds_id = None
 
     # 5. Persist ArtifactDB row
-    artifact_row = ArtifactDB(
+    artifact_row = materialize_artifact(
+        db,
+        triggered_by="user_save",
         id=checkpoint_id,
         user_id=current_user.id,
         session_id=session_id,
@@ -364,7 +368,6 @@ def save_checkpoint(
         type="checkpoint",
         format="parquet",
     )
-    db.add(artifact_row)
     db.commit()
 
     return {

@@ -644,6 +644,29 @@ def get_pipeline_steps(
     except Exception:
         steps = []
 
+    # ── Detect malformed legacy JSON ─────────────────────────────────────
+    # Older builds (and a brief window of recent ones) wrote steps with
+    # snake_case keys (step_number / timestamp / rows_affected) and no
+    # 'id' field.  The frontend can't render those — appliedAt becomes
+    # Invalid Date and the row vanishes.  Treat such payloads as empty so
+    # the PipelineStepDB fallback below kicks in and reconstructs them in
+    # the correct camelCase schema.
+    def _is_valid_frontend_step(s) -> bool:
+        return (
+            isinstance(s, dict)
+            and "id" in s
+            and "stepNumber" in s
+            and "appliedAt" in s
+        )
+
+    if isinstance(steps, list) and steps and not all(_is_valid_frontend_step(s) for s in steps):
+        import logging as _gps_log
+        _gps_log.getLogger(__name__).info(
+            "pipeline-steps: stored JSON for dataset %s is in legacy format "
+            "— triggering fallback reconstruction", dataset_id[:8],
+        )
+        steps = []
+
     # ── Fallback: reconstruct from PipelineStepDB rows ───────────────────
     # PipelineStepDB is committed per-row immediately after each agent step
     # (see pipeline_recorder.py), so it's always up-to-date even when the

@@ -11,11 +11,18 @@ from ..state import AgentState
 
 logger = logging.getLogger(__name__)
 
-_llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-    temperature=0.3,
-    groq_api_key=os.getenv("GROQ_API_KEY"),
-)
+_llm: ChatGroq | None = None
+
+
+def _get_llm() -> ChatGroq:
+    global _llm
+    if _llm is None:
+        _llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.3,
+            groq_api_key=os.getenv("GROQ_API_KEY"),
+        )
+    return _llm
 
 _LLM_TIMEOUT_MSG = (
     "I'm taking longer than usual — this sometimes happens with complex requests. "
@@ -26,7 +33,7 @@ _LLM_TIMEOUT_MSG = (
 async def _invoke_llm(messages: list) -> str:
     """Invoke the LLM with a 30-second timeout and a friendly fallback."""
     try:
-        response = await asyncio.wait_for(_llm.ainvoke(messages), timeout=30)
+        response = await asyncio.wait_for(_get_llm().ainvoke(messages), timeout=30)
         return str(response.content)
     except asyncio.TimeoutError:
         logger.warning("responder LLM timed out after 30s")

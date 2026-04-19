@@ -10,11 +10,18 @@ from .planner import _dumps
 
 _log = logging.getLogger(__name__)
 
-_llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-    temperature=0.3,
-    groq_api_key=os.getenv("GROQ_API_KEY"),
-)
+_llm: ChatGroq | None = None
+
+
+def _get_llm() -> ChatGroq:
+    global _llm
+    if _llm is None:
+        _llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.3,
+            groq_api_key=os.getenv("GROQ_API_KEY"),
+        )
+    return _llm
 
 CLARIFY_PROMPT = """You are a helpful data analyst assistant. The user's request needs one clarifying question before you can proceed.
 
@@ -55,7 +62,7 @@ async def clarify_step(state: AgentState) -> dict:
 
     try:
         response = await asyncio.wait_for(
-            _llm.ainvoke([
+            _get_llm().ainvoke([
                 SystemMessage(content=prompt),
                 HumanMessage(content=user_goal),
             ]),

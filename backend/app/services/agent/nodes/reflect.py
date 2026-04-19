@@ -9,11 +9,18 @@ from ..prompts import REFLECT_PROMPT
 from ..state import AgentState
 from .planner import _dumps
 
-_llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-    temperature=0.2,
-    groq_api_key=os.getenv("GROQ_API_KEY"),
-)
+_llm: ChatGroq | None = None
+
+
+def _get_llm() -> ChatGroq:
+    global _llm
+    if _llm is None:
+        _llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.2,
+            groq_api_key=os.getenv("GROQ_API_KEY"),
+        )
+    return _llm
 
 
 async def reflect(state: AgentState) -> dict:
@@ -32,7 +39,7 @@ async def reflect(state: AgentState) -> dict:
 
     try:
         response = await asyncio.wait_for(
-            _llm.ainvoke([HumanMessage(content=prompt)]),
+            _get_llm().ainvoke([HumanMessage(content=prompt)]),
             timeout=30,
         )
     except asyncio.TimeoutError:

@@ -80,6 +80,13 @@ const loadPersistedLiveArtifact = (datasetId?: string | null): LiveArtifactState
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.tableName !== "string" || typeof parsed.sessionId !== "string") return null;
+    // Defensive: drop legacy "replayed" sentinel that older builds wrote into
+    // localStorage.  With the v3 fix handleRunPipeline always stores a real
+    // session id, so any persisted entry containing "replayed" is stale.
+    if (parsed.sessionId === "replayed") {
+      try { localStorage.removeItem(liveArtifactKey(datasetId)); } catch { /* ignore */ }
+      return null;
+    }
     return {
       tableName: parsed.tableName,
       rowCount: Number(parsed.rowCount) || 0,

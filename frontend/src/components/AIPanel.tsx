@@ -992,14 +992,10 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       let analyzeDatasetId = dataset.id;
       let analyzeBody: Record<string, unknown> = {};
       if (liveArtifact) {
-        if (liveArtifact.sessionId === "replayed") {
-          // After "Run Pipeline", tableName is the replayed dataset_id.
-          // Analyze that dataset directly (it's a physical Parquet file).
-          analyzeDatasetId = liveArtifact.tableName;
-        } else {
-          // Live DuckDB session — query the session view.
-          analyzeBody = { session_id: liveArtifact.sessionId, table_name: liveArtifact.tableName };
-        }
+        // Live DuckDB session — query the session view.
+        // (After the v3 fix, liveArtifact ALWAYS carries a real session id;
+        // the legacy "replayed" sentinel branch was removed.)
+        analyzeBody = { session_id: liveArtifact.sessionId, table_name: liveArtifact.tableName };
       } else {
         // No liveArtifact — try to find session + output_table from steps.
         const currentSid = sessionIdRef.current || sessionId;

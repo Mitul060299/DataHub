@@ -782,6 +782,31 @@ class PipelineStepDB(Base):
     )
 
 
+class PendingStorageDeleteDB(Base):
+    """Queue of object-storage paths whose immediate delete failed.
+
+    When a dataset / artifact row is deleted from Postgres but the matching
+    S3 / R2 / Azure object delete fails (network blip, transient permission
+    issue, etc.), we enqueue the storage_path here so a background drainer
+    can retry it without the row staying half-deleted.  This prevents
+    orphaned objects from silently inflating storage cost.
+    """
+    __tablename__ = "pending_storage_deletes"
+
+    id = Column(String, primary_key=True)
+    storage_path = Column(Text, nullable=False)
+    source = Column(String(64), nullable=False, default="dataset")  # 'dataset' | 'artifact' | 'child'
+    attempts = Column(Integer, nullable=False, default=0)
+    last_error = Column(Text, nullable=True)
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_pending_storage_deletes_next_attempt", "next_attempt_at"),
+    )
+
+
 class TransformationStepDB(Base):
     """Individual transformation steps within a session - for visualization in UI"""
     __tablename__ = "transformation_steps"

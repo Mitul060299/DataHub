@@ -17,6 +17,7 @@ from ..services.recipes import recipe_store
 from ..services.transformer import apply_steps
 from ..services.archival import schedule_archival_job
 from ..services.tenant_isolation_monitor import schedule_tenant_isolation_job
+from ..services.storage_cleanup import schedule_storage_cleanup_job
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -67,6 +68,7 @@ def start_scheduler() -> None:
     scheduler.start()
     schedule_archival_job(scheduler)
     schedule_tenant_isolation_job(scheduler)
+    schedule_storage_cleanup_job(scheduler)
     _load_jobs()
 
 

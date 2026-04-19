@@ -398,5 +398,122 @@ class PipelineRecorderResilienceTests(unittest.TestCase):
                                 "the failed step commit must trigger a rollback")
 
 
+class StepPreviewEndpointTests(unittest.TestCase):
+    """End-to-end coverage for ``POST /datasets/{id}/step-preview``.
+
+    The endpoint must hand client-supplied ``pipeline_steps`` to
+    ``_replay_session_views`` so refresh-then-second-AI-command does not race
+    against a not-yet-committed PipelineStepDB row.
+    """
+
+    def _call(self, payload: dict, *, table_present: bool):
+        from app.routers import datasets as ds_router
+
+        captured: dict = {}
+
+        class _FakeDataset:
+            id = "ds-1"
+            name = "customers"
+
+        class _FakeDB:
+            def query(self, *_a, **_kw):
+                class _Q:
+                    def filter(self, *_a, **_kw):
+                        class _F:
+                            def first(self_inner):  # noqa: ARG002
+                                return _FakeDataset()
+                        return _F()
+                return _Q()
+
+        class _FakeEngine:
+            def __init__(self, *_a, **_kw):
+                pass
+
+            def preview(self, table_name, limit=200, offset=0):
+                captured["preview_args"] = (table_name, limit, offset)
+                return [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
+
+        from app.services import ai_agent_service as ai_mod
+        with patch("app.services.duckdb_session.table_exists", return_value=table_present), \
+             patch.object(ai_mod.AIAgentService, "_replay_session_views",
+                          return_value=True) as replay_mock, \
+             patch("app.services.step_engine.StepEngine", _FakeEngine):
+            response = ds_router.step_preview(
+                "ds-1", payload, authorization=None, db=_FakeDB(),
+            )
+        return response, captured, replay_mock
+
+    def test_pipeline_steps_passed_to_replay_when_view_missing(self) -> None:
+        steps = [
+            {"step_number": 1, "sql": "SELECT 1", "output_table": "step_1"},
+            {"step_number": 2, "sql": "SELECT 2", "output_table": "step_2"},
+        ]
+        response, captured, replay_mock = self._call(
+            {
+                "session_id": "u:chat-1",
+                "table_name": "step_2",
+                "limit": 100,
+                "pipeline_steps": steps,
+            },
+            table_present=False,
+        )
+
+        replay_mock.assert_called_once()
+        # Second positional / keyword arg client_steps must equal our list.
+        kwargs = replay_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("client_steps"), steps)
+        # Preview engine was driven with the requested table + limit.
+        self.assertEqual(captured["preview_args"], ("step_2", 100, 0))
+        self.assertEqual(response["count"], 2)
+        self.assertEqual(set(response["columns"]), {"a", "b"})
+
+    def test_replay_skipped_when_view_already_present(self) -> None:
+        response, captured, replay_mock = self._call(
+            {"session_id": "u:chat-1", "table_name": "step_2"},
+            table_present=True,
+        )
+
+        replay_mock.assert_not_called()
+        self.assertEqual(captured["preview_args"][0], "step_2")
+        self.assertIn("rows", response)
+
+    def test_invalid_pipeline_step_entries_are_filtered_out(self) -> None:
+        steps = [
+            {"step_number": 1, "sql": "SELECT 1", "output_table": "step_1"},
+            "not-a-dict",
+            42,
+            None,
+            {"step_number": 2, "sql": "SELECT 2", "output_table": "step_2"},
+        ]
+        _response, _captured, replay_mock = self._call(
+            {
+                "session_id": "u:chat-1",
+                "table_name": "step_2",
+                "pipeline_steps": steps,
+            },
+            table_present=False,
+        )
+        replay_mock.assert_called_once()
+        cleaned = replay_mock.call_args.kwargs["client_steps"]
+        self.assertEqual(len(cleaned), 2)
+        self.assertTrue(all(isinstance(s, dict) for s in cleaned))
+
+    def test_missing_session_or_table_returns_422(self) -> None:
+        from app.routers import datasets as ds_router
+        from fastapi import HTTPException
+
+        class _DB:  # never queried, the 422 fires first
+            def query(self, *_a, **_kw):  # pragma: no cover
+                raise AssertionError("must not reach DB")
+
+        with self.assertRaises(HTTPException) as ctx:
+            ds_router.step_preview("ds-1", {"table_name": "x"}, None, _DB())
+        self.assertEqual(ctx.exception.status_code, 422)
+
+        with self.assertRaises(HTTPException) as ctx:
+            ds_router.step_preview("ds-1", {"session_id": "x"}, None, _DB())
+        self.assertEqual(ctx.exception.status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()

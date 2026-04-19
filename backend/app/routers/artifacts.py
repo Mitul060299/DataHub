@@ -421,16 +421,11 @@ def delete_artifact(
     db: Session = Depends(get_db),
 ):
     artifact = _get_artifact_or_404(artifact_id, current_user.id, db)
-
-    # Remove from S3 (best-effort)
-    try:
-        StorageService.delete(artifact.s3_key)
-    except Exception as exc:
-        logger.warning("S3 delete failed for artifact %s: %s", artifact_id, exc)
+    s3_key = artifact.s3_key
 
     # Delete the linked DatasetMetaDB record created by save-checkpoint (same s3_key = storage_path)
     linked_ds = db.query(DatasetMetaDB).filter(
-        DatasetMetaDB.storage_path == artifact.s3_key
+        DatasetMetaDB.storage_path == s3_key
     ).first()
     if linked_ds:
         db.query(DatasetDataDB).filter(DatasetDataDB.id == linked_ds.id).delete(synchronize_session=False)
@@ -438,5 +433,12 @@ def delete_artifact(
         db.delete(linked_ds)
 
     db.delete(artifact)
+
+    # DB rows are queued for delete; attempt the storage delete and queue on
+    # failure so the commit either persists row-delete + retry-row together,
+    # or rolls both back -- never orphaned objects.
+    from ..services.storage_cleanup import safe_storage_delete
+    safe_storage_delete(s3_key, source="artifact", db=db)
+
     db.commit()
     return Response(status_code=204)

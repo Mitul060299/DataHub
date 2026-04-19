@@ -79,7 +79,7 @@ export function WorkspacePage() {
       //   2. The chat session for this dataset (persisted in localStorage)
       //   3. A brand new UUID — backend will create the session on first use
       let sessionIdToUse: string =
-        (liveArtifact && liveArtifact.sessionId !== "replayed" ? liveArtifact.sessionId : "")
+        (liveArtifact?.sessionId || "")
         || localStorage.getItem(`datahub_chat_session_${activeDataset.id}`)
         || "";
       if (!sessionIdToUse) {
@@ -203,8 +203,6 @@ export function WorkspacePage() {
   // shows transformed data immediately — no manual "Run Pipeline" needed.
   useEffect(() => {
     if (!liveArtifact || !activeDataset?.id || sessionPreview) return;
-    // "replayed" is a sentinel from handleRunPipeline — already handled.
-    if (liveArtifact.sessionId === "replayed") return;
     let cancelled = false;
     fetchStepPreview(
       activeDataset.id,
@@ -386,7 +384,7 @@ export function WorkspacePage() {
         showingOriginal={showingOriginal && !!sessionPreview}
         onViewOriginal={() => setShowingOriginal(true)}
         onViewCleaned={() => setShowingOriginal(false)}
-        onSave={liveArtifact && liveArtifact.sessionId !== "replayed" ? async () => {
+        onSave={liveArtifact ? async () => {
           await api.post("/api/artifacts/save-checkpoint", {
             session_id: liveArtifact.sessionId,
             table_name: liveArtifact.tableName,

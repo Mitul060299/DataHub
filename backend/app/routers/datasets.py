@@ -1089,14 +1089,12 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
     user_id = get_current_user_id(authorization)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
 
-    # Delete S3 file (best-effort)
+    # Collect every storage path we need to delete BEFORE touching the DB so
+    # the queue insert (on failure) and the row delete commit together.
+    storage_paths_to_delete: list[tuple[str, str]] = []  # (path, source)
     if meta and meta.storage_path:
-        try:
-            StorageService.delete(meta.storage_path)
-        except Exception as exc:
-            logger.warning("S3 delete failed for dataset %s: %s", dataset_id, exc)
-
-        # Delete the linked ArtifactDB record created by save-checkpoint (same storage_path)
+        storage_paths_to_delete.append((meta.storage_path, "dataset"))
+        # Linked ArtifactDB rows that point at the same s3_key.
         db.query(ArtifactDB).filter(
             ArtifactDB.s3_key == meta.storage_path
         ).delete(synchronize_session=False)
@@ -1107,10 +1105,7 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
         child_ids = [c.id for c in child_metas]
         for child in child_metas:
             if child.storage_path:
-                try:
-                    StorageService.delete(child.storage_path)
-                except Exception as exc:
-                    logger.warning("S3 delete failed for child dataset %s: %s", child.id, exc)
+                storage_paths_to_delete.append((child.storage_path, "child"))
                 db.query(ArtifactDB).filter(
                     ArtifactDB.s3_key == child.storage_path
                 ).delete(synchronize_session=False)
@@ -1118,10 +1113,18 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
         db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id.in_(child_ids)).delete(synchronize_session=False)
         db.query(DatasetMetaDB).filter(DatasetMetaDB.id.in_(child_ids)).delete(synchronize_session=False)
 
-    # Delete the parent dataset records
+    # Delete the parent dataset records.
     db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).delete()
     db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
     db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()
+
+    # Now attempt the storage deletes.  Any failure is enqueued in the same
+    # transaction so the commit either persists both the row delete AND the
+    # retry queue entry, or rolls both back together -- no orphans.
+    from ..services.storage_cleanup import safe_storage_delete
+    for path, source in storage_paths_to_delete:
+        safe_storage_delete(path, source=source, db=db)
+
     db.commit()
     invalidate_profile_cache(dataset_id)
     emit_event("dataset.deleted", {"dataset_id": dataset_id})

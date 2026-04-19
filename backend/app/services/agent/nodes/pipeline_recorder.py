@@ -211,8 +211,37 @@ async def pipeline_recorder(state: AgentState) -> dict:
                 try:
                     import json as _json
                     from sqlalchemy import text as _text
-                    # Build the minimal shape the frontend expects.
-                    _steps_json = _json.dumps(all_steps, default=str)
+
+                    def _to_frontend_step(s: dict) -> dict:
+                        """Normalize a step dict to the camelCase schema
+                        the frontend PipelineContext expects."""
+                        return {
+                            "id": s.get("id") or str(uuid.uuid4()),
+                            "stepNumber": s.get("stepNumber") or s.get("step_number", 0),
+                            "operation": s.get("operation", "transform"),
+                            "intent": s.get("intent") or s.get("operation", "transform"),
+                            "description": s.get("description", ""),
+                            "sql": s.get("sql"),
+                            "affectedRows": str(
+                                s.get("affectedRows")
+                                or s.get("rows_affected")
+                                or s.get("row_count_after")
+                                or ""
+                            ),
+                            "appliedAt": (
+                                s.get("appliedAt")
+                                or s.get("timestamp")
+                                or datetime.utcnow().isoformat()
+                            ),
+                            "input_tables": s.get("input_tables") or [],
+                            "output_table": s.get("output_table"),
+                            "row_count_before": s.get("row_count_before"),
+                            "row_count_after": s.get("row_count_after"),
+                            "execution_time_ms": s.get("execution_time_ms"),
+                        }
+
+                    _frontend_steps = [_to_frontend_step(s) for s in all_steps]
+                    _steps_json = _json.dumps(_frontend_steps, default=str)
                     db.execute(
                         _text("UPDATE dataset_meta SET pipeline_steps_json = :v WHERE id = :id"),
                         {"v": _steps_json, "id": root_dataset_id},

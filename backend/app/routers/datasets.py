@@ -685,21 +685,23 @@ def get_pipeline_steps(
                 "for dataset %s (pipeline_steps_json was empty)",
                 len(db_rows), dataset_id[:8],
             )
+            import uuid as _uuid_mod
             steps = [
                 {
-                    "step_number": ps.step_number,
+                    "id": str(_uuid_mod.uuid4()),
+                    "stepNumber": ps.step_number,
                     "operation": ps.operation,
                     "intent": ps.intent or ps.operation,
                     "description": ps.description,
                     "sql": ps.duckdb_sql,
+                    "affectedRows": str(ps.row_count_after or ""),
+                    "appliedAt": ps.created_at.isoformat() if ps.created_at else None,
                     "output_table": ps.output_table,
                     "input_tables": ps.input_tables or [],
                     "row_count_before": ps.row_count_before,
                     "row_count_after": ps.row_count_after,
                     "execution_time_ms": ps.execution_time_ms,
                     "snapshot_path": ps.snapshot_path,
-                    "timestamp": ps.created_at.isoformat() if ps.created_at else None,
-                    "appliedAt": ps.created_at.isoformat() if ps.created_at else None,
                 }
                 for ps in db_rows
             ]

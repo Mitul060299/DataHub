@@ -19,6 +19,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Set a generous lock timeout so we don't fail on brief lock contention
+    # during concurrent deploys (Render starts the new instance before the
+    # old one fully drains).
+    op.execute("SET lock_timeout = '30s'")
     # PostgreSQL natively supports ADD COLUMN IF NOT EXISTS — no Python
     # inspector involved, so this cannot be skipped due to caching.
     op.execute(

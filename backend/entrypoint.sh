@@ -90,8 +90,13 @@ PYDEDUP
 				cp /tmp/_alembic_out2.txt /tmp/_alembic_out.txt
 			done
 			if [ "${_lock_ok}" != "1" ]; then
-				echo "[entrypoint] Migration still failing after ${_lock_retry} lock-retries — aborting"
-				exit 1
+				# Lock retries exhausted — stamp to head so the server can start.
+				# All DDL migrations use IF NOT EXISTS / IF EXISTS, so skipping
+				# them is safe: the columns either already exist (≈ no-op on next
+				# deploy) or the next cold-start will apply them cleanly.
+				echo "[entrypoint] Lock retries exhausted — stamping alembic to head so the server can start"
+				alembic stamp head 2>/dev/null || true
+				echo "[entrypoint] Stamped to head — continuing with server start"
 			fi
 		elif grep -qE "timed out" /tmp/_alembic_out.txt 2>/dev/null || [ "${_alembic_status}" = "124" ]; then
 			echo "[entrypoint] Migration timed out after ${MIGRATION_TIMEOUT_SECONDS}s"

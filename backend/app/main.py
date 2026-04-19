@@ -524,6 +524,26 @@ async def root() -> dict:
     return {"status": "ok"}
 
 
+# ── Render health-check aliases ───────────────────────────────────────────────
+# Render's dashboard health-check path is configured independently of
+# render.yaml (which is only read on initial service creation from a blueprint).
+# We expose every plausible path so the service stays healthy regardless of
+# what the Render dashboard is set to, without requiring any dashboard changes.
+@app.api_route("/api/health", methods=["GET", "HEAD"], include_in_schema=False)
+async def api_health() -> dict:
+    return {"status": "ok"}
+
+
+@app.api_route("/healthz", methods=["GET", "HEAD"], include_in_schema=False)
+async def healthz() -> dict:
+    return {"status": "ok"}
+
+
+@app.api_route("/ping", methods=["GET", "HEAD"], include_in_schema=False)
+async def ping() -> dict:
+    return {"status": "ok"}
+
+
 app.include_router(health.router)
 app.include_router(metrics.router)
 app.include_router(auth.router)

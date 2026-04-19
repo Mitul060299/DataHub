@@ -553,6 +553,9 @@ def list_datasets(
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
     query = db.query(DatasetMetaDB).filter(DatasetMetaDB.user_id == user_id)
+    # Hide soft-deleted (trashed) datasets from the main list. Use /datasets/trash
+    # to see trashed items and POST /datasets/{id}/restore to recover them.
+    query = query.filter(DatasetMetaDB.deleted_at.is_(None))
     if workspace_id:
         # Include exact matches, legacy NULL workspace_id rows, AND legacy
         # "default"-tagged rows so datasets uploaded before workspaces existed
@@ -1086,12 +1089,89 @@ def clear_dataset_cache(
 
 
 @router.delete("/{dataset_id}")
-def delete_dataset(dataset_id: str, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+def delete_dataset(
+    dataset_id: str,
+    hard: bool = False,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete a dataset.
+
+    Default behaviour is a **soft delete** (move to Trash): the row is kept and
+    its ``deleted_at`` is set to ``now``. The dataset disappears from the main
+    list but can be restored via ``POST /datasets/{id}/restore`` for 30 days.
+    A nightly retention sweep purges items whose ``deleted_at`` exceeds the
+    retention window.
+
+    Pass ``?hard=true`` to bypass Trash and permanently delete immediately
+    (legacy destructive behaviour, used by tests and explicit "purge" actions).
+    """
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
 
+    if not hard:
+        # ── Soft delete: mark deleted_at on this dataset and any descendants
+        # so the user's mental model of "delete" still hides children, but
+        # nothing is destroyed and storage is preserved during the retention
+        # window. Restore happens per-row via /restore.
+        if not meta:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        if meta.deleted_at is not None:
+            return {"status": "already_trashed", "dataset_id": dataset_id}
+        from datetime import datetime as _dt, timezone as _tz
+        now = _dt.now(_tz.utc)
+        meta.deleted_at = now
+        # Cascade soft-delete to direct children (one level — sufficient for
+        # the typical parent/derived pair; deeper chains can be trashed
+        # individually and restored individually).
+        child_metas = (
+            db.query(DatasetMetaDB)
+            .filter(
+                DatasetMetaDB.parent_id == dataset_id,
+                DatasetMetaDB.deleted_at.is_(None),
+            )
+            .all()
+        )
+        for child in child_metas:
+            child.deleted_at = now
+        try:
+            from ..services.event_log import emit_event as _emit_log_event
+            _emit_log_event(
+                db,
+                event_type="dataset_soft_deleted",
+                user_id=user_id,
+                workspace_id=getattr(meta, "workspace_id", None),
+                payload={
+                    "dataset_id": dataset_id,
+                    "name": getattr(meta, "name", None),
+                    "child_count": len(child_metas),
+                    "retention_days": 30,
+                },
+            )
+        except Exception:
+            pass
+        db.commit()
+        invalidate_profile_cache(dataset_id)
+        emit_event("dataset.trashed", {"dataset_id": dataset_id})
+        try:
+            audit_store.add(AuditEntry(
+                action="dataset.trash",
+                actor=user_id or "anonymous",
+                target=f"dataset:{dataset_id}",
+                metadata={"child_count": len(child_metas)},
+            ))
+        except Exception:
+            pass
+        return {
+            "status": "trashed",
+            "dataset_id": dataset_id,
+            "child_count": len(child_metas),
+            "deleted_at": now.isoformat(),
+        }
+
+    # ── Hard delete (?hard=true): original destructive behaviour ──────────
     # Collect every storage path we need to delete BEFORE touching the DB so
     # the queue insert (on failure) and the row delete commit together.
     storage_paths_to_delete: list[tuple[str, str]] = []  # (path, source)
@@ -1160,6 +1240,96 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
     except Exception:
         pass
     return {"status": "deleted", "dataset_id": dataset_id}
+
+
+@router.get("/trash", response_model=list[DatasetMeta])
+def list_trashed_datasets(
+    authorization: str | None = Header(default=None),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    db: Session = Depends(get_db),
+) -> list[DatasetMeta]:
+    """List soft-deleted (trashed) datasets for the current user/workspace."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+    query = db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.user_id == user_id,
+        DatasetMetaDB.deleted_at.isnot(None),
+    )
+    if workspace_id:
+        query = query.filter(
+            (DatasetMetaDB.workspace_id == workspace_id)
+            | (DatasetMetaDB.workspace_id == "default")
+            | DatasetMetaDB.workspace_id.is_(None)
+        )
+    rows = query.all()
+    out: list[DatasetMeta] = []
+    for row in rows:
+        dataset_id = str(row.id or "").strip()
+        if not dataset_id:
+            continue
+        raw_columns = row.columns if isinstance(row.columns, (list, tuple)) else []
+        columns = [str(c) for c in raw_columns if c is not None]
+        try:
+            row_count = int(row.row_count or 0)
+        except (TypeError, ValueError):
+            row_count = 0
+        out.append(
+            DatasetMeta(
+                dataset_id=dataset_id,
+                name=str(row.name) if row.name is not None else None,
+                file_format=str(row.file_format) if row.file_format is not None else None,
+                columns=columns,
+                row_count=row_count,
+                parent_id=str(row.parent_id) if row.parent_id is not None else None,
+            )
+        )
+    return out
+
+
+@router.post("/{dataset_id}/restore")
+def restore_dataset(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Restore a soft-deleted dataset back to the active list."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if meta.deleted_at is None:
+        return {"status": "not_trashed", "dataset_id": dataset_id}
+    meta.deleted_at = None
+    try:
+        from ..services.event_log import emit_event as _emit_log_event
+        _emit_log_event(
+            db,
+            event_type="dataset_restored",
+            user_id=user_id,
+            workspace_id=getattr(meta, "workspace_id", None),
+            payload={
+                "dataset_id": dataset_id,
+                "name": getattr(meta, "name", None),
+            },
+        )
+    except Exception:
+        pass
+    db.commit()
+    invalidate_profile_cache(dataset_id)
+    emit_event("dataset.restored", {"dataset_id": dataset_id})
+    try:
+        audit_store.add(AuditEntry(
+            action="dataset.restore",
+            actor=user_id or "anonymous",
+            target=f"dataset:{dataset_id}",
+            metadata={},
+        ))
+    except Exception:
+        pass
+    return {"status": "restored", "dataset_id": dataset_id}
 
 
 @router.get("/{dataset_id}/export")

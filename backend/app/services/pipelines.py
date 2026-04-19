@@ -18,6 +18,7 @@ from ..services.transformer import apply_steps
 from ..services.archival import schedule_archival_job
 from ..services.tenant_isolation_monitor import schedule_tenant_isolation_job
 from ..services.storage_cleanup import schedule_storage_cleanup_job
+from ..services.trash_retention import schedule_trash_retention_job
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -69,6 +70,7 @@ def start_scheduler() -> None:
     schedule_archival_job(scheduler)
     schedule_tenant_isolation_job(scheduler)
     schedule_storage_cleanup_job(scheduler)
+    schedule_trash_retention_job(scheduler)
     _load_jobs()
 
 

@@ -149,6 +149,8 @@ class DatasetMetaDB(Base):
     # to avoid crashing every SELECT while migration 0050 is pending on prod.
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    # Soft-delete (Trash with retention): NULL = active, NOT NULL = in trash since this timestamp.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     __table_args__ = (
         Index("idx_datasets_user_workspace", "user_id", "workspace_id"),

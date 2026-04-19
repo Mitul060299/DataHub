@@ -671,10 +671,12 @@ def get_pipeline_steps(
         if sess_id:
             q = q.filter(_PSdb.session_id == sess_id)
         else:
-            # Heuristic: latest run's steps for this user
-            q = q.order_by(_PSdb.created_at.desc())
+            # No DatasetSessionDB row means no AI commands were ever run on
+            # THIS dataset.  Do NOT fall back to a user-wide query — that
+            # would leak steps from a completely unrelated (or deleted) dataset.
+            q = None
 
-        db_rows = q.order_by(_PSdb.step_number).limit(50).all()
+        db_rows = q.order_by(_PSdb.step_number).limit(50).all() if q is not None else []
 
         if db_rows:
             import logging as _gps_log

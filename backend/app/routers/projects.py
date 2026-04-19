@@ -309,10 +309,37 @@ def delete_project(
     # expectation: "I deleted the project, the data should be gone" — while
     # still allowing recovery via the Trash UI within the retention window.
     from datetime import datetime, timezone
+    # Collect dataset IDs so we can clean up child rows.
+    dataset_ids = [
+        r[0]
+        for r in db.query(DatasetMetaDB.id)
+        .filter(DatasetMetaDB.project_id == project_id)
+        .all()
+    ]
     db.query(DatasetMetaDB).filter(
         DatasetMetaDB.project_id == project_id,
         DatasetMetaDB.deleted_at.is_(None),
     ).update({"deleted_at": datetime.now(timezone.utc), "project_id": None})
+
+    # Clean up orphaned session and step rows for the deleted datasets.
+    if dataset_ids:
+        from ..models_db import DatasetSessionDB, PipelineStepDB
+        # DatasetSessionDB has dataset_id FK.
+        sess_ids = [
+            r[0]
+            for r in db.query(DatasetSessionDB.chat_session_id)
+            .filter(DatasetSessionDB.dataset_id.in_(dataset_ids))
+            .all()
+            if r[0]
+        ]
+        db.query(DatasetSessionDB).filter(
+            DatasetSessionDB.dataset_id.in_(dataset_ids)
+        ).delete(synchronize_session=False)
+        # PipelineStepDB is linked via session_id (= chat_session_id).
+        if sess_ids:
+            db.query(PipelineStepDB).filter(
+                PipelineStepDB.session_id.in_(sess_ids)
+            ).delete(synchronize_session=False)
 
     db.delete(project)
     db.commit()

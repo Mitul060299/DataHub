@@ -1128,6 +1128,24 @@ def delete_dataset(dataset_id: str, authorization: str | None = Header(default=N
     for path, source in storage_paths_to_delete:
         safe_storage_delete(path, source=source, db=db)
 
+    # Persistent audit row in pipeline_events (joins the same transaction).
+    try:
+        from ..services.event_log import emit_event as _emit_log_event
+        _emit_log_event(
+            db,
+            event_type="dataset_deleted",
+            user_id=user_id,
+            workspace_id=getattr(meta, "workspace_id", None) if meta else None,
+            payload={
+                "dataset_id": dataset_id,
+                "name": getattr(meta, "name", None) if meta else None,
+                "child_count": len(child_metas),
+                "storage_paths": [p for p, _ in storage_paths_to_delete],
+            },
+        )
+    except Exception:
+        pass
+
     db.commit()
     invalidate_profile_cache(dataset_id)
     emit_event("dataset.deleted", {"dataset_id": dataset_id})

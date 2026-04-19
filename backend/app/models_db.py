@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text, UniqueConstraint
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from .db import Base
@@ -804,6 +804,45 @@ class PendingStorageDeleteDB(Base):
 
     __table_args__ = (
         Index("idx_pending_storage_deletes_next_attempt", "next_attempt_at"),
+    )
+
+
+class PipelineEventDB(Base):
+    """Append-only event log for pipeline + persistence lifecycle.
+
+    Every materialization (dataset / artifact) and every deletion writes a row
+    here.  The table is INSERT-only \u2014 we never update or delete rows so the log
+    can answer "who created this artifact?" / "when was this dataset deleted?"
+    questions in production.
+
+    Event types emitted today:
+      * dataset_materialized   payload={triggered_by, dataset_id, name, parent_id}
+      * artifact_materialized  payload={triggered_by, artifact_id, name}
+      * dataset_deleted        payload={dataset_id, name, child_count, storage_paths}
+      * artifact_deleted       payload={artifact_id, name, s3_key}
+
+    Future producers (pipeline run lifecycle, scheduler jobs, etc.) can add
+    new event_type strings without a schema change.
+    """
+    __tablename__ = "pipeline_events"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=True, index=True)
+    workspace_id = Column(String, nullable=True)
+    session_id = Column(String, nullable=True, index=True)
+    run_id = Column(String, nullable=True)
+    step_id = Column(String, nullable=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    payload = Column(
+        JSONB().with_variant(JSON, "sqlite"),
+        nullable=False,
+        default=dict,
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("idx_pipeline_events_user_created", "user_id", "created_at"),
+        Index("idx_pipeline_events_session_created", "session_id", "created_at"),
     )
 
 

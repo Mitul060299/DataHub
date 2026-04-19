@@ -443,5 +443,25 @@ def delete_artifact(
     from ..services.storage_cleanup import safe_storage_delete
     safe_storage_delete(s3_key, source="artifact", db=db)
 
+    # Persistent audit row in pipeline_events (best-effort).
+    try:
+        from ..services.event_log import emit_event as _emit_log_event
+        _emit_log_event(
+            db,
+            event_type="artifact_deleted",
+            user_id=current_user.id,
+            session_id=getattr(artifact, "session_id", None),
+            run_id=getattr(artifact, "pipeline_run_id", None),
+            step_id=getattr(artifact, "step_id", None),
+            payload={
+                "artifact_id": artifact_id,
+                "name": getattr(artifact, "name", None),
+                "s3_key": s3_key,
+                "linked_dataset_id": getattr(linked_ds, "id", None) if linked_ds else None,
+            },
+        )
+    except Exception:
+        pass
+
     db.commit()
     return Response(status_code=204)

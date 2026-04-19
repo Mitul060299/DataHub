@@ -82,6 +82,25 @@ def materialize_dataset(
         triggered_by,
         fields.get("user_id"),
     )
+    # Append-only audit event.  Failure here must not break the business op.
+    try:
+        from .event_log import emit_event
+        emit_event(
+            db,
+            event_type="dataset_materialized",
+            user_id=fields.get("user_id"),
+            workspace_id=fields.get("workspace_id"),
+            payload={
+                "triggered_by": triggered_by,
+                "dataset_id": fields.get("id"),
+                "name": fields.get("name"),
+                "parent_id": fields.get("parent_id"),
+                "row_count": fields.get("row_count"),
+                "source_type": fields.get("source_type"),
+            },
+        )
+    except Exception:
+        logger.exception("materialize_dataset: event emit failed (non-fatal)")
     return row
 
 
@@ -106,4 +125,24 @@ def materialize_artifact(
         triggered_by,
         fields.get("user_id"),
     )
+    try:
+        from .event_log import emit_event
+        emit_event(
+            db,
+            event_type="artifact_materialized",
+            user_id=fields.get("user_id"),
+            session_id=fields.get("session_id"),
+            run_id=fields.get("pipeline_run_id"),
+            step_id=fields.get("step_id"),
+            payload={
+                "triggered_by": triggered_by,
+                "artifact_id": fields.get("id"),
+                "name": fields.get("name"),
+                "type": fields.get("type"),
+                "format": fields.get("format"),
+                "row_count": fields.get("row_count"),
+            },
+        )
+    except Exception:
+        logger.exception("materialize_artifact: event emit failed (non-fatal)")
     return row

@@ -1082,10 +1082,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       <header data-tour="ai-agent-header" style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span className="badge-dot pulse" style={{ background: "var(--gr)" }} />
-    <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <header data-tour="ai-agent-header" style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <span className="badge-dot pulse" style={{ background: "var(--gr)" }} />
           <IconZap size={14} />
           AI Agent
         </span>

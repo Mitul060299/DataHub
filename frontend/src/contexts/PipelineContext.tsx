@@ -286,10 +286,17 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   }, [steps, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── On dataset switch: flush pending save, then load steps from DB ─
-  const prevDatasetIdRef = useRef<string | null>(null);
+  // Initialised to `undefined` (not null) so the first-run check below can
+  // distinguish "never run" from "last run was for null dataset". This is
+  // what lets the mount-time effect actually clear stale-hydrated state when
+  // the user lands on a project that has no datasets — without this, both
+  // values are null on first run and the effect early-returns, leaving the
+  // localStorage-hydrated steps + liveArtifact from a previous (deleted)
+  // project visible on the canvas.
+  const prevDatasetIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    if (datasetId === prevDatasetIdRef.current) return;
-    const prevId = prevDatasetIdRef.current;
+    if (prevDatasetIdRef.current !== undefined && datasetId === prevDatasetIdRef.current) return;
+    const prevId = prevDatasetIdRef.current ?? null;
     prevDatasetIdRef.current = datasetId;
 
     // Flush any pending debounced save for the PREVIOUS dataset before switching.
@@ -304,9 +311,15 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     }
 
     if (!datasetId) {
-      // No dataset selected — reset steps in memory only (don't touch localStorage).
+      // No dataset selected — reset BOTH steps and liveArtifact. The
+      // liveArtifact reset is critical when this branch fires on first mount
+      // after a project-delete-and-recreate: useState() hydrated
+      // liveArtifact from the stale `datahub_live_artifact_<oldId>` key, and
+      // without this clear it would render as a ghost "clean · LIVE" entry
+      // in the new (empty) project's ARTIFACTS sidebar.
       stepsOwnerRef.current = null;
       setSteps([]);
+      setLiveArtifactRaw(null);
       return;
     }
     // If this is the same dataset that useState already hydrated from localStorage,

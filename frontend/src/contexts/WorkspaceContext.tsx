@@ -209,10 +209,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // Clear lanes when switching projects
+  // Clear lanes when switching projects.
+  //
+  // Also clear the localStorage `activeDatasetId` key.  Without this, deleting
+  // a project then opening (or creating) any other project leaves the
+  // previous project's dataset id in localStorage; on the next page reload,
+  // PipelineContext picks it up via its mount-time peek and hydrates stale
+  // steps + liveArtifact from `datahub_steps_v2_<id>` / `datahub_live_artifact_<id>`
+  // keys — producing ghost "clean · LIVE" artifacts and pipeline-step nodes
+  // in the canvas of an otherwise-empty new project.
   useEffect(() => {
     setActiveDatasetState(null);
     setActiveLanes([]);
+    try { localStorage.removeItem("activeDatasetId"); } catch { /* ignore quota */ }
   }, [activeProject?.id]);
 
   const value = useMemo(

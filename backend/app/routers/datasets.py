@@ -570,15 +570,15 @@ def list_datasets(
             | DatasetMetaDB.workspace_id.is_(None)
         )
     # Project scoping (migration 0057): when the caller asks for a specific
-    # project, return only datasets bound to that project. Legacy datasets
-    # (project_id IS NULL) are also included so pre-0057 uploads stay visible
-    # no matter which project the user is viewing; once a dataset is
-    # explicitly bound to a project it is hidden from the other projects.
+    # project, return ONLY datasets bound to that project. We deliberately do
+    # NOT include legacy NULL-project rows here — if we did, deleting a
+    # project and recreating one with the same name (or any new project) would
+    # surface every workspace-level dataset the user ever uploaded, which is
+    # exactly the "ghost dataset" bug users have reported. Workspace-level
+    # datasets (project_id IS NULL) are visible only when no project_id
+    # filter is sent (the workspace-wide "All datasets" view).
     if project_id:
-        query = query.filter(
-            (DatasetMetaDB.project_id == project_id)
-            | DatasetMetaDB.project_id.is_(None)
-        )
+        query = query.filter(DatasetMetaDB.project_id == project_id)
     rows = query.all()
     datasets: list[DatasetMeta] = []
 

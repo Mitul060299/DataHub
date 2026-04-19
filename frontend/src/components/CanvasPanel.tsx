@@ -488,9 +488,17 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             <button
               onClick={() => { if (onRunPipeline && !replayingPipeline) { onClearReplayError?.(); void onRunPipeline(); } }}
               disabled={replayingPipeline}
-              style={{ background: replayError ? "rgba(248,113,113,0.15)" : "rgba(34,197,94,0.15)", border: `1px solid ${replayError ? "rgba(248,113,113,0.35)" : "rgba(34,197,94,0.35)"}`, borderRadius: 4, color: replayError ? "var(--rd)" : "#86efac", fontSize: 11, padding: "2px 10px", cursor: replayingPipeline ? "default" : "pointer", flexShrink: 0, opacity: replayingPipeline ? 0.6 : 1 }}
+              style={{ background: replayError ? "rgba(248,113,113,0.15)" : "rgba(34,197,94,0.15)", border: `1px solid ${replayError ? "rgba(248,113,113,0.35)" : "rgba(34,197,94,0.35)"}`, borderRadius: 4, color: replayError ? "var(--rd)" : "#86efac", fontSize: 11, padding: "2px 10px", cursor: replayingPipeline ? "default" : "pointer", flexShrink: 0, opacity: replayingPipeline ? 0.85 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}
             >
-              {replayingPipeline ? "Running…" : replayError ? "↺ Retry" : "▶ Run Pipeline"}
+              {replayingPipeline ? (
+                <>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ animation: "rp-spin 0.9s linear infinite" }}>
+                    <path d="M21 12a9 9 0 1 1-6.2-8.55" strokeLinecap="round" />
+                  </svg>
+                  <span>Running…</span>
+                  <style>{`@keyframes rp-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+                </>
+              ) : replayError ? "↺ Retry" : "▶ Run Pipeline"}
             </button>
           </div>
         )}

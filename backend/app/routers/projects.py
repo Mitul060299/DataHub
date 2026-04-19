@@ -304,10 +304,15 @@ def delete_project(
     db.query(PipelineV2DB).filter(PipelineV2DB.project_id == project_id).update({"project_id": None})
     db.query(DashboardV2DB).filter(DashboardV2DB.project_id == project_id).update({"project_id": None})
     db.query(DataSourceDB).filter(DataSourceDB.project_id == project_id).update({"project_id": None})
-    # Datasets: null out project_id so the rows become "workspace-level" again
-    # rather than disappearing. The soft-delete Trash flow handles per-dataset
-    # deletion; killing a project shouldn't silently wipe user data.
-    db.query(DatasetMetaDB).filter(DatasetMetaDB.project_id == project_id).update({"project_id": None})
+    # Datasets: soft-delete (move to Trash) so they disappear from the project
+    # view but remain recoverable for `TRASH_RETENTION_DAYS`. This matches user
+    # expectation: "I deleted the project, the data should be gone" — while
+    # still allowing recovery via the Trash UI within the retention window.
+    from datetime import datetime, timezone
+    db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.project_id == project_id,
+        DatasetMetaDB.deleted_at.is_(None),
+    ).update({"deleted_at": datetime.now(timezone.utc), "project_id": None})
 
     db.delete(project)
     db.commit()

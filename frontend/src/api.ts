@@ -638,6 +638,40 @@ export async function saveDatasetPipelineSteps(datasetId: string, steps: unknown
   await api.put(`/datasets/${datasetId}/pipeline-steps`, { steps });
 }
 
+// ── Server-side live workspace state (arch #2) ──────────────────────────────
+// Replaces browser-localStorage-only state for chat-session binding and live
+// preview pointer so refresh / multi-tab / multi-device share the same workspace.
+
+export interface DatasetSessionState {
+  dataset_id: string;
+  chat_session_id: string | null;
+  live_table_name: string | null;
+  live_row_count: number | null;
+  live_step_label: string | null;
+  live_rows_changed: number | null;
+  updated_at: string | null;
+}
+
+export async function fetchDatasetSession(datasetId: string): Promise<DatasetSessionState> {
+  const response = await api.get<DatasetSessionState>(`/datasets/${datasetId}/session`);
+  return response.data;
+}
+
+export async function saveDatasetSession(
+  datasetId: string,
+  patch: Partial<Omit<DatasetSessionState, "dataset_id" | "updated_at">>,
+): Promise<DatasetSessionState> {
+  const response = await api.put<DatasetSessionState>(
+    `/datasets/${datasetId}/session`,
+    patch,
+  );
+  return response.data;
+}
+
+export async function clearDatasetSession(datasetId: string): Promise<void> {
+  await api.delete(`/datasets/${datasetId}/session`);
+}
+
 // ── Power Query-inspired step preview / materialize ──────────────────────────
 
 export async function fetchStepPreview(

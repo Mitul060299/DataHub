@@ -43,7 +43,7 @@ from ..services.usage_service import enforce_usage_limit, increment_usage, updat
 from ..services.plan_guard import resolve_user_plan, resolve_workspace_plan
 from ..services.audit import audit_store
 from ..models import AuditEntry
-from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB
+from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB, DatasetSessionDB
 from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
 logger = logging.getLogger(__name__)
@@ -1330,6 +1330,151 @@ def restore_dataset(
     except Exception:
         pass
     return {"status": "restored", "dataset_id": dataset_id}
+
+
+# ── Server-side live workspace state (arch #2) ────────────────────────────
+# Replaces browser-localStorage-only state for the AI chat session binding
+# and the "live artifact" preview pointer so refresh / multi-tab / multi-device
+# all see the same in-progress workspace.
+
+def _serialize_session(row: DatasetSessionDB | None) -> dict:
+    if row is None:
+        return {
+            "chat_session_id": None,
+            "live_table_name": None,
+            "live_row_count": None,
+            "live_step_label": None,
+            "live_rows_changed": None,
+            "updated_at": None,
+        }
+    return {
+        "chat_session_id": row.chat_session_id,
+        "live_table_name": row.live_table_name,
+        "live_row_count": row.live_row_count,
+        "live_step_label": row.live_step_label,
+        "live_rows_changed": row.live_rows_changed,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+@router.get("/{dataset_id}/session")
+def get_dataset_session(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the live workspace state for the current user on this dataset."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
+    row = (
+        db.query(DatasetSessionDB)
+        .filter(
+            DatasetSessionDB.user_id == user_id,
+            DatasetSessionDB.dataset_id == dataset_id,
+        )
+        .first()
+    )
+    return {"dataset_id": dataset_id, **_serialize_session(row)}
+
+
+@router.put("/{dataset_id}/session")
+def upsert_dataset_session(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Upsert the live workspace state for the current user on this dataset.
+
+    Accepted keys (all optional, ``null`` clears the field):
+    ``chat_session_id``, ``live_table_name``, ``live_row_count``,
+    ``live_step_label``, ``live_rows_changed``.
+
+    Only the keys present in ``payload`` are updated -- omitted keys are
+    left untouched. Pass ``{"key": null}`` to explicitly clear a field.
+    """
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="payload must be an object")
+
+    row = (
+        db.query(DatasetSessionDB)
+        .filter(
+            DatasetSessionDB.user_id == user_id,
+            DatasetSessionDB.dataset_id == dataset_id,
+        )
+        .first()
+    )
+    created = False
+    if row is None:
+        row = DatasetSessionDB(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            dataset_id=dataset_id,
+        )
+        db.add(row)
+        created = True
+
+    # Only mutate keys explicitly present so callers can patch one field.
+    for field in (
+        "chat_session_id",
+        "live_table_name",
+        "live_step_label",
+    ):
+        if field in payload:
+            value = payload[field]
+            setattr(row, field, str(value) if value is not None else None)
+    for field in ("live_row_count", "live_rows_changed"):
+        if field in payload:
+            value = payload[field]
+            if value is None:
+                setattr(row, field, None)
+            else:
+                try:
+                    setattr(row, field, int(value))
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"{field} must be an integer or null",
+                    )
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save session state")
+    db.refresh(row)
+    return {
+        "dataset_id": dataset_id,
+        "created": created,
+        **_serialize_session(row),
+    }
+
+
+@router.delete("/{dataset_id}/session")
+def clear_dataset_session(
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Clear the live workspace state for the current user on this dataset."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
+    deleted = (
+        db.query(DatasetSessionDB)
+        .filter(
+            DatasetSessionDB.user_id == user_id,
+            DatasetSessionDB.dataset_id == dataset_id,
+        )
+        .delete()
+    )
+    db.commit()
+    return {"dataset_id": dataset_id, "deleted": int(deleted)}
 
 
 @router.get("/{dataset_id}/export")

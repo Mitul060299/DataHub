@@ -76,6 +76,13 @@ export function useChatSession() {
         // Persist so AIPanel can load history on next mount
         if (payload.dataset_id) {
           localStorage.setItem(`datahub_chat_session_${payload.dataset_id}`, sid);
+          // Mirror to server-side dataset_sessions (arch #2) so refresh /
+          // multi-tab / multi-device all bind to the same chat session.
+          // Best-effort: localStorage is the working fallback if this fails.
+          import("../api").then(({ saveDatasetSession }) => {
+            void saveDatasetSession(payload.dataset_id, { chat_session_id: sid })
+              .catch(() => { /* silent */ });
+          }).catch(() => { /* silent */ });
         }
       }
 

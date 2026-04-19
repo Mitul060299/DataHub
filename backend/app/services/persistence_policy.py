@@ -23,7 +23,7 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
-from ..models_db import ArtifactDB, DatasetMetaDB
+from ..models_db import ArtifactDB, DatasetLineageEdgeDB, DatasetMetaDB
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,17 @@ def materialize_dataset(
         )
     row = DatasetMetaDB(**fields)
     db.add(row)
+    # If this row declares a parent, also record the lineage edge so
+    # downstream code can stop walking the deprecated ``parent_id`` column.
+    parent_id = fields.get("parent_id")
+    child_id = fields.get("id")
+    if parent_id and child_id:
+        try:
+            record_lineage_edge(db, child_id=child_id, parent_id=parent_id)
+        except Exception:
+            logger.exception(
+                "materialize_dataset: lineage edge insert failed (non-fatal)"
+            )
     logger.info(
         "materialize_dataset id=%s name=%s parent_id=%s triggered_by=%s user_id=%s",
         fields.get("id"),
@@ -146,3 +157,67 @@ def materialize_artifact(
     except Exception:
         logger.exception("materialize_artifact: event emit failed (non-fatal)")
     return row
+
+
+# ---------------------------------------------------------------------------
+# Lineage edges (replaces the deprecated ``DatasetMetaDB.parent_id`` chain)
+# ---------------------------------------------------------------------------
+
+def record_lineage_edge(
+    db: Session,
+    *,
+    child_id: str,
+    parent_id: str,
+    transform_id: str | None = None,
+) -> None:
+    """Idempotently record a lineage edge ``parent_id -> child_id``.
+
+    Safe to call multiple times for the same pair; the unique
+    ``(child_id, parent_id)`` index is checked first via a SELECT so the
+    INSERT is skipped on conflict (works on SQLite + Postgres without
+    needing dialect-specific ON CONFLICT).
+    """
+    if not child_id or not parent_id or child_id == parent_id:
+        return
+    existing = (
+        db.query(DatasetLineageEdgeDB.id)
+        .filter(
+            DatasetLineageEdgeDB.child_id == child_id,
+            DatasetLineageEdgeDB.parent_id == parent_id,
+        )
+        .first()
+    )
+    if existing:
+        return
+    db.add(
+        DatasetLineageEdgeDB(
+            id=f"edge:{child_id}:{parent_id}",
+            child_id=child_id,
+            parent_id=parent_id,
+            transform_id=transform_id,
+        )
+    )
+
+
+def lineage_parents(db: Session, child_id: str) -> list[str]:
+    """Return the parent ids for a given child (typically 0 or 1 today)."""
+    if not child_id:
+        return []
+    rows = (
+        db.query(DatasetLineageEdgeDB.parent_id)
+        .filter(DatasetLineageEdgeDB.child_id == child_id)
+        .all()
+    )
+    return [str(r[0]) for r in rows if r[0]]
+
+
+def lineage_children(db: Session, parent_id: str) -> list[str]:
+    """Return the child ids for a given parent (any number)."""
+    if not parent_id:
+        return []
+    rows = (
+        db.query(DatasetLineageEdgeDB.child_id)
+        .filter(DatasetLineageEdgeDB.parent_id == parent_id)
+        .all()
+    )
+    return [str(r[0]) for r in rows if r[0]]

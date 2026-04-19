@@ -757,11 +757,15 @@ async def execute_step(state: AgentState) -> dict:
         if not output_dataset_id and pipeline_final_dataset_id:
             output_dataset_id = pipeline_final_dataset_id
         if not output_dataset_id:
+            from ...persistence_policy import lineage_children
+            child_ids = lineage_children(db, state["dataset_id"])
             fallback_meta = (
                 db.query(DatasetMetaDB)
-                .filter(DatasetMetaDB.parent_id == state["dataset_id"])
+                .filter(DatasetMetaDB.id.in_(child_ids))
                 .order_by(DatasetMetaDB.created_at.desc())
                 .first()
+                if child_ids
+                else None
             )
             if fallback_meta and fallback_meta.id:
                 output_dataset_id = str(fallback_meta.id)

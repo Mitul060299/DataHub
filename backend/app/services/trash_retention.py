@@ -125,10 +125,14 @@ def _purge_one(session: Session, meta: DatasetMetaDB, *, retention_days: int) ->
         ).delete(synchronize_session=False)
 
     # Children (one level) — purge any that are also trashed.
+    from .persistence_policy import lineage_children
+    child_ids_from_edges = lineage_children(session, dataset_id)
     child_metas = (
         session.query(DatasetMetaDB)
-        .filter(DatasetMetaDB.parent_id == dataset_id)
+        .filter(DatasetMetaDB.id.in_(child_ids_from_edges))
         .all()
+        if child_ids_from_edges
+        else []
     )
     purged_child_ids: list[str] = []
     for child in child_metas:
@@ -159,6 +163,14 @@ def _purge_one(session: Session, meta: DatasetMetaDB, *, retention_days: int) ->
     session.query(DatasetChunkDB).filter(
         DatasetChunkDB.dataset_id == dataset_id
     ).delete()
+
+    # Clean up lineage edges for everything we purged so they don't dangle.
+    from ..models_db import DatasetLineageEdgeDB
+    purged_ids = [dataset_id] + list(purged_child_ids)
+    session.query(DatasetLineageEdgeDB).filter(
+        (DatasetLineageEdgeDB.child_id.in_(purged_ids))
+        | (DatasetLineageEdgeDB.parent_id.in_(purged_ids))
+    ).delete(synchronize_session=False)
 
     for path, source in storage_paths:
         safe_storage_delete(path, source=source, db=session)

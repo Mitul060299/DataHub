@@ -199,6 +199,33 @@ class DatasetSessionDB(Base):
     )
 
 
+class DatasetLineageEdgeDB(Base):
+    """One row per (child_id, parent_id) lineage relationship.
+
+    Replaces the legacy ``dataset_meta.parent_id`` column as the source of
+    truth for lineage. ``parent_id`` is still set on writes as a deprecated
+    mirror so any reader I haven't migrated yet keeps working, but every
+    read site that walks lineage should query this table instead.
+
+    A child can have multiple parents (joins, unions). A parent can have
+    multiple children (forks, branches). The ``(child_id, parent_id)``
+    pair is unique to keep edge insertion idempotent.
+
+    ``transform_id`` is reserved for a future link to the pipeline step /
+    run that produced the edge; for now it is ``NULL`` for backfilled rows
+    and ``NULL`` for new rows until the producer is wired up.
+    """
+    __tablename__ = "dataset_lineage_edges"
+    id = Column(String, primary_key=True)
+    child_id = Column(String, nullable=False, index=True)
+    parent_id = Column(String, nullable=False, index=True)
+    transform_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (
+        Index("ux_dataset_lineage_edges_child_parent", "child_id", "parent_id", unique=True),
+    )
+
+
 class ConnectorCredentialDB(Base):
     """Encrypted connector credentials for query folding, write-back, and live federation."""
     __tablename__ = "connector_credentials"

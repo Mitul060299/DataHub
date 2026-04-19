@@ -749,12 +749,14 @@ def list_dataset_versions(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return the full version chain for a dataset (walk parent_id links)."""
+    """Return the full version chain for a dataset (walk lineage edges)."""
     role = get_current_role(authorization)
     require_role("viewer", role)
 
-    # Walk backwards through parent chain to find the root
-    chain = []
+    from ..services.persistence_policy import lineage_parents, lineage_children
+
+    # Walk backwards through parent chain (via edges) to find the root.
+    chain: list[DatasetMetaDB] = []
     current_id: str | None = dataset_id
     visited: set[str] = set()
     while current_id and current_id not in visited:
@@ -763,29 +765,32 @@ def list_dataset_versions(
         if not row:
             break
         chain.append(row)
-        current_id = row.parent_id
+        parents = lineage_parents(db, current_id)
+        current_id = parents[0] if parents else None
 
     # Walk forward from the root to collect all descendants of the root
     if chain:
         root = chain[-1]
-        all_versions = (
-            db.query(DatasetMetaDB)
-            .filter(DatasetMetaDB.id == root.id)
-            .all()
-        )
-        # Collect descendants using a BFS
+        # Collect descendants using BFS over the edges table.
         to_visit = [root.id]
-        expanded: list[DatasetMetaDB] = []
+        expanded_ids: list[str] = []
         visited_forward: set[str] = set()
         while to_visit:
             cur = to_visit.pop(0)
             if cur in visited_forward:
                 continue
             visited_forward.add(cur)
-            rows = db.query(DatasetMetaDB).filter(DatasetMetaDB.parent_id == cur).all()
-            for r in rows:
-                expanded.append(r)
-                to_visit.append(r.id)
+            for child_id in lineage_children(db, cur):
+                if child_id not in visited_forward:
+                    expanded_ids.append(child_id)
+                    to_visit.append(child_id)
+        expanded: list[DatasetMetaDB] = []
+        if expanded_ids:
+            expanded = (
+                db.query(DatasetMetaDB)
+                .filter(DatasetMetaDB.id.in_(expanded_ids))
+                .all()
+            )
         all_versions = [root] + expanded
     else:
         all_versions = []
@@ -890,6 +895,7 @@ def dataset_lineage(
 ) -> list[DatasetMeta]:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    from ..services.persistence_policy import lineage_parents
     lineage: list[DatasetMeta] = []
     current_id = dataset_id
     visited = set()
@@ -898,6 +904,8 @@ def dataset_lineage(
         row = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == current_id).first()
         if not row:
             break
+        parents = lineage_parents(db, current_id)
+        next_parent = parents[0] if parents else None
         lineage.append(
             DatasetMeta(
                 dataset_id=row.id,
@@ -905,10 +913,10 @@ def dataset_lineage(
                 file_format=row.file_format,
                 columns=row.columns,
                 row_count=row.row_count,
-                parent_id=row.parent_id,
+                parent_id=next_parent,
             )
         )
-        current_id = row.parent_id
+        current_id = next_parent
     return lineage
 
 
@@ -923,6 +931,8 @@ def dataset_lineage_graph(
 
     user_plan = resolve_user_plan(db, authorization)
     enforce_sso(user_plan)
+
+    from ..services.persistence_policy import lineage_parents
 
     nodes: list[DatasetLineageNode] = []
     edges: list[DatasetLineageEdge] = []
@@ -946,15 +956,19 @@ def dataset_lineage_graph(
             )
         )
 
-        if row.parent_id:
+        for pid in lineage_parents(db, current_id):
             edges.append(
                 DatasetLineageEdge(
-                    from_dataset_id=row.parent_id,
+                    from_dataset_id=pid,
                     to_dataset_id=row.id,
                     relationship="transformed_from",
                 )
             )
-        current_id = row.parent_id
+        # Continue walking up the first parent chain (legacy behaviour:
+        # graph traversal is single-parent today; multi-parent edges are
+        # still emitted above but the walker doesn't fork).
+        parents = lineage_parents(db, current_id)
+        current_id = parents[0] if parents else None
 
     return DatasetLineageGraph(nodes=nodes, edges=edges)
 
@@ -1126,13 +1140,17 @@ def delete_dataset(
         # Cascade soft-delete to direct children (one level — sufficient for
         # the typical parent/derived pair; deeper chains can be trashed
         # individually and restored individually).
+        from ..services.persistence_policy import lineage_children
+        child_ids = lineage_children(db, dataset_id)
         child_metas = (
             db.query(DatasetMetaDB)
             .filter(
-                DatasetMetaDB.parent_id == dataset_id,
+                DatasetMetaDB.id.in_(child_ids),
                 DatasetMetaDB.deleted_at.is_(None),
             )
             .all()
+            if child_ids
+            else []
         )
         for child in child_metas:
             child.deleted_at = now
@@ -1182,8 +1200,14 @@ def delete_dataset(
             ArtifactDB.s3_key == meta.storage_path
         ).delete(synchronize_session=False)
 
-    # Cascade: delete child derived datasets (parent_id == dataset_id)
-    child_metas = db.query(DatasetMetaDB).filter(DatasetMetaDB.parent_id == dataset_id).all()
+    # Cascade: delete child derived datasets (lineage edges → child)
+    from ..services.persistence_policy import lineage_children
+    child_ids_from_edges = lineage_children(db, dataset_id)
+    child_metas = (
+        db.query(DatasetMetaDB).filter(DatasetMetaDB.id.in_(child_ids_from_edges)).all()
+        if child_ids_from_edges
+        else []
+    )
     if child_metas:
         child_ids = [c.id for c in child_metas]
         for child in child_metas:
@@ -1200,6 +1224,15 @@ def delete_dataset(
     db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).delete()
     db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).delete()
     db.query(DatasetChunkDB).filter(DatasetChunkDB.dataset_id == dataset_id).delete()
+
+    # Clean up lineage edges that reference any of the deleted datasets so we
+    # don't leave dangling edge rows behind.
+    from ..models_db import DatasetLineageEdgeDB
+    all_deleted_ids = [dataset_id] + [c.id for c in child_metas]
+    db.query(DatasetLineageEdgeDB).filter(
+        (DatasetLineageEdgeDB.child_id.in_(all_deleted_ids))
+        | (DatasetLineageEdgeDB.parent_id.in_(all_deleted_ids))
+    ).delete(synchronize_session=False)
 
     # Now attempt the storage deletes.  Any failure is enqueued in the same
     # transaction so the commit either persists both the row delete AND the

@@ -476,6 +476,22 @@ class AIAgentService:
     _warmed_sessions: set[str] = set()
     _warmed_lock = __import__("threading").Lock()
 
+    # Content-addressed replay cache:
+    #   session_id -> (sha256(step_list), frozenset(output_table names))
+    # When a replay request arrives whose normalized step list hashes the same
+    # AND every output_table view still exists in the live DuckDB session, the
+    # rebuild is skipped.  This makes the common "refresh -> repeat command"
+    # path O(1) and removes the entire class of "is the session current?" race
+    # conditions: the answer is "yes iff the views are still there".
+    _replay_cache: dict[str, tuple[str, frozenset[str]]] = {}
+    _replay_cache_lock = __import__("threading").Lock()
+
+    @staticmethod
+    def invalidate_replay_cache(session_id: str) -> None:
+        """Drop the cached step-hash for a session (e.g. after explicit reset)."""
+        with AIAgentService._replay_cache_lock:
+            AIAgentService._replay_cache.pop(session_id, None)
+
     @staticmethod
     def _replay_session_views(
         session_id: str,
@@ -577,6 +593,33 @@ class AIAgentService:
 
         normalized.sort(key=lambda s: s["step_number"])
 
+        # Idempotent fast path: if the step list is identical to the last
+        # successful replay for this session AND every view is still present
+        # in the live DuckDB connection, skip the rebuild entirely.
+        import hashlib as _h_replay
+        from .duckdb_session import table_exists as _table_exists_replay
+        step_hash = _h_replay.sha256(
+            "\n".join(
+                f"{s['step_number']}\x1f{s['output_table']}\x1f{s['sql']}"
+                for s in normalized
+            ).encode("utf-8")
+        ).hexdigest()
+        output_tables = frozenset(s["output_table"] for s in normalized)
+        with AIAgentService._replay_cache_lock:
+            cached = AIAgentService._replay_cache.get(session_id)
+        if cached and cached[0] == step_hash:
+            try:
+                if all(_table_exists_replay(session_id, t) for t in output_tables):
+                    _logger.debug(
+                        "replay: cache hit session=%s hash=%s tables=%d",
+                        session_id[:8], step_hash[:8], len(output_tables),
+                    )
+                    return True
+            except Exception:
+                # If the existence probe itself fails, fall through to a real
+                # rebuild rather than trusting a possibly-stale cache entry.
+                pass
+
         # 3. Re-create each VIEW.  Skip-and-continue rather than break — a later
         # step that doesn't depend on a failed predecessor can still succeed.
         replayed_count = 0
@@ -603,6 +646,11 @@ class AIAgentService:
                 "replay: session %s replayed %d/%d views, failures=%s",
                 session_id[:8], replayed_count, len(normalized), failures,
             )
+        # Update cache only when *all* steps replayed cleanly — a partial
+        # rebuild leaves missing views, so we want the next request to retry.
+        if replayed_count == len(normalized) and replayed_count > 0:
+            with AIAgentService._replay_cache_lock:
+                AIAgentService._replay_cache[session_id] = (step_hash, output_tables)
         return replayed_count > 0
 
     @staticmethod

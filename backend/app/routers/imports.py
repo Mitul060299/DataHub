@@ -77,8 +77,10 @@ async def upload_file(
     dataset_name: str | None = Form(default=None),
     sheet: str | None = Form(default=None),
     delimiter: str | None = Form(default=None),
+    project_id: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    project_id_header: str | None = Header(default=None, alias="X-Project-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     logger.info(f"Upload started: file={file.filename}, size={file.size}, workspace={workspace_id}")
@@ -160,7 +162,10 @@ async def upload_file(
             workspace_id=workspace_id,
             user_id=current_user_id,
             store_rows=store_rows,
-            meta_extra={"name": resolved_dataset_name},
+            meta_extra={
+                "name": resolved_dataset_name,
+                "project_id": (project_id or project_id_header or None),
+            },
         )
         logger.info(f"Dataset saved: {dataset_id}")
     except Exception as exc:
@@ -343,6 +348,7 @@ async def presign_upload(
     filename = str(payload.get("filename") or "").strip()
     file_size_bytes = int(payload.get("file_size_bytes") or 0)
     dataset_name = str(payload.get("dataset_name") or "").strip() or filename
+    project_id = (str(payload.get("project_id") or "").strip()) or None
 
     if not filename:
         raise HTTPException(status_code=400, detail="filename is required")
@@ -410,6 +416,7 @@ async def presign_upload(
         file_format=source_format,
         file_size_bytes=file_size_bytes,
         access_tier="hot",
+        project_id=project_id,
     )
     db.commit()
 

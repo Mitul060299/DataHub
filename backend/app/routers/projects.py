@@ -33,6 +33,7 @@ from ..models_db import (
     DashboardTileDB,
     DashboardV2DB,
     DataSourceDB,
+    DatasetMetaDB,
     PipelineRunV2DB,
     PipelineScheduleDB,
     PipelineV2DB,
@@ -303,6 +304,10 @@ def delete_project(
     db.query(PipelineV2DB).filter(PipelineV2DB.project_id == project_id).update({"project_id": None})
     db.query(DashboardV2DB).filter(DashboardV2DB.project_id == project_id).update({"project_id": None})
     db.query(DataSourceDB).filter(DataSourceDB.project_id == project_id).update({"project_id": None})
+    # Datasets: null out project_id so the rows become "workspace-level" again
+    # rather than disappearing. The soft-delete Trash flow handles per-dataset
+    # deletion; killing a project shouldn't silently wipe user data.
+    db.query(DatasetMetaDB).filter(DatasetMetaDB.project_id == project_id).update({"project_id": None})
 
     db.delete(project)
     db.commit()

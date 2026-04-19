@@ -6,6 +6,7 @@ import { useUser } from "../../contexts/UserContext";
 interface ImportModalProps {
   open: boolean;
   workspaceId?: string;
+  projectId?: string;
   onClose: () => void;
   onImported: () => void;
   preloadUrl?: string;
@@ -31,7 +32,7 @@ interface FilePreview {
 }
 
 
-export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl }: ImportModalProps) {
+export function ImportModal({ open, workspaceId, projectId, onClose, onImported, preloadUrl }: ImportModalProps) {
   // One hidden <input> per file type so accept filter changes correctly
   const csvRef     = useRef<HTMLInputElement>(null);
   const excelRef   = useRef<HTMLInputElement>(null);
@@ -145,7 +146,9 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
     setIsUploading(true);
     setUploadProgress(0);
 
-    const extraHeaders = workspaceId ? { "X-Workspace-Id": workspaceId } : {};
+    const extraHeaders: Record<string, string> = {};
+    if (workspaceId) extraHeaders["X-Workspace-Id"] = workspaceId;
+    if (projectId) extraHeaders["X-Project-Id"] = projectId;
 
     // Files larger than 50 MB use the presigned direct-to-S3 flow so that
     // the Render server never buffers the bytes in RAM.
@@ -163,6 +166,7 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
             filename: selectedFile.name,
             file_size_bytes: selectedFile.size,
             ...(datasetName.trim() ? { dataset_name: datasetName.trim() } : {}),
+            ...(projectId ? { project_id: projectId } : {}),
           },
           { headers: extraHeaders },
         );
@@ -207,6 +211,9 @@ export function ImportModal({ open, workspaceId, onClose, onImported, preloadUrl
         formData.append("file", selectedFile);
         if (datasetName.trim()) {
           formData.append("dataset_name", datasetName.trim());
+        }
+        if (projectId) {
+          formData.append("project_id", projectId);
         }
         // Pass custom delimiter for CSV files when the user specified one
         if (selectedFileType === "csv" && customDelimiter.trim()) {

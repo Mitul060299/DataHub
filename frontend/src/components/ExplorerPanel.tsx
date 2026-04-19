@@ -387,6 +387,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       <ImportModal
         open={importModalOpen}
         workspaceId={workspaceId}
+        projectId={activeProject?.id}
         onClose={() => setImportModalOpen(false)}
         onImported={() => {
           setImportModalOpen(false);

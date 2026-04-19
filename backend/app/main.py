@@ -319,6 +319,8 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS uploaded_by TEXT",
         # 0046 — workspace_type ('personal' | 'collab') on workspaces table
         "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS workspace_type TEXT NOT NULL DEFAULT 'personal'",
+        # 0047/0051 — per-user monthly bytes-scanned counter (used by usage_service.increment_scan_bytes)
+        "ALTER TABLE user_usage ADD COLUMN IF NOT EXISTS data_scanned_bytes BIGINT NOT NULL DEFAULT 0",
         # 0050 — pipeline_steps_json on dataset_meta (live workspace persistence)
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS pipeline_steps_json JSONB",
         # 0052 — pending_storage_deletes retry queue (orphan cleanup)
@@ -386,6 +388,10 @@ def _apply_startup_ddl() -> None:
            FROM dataset_meta dm
            WHERE dm.parent_id IS NOT NULL
            ON CONFLICT (child_id, parent_id) DO NOTHING""",
+        # 0057 — project scoping on dataset_meta (previously datasets were only
+        # workspace-scoped, so every project inside a workspace showed the same list).
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS project_id TEXT",
+        "CREATE INDEX IF NOT EXISTS ix_dataset_meta_project_id ON dataset_meta (project_id)",
     ]
     try:
         from sqlalchemy import text as _text

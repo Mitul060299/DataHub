@@ -187,7 +187,7 @@ export async function validateFile(file: File): Promise<{
   return response.data;
 }
 
-export async function uploadDataset(file: File, datasetName?: string, sheet?: string) {
+export async function uploadDataset(file: File, datasetName?: string, sheet?: string, projectId?: string) {
   const formData = new FormData();
   formData.append("file", file);
   if (datasetName?.trim()) {
@@ -195,6 +195,9 @@ export async function uploadDataset(file: File, datasetName?: string, sheet?: st
   }
   if (sheet?.trim()) {
     formData.append("sheet", sheet.trim());
+  }
+  if (projectId?.trim()) {
+    formData.append("project_id", projectId.trim());
   }
   const response = await api.post("/datasets/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" }

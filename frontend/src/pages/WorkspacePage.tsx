@@ -458,7 +458,7 @@ export function WorkspacePage() {
         }}
         onUploadClick={() => setImportOpen(true)}
       />
-      <ImportModal workspaceId={workspaceId} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />
+      <ImportModal workspaceId={workspaceId} projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}

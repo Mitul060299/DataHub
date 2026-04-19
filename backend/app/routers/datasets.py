@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends, BackgroundTasks, Request, Query
 from fastapi.responses import StreamingResponse
 from typing import Dict
 import json
@@ -209,8 +209,10 @@ async def upload_dataset(
     request: Request,
     file: UploadFile = File(...),
     dataset_name: str | None = Form(default=None),
+    project_id: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    project_id_header: str | None = Header(default=None, alias="X-Project-Id"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ) -> DatasetPreview:
@@ -315,6 +317,7 @@ async def upload_dataset(
         access_tier=initial_tier,
         storage_path=_parquet_s3_path,
         parent_id=None,
+        project_id=(project_id or project_id_header or None),
         file_size_bytes=len(content),
         compressed_size_bytes=_compressed_size,
     )
@@ -547,6 +550,7 @@ def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
 def list_datasets(
     authorization: str | None = Header(default=None),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    project_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[DatasetMeta]:
     role = get_current_role(authorization)
@@ -564,6 +568,16 @@ def list_datasets(
             (DatasetMetaDB.workspace_id == workspace_id)
             | (DatasetMetaDB.workspace_id == "default")
             | DatasetMetaDB.workspace_id.is_(None)
+        )
+    # Project scoping (migration 0057): when the caller asks for a specific
+    # project, return only datasets bound to that project. Legacy datasets
+    # (project_id IS NULL) are also included so pre-0057 uploads stay visible
+    # no matter which project the user is viewing; once a dataset is
+    # explicitly bound to a project it is hidden from the other projects.
+    if project_id:
+        query = query.filter(
+            (DatasetMetaDB.project_id == project_id)
+            | DatasetMetaDB.project_id.is_(None)
         )
     rows = query.all()
     datasets: list[DatasetMeta] = []

@@ -281,10 +281,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
   // Stable ref to the latest runDataQualityReport so setTimeout doesn't
   // capture a stale closure where liveArtifact is still null from mount.
   const runQualityRef = useRef<() => Promise<void>>();
-  // ── Auto-save ──────────────────────────────────────────────────────────────
-  const [autoSaveStatus, setAutoSaveStatus] = useState<{ savedAt: Date; tableName: string } | null>(null);
-  // Tracks what we last saved so we skip unchanged state
-  const autoSaveRef = useRef<{ stepCount: number; tableName: string } | null>(null);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -1077,77 +1073,25 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
     return () => clearTimeout(t);
   }, [dataset?.id]); // intentionally omit runDataQualityReport — stable enough for one-shot
 
-  // Auto-save the latest leaf session table to S3 every 2 minutes.
-  // Silent — never interrupts the user. Only fires when there is an active
-  // session with at least one transform step that produced a named DuckDB table.
-  useEffect(() => {
-    const AUTO_SAVE_MS = 2 * 60 * 1000;
-
-    const doAutoSave = async () => {
-      if (!sessionId || sending) return;
-
-      // Find the most recent step that holds a DuckDB session table name.
-      // Chart/visualise steps don't produce one, so they are naturally skipped.
-      const stepsWithTable = steps.filter((s) => {
-        const raw = s.rawConfig as Record<string, unknown> | undefined;
-        return Boolean(raw?.session_table_name ?? raw?.output_table);
-      });
-      if (stepsWithTable.length === 0) return;
-
-      const lastStep = stepsWithTable[stepsWithTable.length - 1];
-      const raw = lastStep.rawConfig as Record<string, unknown> | undefined;
-      const tableName = String(raw?.session_table_name ?? raw?.output_table ?? "");
-      if (!tableName) return;
-
-      // Skip if nothing has changed since the last save.
-      if (
-        autoSaveRef.current?.stepCount === steps.length &&
-        autoSaveRef.current?.tableName === tableName
-      ) return;
-
-      const token = getAuthToken();
-      try {
-        const res = await fetch("/api/artifacts/save-checkpoint", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            session_id: sessionId,
-            table_name: tableName,
-            artifact_name: `autosave_${tableName}`,
-          }),
-        });
-        if (!res.ok) return; // silent — auto-save failures must never disrupt UX
-        autoSaveRef.current = { stepCount: steps.length, tableName };
-        setAutoSaveStatus({ savedAt: new Date(), tableName });
-        onDatasetMutated?.();
-      } catch {
-        // silent — non-critical background save
-      }
-    };
-
-    const id = setInterval(() => { void doAutoSave(); }, AUTO_SAVE_MS);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, steps, sending]);
+  // NOTE: A previous version of this file ran a 2-minute background interval
+  // that silently POSTed `/api/artifacts/save-checkpoint` for the live session
+  // table.  That was removed because it (a) created `autosave_*` DatasetMetaDB
+  // rows that the user never asked for, polluting the workspace, and (b)
+  // could materialise rows from a stale session that did NOT match the
+  // current pipeline state.  Materialisation is now an explicit user action:
+  // the "Save ↑" button on the live artifact in the Artifacts panel.
 
   return (
     <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <header data-tour="ai-agent-header" style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span className="badge-dot pulse" style={{ background: "var(--gr)" }} />
+    <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <header data-tour="ai-agent-header" style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span className="badge-dot pulse" style={{ background: "var(--gr)" }} />
           <IconZap size={14} />
           AI Agent
-          {autoSaveStatus ? (
-            <span
-              style={{ fontSize: 10, color: "var(--tx2)", opacity: 0.55, fontWeight: 400 }}
-              title={`Session progress auto-saved · table: ${autoSaveStatus.tableName}`}
-            >
-              · ↑ saved {autoSaveStatus.savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          ) : null}
         </span>
         <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
           {dataset ? (

@@ -646,12 +646,14 @@ export async function fetchStepPreview(
   tableName: string,
   limit = 200,
   offset = 0,
+  pipelineSteps?: Array<Record<string, unknown>>,
 ): Promise<{ rows: Record<string, unknown>[]; columns: string[]; count: number }> {
   const response = await api.post(`/datasets/${datasetId}/step-preview`, {
     session_id: sessionId,
     table_name: tableName,
     limit,
     offset,
+    ...(pipelineSteps && pipelineSteps.length ? { pipeline_steps: pipelineSteps } : {}),
   });
   return response.data as { rows: Record<string, unknown>[]; columns: string[]; count: number };
 }

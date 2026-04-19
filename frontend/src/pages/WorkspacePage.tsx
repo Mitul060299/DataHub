@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, fetchDatasetPage, fetchStepPreview } from "../api";
+import { api, fetchStepPreview } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
@@ -60,30 +60,83 @@ export function WorkspacePage() {
   // clearing cycle so the agent-provided preview survives the dataset switch.
   const skipNextClearRef = useRef(false);
 
-  // Re-execute all pipeline steps and restore session preview.
-  // Called from the green banner when the user refreshes and liveArtifact is gone.
+  // Re-execute all pipeline steps in the LIVE DuckDB session and restore the
+  // session preview.  Called from the green banner / pipeline panel when the
+  // user refreshes and `liveArtifact` is gone.
+  //
+  // CRITICAL: this used to call `/cleaning/datasets/.../replay`, which has the
+  // side-effect of CREATING NEW PERSISTED `DatasetMetaDB` rows named
+  // "X (transformed)" for every step.  Those rows then showed up under
+  // ARTIFACTS, the active dataset could end up switched to one of them, and
+  // the live banner / pipeline steps would disappear.  Replay must be a
+  // session-only operation: it rebuilds the in-memory views and previews them.
   const handleRunPipeline = async () => {
     if (!activeDataset?.id || !steps.length || replayingPipeline) return;
     setReplayingPipeline(true);
     try {
-      const replaySteps = steps
-        .map((s) => s.rawConfig ?? (s.sql ? { sql: s.sql } : null))
-        .filter(Boolean);
-      // Use the root dataset (first step's input) as the pivot so the alias
-      // computed from its name matches the SQL written by the agent at capture time.
-      const pivotId = steps[0]?.inputDataset?.id ?? activeDataset.id;
-      const result = await api.post<{ final_dataset_id: string; final_row_count: number }>(
-        `/cleaning/datasets/${pivotId}/replay`,
-        { steps: replaySteps },
+      // Pick / generate a session id.  Order:
+      //   1. The current liveArtifact's session (most likely fresh)
+      //   2. The chat session for this dataset (persisted in localStorage)
+      //   3. A brand new UUID — backend will create the session on first use
+      let sessionIdToUse: string =
+        (liveArtifact && liveArtifact.sessionId !== "replayed" ? liveArtifact.sessionId : "")
+        || localStorage.getItem(`datahub_chat_session_${activeDataset.id}`)
+        || "";
+      if (!sessionIdToUse) {
+        sessionIdToUse = crypto.randomUUID();
+        localStorage.setItem(`datahub_chat_session_${activeDataset.id}`, sessionIdToUse);
+      }
+
+      // Build the client-supplied pipeline_steps payload that the backend
+      // (`_replay_session_views`) uses to re-create views.  Each entry needs
+      // step_number, output_table and sql.
+      const replayPipelineSteps = steps
+        .map((s, idx) => {
+          const raw = s.rawConfig as Record<string, unknown> | undefined;
+          const outputTable = String(
+            s.output_table
+            ?? raw?.output_table
+            ?? raw?.session_table_name
+            ?? "",
+          );
+          const sql = String(s.sql ?? raw?.sql ?? "");
+          if (!outputTable || !sql) return null;
+          return {
+            step_number: Number(s.stepNumber ?? idx + 1),
+            operation: s.operation,
+            description: s.description,
+            sql,
+            output_table: outputTable,
+            rows_affected: s.affectedRows ?? null,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null);
+
+      if (!replayPipelineSteps.length) {
+        setReplayError("No replayable steps — none of your pipeline steps have a stored SQL + output table.");
+        return;
+      }
+
+      // The leaf table to preview is the LAST step's output_table.
+      const leafTableName = replayPipelineSteps[replayPipelineSteps.length - 1].output_table;
+
+      // step-preview re-creates views via _replay_session_views(client_steps=...)
+      // and returns the LIMIT 500 preview rows in one round-trip.
+      const previewResult = await fetchStepPreview(
+        activeDataset.id,
+        sessionIdToUse,
+        leafTableName,
+        500,
+        0,
+        replayPipelineSteps,
       );
-      const { final_dataset_id, final_row_count } = result.data;
-      const page = await fetchDatasetPage(final_dataset_id, 0, 500);
-      setSessionPreview({ rows: page.rows ?? [], columns: page.columns ?? [] });
+
+      setSessionPreview({ rows: previewResult.rows ?? [], columns: previewResult.columns ?? [] });
       setLiveArtifact({
-        tableName: final_dataset_id,
-        rowCount: final_row_count ?? page.total_rows ?? page.rows?.length ?? 0,
+        tableName: leafTableName,
+        rowCount: previewResult.count ?? previewResult.rows?.length ?? 0,
         stepLabel: steps[steps.length - 1].description,
-        sessionId: "replayed",
+        sessionId: sessionIdToUse,
       });
     } catch (err) {
       console.error("Pipeline replay failed", err);

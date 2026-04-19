@@ -232,6 +232,12 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   // Counter that increments on every structural change (add/remove/clear).
   // The write-through effect uses this to decide between immediate vs debounced save.
   const structuralChangeRef = useRef(0);
+  // Tracks which dataset the current `steps` state actually belongs to.
+  // CRITICAL: Without this, switching datasets while a previous fetch is in
+  // flight causes the write-through effect to persist OLD-dataset steps
+  // under the NEW datasetId, permanently corrupting `pipeline_steps_json`
+  // in the DB. We refuse any persistence when datasetId !== stepsOwnerRef.
+  const stepsOwnerRef = useRef<string | null>(initialDatasetId);
 
   // Immediately persist to localStorage + DB. Used for structural changes
   // (step add/remove) where a 1.5s debounce would risk data loss.
@@ -245,6 +251,12 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   // ── Write-through: per-dataset localStorage (always) + DB (debounced 1.5s for cosmetic changes) ───
   useEffect(() => {
     if (!datasetId) return;
+    // Guard: if `steps` belongs to a different dataset (we're mid-switch and
+    // the corrective fetch hasn't yet called setSteps for the new dataset),
+    // do NOT persist. Persisting here would write OLD steps under NEW datasetId
+    // and corrupt the DB row irrecoverably (especially on slow Render cold
+    // starts where the fetch can take 30-60s, longer than the 1.5s debounce).
+    if (stepsOwnerRef.current !== datasetId) return;
     try {
       localStorage.setItem(stepsKey(datasetId), JSON.stringify(steps));
     } catch {
@@ -261,8 +273,12 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     }
     // Debounce DB writes for cosmetic changes (renames, etc.)
     if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+    const ownerAtSchedule = datasetId;
     dbSyncTimerRef.current = setTimeout(() => {
-      void saveDatasetPipelineSteps(datasetId, steps).catch(() => { /* best-effort */ });
+      // Final guard at fire-time: the dataset may have switched again in the
+      // 1.5s window. Only write if the currently-owned dataset still matches.
+      if (stepsOwnerRef.current !== ownerAtSchedule) return;
+      void saveDatasetPipelineSteps(ownerAtSchedule, steps).catch(() => { /* best-effort */ });
     }, 1500);
     return () => {
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
@@ -289,6 +305,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
     if (!datasetId) {
       // No dataset selected — reset steps in memory only (don't touch localStorage).
+      stepsOwnerRef.current = null;
       setSteps([]);
       return;
     }
@@ -296,20 +313,28 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     // skip the DB fetch entirely — the correct steps are already in state.
     if (datasetId === hydratedForRef.current) {
       hydratedForRef.current = null; // allow normal DB reload on subsequent switches
+      stepsOwnerRef.current = datasetId;
       // Restore liveArtifact from the steps that were loaded from localStorage
       restoreLiveArtifact(steps, datasetId);
       return;
     }
     fetchDatasetPipelineSteps(datasetId)
       .then((loaded) => {
+        // The dataset may have switched again while the fetch was in flight
+        // (very common on Render cold starts). Discard the stale response so
+        // it can't overwrite the in-flight switch's steps.
+        if (datasetId !== prevDatasetIdRef.current) return;
         const parsed = (loaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
           .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
         const resolved = parsed.length > 0 ? parsed : loadPersistedSteps(datasetId);
+        stepsOwnerRef.current = datasetId;
         setSteps(resolved);
         restoreLiveArtifact(resolved, datasetId);
       })
       .catch(() => {
+        if (datasetId !== prevDatasetIdRef.current) return;
         const fallback = loadPersistedSteps(datasetId);
+        stepsOwnerRef.current = datasetId;
         setSteps(fallback);
         restoreLiveArtifact(fallback, datasetId);
       });

@@ -135,6 +135,11 @@ async def pipeline_recorder(state: AgentState) -> dict:
                     row_count_before=result.get("row_count_before"),
                     row_count_after=result.get("row_count_after") or result.get("rows_affected"),
                     artifact_id=None,
+                    # Object-storage path of the auto-snapshot (Item 2 in arch
+                    # tightening): used by ``_replay_session_views`` for an
+                    # O(1) deterministic restore on the next request /
+                    # instance restart, instead of re-executing duckdb_sql.
+                    snapshot_path=result.get("snapshot_path"),
                 )
                 try:
                     db.add(step_row)

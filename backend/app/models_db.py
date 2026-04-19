@@ -839,6 +839,11 @@ class PipelineStepDB(Base):
     row_count_before = Column(Integer, nullable=True)
     row_count_after = Column(Integer, nullable=True)
     artifact_id = Column(String, ForeignKey("artifacts.id", ondelete="SET NULL"), nullable=True)
+    # Object-storage path of a Parquet snapshot of this step's output.
+    # Populated by ``StepEngine.snapshot_to_parquet`` immediately after a
+    # successful step. ``_replay_session_views`` prefers this over re-executing
+    # ``duckdb_sql`` because it is deterministic and O(1) per step.
+    snapshot_path = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (

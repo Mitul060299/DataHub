@@ -544,16 +544,31 @@ class AIAgentService:
         # 2. Build the canonical step list
         normalized: list[dict[str, Any]] = []
 
-        def _add_norm(step_number: Any, output_table: Any, sql: Any) -> None:
+        def _add_norm(
+            step_number: Any,
+            output_table: Any,
+            sql: Any,
+            snapshot_path: Any = None,
+        ) -> None:
             try:
                 sn = int(step_number or 0)
             except Exception:
                 sn = 0
             ot = str(output_table or "").strip()
             sq = str(sql or "").strip()
-            if not ot or not sq:
+            sp = str(snapshot_path or "").strip() or None
+            # A step is replayable if EITHER it has a snapshot_path (deterministic
+            # O(1) restore) OR it has both an output_table + duckdb_sql.  We
+            # accept snapshot-only entries so future steps that drop the SQL
+            # column for storage savings still replay cleanly.
+            if not ot or (not sq and not sp):
                 return
-            normalized.append({"step_number": sn, "output_table": ot, "sql": sq})
+            normalized.append({
+                "step_number": sn,
+                "output_table": ot,
+                "sql": sq,
+                "snapshot_path": sp,
+            })
 
         if client_steps:
             for cs in client_steps:
@@ -563,6 +578,7 @@ class AIAgentService:
                     cs.get("step_number"),
                     cs.get("output_table") or cs.get("session_table_name"),
                     cs.get("sql") or cs.get("duckdb_sql"),
+                    cs.get("snapshot_path"),
                 )
 
         if not normalized:
@@ -573,14 +589,18 @@ class AIAgentService:
                     .filter(
                         _PipelineStepDB.session_id == session_id,
                         _PipelineStepDB.output_table.isnot(None),
-                        _PipelineStepDB.duckdb_sql.isnot(None),
                         _PipelineStepDB.status == "completed",
                     )
                     .order_by(_PipelineStepDB.step_number)
                     .all()
                 )
                 for ps in rows:
-                    _add_norm(ps.step_number, ps.output_table, ps.duckdb_sql)
+                    _add_norm(
+                        ps.step_number,
+                        ps.output_table,
+                        ps.duckdb_sql,
+                        getattr(ps, "snapshot_path", None),
+                    )
             finally:
                 _db.close()
 
@@ -600,7 +620,7 @@ class AIAgentService:
         from .duckdb_session import table_exists as _table_exists_replay
         step_hash = _h_replay.sha256(
             "\n".join(
-                f"{s['step_number']}\x1f{s['output_table']}\x1f{s['sql']}"
+                f"{s['step_number']}\x1f{s['output_table']}\x1f{s['sql']}\x1f{s.get('snapshot_path') or ''}"
                 for s in normalized
             ).encode("utf-8")
         ).hexdigest()
@@ -622,29 +642,76 @@ class AIAgentService:
 
         # 3. Re-create each VIEW.  Skip-and-continue rather than break — a later
         # step that doesn't depend on a failed predecessor can still succeed.
+        #
+        # Strategy per step:
+        #   (a) PREFERRED — if snapshot_path is set, register a view over the
+        #       Parquet snapshot.  Deterministic + O(1) regardless of source
+        #       file size or how complex the original SQL was.  This is what
+        #       makes "kill the server mid-pipeline + reload" produce byte-
+        #       identical results.
+        #   (b) FALLBACK — replay the original SQL.  Used when the snapshot
+        #       is missing (older rows, snapshot upload failed) or when the
+        #       snapshot's storage path can't be resolved.
         replayed_count = 0
+        snapshot_count = 0
         failures: list[tuple[int, str]] = []
         for step in normalized:
             out_table = step["output_table"]
             raw_sql = step["sql"]
-            ct_m = _re_replay.match(
-                r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
-                raw_sql,
-            )
-            select_sql = (raw_sql[ct_m.end():].strip() if ct_m else raw_sql).rstrip("; \t\r\n")
-            try:
-                conn.execute(f'CREATE OR REPLACE VIEW "{out_table}" AS ({select_sql})')
-                replayed_count += 1
-            except Exception as _view_exc:
-                failures.append((step["step_number"], str(_view_exc)[:200]))
-                _logger.warning(
-                    "replay: failed to create view %s (step %s): %s",
-                    out_table, step["step_number"], _view_exc,
+            snap = step.get("snapshot_path")
+            replayed = False
+
+            # (a) Prefer snapshot — deterministic, fast.
+            if snap:
+                try:
+                    query_path = StorageService.get_query_path(snap)
+                    # Quote the path safely.  read_parquet accepts a string
+                    # literal; we escape any embedded single quotes.
+                    safe_path = query_path.replace("'", "''")
+                    conn.execute(
+                        f"CREATE OR REPLACE VIEW \"{out_table}\" AS "
+                        f"SELECT * FROM read_parquet('{safe_path}')"
+                    )
+                    replayed_count += 1
+                    snapshot_count += 1
+                    replayed = True
+                except Exception as _snap_exc:
+                    _logger.info(
+                        "replay: snapshot failed for %s (step %s) — "
+                        "falling back to SQL: %s",
+                        out_table, step["step_number"], _snap_exc,
+                    )
+
+            # (b) Fallback — replay original SQL.
+            if not replayed and raw_sql:
+                ct_m = _re_replay.match(
+                    r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                    raw_sql,
                 )
+                select_sql = (raw_sql[ct_m.end():].strip() if ct_m else raw_sql).rstrip("; \t\r\n")
+                try:
+                    conn.execute(f'CREATE OR REPLACE VIEW "{out_table}" AS ({select_sql})')
+                    replayed_count += 1
+                    replayed = True
+                except Exception as _view_exc:
+                    failures.append((step["step_number"], str(_view_exc)[:200]))
+                    _logger.warning(
+                        "replay: failed to create view %s (step %s): %s",
+                        out_table, step["step_number"], _view_exc,
+                    )
+            elif not replayed:
+                # No snapshot AND no SQL — nothing we can do.
+                failures.append((step["step_number"], "no snapshot_path and no duckdb_sql"))
         if failures:
             _logger.warning(
-                "replay: session %s replayed %d/%d views, failures=%s",
-                session_id[:8], replayed_count, len(normalized), failures,
+                "replay: session %s replayed %d/%d views (snapshot=%d), failures=%s",
+                session_id[:8], replayed_count, len(normalized),
+                snapshot_count, failures,
+            )
+        else:
+            _logger.info(
+                "replay: session %s replayed %d/%d views (snapshot=%d)",
+                session_id[:8], replayed_count, len(normalized), snapshot_count,
             )
         # Update cache only when *all* steps replayed cleanly — a partial
         # rebuild leaves missing views, so we want the next request to retry.

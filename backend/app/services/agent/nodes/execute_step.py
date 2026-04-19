@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -560,6 +561,14 @@ async def execute_step(state: AgentState) -> dict:
                             input_tables = [primary_alias]
 
                     if session_id:
+                        # Reject non-deterministic SQL BEFORE persisting / snapshotting.
+                        # Catching this here means we never write a Parquet snapshot
+                        # whose contents would silently diverge from a future replay
+                        # (the whole point of the snapshot architecture is that
+                        # replay must be byte-identical to original execution).
+                        from ...sql_safety import reject_nondeterministic
+                        reject_nondeterministic(step_sql, context=f"step {step['step_number']}")
+
                         # Apply step as lazy VIEW via StepEngine
                         # (Power Query pattern: non-destructive, composable, sampled preview)
                         engine = StepEngine(session_id, table_registry)
@@ -580,6 +589,33 @@ async def execute_step(state: AgentState) -> dict:
                         row_count_before = step_result.row_count_before
                         rows_changed = step_result.rows_changed
                         _exec_time_ms = step_result.execution_time_ms
+
+                        # ── AUTO-SNAPSHOT: durable replay backbone ───────────
+                        # Persist this step's output to object storage as a
+                        # Parquet file immediately. ``_replay_session_views``
+                        # prefers this snapshot over re-executing duckdb_sql
+                        # when a session is lost or the instance restarts —
+                        # making replay deterministic and O(1) per step.
+                        #
+                        # This is best-effort and does NOT block the step's
+                        # success. Failures (S3 quota, network blip) just
+                        # mean replay falls back to SQL re-execution which is
+                        # the prior behaviour.
+                        #
+                        # Cap by row count to avoid OOM on the 512 MB Render
+                        # tier — chains on huge tables fall back to SQL replay.
+                        _SNAPSHOT_ROW_CAP = int(os.getenv("STEP_SNAPSHOT_ROW_CAP", "500000"))
+                        snapshot_path: str | None = None
+                        if rows_out is not None and rows_out <= _SNAPSHOT_ROW_CAP:
+                            try:
+                                _snap_uid = str(state.get("user_id") or "agent")
+                                _snap_dsid = str(state.get("dataset_id") or "agent")
+                                snapshot_path = engine.snapshot_to_parquet(
+                                    output_table, _snap_dsid, _snap_uid,
+                                )
+                            except Exception as _snap_exc:
+                                # snapshot_to_parquet already logs; just keep going
+                                snapshot_path = None
                     else:
                         rows_out = None
                         out_cols = []
@@ -588,6 +624,7 @@ async def execute_step(state: AgentState) -> dict:
                         row_count_before = None
                         rows_changed = None
                         _exec_time_ms = 0
+                        snapshot_path = None
 
                     # ── Scan byte tracking ────────────────────────────────────
                     # Charge the source dataset's size to the billing account ONCE per
@@ -646,6 +683,7 @@ async def execute_step(state: AgentState) -> dict:
                         "column_schema": column_schema,
                         "query_results": preview_rows,
                         "is_view": True,  # Power Query: steps are always lazy views
+                        "snapshot_path": snapshot_path,
                     }
                     _prev_charged = list(state.get("scan_charged_dataset_ids") or [])
                     _new_charged = (

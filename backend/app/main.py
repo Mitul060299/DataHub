@@ -392,6 +392,8 @@ def _apply_startup_ddl() -> None:
         # workspace-scoped, so every project inside a workspace showed the same list).
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS project_id TEXT",
         "CREATE INDEX IF NOT EXISTS ix_dataset_meta_project_id ON dataset_meta (project_id)",
+        # 0058 — snapshot path on each pipeline step (replay-from-Parquet path).
+        "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS snapshot_path TEXT",
     ]
     try:
         from sqlalchemy import text as _text

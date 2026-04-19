@@ -275,31 +275,53 @@ class StepEngine:
     def snapshot_to_parquet(self, view_name: str, dataset_id: str, user_id: str) -> str | None:
         """Export a step's output as a Parquet file to object storage.
 
-        Returns the storage URL, or None on failure.
-        Used for checkpoint save and crash-proof session recovery.
+        Returns the **storage_path** (e.g. ``s3://bucket/user/dataset/step_X.parquet``)
+        that can be re-registered later via
+        ``StorageService.get_query_path(path)`` + ``read_parquet(...)``.
+
+        Used as the auto-snapshot path on every successful step so replay
+        is O(1) per step instead of re-running the SQL chain.
         """
         try:
             from .object_storage import StorageService
-            import io
             conn = get_connection(self._session_id)
-            # Use DuckDB's native Parquet writer for zero-copy export.
-            parquet_path = f"/tmp/step_snapshot_{uuid.uuid4().hex[:8]}.parquet"
-            conn.execute(f"COPY (SELECT * FROM \"{view_name}\") TO '{parquet_path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
-            with open(parquet_path, "rb") as f:
-                buffer = f.read()
-            import os
-            os.unlink(parquet_path)
-            url = StorageService.upload(
+            # Use a unique tmp filename — DuckDB writes to disk, then we read it
+            # back into memory for the upload.
+            import os as _os
+            import tempfile as _tempfile
+            tmp_dir = _tempfile.gettempdir()
+            parquet_path = _os.path.join(
+                tmp_dir, f"step_snapshot_{uuid.uuid4().hex[:8]}.parquet"
+            )
+            try:
+                conn.execute(
+                    f"COPY (SELECT * FROM \"{view_name}\") "
+                    f"TO '{parquet_path}' (FORMAT PARQUET, COMPRESSION ZSTD)"
+                )
+                with open(parquet_path, "rb") as f:
+                    buffer = f.read()
+            finally:
+                try:
+                    _os.unlink(parquet_path)
+                except Exception:
+                    pass
+            # Stable filename per (dataset, view_name) so re-running the same
+            # step overwrites the previous snapshot rather than littering S3.
+            safe_view = "".join(c if c.isalnum() or c in "._-" else "_" for c in view_name)[:80]
+            storage_path = StorageService.upload(
                 user_id=user_id,
                 dataset_id=dataset_id,
                 buffer=buffer,
-                file_name=f"step_{view_name}.parquet",
+                file_name=f"step_{safe_view}.parquet",
             )
             if view_name in self._registry:
                 self._registry[view_name]["is_artifact"] = True
-                self._registry[view_name]["artifact_url"] = url
-            logger.info("STEP_SNAPSHOT: view=%s url=%s", view_name, url)
-            return url
+                self._registry[view_name]["artifact_url"] = storage_path
+            logger.info(
+                "STEP_SNAPSHOT: view=%s storage_path=%s bytes=%d",
+                view_name, storage_path, len(buffer),
+            )
+            return storage_path
         except Exception as exc:
             logger.warning("STEP_SNAPSHOT_FAILED: view=%s error=%s", view_name, exc)
             return None

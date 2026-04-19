@@ -319,6 +319,73 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS uploaded_by TEXT",
         # 0046 — workspace_type ('personal' | 'collab') on workspaces table
         "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS workspace_type TEXT NOT NULL DEFAULT 'personal'",
+        # 0050 — pipeline_steps_json on dataset_meta (live workspace persistence)
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS pipeline_steps_json JSONB",
+        # 0052 — pending_storage_deletes retry queue (orphan cleanup)
+        """CREATE TABLE IF NOT EXISTS pending_storage_deletes (
+            id              SERIAL PRIMARY KEY,
+            storage_path    TEXT NOT NULL,
+            source          TEXT NOT NULL,
+            attempts        INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_error      TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_pending_storage_deletes_next_attempt ON pending_storage_deletes (next_attempt_at)",
+        # 0053 — append-only pipeline_events log
+        """CREATE TABLE IF NOT EXISTS pipeline_events (
+            id              TEXT PRIMARY KEY,
+            event_type      TEXT NOT NULL,
+            user_id         TEXT,
+            workspace_id    TEXT,
+            session_id      TEXT,
+            run_id          TEXT,
+            step_id         TEXT,
+            payload         JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_events_event_type ON pipeline_events (event_type)",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_events_user_id ON pipeline_events (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_events_workspace_id ON pipeline_events (workspace_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_events_session_id ON pipeline_events (session_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_events_created_at ON pipeline_events (created_at)",
+        # 0054 — soft-delete (Trash) on dataset_meta
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+        "CREATE INDEX IF NOT EXISTS ix_dataset_meta_deleted_at ON dataset_meta (deleted_at)",
+        # 0055 — server-side dataset_sessions (live workspace state)
+        """CREATE TABLE IF NOT EXISTS dataset_sessions (
+            id                  TEXT PRIMARY KEY,
+            user_id             TEXT NOT NULL,
+            dataset_id          TEXT NOT NULL,
+            chat_session_id     TEXT,
+            live_table_name     TEXT,
+            live_row_count      BIGINT,
+            live_step_label     TEXT,
+            live_rows_changed   BIGINT,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_dataset_sessions_user_id ON dataset_sessions (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_dataset_sessions_dataset_id ON dataset_sessions (dataset_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_dataset_sessions_user_dataset ON dataset_sessions (user_id, dataset_id)",
+        # 0056 — dataset_lineage_edges (replaces parent_id chain)
+        """CREATE TABLE IF NOT EXISTS dataset_lineage_edges (
+            id              TEXT PRIMARY KEY,
+            child_id        TEXT NOT NULL,
+            parent_id       TEXT NOT NULL,
+            transform_id    TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_dataset_lineage_edges_child_id ON dataset_lineage_edges (child_id)",
+        "CREATE INDEX IF NOT EXISTS ix_dataset_lineage_edges_parent_id ON dataset_lineage_edges (parent_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_dataset_lineage_edges_child_parent ON dataset_lineage_edges (child_id, parent_id)",
+        # 0056 — backfill lineage edges from any existing parent_id values
+        # (idempotent: ON CONFLICT skips already-recorded edges).
+        """INSERT INTO dataset_lineage_edges (id, child_id, parent_id, transform_id, created_at)
+           SELECT 'edge:' || dm.id || ':' || dm.parent_id, dm.id, dm.parent_id, NULL, COALESCE(dm.created_at, NOW())
+           FROM dataset_meta dm
+           WHERE dm.parent_id IS NOT NULL
+           ON CONFLICT (child_id, parent_id) DO NOTHING""",
     ]
     try:
         from sqlalchemy import text as _text

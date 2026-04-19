@@ -157,6 +157,76 @@ async def pipeline_recorder(state: AgentState) -> dict:
                         db.rollback()
                     except Exception:
                         pass
+
+            # ── Ensure DatasetSessionDB row exists ───────────────────────
+            # The frontend also upserts this row, but its call is async and
+            # fire-and-forget.  If the user refreshes before it fires,
+            # get_pipeline_steps can't find PipelineStepDB rows (it needs
+            # chat_session_id to scope the fallback query).  Writing here
+            # guarantees the link between dataset_id ↔ session_id always
+            # exists after a successful recording.
+            _sess_id = state.get("session_id")
+            _user_id = str(state.get("user_id") or "agent")
+            if _sess_id and root_dataset_id:
+                try:
+                    from ....models_db import DatasetSessionDB
+                    existing = (
+                        db.query(DatasetSessionDB)
+                        .filter(
+                            DatasetSessionDB.user_id == _user_id,
+                            DatasetSessionDB.dataset_id == root_dataset_id,
+                        )
+                        .first()
+                    )
+                    if existing:
+                        if existing.chat_session_id != _sess_id:
+                            existing.chat_session_id = _sess_id
+                            db.commit()
+                    else:
+                        db.add(DatasetSessionDB(
+                            id=str(uuid.uuid4()),
+                            user_id=_user_id,
+                            dataset_id=root_dataset_id,
+                            chat_session_id=_sess_id,
+                        ))
+                        db.commit()
+                except Exception as _ds_exc:
+                    import logging as _ds_log
+                    _ds_log.getLogger(__name__).warning(
+                        "DATASET_SESSION_UPSERT_FAILED: %s", _ds_exc,
+                    )
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+            # ── Back-fill pipeline_steps_json on dataset_meta ────────────
+            # The frontend writes this with a 1.5 s debounce.  If the user
+            # refreshes or the server restarts before it fires, the steps
+            # vanish.  Writing here guarantees the JSON is always current
+            # after a successful recording — the frontend's later write is
+            # idempotent (same data, just slightly delayed).
+            all_steps = [*state.get("pipeline_steps", []), *saved_steps]
+            if all_steps and root_dataset_id:
+                try:
+                    import json as _json
+                    from sqlalchemy import text as _text
+                    # Build the minimal shape the frontend expects.
+                    _steps_json = _json.dumps(all_steps, default=str)
+                    db.execute(
+                        _text("UPDATE dataset_meta SET pipeline_steps_json = :v WHERE id = :id"),
+                        {"v": _steps_json, "id": root_dataset_id},
+                    )
+                    db.commit()
+                except Exception as _pj_exc:
+                    import logging as _pj_log
+                    _pj_log.getLogger(__name__).warning(
+                        "PIPELINE_STEPS_JSON_BACKFILL_FAILED: %s", _pj_exc,
+                    )
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
         finally:
             db.close()
 

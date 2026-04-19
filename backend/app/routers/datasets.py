@@ -617,7 +617,18 @@ def get_pipeline_steps(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return the saved pipeline steps JSON for a dataset."""
+    """Return the saved pipeline steps JSON for a dataset.
+
+    Primary source: ``pipeline_steps_json`` on ``dataset_meta`` (written by the
+    frontend via ``PUT /datasets/{id}/pipeline-steps`` with a debounced write-
+    through that fires 1.5 s after each change).
+
+    Fallback: ``pipeline_steps`` DB rows written by ``pipeline_recorder`` on
+    every successful agent step (individual commit, no debounce).  This covers
+    the critical window where the server restarts or the user closes the tab
+    before the 1.5 s frontend debounce fires — without this fallback the step
+    the user just ran would silently vanish on the next page load.
+    """
     role = get_current_role(authorization)
     require_role("viewer", role)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
@@ -632,6 +643,74 @@ def get_pipeline_steps(
         steps = json.loads(raw) if raw else []
     except Exception:
         steps = []
+
+    # ── Fallback: reconstruct from PipelineStepDB rows ───────────────────
+    # PipelineStepDB is committed per-row immediately after each agent step
+    # (see pipeline_recorder.py), so it's always up-to-date even when the
+    # frontend debounce didn't fire.  We reconstruct steps in the same shape
+    # the frontend writes, keyed by session_id (the DuckDB session that ran
+    # the steps for this dataset).
+    if not steps:
+        from ..models_db import PipelineStepDB as _PSdb, DatasetSessionDB as _DSess
+        # Find the chat session for this dataset so we know which
+        # PipelineStepDB.session_id to query.
+        user_id = get_current_user_id(authorization) or "anonymous"
+        ds_session = (
+            db.query(_DSess)
+            .filter(_DSess.dataset_id == dataset_id, _DSess.user_id == user_id)
+            .first()
+        )
+        sess_id = ds_session.chat_session_id if ds_session else None
+
+        # Also try to match by user_id + ordering if no session row exists.
+        q = db.query(_PSdb).filter(
+            _PSdb.user_id == user_id,
+            _PSdb.status == "completed",
+            _PSdb.output_table.isnot(None),
+        )
+        if sess_id:
+            q = q.filter(_PSdb.session_id == sess_id)
+        else:
+            # Heuristic: latest run's steps for this user
+            q = q.order_by(_PSdb.created_at.desc())
+
+        db_rows = q.order_by(_PSdb.step_number).limit(50).all()
+
+        if db_rows:
+            import logging as _gps_log
+            _gps_log.getLogger(__name__).info(
+                "pipeline-steps: recovered %d steps from PipelineStepDB "
+                "for dataset %s (pipeline_steps_json was empty)",
+                len(db_rows), dataset_id[:8],
+            )
+            steps = [
+                {
+                    "step_number": ps.step_number,
+                    "operation": ps.operation,
+                    "intent": ps.intent or ps.operation,
+                    "description": ps.description,
+                    "sql": ps.duckdb_sql,
+                    "output_table": ps.output_table,
+                    "input_tables": ps.input_tables or [],
+                    "row_count_before": ps.row_count_before,
+                    "row_count_after": ps.row_count_after,
+                    "execution_time_ms": ps.execution_time_ms,
+                    "snapshot_path": ps.snapshot_path,
+                    "timestamp": ps.created_at.isoformat() if ps.created_at else None,
+                    "appliedAt": ps.created_at.isoformat() if ps.created_at else None,
+                }
+                for ps in db_rows
+            ]
+            # Back-fill pipeline_steps_json so next load is fast.
+            try:
+                db.execute(
+                    text("UPDATE dataset_meta SET pipeline_steps_json = :v WHERE id = :id"),
+                    {"v": json.dumps(steps), "id": dataset_id},
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+
     return {"dataset_id": dataset_id, "steps": steps}
 
 
@@ -712,13 +791,33 @@ def step_preview(
                 AIAgentService._replay_session_views(
                     session_id, _ds, client_steps=client_steps,
                 )
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Dataset not found — cannot replay session views.",
+                )
         from ..services.step_engine import StepEngine
         engine = StepEngine(session_id, {})
         rows = engine.preview(table_name, limit=limit, offset=offset)
         columns = list(rows[0].keys()) if rows else []
         return {"rows": rows, "columns": columns, "count": len(rows)}
+    except HTTPException:
+        raise  # pass through 404 already raised above
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        # If the preview failed because the view couldn't be restored after
+        # session eviction, give the frontend a clear 422 instead of a
+        # cryptic "table not found" 500.
+        detail = str(exc)
+        if "not found" in detail.lower() or "does not exist" in detail.lower():
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"View '{table_name}' could not be restored.  The DuckDB "
+                    f"session was evicted (server restart or timeout).  "
+                    f"Re-run the pipeline to recreate this view."
+                ),
+            )
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.post("/{dataset_id}/step-materialize")
@@ -1410,7 +1509,12 @@ def get_dataset_session(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return the live workspace state for the current user on this dataset."""
+    """Return the live workspace state for the current user on this dataset.
+
+    If the stored ``live_table_name`` references a DuckDB session that no
+    longer exists (server restart, TTL eviction), the stale session fields
+    are cleared so the frontend doesn't render a ghost artifact card.
+    """
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization) or "anonymous"
@@ -1422,6 +1526,37 @@ def get_dataset_session(
         )
         .first()
     )
+    # ── Validate liveness: if the DuckDB session was evicted the row is stale.
+    # Clear the transient session fields so the frontend sees a clean slate
+    # instead of a ghost "clean · LIVE" artifact that can't be queried.
+    if row and row.live_table_name and row.chat_session_id:
+        try:
+            from ..services.duckdb_session import session_is_alive
+            alive = session_is_alive(row.chat_session_id)
+            # Only clear when we are *certain* the session is dead (False).
+            # If alive is None (DuckDB not available / test env), leave the
+            # row untouched — the frontend will discover the failure on
+            # step-preview and show a user-friendly error.
+            if alive is False:
+                import logging as _ds_log
+                _ds_log.getLogger(__name__).info(
+                    "dataset-session: clearing stale session for dataset %s "
+                    "(DuckDB session %s / table %s no longer exists)",
+                    dataset_id[:8], row.chat_session_id[:8], row.live_table_name,
+                )
+                row.live_table_name = None
+                row.live_row_count = None
+                row.live_step_label = None
+                row.live_rows_changed = None
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+        except Exception:
+            # If the check itself fails (import error, connection issue),
+            # don't block the response — the frontend will handle a failed
+            # step-preview gracefully.
+            pass
     return {"dataset_id": dataset_id, **_serialize_session(row)}
 
 

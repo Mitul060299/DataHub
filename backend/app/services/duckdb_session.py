@@ -79,6 +79,7 @@ _BLOCKED_DML = re.compile(
 _lock = threading.Lock()
 _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
 _last_used: dict[str, float] = {}
+_pool_initialized: bool = False  # True once the first real session is created
 
 MAX_SESSION_AGE_SECONDS = 1800  # 30 minutes — comfortable on 2 GB Standard
 _CLEANUP_INTERVAL_SECONDS = 300  # run background cleanup every 5 minutes
@@ -250,6 +251,8 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
             pass
         _sessions[session_id] = new_conn
         _last_used[session_id] = time.monotonic()
+        global _pool_initialized
+        _pool_initialized = True
         return new_conn
 
 
@@ -389,6 +392,33 @@ def table_exists(session_id: str, name: str) -> bool:
         return any(r[0] > 0 for r in result)
     except Exception:
         return False
+
+
+def session_is_alive(session_id: str) -> bool | None:
+    """Check whether a DuckDB session is alive.
+
+    Returns:
+        True  – session exists in the session pool and responds to queries.
+        False – session was tracked but is dead (GC'd / closed), or pool is
+                initialised and the session is simply not present (evicted).
+        None  – cannot determine (DuckDB pool not initialised, import error,
+                etc.).  Callers should NOT treat ``None`` as "evicted".
+    """
+    try:
+        with _lock:
+            if not _pool_initialized:
+                return None  # pool never used — can't say if session is dead
+            conn = _sessions.get(session_id)
+            if conn is None:
+                # Pool is initialised (we hold _lock) but session is absent.
+                return False
+            try:
+                conn.execute("SELECT 1")
+                return True
+            except Exception:
+                return False
+    except Exception:
+        return None
 
 
 # ── Background cleanup thread ─────────────────────────────────────────────────

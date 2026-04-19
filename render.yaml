@@ -8,4 +8,9 @@ services:
     envVars:
       - key: RUN_MIGRATIONS
         value: "0"
-    healthCheckPath: /api/health
+    # /health is the lightweight liveness probe (no DB touch, returns immediately).
+    # Previously this was set to /api/health which DOES NOT EXIST — every Render
+    # health probe 404'd, and after consecutive failures Render SIGKILL'd the
+    # instance, leaving no Python traceback in the logs (just an unexplained
+    # "[entrypoint] Starting backend" line on the next deploy attempt).
+    healthCheckPath: /health

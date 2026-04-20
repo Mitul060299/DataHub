@@ -320,29 +320,48 @@ def delete_project(
         DatasetMetaDB.project_id == project_id,
         DatasetMetaDB.deleted_at.is_(None),
     ).update({"deleted_at": datetime.now(timezone.utc), "project_id": None})
-
-    # Clean up orphaned session and step rows for the deleted datasets.
-    if dataset_ids:
-        from ..models_db import DatasetSessionDB, PipelineStepDB
-        # DatasetSessionDB has dataset_id FK.
-        sess_ids = [
-            r[0]
-            for r in db.query(DatasetSessionDB.chat_session_id)
-            .filter(DatasetSessionDB.dataset_id.in_(dataset_ids))
-            .all()
-            if r[0]
-        ]
-        db.query(DatasetSessionDB).filter(
-            DatasetSessionDB.dataset_id.in_(dataset_ids)
-        ).delete(synchronize_session=False)
-        # PipelineStepDB is linked via session_id (= chat_session_id).
-        if sess_ids:
-            db.query(PipelineStepDB).filter(
-                PipelineStepDB.session_id.in_(sess_ids)
-            ).delete(synchronize_session=False)
+    # Also clear project_id on already-trashed datasets so the FK doesn't
+    # block deletion of the project row.
+    db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.project_id == project_id,
+        DatasetMetaDB.deleted_at.isnot(None),
+    ).update({"project_id": None})
 
     db.delete(project)
     db.commit()
+
+    # Best-effort cleanup of orphaned session and step rows for the deleted
+    # datasets.  Done AFTER the main commit so that any FK constraint or other
+    # DB error here does NOT roll back the actual project deletion.
+    if dataset_ids:
+        try:
+            from ..models_db import DatasetSessionDB, PipelineStepDB
+            # Collect session IDs before deleting the session rows.
+            sess_ids = [
+                r[0]
+                for r in db.query(DatasetSessionDB.chat_session_id)
+                .filter(DatasetSessionDB.dataset_id.in_(dataset_ids))
+                .all()
+                if r[0]
+            ]
+            db.query(DatasetSessionDB).filter(
+                DatasetSessionDB.dataset_id.in_(dataset_ids)
+            ).delete(synchronize_session=False)
+            if sess_ids:
+                db.query(PipelineStepDB).filter(
+                    PipelineStepDB.session_id.in_(sess_ids)
+                ).delete(synchronize_session=False)
+            db.commit()
+        except Exception as _cleanup_exc:
+            import logging as _proj_log
+            _proj_log.getLogger(__name__).warning(
+                "delete_project: cleanup of sessions/steps failed (non-fatal): %s",
+                _cleanup_exc,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
     return Response(status_code=204)
 
 

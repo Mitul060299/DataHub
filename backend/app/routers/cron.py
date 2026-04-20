@@ -7,6 +7,7 @@ Protected by X-Cron-Secret header (not user auth).
 GET /api/cron/run-scheduled-pipelines
 """
 
+import hmac
 import logging
 from datetime import datetime, timezone
 
@@ -33,7 +34,7 @@ async def run_scheduled_pipelines(
     Triggered by Render Cron Job every minute.
     Finds all active schedules where next_run_at <= now() and triggers pipeline_runner.
     """
-    if not x_cron_secret or x_cron_secret != settings.cron_secret:
+    if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.cron_secret):
         raise HTTPException(status_code=403, detail="Invalid cron secret")
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -87,7 +88,7 @@ async def send_weekly_digest(
 ) -> dict:
     """Triggered once a week (e.g. Monday 09:00 UTC via Render Cron Job).
     Sends a per-user activity digest email to all opted-in users."""
-    if not x_cron_secret or x_cron_secret != settings.cron_secret:
+    if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.cron_secret):
         raise HTTPException(status_code=403, detail="Invalid cron secret")
 
     from ..services.weekly_digest_service import send_weekly_digests

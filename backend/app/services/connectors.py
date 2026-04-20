@@ -1,6 +1,10 @@
 from typing import Dict, Any, Optional
+import ipaddress
+import re
+import socket
 import pandas as pd
 from io import StringIO
+from urllib.parse import urlparse
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 from supabase import create_client
@@ -8,6 +12,130 @@ from .plugins import plugin_registry, PluginInfo
 import logging
 
 logger = logging.getLogger(__name__)
+
+# ── Security helpers ──────────────────────────────────────────────────────────
+
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+_MAX_IDENTIFIER_LEN = 128
+# Patterns that suggest multi-statement or comment injection in a WHERE clause
+_UNSAFE_WHERE_RE = re.compile(r"--|/\*|\*/|;|\bxp_|\bexec\s|\bexecute\s", re.IGNORECASE)
+# Private / loopback IP ranges that should never be reached via connector URLs
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+# Credential-bearing keys that must not be persisted in plaintext column store
+CREDENTIAL_KEYS: frozenset[str] = frozenset({
+    "password", "passwd", "connection_url", "api_key", "key", "secret",
+    "token", "access_token", "refresh_token", "access_key", "secret_key",
+    "service_account_key", "private_key", "auth_header", "credentials",
+    "certificate", "ssl_cert", "ssl_key",
+})
+
+
+def _validate_identifier(name: str, label: str = "identifier") -> str:
+    """Raise ValueError if *name* is not a safe SQL identifier.
+
+    Allows letters, digits, underscores and ``$`` (common in many databases).
+    Does NOT allow dots, spaces, quotes or any other special character.
+    Users needing complex identifiers must pass a full ``query`` instead.
+    """
+    if (
+        not name
+        or len(name) > _MAX_IDENTIFIER_LEN
+        or not _SAFE_IDENTIFIER_RE.match(name)
+    ):
+        raise ValueError(
+            f"Invalid SQL {label} {name!r}: only letters, digits, underscores "
+            "and $ are allowed. Pass a 'query' field for complex identifiers."
+        )
+    return name
+
+
+def _validate_where(where: str) -> str:
+    """Raise ValueError if the WHERE clause contains suspicious SQL injection markers."""
+    if _UNSAFE_WHERE_RE.search(where):
+        raise ValueError(
+            "WHERE clause contains forbidden characters or keywords (e.g. --, /*, ;). "
+            "Pass a parameterised 'query' field instead."
+        )
+    return where
+
+
+def _validate_http_url_no_ssrf(url: str, label: str = "URL") -> None:
+    """Raise ValueError if *url* resolves to a private/loopback address (SSRF guard)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Only http/https schemes are allowed for {label}")
+        hostname = parsed.hostname
+        if not hostname:
+            raise ValueError(f"Missing hostname in {label}")
+        resolved = socket.getaddrinfo(hostname, None)
+        for (_fam, _typ, _pro, _can, sockaddr) in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if any(ip in net for net in _PRIVATE_NETWORKS):
+                raise ValueError(
+                    f"{label} resolves to a private/reserved address ({ip}), which is not allowed"
+                )
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Invalid {label}: {exc}") from exc
+
+
+def _validate_db_connection_url(connection_url: str) -> None:
+    """Reject connection URLs that target loopback/private hosts or use the SQLite scheme.
+
+    The ``sqlite`` scheme would allow reading arbitrary local files on the server;
+    loopback/private hosts would allow SSRF against internal services.
+    """
+    try:
+        parsed = urlparse(connection_url)
+        scheme = (parsed.scheme or "").lower()
+        if scheme.startswith("sqlite"):
+            raise ValueError(
+                "SQLite connection URLs are not permitted in the sql_query connector. "
+                "Use the dedicated 'sqlite' connector instead."
+            )
+        hostname = parsed.hostname
+        if hostname:
+            try:
+                resolved = socket.getaddrinfo(hostname, None)
+            except socket.gaierror:
+                raise ValueError(f"Cannot resolve hostname in connection URL: {hostname!r}")
+            for (_fam, _typ, _pro, _can, sockaddr) in resolved:
+                ip = ipaddress.ip_address(sockaddr[0])
+                if any(ip in net for net in _PRIVATE_NETWORKS):
+                    raise ValueError(
+                        f"connection_url hostname resolves to a private/reserved address "
+                        f"({ip}), which is not allowed"
+                    )
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Invalid connection_url: {exc}") from exc
+
+
+_ALLOWED_SQLITE_EXTENSIONS = {".db", ".sqlite", ".sqlite3"}
+
+
+def _validate_sqlite_path(file_path: str) -> None:
+    """Reject SQLite file_paths that could read arbitrary server files."""
+    import os
+    # Block path traversal
+    if ".." in file_path:
+        raise ValueError("file_path must not contain '..': path traversal is not allowed")
+    _, ext = os.path.splitext(file_path.lower())
+    if ext not in _ALLOWED_SQLITE_EXTENSIONS:
+        raise ValueError(
+            f"file_path must have a .db, .sqlite or .sqlite3 extension (got {ext!r})"
+        )
 
 
 class InlineCsvConnector:
@@ -27,6 +155,7 @@ class HttpCsvConnector:
         url = config.get("url", "")
         if not url:
             raise ValueError("url is required")
+        _validate_http_url_no_ssrf(url, label="CSV URL")
         return pd.read_csv(url)
 
 
@@ -67,17 +196,21 @@ class SqlQueryConnector:
 
         if not connection_url:
             raise ValueError("connection_url is required")
+        _validate_db_connection_url(connection_url)
 
         if not query and not table:
             raise ValueError("query or table is required")
 
         if not query:
-            query = f"SELECT * FROM {table}"
+            _validate_identifier(table, "table")
+            query = f'SELECT * FROM "{table}"'
             clauses = []
             if where:
+                _validate_where(where)
                 clauses.append(where)
             if updated_at_column and updated_at_since:
-                clauses.append(f"{updated_at_column} >= :updated_at_since")
+                _validate_identifier(updated_at_column, "updated_at_column")
+                clauses.append(f'"{updated_at_column}" >= :updated_at_since')
             if clauses:
                 query = f"{query} WHERE " + " AND ".join(clauses)
 
@@ -145,8 +278,11 @@ class PostgreSQLConnector:
         connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
 
         if not query:
-            query = f"SELECT * FROM {schema}.{table}"
+            _validate_identifier(table, "table")
+            _validate_identifier(schema, "schema")
+            query = f'SELECT * FROM "{schema}"."{table}"'
             if where:
+                _validate_where(where)
                 query = f"{query} WHERE {where}"
 
         engine = create_engine(connection_url, pool_pre_ping=True)
@@ -294,10 +430,12 @@ class MySQLConnector:
             raise ValueError("query or table is required")
 
         connection_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
-        
+
         if not query:
+            _validate_identifier(table, "table")
             query = f"SELECT * FROM {table}"
             if where:
+                _validate_where(where)
                 query = f"{query} WHERE {where}"
 
         engine = create_engine(connection_url, pool_pre_ping=True)
@@ -405,10 +543,12 @@ class SQLServerConnector:
             raise ValueError("query or table is required")
 
         connection_url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
-        
+
         if not query:
+            _validate_identifier(table, "table")
             query = f"SELECT * FROM {table}"
             if where:
+                _validate_where(where)
                 query = f"{query} WHERE {where}"
 
         engine = create_engine(connection_url, pool_pre_ping=True)
@@ -528,10 +668,12 @@ class OracleConnector:
             dsn = f"{host}:{port}/{sid}"
         
         connection_url = f"oracle+oracledb://{username}:{password}@{dsn}"
-        
+
         if not query:
+            _validate_identifier(table, "table")
             query = f"SELECT * FROM {table}"
             if where:
+                _validate_where(where)
                 query = f"{query} WHERE {where}"
 
         engine = create_engine(connection_url, pool_pre_ping=True, thick_mode=False)
@@ -630,6 +772,7 @@ class SQLiteConnector:
         file_path = config.get("file_path")
         if not file_path:
             raise ValueError("file_path is required")
+        _validate_sqlite_path(file_path)
         url = f"sqlite:///{file_path}"
         return create_engine(url, poolclass=NullPool)
 
@@ -650,10 +793,13 @@ class SQLiteConnector:
         if not query and not table:
             raise ValueError("query or table is required")
 
+        _validate_sqlite_path(file_path)
         connection_url = f"sqlite:///{file_path}"
         if not query:
+            _validate_identifier(table, "table")
             query = f"SELECT * FROM {table}"
             if where:
+                _validate_where(where)
                 query = f"{query} WHERE {where}"
 
         engine = create_engine(connection_url, poolclass=NullPool)
@@ -830,6 +976,7 @@ class SnowflakeConnector:
         )
 
         if not query:
+            _validate_identifier(table, "table")
             query = f"SELECT * FROM {table}"
 
         df = pd.read_sql(query, conn)
@@ -1036,9 +1183,11 @@ class RedshiftConnector:
             raise ValueError("query or table is required")
 
         connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-        
+
         if not query:
-            query = f"SELECT * FROM {schema}.{table}"
+            _validate_identifier(table, "table")
+            _validate_identifier(schema, "schema")
+            query = f'SELECT * FROM "{schema}"."{table}"'
 
         engine = create_engine(connection_url, pool_pre_ping=True)
         with engine.connect() as conn:
@@ -1105,8 +1254,10 @@ class AzureSynapseConnector:
             raise ValueError("query or table is required")
 
         connection_url = f"mssql+pymssql://{username}:{password}@{server}/{database}"
-        
+
         if not query:
+            _validate_identifier(table, "table")
+            _validate_identifier(schema, "schema")
             query = f"SELECT * FROM {schema}.{table}"
 
         engine = create_engine(connection_url, pool_pre_ping=True)

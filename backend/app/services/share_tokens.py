@@ -19,7 +19,10 @@ def sign_token(token: str) -> Optional[str]:
 
 def verify_token(token: str, signature: str | None) -> bool:
     if not settings.share_signing_secret:
-        return True
+        # Fail closed: if no secret is configured, all signature checks fail.
+        # This prevents share links from being universally accessible when the
+        # operator forgets to set SHARE_SIGNING_SECRET.
+        return False
     if not signature:
         return False
     expected = sign_token(token)

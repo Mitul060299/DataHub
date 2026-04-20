@@ -9,7 +9,7 @@ from ..models import (
     DatasetPreview,
 )
 from ..models_db import ImportConnectionDB, ConnectorCredentialDB, DatasetMetaDB
-from ..services.connectors import connector_registry
+from ..services.connectors import connector_registry, CREDENTIAL_KEYS
 from .datasets import save_dataset
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
@@ -119,7 +119,14 @@ def import_from_connector(
         meta.connector_credential_id = credential_id
         meta.import_mode = payload.import_mode
         meta.source_type = payload.connector
-        meta.connector_config = dict(payload.config)  # store original for fold base relation
+        # Strip credential-bearing fields before persisting: passwords and keys
+        # are already encrypted in ConnectorCredentialDB.  Storing them again
+        # in plaintext on dataset_meta would expose them to any reader of the
+        # JSONB column (DB dumps, logs, admin UIs).
+        meta.connector_config = {
+            k: v for k, v in dict(payload.config).items()
+            if k.lower() not in CREDENTIAL_KEYS
+        }
         db.commit()
 
     return DatasetPreview(

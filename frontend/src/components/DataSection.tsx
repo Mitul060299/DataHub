@@ -67,12 +67,12 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
         <div style={{ position: "relative" }}>
           <button
             className="btn"
-            style={{ width: 22, height: 22, padding: 0, display: "grid", placeItems: "center" }}
+            style={{ width: 24, height: 24, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Add data"
             title="Add data"
           >
-            <IconPlus size={13} />
+            <IconPlus size={14} />
           </button>
           {menuOpen && (
             <div

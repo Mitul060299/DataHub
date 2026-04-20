@@ -9,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { IconBarChart, IconCode, IconTable } from "./Icons";
 import { api } from "../api";
 import type { Dataset } from "../contexts/WorkspaceContext";
-import { usePipelineContext } from "../contexts/PipelineContext";
 
 export type ArtifactKind = "table" | "metric" | "variable";
 
@@ -79,7 +78,6 @@ export function ArtifactsSection({
   liveArtifact,
   onSaveLive,
 }: ArtifactsSectionProps) {
-  const { steps } = usePipelineContext();
   const [open, setOpen] = useState(true);
   const [savingLive, setSavingLive] = useState(false);
   const [liveArtifactName, setLiveArtifactName] = useState(liveArtifact?.stepLabel ?? "");
@@ -242,21 +240,27 @@ export function ArtifactsSection({
                     borderRadius: 4, color: "#86efac", padding: "2px 5px", outline: "none",
                     boxSizing: "border-box",
                   }}
-                  placeholder="Artifact name…"
+                  placeholder="Artifact name\u2026"
                 />
                 <div
-                  onClick={() => window.dispatchEvent(new CustomEvent("datahub:view:live"))}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("datahub:view:live"));
+                    window.dispatchEvent(new CustomEvent("datahub:run:pipeline"));
+                  }}
                   style={{ fontSize: 10, color: "rgba(134,239,172,0.6)", marginTop: 2, cursor: "pointer" }}
                   title="Click to view latest cleaned data"
                 >
-                  {liveArtifact.rowCount > 0 ? `${liveArtifact.rowCount.toLocaleString()} rows · ` : ""}LIVE
+                  {liveArtifact.rowCount > 0 ? `${liveArtifact.rowCount.toLocaleString()} rows \u00b7 ` : ""}LIVE
                 </div>
               </div>
               {/* View button for LIVE artifact */}
               <button
                 className="btn"
                 style={{ height: 22, padding: "0 8px", fontSize: 10, flexShrink: 0, borderColor: "rgba(34,197,94,0.4)", color: "#86efac" }}
-                onClick={() => window.dispatchEvent(new CustomEvent("datahub:view:live"))}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("datahub:view:live"));
+                  window.dispatchEvent(new CustomEvent("datahub:run:pipeline"));
+                }}
                 title="View latest cleaned data"
               >
                 View
@@ -280,57 +284,6 @@ export function ArtifactsSection({
                 </button>
               )}
             </div>
-          )}
-
-          {/* ── Pipeline Step Outputs ───────────────────────────────── */}
-          {steps.length > 0 && (
-            <>
-              <div style={{ marginTop: 4, paddingTop: 4 }}>
-                <span style={{ fontSize: 10, color: "var(--tx2)", fontWeight: 600, letterSpacing: "0.06em" }}>
-                  PIPELINE STEPS
-                </span>
-              </div>
-              {steps.map((step, index) => {
-                const stepLabel = step.description || step.operation.replace(/_/g, " ");
-                const displayLabel = stepLabel.length > 32 ? stepLabel.slice(0, 30) + "\u2026" : stepLabel;
-                return (
-                  <div
-                    key={step.id}
-                    onClick={() => window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: index } }))}
-                    style={{
-                      minHeight: 28,
-                      borderRadius: "var(--r6)",
-                      border: "1px solid var(--bd)",
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "0 8px",
-                      gap: 6,
-                      cursor: "pointer",
-                      background: "transparent",
-                      transition: "background 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    title={`Preview step ${index + 1}: ${stepLabel}`}
-                  >
-                    <span style={{ fontSize: 10, color: "var(--ac)", fontWeight: 700, flexShrink: 0, width: 16, textAlign: "center" }}>
-                      {index + 1}
-                    </span>
-                    <span className="mono" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--tx0)" }}>
-                      {displayLabel}
-                    </span>
-                    {step.row_count_after != null && (
-                      <span style={{ fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
-                        {step.row_count_after.toLocaleString()}
-                      </span>
-                    )}
-                    <span style={{ fontSize: 11, color: "var(--tx2)", flexShrink: 0, opacity: 0.6 }}>
-                      👁
-                    </span>
-                  </div>
-                );
-              })}
-            </>
           )}
 
           {/* ── In-Session Tables ─────────────────────────────────────── */}

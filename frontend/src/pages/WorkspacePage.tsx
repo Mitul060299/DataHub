@@ -187,6 +187,22 @@ export function WorkspacePage() {
     return () => window.removeEventListener("datahub:view:live", handleViewLive);
   }, []);
 
+  // Auto-replay the pipeline when the user clicks the LIVE artifact and the
+  // session preview is gone (e.g. after page refresh).  Without this the
+  // "View" button just toggles a flag but the canvas still shows raw data
+  // because there is nothing to display.
+  useEffect(() => {
+    function handleRunPipelineEvent() {
+      if (sessionPreview) return; // already have live data, nothing to do
+      if (replayingPipeline) return;
+      if (!steps.length) return;
+      void handleRunPipeline();
+    }
+    window.addEventListener("datahub:run:pipeline", handleRunPipelineEvent);
+    return () => window.removeEventListener("datahub:run:pipeline", handleRunPipelineEvent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionPreview, replayingPipeline, steps.length]);
+
   const prevActiveDatasetRef = useRef<string | null>(activeDataset?.id ?? null);
   useEffect(() => {
     const prev = prevActiveDatasetRef.current;

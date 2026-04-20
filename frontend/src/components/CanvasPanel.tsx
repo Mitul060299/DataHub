@@ -93,9 +93,17 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         // Preferred: read directly from the persisted Parquet snapshot
         // (works even after server restart / session eviction)
         data = await fetchSnapshotPreview(dataset.id, snapshotPath, 200);
-      } else if (tableName && dataset?.id && liveArtifact?.sessionId) {
-        // Session is alive — preview via DuckDB session
-        data = await fetchStepPreview(dataset.id, liveArtifact.sessionId, tableName, 200, 0,
+      } else if (tableName && dataset?.id) {
+        // Session may be dead after refresh — fall back to the persisted
+        // chat session id (or a fresh uuid) so the backend can replay the
+        // recorded pipeline_steps and serve the preview.
+        const sessionId = liveArtifact?.sessionId
+          || localStorage.getItem(`datahub_chat_session_${dataset.id}`)
+          || crypto.randomUUID();
+        if (!liveArtifact?.sessionId) {
+          localStorage.setItem(`datahub_chat_session_${dataset.id}`, sessionId);
+        }
+        data = await fetchStepPreview(dataset.id, sessionId, tableName, 200, 0,
           steps.map((s, i) => ({
             step_number: s.stepNumber ?? i + 1,
             operation: s.operation,
@@ -246,9 +254,23 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         </div>
       )}
+      {/* ── Global replay progress ribbon ── */}
+      {replayingPipeline && (
+        <div
+          style={{
+            height: 3,
+            width: "100%",
+            background: "linear-gradient(90deg, transparent, rgba(91,106,240,0.1) 20%, rgba(91,106,240,0.9) 50%, rgba(91,106,240,0.1) 80%, transparent)",
+            backgroundSize: "200% 100%",
+            animation: "replay-slide 1.2s linear infinite",
+            flexShrink: 0,
+          }}
+        >
+          <style>{`@keyframes replay-slide{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+        </div>
+      )}
       <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
-        <div style={{ display: "inline-flex", gap: 3 }}>
-          {([
+        <div style={{ display: "inline-flex", gap: 3 }}>          {([
             { key: "data",     icon: <IconTable size={16} />,     label: "Data" },
             { key: "pipeline", icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null },
             { key: "canvas",   icon: <IconBarChart size={16} />,  label: "Canvas",   tourAttr: true },
@@ -363,16 +385,21 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       </div>
       {/* ── Step preview indicator (when previewing a step's snapshot) ── */}
       {viewingStepIndex !== null && tab === "data" && (
-        <div style={{ height: 32, borderBottom: "1px solid var(--bd)", background: "rgba(91,106,240,0.06)", display: "flex", alignItems: "center", padding: "0 12px", gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: "var(--tx2)", flex: 1 }}>
-            👁 Previewing: <strong style={{ color: "var(--ac)" }}>{steps[viewingStepIndex]?.description || `Step ${viewingStepIndex + 1}`}</strong>
-            {timelineLoading && <span style={{ marginLeft: 8, color: "var(--tx2)" }}>Loading…</span>}
+        <div style={{ minHeight: 36, borderBottom: "1px solid rgba(91,106,240,0.25)", background: "linear-gradient(90deg, rgba(91,106,240,0.12), rgba(124,58,237,0.08))", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999, background: "rgba(91,106,240,0.22)", border: "1px solid rgba(91,106,240,0.45)", color: "#c7d2fe", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#a5b4fc" }} />
+            STEP {viewingStepIndex + 1} PREVIEW
+          </span>
+          <span style={{ flex: 1, fontSize: 12, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {steps[viewingStepIndex]?.description || `Step ${viewingStepIndex + 1}`}
+            {timelineLoading && <span style={{ marginLeft: 10, color: "var(--tx2)", fontSize: 11 }}>Loading\u2026</span>}
           </span>
           <button
             onClick={handleTimelineReset}
-            style={{ fontSize: 10, padding: "2px 10px", borderRadius: 4, border: "1px solid var(--bd2)", background: "transparent", color: "var(--tx2)", cursor: "pointer" }}
+            style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--bd2)", background: "var(--bg2)", color: "var(--tx1)", cursor: "pointer" }}
+            title="Close preview and return to live data"
           >
-            ✕ Close preview
+            Close preview
           </button>
         </div>
       )}

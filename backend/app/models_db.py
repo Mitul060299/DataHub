@@ -141,7 +141,12 @@ class DatasetMetaDB(Base):
     # Project scoping — added by migration 0057. Nullable so legacy datasets
     # uploaded before projects existed stay visible at the workspace level
     # (filter treats NULL as "no project" / visible from "All" view).
-    project_id = Column(String, nullable=True, index=True)
+    project_id = Column(
+        String,
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     version_number = Column(Integer, nullable=False, default=1)
     version_note = Column(Text, nullable=True)
     uploaded_by = Column(String, nullable=True)

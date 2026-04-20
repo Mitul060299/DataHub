@@ -300,16 +300,18 @@ def delete_project(
 ) -> Response:
     project = _get_project_or_404(project_id, current_user.id, db)
 
-    # Null out FKs before deleting so child rows survive
-    db.query(PipelineV2DB).filter(PipelineV2DB.project_id == project_id).update({"project_id": None})
-    db.query(DashboardV2DB).filter(DashboardV2DB.project_id == project_id).update({"project_id": None})
-    db.query(DataSourceDB).filter(DataSourceDB.project_id == project_id).update({"project_id": None})
-    # Datasets: soft-delete (move to Trash) so they disappear from the project
-    # view but remain recoverable for `TRASH_RETENTION_DAYS`. This matches user
-    # expectation: "I deleted the project, the data should be gone" — while
-    # still allowing recovery via the Trash UI within the retention window.
+    # All FKs that point at projects.id are declared ``ON DELETE SET NULL``
+    # at the database level (see alembic 0029, 0060), so dropping the
+    # projects row will null out:
+    #   pipelines_v2.project_id, dashboards_v2.project_id,
+    #   data_sources.project_id, dataset_meta.project_id, etc.
+    # We only need to handle business-logic state the FK cannot express:
+    # soft-delete the active datasets so they appear in the user's Trash
+    # within the retention window instead of resurfacing as orphans.
     from datetime import datetime, timezone
-    # Collect dataset IDs so we can clean up child rows.
+
+    # Capture dataset IDs before the cascade fires so we can also evict
+    # their session/step rows (those tables are not FK-linked).
     dataset_ids = [
         r[0]
         for r in db.query(DatasetMetaDB.id)
@@ -319,13 +321,7 @@ def delete_project(
     db.query(DatasetMetaDB).filter(
         DatasetMetaDB.project_id == project_id,
         DatasetMetaDB.deleted_at.is_(None),
-    ).update({"deleted_at": datetime.now(timezone.utc), "project_id": None})
-    # Also clear project_id on already-trashed datasets so the FK doesn't
-    # block deletion of the project row.
-    db.query(DatasetMetaDB).filter(
-        DatasetMetaDB.project_id == project_id,
-        DatasetMetaDB.deleted_at.isnot(None),
-    ).update({"project_id": None})
+    ).update({"deleted_at": datetime.now(timezone.utc)})
 
     db.delete(project)
     db.commit()

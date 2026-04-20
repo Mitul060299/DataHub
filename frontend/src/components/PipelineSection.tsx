@@ -44,6 +44,8 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
   const importFileRef = useRef<HTMLInputElement>(null);
   const [pendingAction, setPendingAction] = useState<{ message: string; run: () => Promise<void> } | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runSuccess, setRunSuccess] = useState(false);
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -224,6 +226,32 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     });
   };
 
+  const handleRun = async () => {
+    if (running || !steps.length) return;
+    setRunning(true);
+    setRunSuccess(false);
+    try {
+      if (onRunPipeline) await onRunPipeline();
+      else await runPipeline();
+      setRunSuccess(true);
+      setTimeout(() => setRunSuccess(false), 2500);
+    } catch {
+      // Error state handled by caller
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  /** Strip dataset name prefix from step labels for cleaner display */
+  const cleanStepLabel = (label: string) => {
+    const dsName = activeDataset?.name;
+    if (dsName && label.toLowerCase().startsWith(dsName.toLowerCase())) {
+      const rest = label.slice(dsName.length).replace(/^\s*[-–—:_]\s*/, "").trim();
+      if (rest) return rest.charAt(0).toUpperCase() + rest.slice(1);
+    }
+    return label;
+  };
+
   return (
     <section style={{ ...(hideHeader ? { padding: 8 } : { borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10 }), display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
       {!hideHeader && (
@@ -394,6 +422,10 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                       />
                     ) : (
                       <span
+                        role="button"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: index } }));
+                        }}
                         style={{
                           minWidth: 0,
                           color: "var(--tx0)",
@@ -402,12 +434,11 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                           fontWeight: isActiveStep ? 600 : 400,
+                          cursor: "pointer",
                         }}
-                        title={getStepLabel(step)}
+                        title={`Click to preview: ${getStepLabel(step)}`}
                       >
-                        {getStepLabel(step).length > 28
-                          ? getStepLabel(step).slice(0, 26) + "\u2026"
-                          : getStepLabel(step)}
+                        {cleanStepLabel(getStepLabel(step))}
                       </span>
                     )}
 
@@ -443,16 +474,6 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                       </button>
                       <button
                         className="btn"
-                        style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
-                        title="Preview this step's data"
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: index } }));
-                        }}
-                      >
-                        👁
-                      </button>
-                      <button
-                        className="btn"
                         style={{ height: 20, width: 20, padding: 0 }}
                         title={steps.length > 1 && index < steps.length - 1 ? "Surgical remove (re-runs downstream steps)" : "Remove step"}
                         onClick={() => handleSurgicalRemove(step.id)}
@@ -474,8 +495,8 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                     />
                   </div>
 
-                  {/* Row 2: input → output table flow */}
-                  {(step.input_tables?.length || step.output_table) ? (
+                  {/* Row 2: input → output table flow (only when SQL expanded) */}
+                  {isSqlExpanded && (step.input_tables?.length || step.output_table) ? (
                     <div style={{ paddingLeft: 24, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                       {step.input_tables?.map((t) => (
                         <span key={t} className="mono" style={{ fontSize: 10, color: "var(--tx1)", background: "var(--bg2)", borderRadius: 3, padding: "1px 4px", border: "1px solid var(--bd)" }}>
@@ -565,28 +586,68 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
 
       {open ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          <style>{`
+            @keyframes pipeline-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+            @keyframes pipeline-glow{0%,100%{box-shadow:0 0 20px rgba(91,106,240,0.4)}50%{box-shadow:0 0 36px rgba(124,58,237,0.6)}}
+            @keyframes pipeline-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+          `}</style>
           <button
-            onClick={() => { if (onRunPipeline) void onRunPipeline(); else void runPipeline(); }}
-            disabled={!steps.length}
+            onClick={() => void handleRun()}
+            disabled={!steps.length || running}
             style={{
               width: "100%",
-              borderRadius: 7,
-              padding: 10,
+              borderRadius: 8,
+              padding: "12px 10px",
               fontSize: 13,
               fontWeight: 600,
               color: "#fff",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 7,
-              background: steps.length ? "var(--ac)" : "var(--bg3)",
-              boxShadow: steps.length ? "0 2px 12px rgba(91,106,240,0.25)" : "none",
-              cursor: steps.length ? "pointer" : "not-allowed",
+              gap: 8,
+              background: running
+                ? "linear-gradient(135deg, #5b6af0, #7c3aed, #5b6af0)"
+                : runSuccess
+                  ? "linear-gradient(135deg, #059669, #22c55e)"
+                  : steps.length
+                    ? "var(--ac)"
+                    : "var(--bg3)",
+              backgroundSize: running ? "200% 100%" : "100% 100%",
+              animation: running ? "pipeline-shimmer 2s ease infinite, pipeline-glow 1.5s ease-in-out infinite" : "none",
+              boxShadow: running
+                ? "0 0 24px rgba(91,106,240,0.5)"
+                : runSuccess
+                  ? "0 0 20px rgba(34,197,94,0.4)"
+                  : steps.length
+                    ? "0 2px 12px rgba(91,106,240,0.25)"
+                    : "none",
+              cursor: (!steps.length || running) ? "not-allowed" : "pointer",
               opacity: steps.length ? 1 : 0.5,
+              transition: "all 0.35s cubic-bezier(0.4,0,0.2,1)",
+              position: "relative",
+              overflow: "hidden",
             }}
           >
-            <IconPlay size={14} />
-            Run Applied Steps
+            {running ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ animation: "pipeline-spin 0.8s linear infinite" }}>
+                  <path d="M21 12a9 9 0 1 1-6.2-8.55" strokeLinecap="round" />
+                </svg>
+                Running pipeline…
+              </>
+            ) : runSuccess ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Pipeline complete
+              </>
+            ) : (
+              <>
+                <IconPlay size={14} />
+                Run Applied Steps
+              </>
+            )}
           </button>
 
           <button className="btn" style={{ width: "100%" }} onClick={() => handleUndoLast()} disabled={!steps.length || undoing}>

@@ -180,6 +180,13 @@ export function WorkspacePage() {
   // Clear in-session view state whenever the user switches to a different source dataset.
   // PipelineContext handles loading the correct steps for each dataset independently.
   // Skip clearing when agent.done triggered the switch (skipNextClearRef is set).
+  // Switch to cleaned view when user clicks LIVE artifact in sidebar
+  useEffect(() => {
+    function handleViewLive() { setShowingOriginal(false); }
+    window.addEventListener("datahub:view:live", handleViewLive);
+    return () => window.removeEventListener("datahub:view:live", handleViewLive);
+  }, []);
+
   const prevActiveDatasetRef = useRef<string | null>(activeDataset?.id ?? null);
   useEffect(() => {
     const prev = prevActiveDatasetRef.current;

@@ -67,7 +67,7 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
         <div style={{ position: "relative" }}>
           <button
             className="btn"
-            style={{ width: 22, height: 22, padding: 0 }}
+            style={{ width: 22, height: 22, padding: 0, display: "grid", placeItems: "center" }}
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Add data"
             title="Add data"

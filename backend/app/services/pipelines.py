@@ -19,6 +19,7 @@ from ..services.archival import schedule_archival_job
 from ..services.tenant_isolation_monitor import schedule_tenant_isolation_job
 from ..services.storage_cleanup import schedule_storage_cleanup_job
 from ..services.trash_retention import schedule_trash_retention_job
+from ..services.snapshot_retention import schedule_snapshot_retention_job
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -71,6 +72,7 @@ def start_scheduler() -> None:
     schedule_tenant_isolation_job(scheduler)
     schedule_storage_cleanup_job(scheduler)
     schedule_trash_retention_job(scheduler)
+    schedule_snapshot_retention_job(scheduler)
     _load_jobs()
 
 

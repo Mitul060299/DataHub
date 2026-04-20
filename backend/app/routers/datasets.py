@@ -717,6 +717,7 @@ def get_pipeline_steps(
                     "row_count_before": s.get("row_count_before"),
                     "row_count_after": s.get("row_count_after"),
                     "execution_time_ms": s.get("execution_time_ms"),
+                    "snapshot_path": s.get("snapshot_path"),
                 })
             return {"dataset_id": dataset_id, "steps": normalized}
     except Exception:
@@ -895,15 +896,25 @@ def snapshot_preview(
     role = get_current_role(authorization)
     require_role("viewer", role)
     snapshot_path = (payload.get("snapshot_path") or "").strip()
-    limit = min(int(payload.get("limit", 200)), 1000)
-    offset = max(int(payload.get("offset", 0)), 0)
     if not snapshot_path:
         raise HTTPException(status_code=422, detail="snapshot_path is required")
 
-    # Verify the snapshot belongs to this dataset (prevents path traversal via
-    # a forged snapshot_path pointing to another user's data).
-    if dataset_id not in snapshot_path:
-        raise HTTPException(status_code=403, detail="snapshot_path does not belong to this dataset")
+    try:
+        limit = min(int(payload.get("limit", 200)), 1000)
+        offset = max(int(payload.get("offset", 0)), 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="limit and offset must be integers")
+
+    # Ownership check: verify this exact path is stored against this dataset.
+    # This is a strict DB lookup — no substring tricks that an attacker could
+    # bypass by embedding the dataset_id inside a crafted path.
+    from ..models_db import PipelineStepDB as _PSdb
+    owned = db.query(_PSdb).filter(
+        _PSdb.dataset_id == dataset_id,
+        _PSdb.snapshot_path == snapshot_path,
+    ).first()
+    if not owned:
+        raise HTTPException(status_code=403, detail="snapshot_path not found for this dataset")
 
     try:
         from ..services.object_storage import StorageService
@@ -912,23 +923,20 @@ def snapshot_preview(
         import duckdb as _ddb
         con = _ddb.connect(database=":memory:")
         try:
+            # Single pass: fetch rows and total count together via window function.
             result = con.execute(
-                "SELECT * FROM read_parquet(?) LIMIT ? OFFSET ?",
+                "SELECT *, COUNT(*) OVER () AS _dh_total FROM read_parquet(?) LIMIT ? OFFSET ?",
                 [query_path, limit, offset],
             )
-            columns = [desc[0] for desc in result.description]
+            all_cols = [desc[0] for desc in result.description]
+            data_cols = [c for c in all_cols if c != "_dh_total"]
             raw_rows = result.fetchall()
-            rows = [dict(zip(columns, row)) for row in raw_rows]
-
-            count_result = con.execute(
-                "SELECT COUNT(*) FROM read_parquet(?)",
-                [query_path],
-            ).fetchone()
-            total = int(count_result[0]) if count_result else len(rows)
+            total = int(raw_rows[0][all_cols.index("_dh_total")]) if raw_rows else 0
+            rows = [dict(zip(data_cols, [r[i] for i, c in enumerate(all_cols) if c != "_dh_total"])) for r in raw_rows]
         finally:
             con.close()
 
-        return {"rows": rows, "columns": columns, "count": total}
+        return {"rows": rows, "columns": data_cols, "count": total}
     except HTTPException:
         raise
     except Exception as exc:

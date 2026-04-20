@@ -100,6 +100,18 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         if (sp && dataset?.id) {
           return fetchSnapshotPreview(dataset.id, sp, 100);
         }
+        const tbl = s.output_table || (typeof s.rawConfig?.output_table === "string" ? s.rawConfig.output_table : undefined);
+        if (tbl && dataset?.id && liveArtifact?.sessionId) {
+          return fetchStepPreview(dataset.id, liveArtifact.sessionId, tbl, 100, 0,
+            steps.map((st, i) => ({
+              step_number: st.stepNumber ?? i + 1,
+              operation: st.operation,
+              description: st.description,
+              sql: st.sql ?? st.rawConfig?.sql ?? "",
+              output_table: st.output_table ?? st.rawConfig?.output_table ?? "",
+            })).filter((st) => st.sql && st.output_table),
+          );
+        }
         if (s.outputDataset?.id) {
           return fetchDatasetPage(s.outputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>;
         }
@@ -123,7 +135,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     }
     window.addEventListener("datahub:compare:step", handleCompare);
     return () => window.removeEventListener("datahub:compare:step", handleCompare);
-  }, [steps, dataset?.id]);
+  }, [steps, dataset?.id, liveArtifact]);
 
   // Reset diff when steps change or dataset changes
   useEffect(() => { setDiffStep(null); setDiffBefore(null); setDiffAfter(null); }, [dataset?.id]);

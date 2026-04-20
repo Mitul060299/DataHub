@@ -1,6 +1,6 @@
 import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import {
   IconBrain,
   IconCheck,
@@ -18,7 +18,7 @@ import { submitFeedbackForm, submitReview, getApprovedReviews, type ReviewOut } 
 import "./HomePage.css";
 
 /* ===========================================================================
-   STATIC CONTENT
+   STATIC CONTENT (ASCII-only)
    =========================================================================== */
 
 const howSteps = [
@@ -28,7 +28,7 @@ const howSteps = [
     icon: <IconUpload size={18} color="#22c55e" />,
     title: "Upload your data",
     description:
-      "CSV, Excel, JSON, Parquet — or connect directly to PostgreSQL, Snowflake, BigQuery, or Redshift.",
+      "CSV, Excel, JSON, Parquet. Or connect directly to PostgreSQL, Snowflake, BigQuery, Redshift.",
   },
   {
     step: "02",
@@ -36,7 +36,7 @@ const howSteps = [
     icon: <IconBrain size={18} color="#a78bfa" />,
     title: "Ask in plain English",
     description:
-      "“Remove duplicates”, “join with customers”, “show revenue by region as a bar chart” — the agent understands.",
+      'Say "remove duplicates", "join with customers", or "show revenue by region as a bar chart". The agent understands.',
   },
   {
     step: "03",
@@ -52,52 +52,67 @@ const howSteps = [
     icon: <IconShare size={18} color="#38bdf8" />,
     title: "Share & publish",
     description:
-      "Publish dashboards with one link. Every step recorded and replayable — full audit trail included.",
+      "Publish dashboards with one link. Every step recorded and replayable. Full audit trail included.",
   },
 ];
 
-const features = [
+type Feature = {
+  title: string;
+  color: string;
+  icon: JSX.Element;
+  description: string;
+  span: "lg" | "md" | "sm" | "tall";
+  visual: "agent" | "pipeline" | "dashboard" | "sources" | "team" | "audit";
+};
+
+const features: Feature[] = [
   {
     title: "AI Agent",
     color: "#a78bfa",
     icon: <IconMessageCircle size={20} color="#a78bfa" />,
-    description:
-      "Plain-English to SQL, with the plan shown before anything runs.",
+    description: "Plain-English to SQL with the plan shown before anything runs.",
+    span: "lg",
+    visual: "agent",
   },
   {
     title: "Recorded Pipelines",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
-    description:
-      "Every transformation captured as a replayable step. Edit, re-run, hand off.",
+    description: "Every transformation captured as a replayable step.",
+    span: "md",
+    visual: "pipeline",
   },
   {
     title: "Cross-Dataset Dashboards",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
-    description:
-      "Power BI-style dashboards across multiple datasets, shareable by link.",
+    description: "Power BI-style dashboards across multiple datasets, shared by link.",
+    span: "md",
+    visual: "dashboard",
   },
   {
     title: "Any Data Source",
     color: "#f59e0b",
     icon: <IconDatabase size={20} color="#f59e0b" />,
-    description:
-      "CSV, Excel, JSON, Parquet. Native connections to Postgres, Snowflake, BigQuery.",
+    description: "CSV, Excel, JSON, Parquet. Native Postgres, Snowflake, BigQuery.",
+    span: "tall",
+    visual: "sources",
   },
   {
     title: "Team Collaboration",
     color: "#ec4899",
     icon: <IconTeam size={20} color="#ec4899" />,
-    description:
-      "Shared workspaces, roles, and version history showing who changed what.",
+    description: "Shared workspaces, roles, and version history.",
+    span: "sm",
+    visual: "team",
   },
   {
     title: "Audit & Governance",
     color: "#f87171",
     icon: <IconShield size={20} color="#f87171" />,
-    description:
-      "Full lineage, approval workflows, audit logs — SOC2-ready foundations.",
+    description: "Full lineage, approval workflows, audit logs. SOC2-ready.",
+    span: "sm",
+    visual: "audit",
   },
 ];
 
@@ -145,13 +160,13 @@ const plans: PricingPlan[] = [
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "1 personal workspace · 1 seat",
+      "1 personal workspace, 1 seat",
       "20 projects per workspace",
       "2,000 AI messages/month",
       "1 GB file size",
       "20 GB storage",
       "50 GB data scan/month",
-      "DB connections: PostgreSQL, MySQL, SQLite, MSSQL, Oracle",
+      "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle",
       "Email support",
     ],
     buttonLabel: "Start free trial",
@@ -166,13 +181,13 @@ const plans: PricingPlan[] = [
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "Includes 3 seats · +\u20b92,499/extra seat",
+      "Includes 3 seats. +\u20b92,499/extra seat",
       "1 personal + 2 collab workspaces",
       "5,000+ AI messages (scales with seats)",
       "5 GB file size",
       "100 GB+ storage (scales with seats)",
       "200 GB+ data scan/month",
-      "DB connections: + Snowflake, Redshift, BigQuery",
+      "DB: + Snowflake, Redshift, BigQuery",
       "Audit log",
       "Priority email support",
     ],
@@ -188,12 +203,12 @@ const plans: PricingPlan[] = [
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "Includes 5 seats · +\u20b93,999/extra seat",
+      "Includes 5 seats. +\u20b93,999/extra seat",
       "1 personal + 9 collab workspaces",
       "Unlimited AI messages",
       "10 GB file size",
       "2 TB storage + unlimited scan",
-      "DB connections: + Custom connectors",
+      "DB: + Custom connectors",
       "Audit log",
       "SSO / SAML",
       "24/7 dedicated support",
@@ -229,29 +244,29 @@ const plans: PricingPlan[] = [
 
 const myths = [
   {
-    myth: "“It's a black box — I have no idea what it's doing to my data.”",
+    myth: 'It is a black box. I have no idea what it is doing to my data.',
     reality:
       "Every action is a named step shown to you before it runs. You see the exact SQL or operation, then choose Approve, Edit, or Reject. Nothing executes without your go-ahead.",
   },
   {
-    myth: "“The AI will hallucinate results or make up numbers.”",
+    myth: 'The AI will hallucinate results or make up numbers.',
     reality:
-      "DataHub runs real, deterministic SQL on your actual data. The AI writes the query — your data produces the result. No generation, no guessing, no invented rows.",
+      "DataHub runs real, deterministic SQL on your actual data. The AI writes the query. Your data produces the result. No generation, no guessing, no invented rows.",
   },
   {
-    myth: "“I'll lose control of my pipeline once the AI builds it.”",
+    myth: 'I will lose control of my pipeline once the AI builds it.',
     reality:
-      "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours — the AI is just the author.",
+      "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours. The AI is just the author.",
   },
   {
-    myth: "“My sensitive data is being sent somewhere unsafe.”",
+    myth: 'My sensitive data is being sent somewhere unsafe.',
     reality:
-      "Your data is stored in our encrypted, isolated cloud storage — never shared between accounts. We never use your data to train our AI. Full audit logs record every access, by whom, and when.",
+      "Your data is stored in our encrypted, isolated cloud storage, never shared between accounts. We never use your data to train our AI. Full audit logs record every access.",
   },
   {
-    myth: "“It only works on clean, nicely formatted CSVs.”",
+    myth: 'It only works on clean, nicely formatted CSVs.',
     reality:
-      "DataHub was built specifically for the messy real world — auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel out of the box.",
+      "DataHub was built for the messy real world. Auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel out of the box.",
   },
 ];
 
@@ -265,6 +280,22 @@ const DEMO_QUERIES = [
   "Export cleaned data to Google Sheets",
 ];
 
+const MARQUEE_ITEMS = [
+  "PostgreSQL",
+  "Snowflake",
+  "BigQuery",
+  "Redshift",
+  "MySQL",
+  "MSSQL",
+  "Oracle",
+  "SQLite",
+  "CSV",
+  "Excel",
+  "JSON",
+  "Parquet",
+  "Google Sheets",
+];
+
 const SUPPORT_EMAIL = "mitul.srivastava000@gmail.com";
 
 /* ===========================================================================
@@ -275,10 +306,22 @@ export function HomePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const mainRef = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ container: mainRef });
-  const progressOpacity = useTransform(scrollYProgress, [0, 0.01, 1], [0, 1, 1]);
+  const heroRef = useRef<HTMLElement>(null);
 
-  /* Feedback state */
+  const { scrollYProgress } = useScroll({ container: mainRef });
+  const progressOpacity = useTransform(scrollYProgress, [0, 0.005, 1], [0, 1, 1]);
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 120, damping: 28, mass: 0.4 });
+
+  const { scrollYProgress: heroProgress } = useScroll({
+    target: heroRef,
+    container: mainRef,
+    offset: ["start start", "end start"],
+  });
+  const heroOrbY = useTransform(heroProgress, [0, 1], [0, 180]);
+  const heroContentY = useTransform(heroProgress, [0, 1], [0, -60]);
+  const heroContentOpacity = useTransform(heroProgress, [0, 0.7], [1, 0.2]);
+  const heroBgScale = useTransform(heroProgress, [0, 1], [1, 1.1]);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
@@ -288,7 +331,6 @@ export function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successName, setSuccessName] = useState<string | null>(null);
 
-  /* Reviews state */
   const [approvedReviews, setApprovedReviews] = useState<ReviewOut[]>([]);
   const [reviewerName, setReviewerName] = useState("");
   const [reviewerRole, setReviewerRole] = useState("");
@@ -298,7 +340,6 @@ export function HomePage() {
   const [reviewSuccess, setReviewSuccess] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
-  /* Accordion state for myths */
   const [openMyth, setOpenMyth] = useState<number | null>(null);
 
   useEffect(() => {
@@ -307,7 +348,6 @@ export function HomePage() {
       .catch(() => {});
   }, []);
 
-  /* Currency */
   const [currency, setCurrency] = useState<"USD" | "INR">("USD");
   const [showWaitlistToast, setShowWaitlistToast] = useState(false);
   const [waitlistModal, setWaitlistModal] = useState<{ plan: string } | null>(null);
@@ -315,7 +355,6 @@ export function HomePage() {
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistDone, setWaitlistDone] = useState(false);
 
-  /* Demo queries animation */
   const [demoQueryIdx, setDemoQueryIdx] = useState(0);
   const [demoQueryFade, setDemoQueryFade] = useState(true);
   const demoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -336,16 +375,22 @@ export function HomePage() {
     };
   }, []);
 
-  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     fetch("https://ipapi.co/json/")
       .then((r) => r.json())
-      .then((d) => { if (d?.country_code === "IN") setCurrency("INR"); })
+      .then((d) => {
+        if (d?.country_code === "IN") setCurrency("INR");
+      })
       .catch(() => {});
   }, []);
 
-  /* Handlers */
   const handleWaitlist = (planName: string) => {
     setWaitlistEmail("");
     setWaitlistDone(false);
@@ -455,7 +500,87 @@ export function HomePage() {
     }
   };
 
-  /* Pricing helper */
+  const handleMagneticMove = (e: React.MouseEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    el.style.setProperty("--mx", `${x}%`);
+    el.style.setProperty("--my", `${y}%`);
+  };
+
+  const renderFeatureVisual = (kind: Feature["visual"]) => {
+    switch (kind) {
+      case "agent":
+        return (
+          <div className="bento-visual bento-visual-agent">
+            <div className="agent-msg user">Show revenue by region this quarter</div>
+            <div className="agent-msg ai">
+              <span className="agent-step">Step 1</span> Group orders by region
+            </div>
+            <div className="agent-msg ai">
+              <span className="agent-step">Step 2</span> Sum revenue, sort desc
+            </div>
+            <div className="agent-msg ai">
+              <span className="agent-step">Step 3</span> Render bar chart
+            </div>
+          </div>
+        );
+      case "pipeline":
+        return (
+          <div className="bento-visual bento-visual-pipeline">
+            {["Load", "Clean", "Join", "Aggregate", "Export"].map((s, i) => (
+              <div key={s} className="pipe-node" style={{ animationDelay: `${i * 0.15}s` }}>
+                {s}
+              </div>
+            ))}
+          </div>
+        );
+      case "dashboard":
+        return (
+          <div className="bento-visual bento-visual-dashboard">
+            <div className="bar" style={{ height: "60%" }} />
+            <div className="bar" style={{ height: "85%" }} />
+            <div className="bar" style={{ height: "45%" }} />
+            <div className="bar" style={{ height: "95%" }} />
+            <div className="bar" style={{ height: "70%" }} />
+          </div>
+        );
+      case "sources":
+        return (
+          <div className="bento-visual bento-visual-sources">
+            {["PG", "SF", "BQ", "RS", "MY", "MS", "CSV", "XLS"].map((s) => (
+              <div key={s} className="src-chip">
+                {s}
+              </div>
+            ))}
+          </div>
+        );
+      case "team":
+        return (
+          <div className="bento-visual bento-visual-team">
+            <div className="avatar a1">M</div>
+            <div className="avatar a2">A</div>
+            <div className="avatar a3">+</div>
+          </div>
+        );
+      case "audit":
+        return (
+          <div className="bento-visual bento-visual-audit">
+            <div className="audit-row">
+              <span className="dot" /> approved
+            </div>
+            <div className="audit-row">
+              <span className="dot" /> approved
+            </div>
+            <div className="audit-row">
+              <span className="dot" /> approved
+            </div>
+          </div>
+        );
+    }
+  };
+
   const renderPricingCard = (plan: PricingPlan, idx: number, highlight = false) => {
     const buttonClass = [
       "pricing-button",
@@ -478,9 +603,11 @@ export function HomePage() {
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.45, delay: idx * 0.08, ease: "easeOut" }}
-        whileHover={{ y: -6, transition: { duration: 0.2 } }}
+        transition={{ duration: 0.45, delay: idx * 0.06, ease: "easeOut" }}
+        whileHover={{ y: -8 }}
+        onMouseMove={handleMagneticMove}
       >
+        <div className="card-glow" />
         <p className="pricing-tier">{plan.tier}</p>
         <p className="pricing-price">{currency === "INR" ? plan.priceINR : plan.priceUSD}</p>
         <p className="pricing-period">{currency === "INR" ? plan.periodINR : plan.periodUSD}</p>
@@ -510,27 +637,27 @@ export function HomePage() {
     );
   };
 
-  /* ===========================================================================
-     RENDER
-     =========================================================================== */
   return (
     <main className="app-page home-page" ref={mainRef}>
-      {/* Scroll progress at very top, behind nothing else */}
       <motion.div
         className="scroll-progress-bar"
-        style={{ scaleX: scrollYProgress, opacity: progressOpacity }}
+        style={{ scaleX: smoothProgress, opacity: progressOpacity }}
       />
 
-      {/* ============================== HERO ============================== */}
-      <section className="hero">
-        <div className="hero-bg">
+      {/* HERO */}
+      <section className="hero" ref={heroRef}>
+        <motion.div className="hero-bg" style={{ y: heroOrbY, scale: heroBgScale }}>
           <div className="hero-orb hero-orb-1" />
           <div className="hero-orb hero-orb-2" />
           <div className="hero-orb hero-orb-3" />
           <div className="hero-grid-lines" />
-        </div>
+          <div className="hero-noise" />
+        </motion.div>
 
-        <div className="hero-content">
+        <motion.div
+          className="hero-content"
+          style={{ y: heroContentY, opacity: heroContentOpacity }}
+        >
           <motion.div
             className="hero-badge"
             initial={{ opacity: 0, y: -12 }}
@@ -538,7 +665,7 @@ export function HomePage() {
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
             <span className="hero-badge-dot" />
-            Beta live — help us improve
+            Beta live. Help us improve.
           </motion.div>
 
           <motion.h1
@@ -548,7 +675,8 @@ export function HomePage() {
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
             The data tool that lets you{" "}
-            <span className="hero-gradient-text">see exactly</span>{" "}
+            <span className="hero-gradient-text">see exactly</span>
+            <br />
             what it&apos;s doing
           </motion.h1>
 
@@ -558,22 +686,19 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            Describe what you want. DataHub builds a step-by-step plan with the exact SQL — you
-            review and approve before anything touches your data.
+            Describe what you want. DataHub builds a step-by-step plan with the exact SQL.
+            You review and approve before anything touches your data.
           </motion.p>
 
-          {/* Floating prompt-bar */}
           <motion.div
             className="hero-demo-bar"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+            whileHover={{ y: -2, boxShadow: "0 20px 60px rgba(124,58,237,0.35)" }}
           >
-            <span className="hero-demo-prefix">›</span>
-            <span
-              className="hero-demo-inner"
-              style={{ opacity: demoQueryFade ? 1 : 0 }}
-            >
+            <span className="hero-demo-prefix">&gt;</span>
+            <span className="hero-demo-inner" style={{ opacity: demoQueryFade ? 1 : 0 }}>
               {DEMO_QUERIES[demoQueryIdx]}
             </span>
             <button
@@ -599,6 +724,7 @@ export function HomePage() {
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
             >
+              <span className="btn-shine" />
               Get started free
             </motion.button>
             <motion.button
@@ -611,18 +737,93 @@ export function HomePage() {
               See how it works
             </motion.button>
           </motion.div>
+
+          <motion.div
+            className="hero-preview"
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
+          >
+            <div className="preview-window">
+              <div className="window-bar">
+                <span className="dot red" />
+                <span className="dot yellow" />
+                <span className="dot green" />
+                <span className="window-title">DataHub Studio</span>
+              </div>
+              <div className="window-body">
+                <div className="window-sidebar">
+                  <div className="sb-item active">customers.csv</div>
+                  <div className="sb-item">orders.csv</div>
+                  <div className="sb-item">revenue.parquet</div>
+                  <div className="sb-item">+ new</div>
+                </div>
+                <div className="window-main">
+                  <div className="prompt-line">
+                    <span className="prompt-prefix">&gt;</span> clean nulls and join with orders
+                  </div>
+                  <div className="plan-step">
+                    <span className="plan-num">1</span>
+                    <span className="plan-text">Drop rows where email IS NULL</span>
+                    <span className="plan-status">approved</span>
+                  </div>
+                  <div className="plan-step">
+                    <span className="plan-num">2</span>
+                    <span className="plan-text">JOIN orders ON customer_id</span>
+                    <span className="plan-status">approved</span>
+                  </div>
+                  <div className="plan-step running">
+                    <span className="plan-num">3</span>
+                    <span className="plan-text">GROUP BY region, SUM(revenue)</span>
+                    <span className="plan-status running">running</span>
+                  </div>
+                  <div className="mini-chart">
+                    <div className="mini-bar" style={{ height: "55%" }} />
+                    <div className="mini-bar" style={{ height: "82%" }} />
+                    <div className="mini-bar" style={{ height: "40%" }} />
+                    <div className="mini-bar" style={{ height: "92%" }} />
+                    <div className="mini-bar" style={{ height: "68%" }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="preview-glow" />
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* MARQUEE */}
+      <section className="marquee-section">
+        <div className="marquee-label">Connects to</div>
+        <div className="marquee">
+          <div className="marquee-track">
+            {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
+              <span key={`${item}-${i}`} className="marquee-item">
+                {item}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ============================== HOW IT WORKS ============================== */}
+      {/* HOW */}
       <section id="how" className="section section-how">
-        <div className="section-header">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="section-eyebrow">Workflow</p>
-          <h2 className="section-title">From data to dashboard in four steps</h2>
+          <h2 className="section-title">
+            From data to dashboard{" "}
+            <span className="hero-gradient-text">in four steps</span>
+          </h2>
           <p className="section-subtitle">
-            Every action is transparent, reviewable, and replayable. You stay in control end-to-end.
+            Every action is transparent, reviewable, and replayable. You stay in control end to end.
           </p>
-        </div>
+        </motion.div>
 
         <div className="how-grid">
           {howSteps.map((s, i) => (
@@ -630,12 +831,14 @@ export function HomePage() {
               key={s.step}
               className="how-card"
               style={{ "--step-color": s.color } as CSSProperties}
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 32 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.45, delay: i * 0.08, ease: "easeOut" }}
-              whileHover={{ y: -6 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.5, delay: i * 0.1, ease: "easeOut" }}
+              whileHover={{ y: -8 }}
+              onMouseMove={handleMagneticMove}
             >
+              <div className="card-glow" />
               <div className="how-step-number">{s.step}</div>
               <div className="how-step-icon">{s.icon}</div>
               <h3 className="how-step-title">{s.title}</h3>
@@ -645,41 +848,64 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ============================== FEATURES ============================== */}
+      {/* FEATURES BENTO */}
       <section className="section section-features">
-        <div className="section-header">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="section-eyebrow">Capabilities</p>
-          <h2 className="section-title">Everything you need to ship clean data</h2>
+          <h2 className="section-title">
+            Everything you need to{" "}
+            <span className="hero-gradient-text">ship clean data</span>
+          </h2>
           <p className="section-subtitle">
             Built for the messy, real-world data that breaks every other tool.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="features-grid">
+        <div className="bento-grid">
           {features.map((f, i) => (
             <motion.article
               key={f.title}
-              className="feature-card"
+              className={`bento-card bento-${f.span}`}
               style={{ "--feat-color": f.color } as CSSProperties}
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 32 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.45, delay: i * 0.06, ease: "easeOut" }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.5, delay: i * 0.08, ease: "easeOut" }}
               whileHover={{ y: -6 }}
+              onMouseMove={handleMagneticMove}
             >
-              <div className="feature-icon">{f.icon}</div>
-              <h3 className="feature-title">{f.title}</h3>
-              <p className="feature-description">{f.description}</p>
+              <div className="card-glow" />
+              <div className="bento-content">
+                <div className="feature-icon">{f.icon}</div>
+                <h3 className="feature-title">{f.title}</h3>
+                <p className="feature-description">{f.description}</p>
+              </div>
+              {renderFeatureVisual(f.visual)}
             </motion.article>
           ))}
         </div>
       </section>
 
-      {/* ============================== PRICING ============================== */}
+      {/* PRICING */}
       <section id="pricing" className="section section-pricing">
-        <div className="section-header">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="section-eyebrow">Pricing</p>
-          <h2 className="section-title">Simple, transparent pricing</h2>
+          <h2 className="section-title">
+            Simple,{" "}
+            <span className="hero-gradient-text">transparent</span> pricing
+          </h2>
           <p className="section-subtitle">
             Start free. Upgrade when your team is ready. No surprises.
           </p>
@@ -699,22 +925,28 @@ export function HomePage() {
               INR
             </button>
           </div>
-        </div>
+        </motion.div>
 
         <div className="pricing-grid">
           {plans.map((plan, idx) => renderPricingCard(plan, idx))}
         </div>
       </section>
 
-      {/* ============================== MYTHS ============================== */}
+      {/* MYTHS */}
       <section className="section section-myths">
-        <div className="section-header">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="section-eyebrow">Why DataHub is different</p>
           <h2 className="section-title">Common concerns about AI data tools</h2>
           <p className="section-subtitle">
             We built DataHub specifically to address every one of these.
           </p>
-        </div>
+        </motion.div>
 
         <div className="myths-list">
           {myths.map((m, i) => (
@@ -741,33 +973,44 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ============================== REVIEWS ============================== */}
+      {/* REVIEWS */}
       <section className="section section-reviews">
-        <div className="section-header">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="section-eyebrow">Reviews</p>
           <h2 className="section-title">What early users are saying</h2>
-        </div>
+        </motion.div>
 
         {approvedReviews.length > 0 ? (
           <div className="reviews-grid">
-            {approvedReviews.slice(0, 6).map((r) => (
+            {approvedReviews.slice(0, 6).map((r, i) => (
               <motion.article
                 key={r.id}
                 className="review-card"
-                initial={{ opacity: 0, y: 16 }}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.4 }}
+                transition={{ duration: 0.4, delay: i * 0.05 }}
+                whileHover={{ y: -4 }}
+                onMouseMove={handleMagneticMove}
               >
+                <div className="card-glow" />
                 <div className="review-stars">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <span key={i} className={i < r.rating ? "star filled" : "star"}>?</span>
+                  {Array.from({ length: 5 }).map((_, k) => (
+                    <span key={k} className={k < r.rating ? "star filled" : "star"}>
+                      *
+                    </span>
                   ))}
                 </div>
-                <p className="review-body">“{r.body}”</p>
+                <p className="review-body">&quot;{r.body}&quot;</p>
                 <p className="review-author">
                   <strong>{r.name}</strong>
-                  {r.role ? <span className="review-role"> · {r.role}</span> : null}
+                  {r.role ? <span className="review-role"> &middot; {r.role}</span> : null}
                 </p>
               </motion.article>
             ))}
@@ -780,7 +1023,7 @@ export function HomePage() {
           <h3 className="review-form-title">Share your experience</h3>
           {reviewSuccess ? (
             <div className="form-success">
-              Thank you — your review has been submitted for moderation.
+              Thank you. Your review has been submitted for moderation.
             </div>
           ) : (
             <form className="review-form" onSubmit={handleReviewSubmit}>
@@ -809,13 +1052,13 @@ export function HomePage() {
                     onClick={() => setReviewRating(n)}
                     aria-label={`${n} star${n > 1 ? "s" : ""}`}
                   >
-                    ?
+                    *
                   </button>
                 ))}
               </div>
               <textarea
                 className="form-textarea"
-                placeholder="Tell us what worked, what didn't, what you'd love to see…"
+                placeholder="Tell us what worked, what did not, what you would love to see..."
                 rows={4}
                 value={reviewBody}
                 onChange={(e) => setReviewBody(e.target.value)}
@@ -823,27 +1066,34 @@ export function HomePage() {
               />
               {reviewError ? <div className="form-error">{reviewError}</div> : null}
               <button type="submit" className="btn-primary-lg" disabled={reviewSubmitting}>
-                {reviewSubmitting ? "Submitting…" : "Submit review"}
+                <span className="btn-shine" />
+                {reviewSubmitting ? "Submitting..." : "Submit review"}
               </button>
             </form>
           )}
         </div>
       </section>
 
-      {/* ============================== FEEDBACK ============================== */}
+      {/* FEEDBACK */}
       <section id="feedback" className="section section-feedback">
-        <div className="section-header">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="section-eyebrow">Get in touch</p>
           <h2 className="section-title">Have feedback or a question?</h2>
           <p className="section-subtitle">
-            We read everything. Tell us what you need — feature, bug, integration, or anything else.
+            We read everything. Tell us what you need: feature, bug, integration, or anything else.
           </p>
-        </div>
+        </motion.div>
 
         <div className="feedback-card">
           {successName ? (
             <div className="form-success">
-              Thanks, {successName} — we&apos;ll get back to you shortly.
+              Thanks, {successName}. We will get back to you shortly.
             </div>
           ) : (
             <form className="feedback-form" onSubmit={handleFeedbackSubmit}>
@@ -878,7 +1128,7 @@ export function HomePage() {
               </div>
               <textarea
                 className="form-textarea"
-                placeholder="Your message…"
+                placeholder="Your message..."
                 rows={5}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -887,20 +1137,29 @@ export function HomePage() {
               {validationError ? <div className="form-error">{validationError}</div> : null}
               {requestError ? <div className="form-error">{requestError}</div> : null}
               <button type="submit" className="btn-primary-lg" disabled={isSubmitting}>
-                {isSubmitting ? "Sending…" : "Send message"}
+                <span className="btn-shine" />
+                {isSubmitting ? "Sending..." : "Send message"}
               </button>
             </form>
           )}
         </div>
       </section>
 
-      {/* ============================== CTA ============================== */}
+      {/* CTA */}
       <section className="section section-cta">
-        <div className="cta-card">
-          <h2 className="home-cta-title">Ready to ship clean data?</h2>
-          <p className="cta-sub">
-            Start free in seconds. No credit card. Upgrade anytime.
-          </p>
+        <motion.div
+          className="cta-card"
+          initial={{ opacity: 0, scale: 0.96 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="cta-glow" />
+          <h2 className="home-cta-title">
+            Ready to ship{" "}
+            <span className="hero-gradient-text">clean data?</span>
+          </h2>
+          <p className="cta-sub">Start free in seconds. No credit card. Upgrade anytime.</p>
           <div className="hero-buttons">
             <motion.button
               type="button"
@@ -909,16 +1168,17 @@ export function HomePage() {
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
             >
+              <span className="btn-shine" />
               Get started free
             </motion.button>
             <a className="btn-ghost-lg" href={`mailto:${SUPPORT_EMAIL}`}>
               Talk to us
             </a>
           </div>
-        </div>
+        </motion.div>
       </section>
 
-      {/* ============================== FOOTER ============================== */}
+      {/* FOOTER */}
       <footer className="home-footer">
         <div className="footer-grid">
           <div>
@@ -933,21 +1193,19 @@ export function HomePage() {
             <a className="footer-link" href={`mailto:${SUPPORT_EMAIL}`}>Contact</a>
           </div>
         </div>
-        <p className="footer-copy">© {new Date().getFullYear()} DataHub. All rights reserved.</p>
+        <p className="footer-copy">
+          (c) {new Date().getFullYear()} DataHub. All rights reserved.
+        </p>
       </footer>
 
-      {/* ============================== WAITLIST MODAL ============================== */}
+      {/* WAITLIST MODAL */}
       {waitlistModal && (
         <div className="modal-backdrop" onClick={() => setWaitlistModal(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h3 className="modal-title">Join the {waitlistModal.plan} waitlist</h3>
-            <p className="modal-sub">
-              We&apos;ll let you know the moment it&apos;s available.
-            </p>
+            <p className="modal-sub">We will let you know the moment it is available.</p>
             {waitlistDone ? (
-              <div className="form-success">
-                You&apos;re on the list. Talk soon.
-              </div>
+              <div className="form-success">You are on the list. Talk soon.</div>
             ) : (
               <form onSubmit={handleWaitlistSubmit} className="modal-form">
                 <input
@@ -960,7 +1218,8 @@ export function HomePage() {
                   autoFocus
                 />
                 <button type="submit" className="btn-primary-lg" disabled={waitlistSubmitting}>
-                  {waitlistSubmitting ? "Joining…" : "Join waitlist"}
+                  <span className="btn-shine" />
+                  {waitlistSubmitting ? "Joining..." : "Join waitlist"}
                 </button>
               </form>
             )}
@@ -970,7 +1229,7 @@ export function HomePage() {
               onClick={() => setWaitlistModal(null)}
               aria-label="Close"
             >
-              ×
+              x
             </button>
           </div>
         </div>
@@ -978,7 +1237,7 @@ export function HomePage() {
 
       {showWaitlistToast && (
         <div className="toast">
-          ? You&apos;re on the waitlist — we&apos;ll be in touch!
+          You are on the waitlist. We will be in touch.
         </div>
       )}
     </main>

@@ -1,6 +1,6 @@
-﻿import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
+import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, useScroll } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   IconBrain,
   IconCheck,
@@ -8,7 +8,6 @@ import {
   IconFileText,
   IconGrid,
   IconMessageCircle,
-  IconSend,
   IconShare,
   IconShield,
   IconTeam,
@@ -18,31 +17,31 @@ import { useAuth } from "../contexts/AuthContext";
 import { submitFeedbackForm, submitReview, getApprovedReviews, type ReviewOut } from "../api";
 import "./HomePage.css";
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STATIC DATA
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ===========================================================================
+   STATIC CONTENT
+   =========================================================================== */
 
 const howSteps = [
   {
     step: "01",
     color: "#22c55e",
-    icon: <IconUpload size={16} color="#22c55e" />,
+    icon: <IconUpload size={18} color="#22c55e" />,
     title: "Upload your data",
     description:
-      "CSV, Excel, JSON, Parquet â€” or connect directly to PostgreSQL, Snowflake, BigQuery, or Redshift.",
+      "CSV, Excel, JSON, Parquet � or connect directly to PostgreSQL, Snowflake, BigQuery, or Redshift.",
   },
   {
     step: "02",
-    color: "#818cf8",
-    icon: <IconBrain size={16} color="#818cf8" />,
+    color: "#a78bfa",
+    icon: <IconBrain size={18} color="#a78bfa" />,
     title: "Ask in plain English",
     description:
-      '"Remove duplicates", "join with customers", "show revenue by region as a bar chart" â€” the agent understands.',
+      "�Remove duplicates�, �join with customers�, �show revenue by region as a bar chart� � the agent understands.",
   },
   {
     step: "03",
-    color: "#eab308",
-    icon: <IconCheck size={16} color="#eab308" />,
+    color: "#facc15",
+    icon: <IconCheck size={18} color="#facc15" />,
     title: "Review the plan",
     description:
       "The agent shows exactly what it will do before executing. Approve, edit, or ask it to try again.",
@@ -50,55 +49,55 @@ const howSteps = [
   {
     step: "04",
     color: "#38bdf8",
-    icon: <IconShare size={16} color="#38bdf8" />,
+    icon: <IconShare size={18} color="#38bdf8" />,
     title: "Share & publish",
     description:
-      "Publish dashboards with one link. Every step recorded and replayable â€” full audit trail included.",
+      "Publish dashboards with one link. Every step recorded and replayable � full audit trail included.",
   },
 ];
 
 const features = [
   {
     title: "AI Agent",
-    color: "#818cf8",
-    icon: <IconMessageCircle size={20} color="#818cf8" />,
+    color: "#a78bfa",
+    icon: <IconMessageCircle size={20} color="#a78bfa" />,
     description:
-      "Understands your intent, builds a step-by-step plan with the exact SQL, presents it for your review â€” and only executes after you approve. Retries automatically on failure.",
+      "Plain-English to SQL, with the plan shown before anything runs.",
   },
   {
     title: "Recorded Pipelines",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
     description:
-      "Every transformation captured as a replayable step. Edit, re-run, or hand off â€” always transparent.",
+      "Every transformation captured as a replayable step. Edit, re-run, hand off.",
   },
   {
     title: "Cross-Dataset Dashboards",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
     description:
-      "Build Power BI-style dashboards across multiple datasets. Publish with one click via a shareable public link.",
+      "Power BI-style dashboards across multiple datasets, shareable by link.",
   },
   {
     title: "Any Data Source",
     color: "#f59e0b",
     icon: <IconDatabase size={20} color="#f59e0b" />,
     description:
-      "CSV, Excel, JSON, Parquet. Direct connections to PostgreSQL, MySQL, Snowflake, BigQuery, Redshift.",
+      "CSV, Excel, JSON, Parquet. Native connections to Postgres, Snowflake, BigQuery.",
   },
   {
     title: "Team Collaboration",
-    color: "#a78bfa",
-    icon: <IconTeam size={20} color="#a78bfa" />,
+    color: "#ec4899",
+    icon: <IconTeam size={20} color="#ec4899" />,
     description:
-      "Share workspaces, collaborate on pipelines, assign roles. Version history shows who changed what and when.",
+      "Shared workspaces, roles, and version history showing who changed what.",
   },
   {
     title: "Audit & Governance",
     color: "#f87171",
     icon: <IconShield size={20} color="#f87171" />,
     description:
-      "Full data lineage, approval workflows, audit logs. SOC2-ready controls for compliance-heavy industries.",
+      "Full lineage, approval workflows, audit logs � SOC2-ready foundations.",
   },
 ];
 
@@ -146,7 +145,7 @@ const plans: PricingPlan[] = [
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "1 personal workspace Â· 1 seat",
+      "1 personal workspace � 1 seat",
       "20 projects per workspace",
       "2,000 AI messages/month",
       "1 GB file size",
@@ -161,13 +160,13 @@ const plans: PricingPlan[] = [
   },
   {
     tier: "Team",
-    color: "#5B6AF0",
+    color: "#7c3aed",
     priceUSD: "$299",
     priceINR: "\u20b914,999",
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "Includes 3 seats Â· +â‚¹2,499/extra seat",
+      "Includes 3 seats � +\u20b92,499/extra seat",
       "1 personal + 2 collab workspaces",
       "5,000+ AI messages (scales with seats)",
       "5 GB file size",
@@ -189,7 +188,7 @@ const plans: PricingPlan[] = [
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "Includes 5 seats Â· +â‚¹3,999/extra seat",
+      "Includes 5 seats � +\u20b93,999/extra seat",
       "1 personal + 9 collab workspaces",
       "Unlimited AI messages",
       "10 GB file size",
@@ -230,48 +229,33 @@ const plans: PricingPlan[] = [
 
 const myths = [
   {
-    myth: "\"It's a black box â€” I have no idea what it's doing to my data.\"",
+    myth: "�It's a black box � I have no idea what it's doing to my data.�",
     reality:
       "Every action is a named step shown to you before it runs. You see the exact SQL or operation, then choose Approve, Edit, or Reject. Nothing executes without your go-ahead.",
   },
   {
-    myth: "\"The AI will hallucinate results or make up numbers.\"",
+    myth: "�The AI will hallucinate results or make up numbers.�",
     reality:
-      "DataHub runs real, deterministic SQL on your actual data. The AI writes the query â€” your data produces the result. No generation, no guessing, no invented rows.",
+      "DataHub runs real, deterministic SQL on your actual data. The AI writes the query � your data produces the result. No generation, no guessing, no invented rows.",
   },
   {
-    myth: "\"I'll lose control of my pipeline once the AI builds it.\"",
+    myth: "�I'll lose control of my pipeline once the AI builds it.�",
     reality:
-      "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours â€” the AI is just the author.",
+      "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours � the AI is just the author.",
   },
   {
-    myth: "\"My sensitive data is being sent somewhere unsafe.\"",
+    myth: "�My sensitive data is being sent somewhere unsafe.�",
     reality:
-      "Your data is stored in our encrypted, isolated cloud storage â€” never shared between accounts. We never use your data to train our AI. Full audit logs record every access, by whom, and when.",
+      "Your data is stored in our encrypted, isolated cloud storage � never shared between accounts. We never use your data to train our AI. Full audit logs record every access, by whom, and when.",
   },
   {
-    myth: "\"It only works on clean, nicely formatted CSVs.\"",
+    myth: "�It only works on clean, nicely formatted CSVs.�",
     reality:
-      "DataHub was built specifically for the messy real world â€” auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel out of the box.",
+      "DataHub was built specifically for the messy real world � auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel out of the box.",
   },
 ];
 
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
-
-const metricsStrip = [
-  { number: "10+", label: "Countries served" },
-  { number: "Free", label: "Forever tier" },
-  { number: "0", label: "Lines of code needed" },
-  { number: "100%", label: "Audit trail" },
-];
-
-const heroChips = [
-  { label: "AI Agent", color: "#818cf8" },
-  { label: "Recorded Pipelines", color: "#22c55e" },
-  { label: "Dashboards", color: "#38bdf8" },
-  { label: "Team Collaboration", color: "#a78bfa" },
-  { label: "Full Audit Trail", color: "#f87171" },
-];
 
 const DEMO_QUERIES = [
   "Remove duplicates and fill nulls with averages",
@@ -281,15 +265,18 @@ const DEMO_QUERIES = [
   "Export cleaned data to Google Sheets",
 ];
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const SUPPORT_EMAIL = "mitul.srivastava000@gmail.com";
+
+/* ===========================================================================
    COMPONENT
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   =========================================================================== */
 
 export function HomePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const mainRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ container: mainRef });
+  const progressOpacity = useTransform(scrollYProgress, [0, 0.01, 1], [0, 1, 1]);
 
   /* Feedback state */
   const [name, setName] = useState("");
@@ -332,17 +319,24 @@ export function HomePage() {
   const [demoQueryIdx, setDemoQueryIdx] = useState(0);
   const [demoQueryFade, setDemoQueryFade] = useState(true);
   const demoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     demoTimerRef.current = setInterval(() => {
       setDemoQueryFade(false);
-      setTimeout(() => {
+      fadeTimerRef.current = setTimeout(() => {
         setDemoQueryIdx((i) => (i + 1) % DEMO_QUERIES.length);
         setDemoQueryFade(true);
       }, 350);
     }, 3200);
-    return () => { if (demoTimerRef.current) clearInterval(demoTimerRef.current); };
+    return () => {
+      if (demoTimerRef.current) clearInterval(demoTimerRef.current);
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    };
   }, []);
+
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   useEffect(() => {
     fetch("https://ipapi.co/json/")
@@ -371,7 +365,8 @@ export function HomePage() {
       });
       setWaitlistDone(true);
       setShowWaitlistToast(true);
-      setTimeout(() => setShowWaitlistToast(false), 5000);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setShowWaitlistToast(false), 5000);
     } catch {
       setWaitlistDone(true);
     } finally {
@@ -394,7 +389,7 @@ export function HomePage() {
 
   const handlePlanCta = (action: "trial" | "contact") => {
     if (action === "contact") {
-      window.location.href = "mailto:mitul.srivastava000@gmail.com";
+      window.location.href = `mailto:${SUPPORT_EMAIL}`;
       return;
     }
     navigate(session ? "/workspace" : "/signup");
@@ -425,7 +420,7 @@ export function HomePage() {
       setSubject("");
       setMessage("");
     } catch {
-      setRequestError("Something went wrong. Email us directly at mitul.srivastava000@gmail.com");
+      setRequestError(`Something went wrong. Email us directly at ${SUPPORT_EMAIL}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -495,7 +490,7 @@ export function HomePage() {
           ))}
         </ul>
         {plan.action === "contact" ? (
-          <a className={buttonClass} href="mailto:mitul.srivastava000@gmail.com">
+          <a className={buttonClass} href={`mailto:${SUPPORT_EMAIL}`}>
             {plan.buttonLabel}
           </a>
         ) : plan.action === "checkout" ? (
@@ -515,16 +510,18 @@ export function HomePage() {
     );
   };
 
-  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  /* ===========================================================================
      RENDER
-     â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+     =========================================================================== */
   return (
     <main className="app-page home-page" ref={mainRef}>
-      <motion.div className="scroll-progress-bar" style={{ scaleX: scrollYProgress }} />
+      {/* Scroll progress at very top, behind nothing else */}
+      <motion.div
+        className="scroll-progress-bar"
+        style={{ scaleX: scrollYProgress, opacity: progressOpacity }}
+      />
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          HERO â€“ Full viewport, centered
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ============================== HERO ============================== */}
       <section className="hero">
         <div className="hero-bg">
           <div className="hero-orb hero-orb-1" />
@@ -540,7 +537,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
-            ðŸš€ Beta Live â€” Help us Improve
+            <span className="hero-badge-dot" />
+            Beta live � help us improve
           </motion.div>
 
           <motion.h1
@@ -560,27 +558,34 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            Describe what you want. DataHub builds a step-by-step plan with the exact SQL â€” you
+            Describe what you want. DataHub builds a step-by-step plan with the exact SQL � you
             review and approve before anything touches your data.
           </motion.p>
 
-          {/* â”€â”€ Floating demo bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* Floating prompt-bar */}
           <motion.div
             className="hero-demo-bar"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
           >
+            <span className="hero-demo-prefix">�</span>
             <span
               className="hero-demo-inner"
               style={{ opacity: demoQueryFade ? 1 : 0 }}
             >
               {DEMO_QUERIES[demoQueryIdx]}
             </span>
-            <button type="button" className="hero-demo-btn" onClick={handleGetStarted}>â†‘</button>
+            <button
+              type="button"
+              className="hero-demo-btn"
+              onClick={handleGetStarted}
+              aria-label="Try this prompt"
+            >
+              Try
+            </button>
           </motion.div>
 
-          {/* â”€â”€ CTA buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <motion.div
             className="hero-buttons"
             initial={{ opacity: 0, y: 16 }}
@@ -594,612 +599,388 @@ export function HomePage() {
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
             >
-              â–¶ Get started free
+              Get started free
             </motion.button>
             <motion.button
               type="button"
               className="btn-ghost-lg"
               onClick={handleScrollHow}
-              whileHover={{ scale: 1.03 }}
+              whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
             >
-              See how it works â†“
+              See how it works
             </motion.button>
-          </motion.div>
-
-          <motion.p
-            className="hero-note"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-          >
-            No credit card required Â· Free tier forever
-          </motion.p>
-
-          {/* â”€â”€ Capability chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-          <motion.div
-            className="hero-chips"
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5, ease: "easeOut" }}
-          >
-            {heroChips.map((chip) => (
-              <span key={chip.label} className="hero-chip">
-                <span className="hero-chip-dot" style={{ background: chip.color, boxShadow: `0 0 8px ${chip.color}` }} />
-                {chip.label}
-              </span>
-            ))}
           </motion.div>
         </div>
       </section>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          METRICS BAND
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section className="metrics-band">
-        <div className="metrics-band-inner">
-          {metricsStrip.map((item, i) => (
-            <motion.div
-              key={item.label}
-              className="metric-item"
-              initial={{ opacity: 0, y: 14 }}
+      {/* ============================== HOW IT WORKS ============================== */}
+      <section id="how" className="section section-how">
+        <div className="section-header">
+          <p className="section-eyebrow">Workflow</p>
+          <h2 className="section-title">From data to dashboard in four steps</h2>
+          <p className="section-subtitle">
+            Every action is transparent, reviewable, and replayable. You stay in control end-to-end.
+          </p>
+        </div>
+
+        <div className="how-grid">
+          {howSteps.map((s, i) => (
+            <motion.article
+              key={s.step}
+              className="how-card"
+              style={{ "--step-color": s.color } as CSSProperties}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.08, ease: "easeOut" }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.45, delay: i * 0.08, ease: "easeOut" }}
+              whileHover={{ y: -6 }}
             >
-              <span className="metric-number">{item.number}</span>
-              <span className="metric-label">{item.label}</span>
+              <div className="how-step-number">{s.step}</div>
+              <div className="how-step-icon">{s.icon}</div>
+              <h3 className="how-step-title">{s.title}</h3>
+              <p className="how-step-description">{s.description}</p>
+            </motion.article>
+          ))}
+        </div>
+      </section>
+
+      {/* ============================== FEATURES ============================== */}
+      <section className="section section-features">
+        <div className="section-header">
+          <p className="section-eyebrow">Capabilities</p>
+          <h2 className="section-title">Everything you need to ship clean data</h2>
+          <p className="section-subtitle">
+            Built for the messy, real-world data that breaks every other tool.
+          </p>
+        </div>
+
+        <div className="features-grid">
+          {features.map((f, i) => (
+            <motion.article
+              key={f.title}
+              className="feature-card"
+              style={{ "--feat-color": f.color } as CSSProperties}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.45, delay: i * 0.06, ease: "easeOut" }}
+              whileHover={{ y: -6 }}
+            >
+              <div className="feature-icon">{f.icon}</div>
+              <h3 className="feature-title">{f.title}</h3>
+              <p className="feature-description">{f.description}</p>
+            </motion.article>
+          ))}
+        </div>
+      </section>
+
+      {/* ============================== PRICING ============================== */}
+      <section id="pricing" className="section section-pricing">
+        <div className="section-header">
+          <p className="section-eyebrow">Pricing</p>
+          <h2 className="section-title">Simple, transparent pricing</h2>
+          <p className="section-subtitle">
+            Start free. Upgrade when your team is ready. No surprises.
+          </p>
+          <div className="currency-toggle">
+            <button
+              type="button"
+              className={`currency-btn${currency === "USD" ? " active" : ""}`}
+              onClick={() => setCurrency("USD")}
+            >
+              USD
+            </button>
+            <button
+              type="button"
+              className={`currency-btn${currency === "INR" ? " active" : ""}`}
+              onClick={() => setCurrency("INR")}
+            >
+              INR
+            </button>
+          </div>
+        </div>
+
+        <div className="pricing-grid">
+          {plans.map((plan, idx) => renderPricingCard(plan, idx))}
+        </div>
+      </section>
+
+      {/* ============================== MYTHS ============================== */}
+      <section className="section section-myths">
+        <div className="section-header">
+          <p className="section-eyebrow">Why DataHub is different</p>
+          <h2 className="section-title">Common concerns about AI data tools</h2>
+          <p className="section-subtitle">
+            We built DataHub specifically to address every one of these.
+          </p>
+        </div>
+
+        <div className="myths-list">
+          {myths.map((m, i) => (
+            <motion.div
+              key={i}
+              className={`myth-item${openMyth === i ? " open" : ""}`}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.4, delay: i * 0.05 }}
+            >
+              <button
+                type="button"
+                className="myth-q"
+                onClick={() => setOpenMyth(openMyth === i ? null : i)}
+                aria-expanded={openMyth === i}
+              >
+                <span>{m.myth}</span>
+                <span className="myth-toggle">{openMyth === i ? "-" : "+"}</span>
+              </button>
+              {openMyth === i && <p className="myth-a">{m.reality}</p>}
             </motion.div>
           ))}
         </div>
       </section>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          HOW IT WORKS â€“ Large step strip
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section id="how" className="hp-section">
-        <div className="hp-inner">
-          <motion.span
-            className="eyebrow"
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
-          >
-            How it works
-          </motion.span>
-          <motion.h2
-            className="hp-heading"
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.06 }}
-          >
-            From messy data to decisions in four steps
-          </motion.h2>
-          <motion.p
-            className="hp-subheading"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.12 }}
-          >
-            No SQL. No Python. No BI team needed. Just describe what you want â€” the agent handles the rest, with a full audit trail.
-          </motion.p>
-
-          <div className="steps-grid">
-            {howSteps.map((step, i) => (
-              <motion.div
-                key={step.step}
-                className="step-card"
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ duration: 0.45, delay: i * 0.1, ease: "easeOut" }}
-              >
-                <p className="step-number">{step.step}</p>
-                <div className="step-icon-circle" style={{ background: `${step.color}14` }}>
-                  {step.icon}
-                </div>
-                <h3 className="step-title">{step.title}</h3>
-                <p className="step-desc">{step.description}</p>
-              </motion.div>
-            ))}
-          </div>
+      {/* ============================== REVIEWS ============================== */}
+      <section className="section section-reviews">
+        <div className="section-header">
+          <p className="section-eyebrow">Reviews</p>
+          <h2 className="section-title">What early users are saying</h2>
         </div>
-      </section>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          FEATURES â€“ Bento grid
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section className="hp-section hp-section-dark">
-        <div className="hp-inner">
-          <motion.span
-            className="eyebrow"
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
-          >
-            Features
-          </motion.span>
-          <motion.h2
-            className="hp-heading"
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.06 }}
-          >
-            Everything your data team needs
-          </motion.h2>
-          <motion.p
-            className="hp-subheading"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.12 }}
-          >
-            Built for analysts who want the power of a data engineer without writing a single line of code.
-          </motion.p>
-
-          <div className="bento-grid">
-            {features.map((feature, i) => (
+        {approvedReviews.length > 0 ? (
+          <div className="reviews-grid">
+            {approvedReviews.slice(0, 6).map((r) => (
               <motion.article
-                key={feature.title}
-                className={`bento-card${i === 0 ? " bento-hero" : ""}`}
-                style={{ "--feature-color": feature.color } as CSSProperties}
-                initial={{ opacity: 0, y: 22 }}
+                key={r.id}
+                className="review-card"
+                initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.42, delay: i * 0.07, ease: "easeOut" }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.4 }}
               >
-                <div className="bento-icon" style={{ background: `${feature.color}12` }}>
-                  {feature.icon}
+                <div className="review-stars">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span key={i} className={i < r.rating ? "star filled" : "star"}>?</span>
+                  ))}
                 </div>
-                <h3 className="bento-title">{feature.title}</h3>
-                <p className="bento-desc">{feature.description}</p>
+                <p className="review-body">�{r.body}�</p>
+                <p className="review-author">
+                  <strong>{r.name}</strong>
+                  {r.role ? <span className="review-role"> � {r.role}</span> : null}
+                </p>
               </motion.article>
             ))}
           </div>
-        </div>
-      </section>
+        ) : (
+          <p className="reviews-empty">Be the first to share a review below.</p>
+        )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          BRANCHING PIPELINES DAG
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section className="hp-section">
-        <div className="hp-inner">
-          <motion.span
-            className="eyebrow"
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
-          >
-            Branching Pipelines
-          </motion.span>
-          <motion.h2
-            className="hp-heading"
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.06 }}
-          >
-            Multi-stream pipelines, not just a list
-          </motion.h2>
-          <motion.p
-            className="hp-subheading"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.12 }}
-          >
-            When your analysis splits into parallel streams, DataHub visualises it as a dependency graph â€”
-            just like GitHub Actions workflows.
-          </motion.p>
-
-          <div className="pipeline-dag-demo">
-            <div className="dag-demo-query">
-              &ldquo;Clean the data, then branch â€” segment customers by region AND calculate monthly revenue trends, finally merge into one summary report.&rdquo;
+        <div className="review-form-wrap">
+          <h3 className="review-form-title">Share your experience</h3>
+          {reviewSuccess ? (
+            <div className="form-success">
+              Thank you � your review has been submitted for moderation.
             </div>
-            <div className="dag-demo-graph">
-              <div className="dag-row">
-                <motion.div className="dag-node dag-node-source" initial={{ opacity: 0, scale: 0.85 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.35 }}>
-                  1 &middot; Clean sales data
-                </motion.div>
+          ) : (
+            <form className="review-form" onSubmit={handleReviewSubmit}>
+              <div className="form-row">
+                <input
+                  className="form-input"
+                  placeholder="Your name"
+                  value={reviewerName}
+                  onChange={(e) => setReviewerName(e.target.value)}
+                  required
+                />
+                <input
+                  className="form-input"
+                  placeholder="Role (optional)"
+                  value={reviewerRole}
+                  onChange={(e) => setReviewerRole(e.target.value)}
+                />
               </div>
-              <div className="dag-connectors dag-connectors-fork">
-                <span className="dag-line dag-line-left" />
-                <span className="dag-line dag-line-right" />
-              </div>
-              <div className="dag-row">
-                <motion.div className="dag-node dag-node-branch" initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.35, delay: 0.18 }}>
-                  2 &middot; Segment by region
-                </motion.div>
-                <motion.div className="dag-node dag-node-branch" initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.35, delay: 0.18 }}>
-                  3 &middot; Revenue trends
-                </motion.div>
-              </div>
-              <div className="dag-connectors dag-connectors-join">
-                <span className="dag-line dag-line-left" />
-                <span className="dag-line dag-line-right" />
-              </div>
-              <div className="dag-row">
-                <motion.div className="dag-node dag-node-merge" initial={{ opacity: 0, scale: 0.85 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.35, delay: 0.36 }}>
-                  4 &middot; Merge into summary
-                </motion.div>
-              </div>
-            </div>
-            <div className="dag-demo-note">
-              Steps 2 and 3 run independently â€” step 4 starts only when both are done.
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          MYTHS / FAQ â€“ Accordion
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section id="myths" className="hp-section hp-section-dark">
-        <div className="hp-inner">
-          <motion.span
-            className="eyebrow"
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
-          >
-            Straight answers
-          </motion.span>
-          <motion.h2
-            className="hp-heading"
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.06 }}
-          >
-            Common concerns, addressed
-          </motion.h2>
-          <motion.p
-            className="hp-subheading"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.12 }}
-          >
-            AI and data tools attract scepticism â€” and that&apos;s healthy. Here&apos;s exactly how DataHub works, no hand-waving.
-          </motion.p>
-
-          <div className="accordion-list">
-            {myths.map((item, i) => (
-              <motion.div
-                key={i}
-                className={`accordion-item${openMyth === i ? " accordion-item-open" : ""}`}
-                initial={{ opacity: 0, y: 14 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-30px" }}
-                transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
-              >
-                <button
-                  type="button"
-                  className="accordion-trigger"
-                  onClick={() => setOpenMyth(openMyth === i ? null : i)}
-                >
-                  <span className="accordion-question">{item.myth}</span>
-                  <span className="accordion-chevron">â–¾</span>
-                </button>
-                <div className="accordion-answer">
-                  <p className="accordion-answer-text">{item.reality}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          PRICING â€“ 3 main + 2 enterprise
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section id="pricing" className="hp-section">
-        <div className="hp-inner">
-          <motion.span
-            className="eyebrow"
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
-          >
-            Pricing
-          </motion.span>
-          <motion.h2
-            className="hp-heading"
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: 0.06 }}
-          >
-            Start free, scale when ready
-          </motion.h2>
-          <motion.p
-            className="hp-subheading"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.12 }}
-          >
-            No credit card required. Upgrade when your team needs more.
-          </motion.p>
-
-          {/* Main 3: Free Â· Professional Â· Team */}
-          <div className="pricing-row-main">
-            {plans.slice(0, 3).map((plan, i) =>
-              renderPricingCard(plan, i, plan.tier === "Professional")
-            )}
-          </div>
-
-          {/* Enterprise row: Business Â· Enterprise */}
-          <div className="pricing-row-enterprise">
-            {plans.slice(3).map((plan, i) =>
-              renderPricingCard(plan, i + 3)
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          CTA
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section className="home-cta-section">
-        <div className="home-cta-inner">
-          <motion.h2
-            className="home-cta-title"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
-          >
-            Start analysing your data in 60 seconds
-          </motion.h2>
-          <motion.p
-            className="home-cta-sub"
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
-          >
-            Upload a CSV, ask a question, get results. No setup. No SQL. No BI team required.
-          </motion.p>
-          <motion.button
-            type="button"
-            className="home-cta-btn"
-            onClick={handleGetStarted}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            â–¶ Try it free &mdash; no credit card needed
-          </motion.button>
-        </div>
-      </section>
-
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          REVIEWS
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section className="hp-section" id="reviews">
-        <div className="hp-inner">
-          <div className="reviews-layout">
-            <div>
-              <motion.span className="eyebrow" initial={{ opacity: 0, x: -16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.35 }}>
-                User reviews
-              </motion.span>
-              <motion.h2
-                className="reviews-heading"
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.45, delay: 0.08 }}
-              >
-                What our users say
-              </motion.h2>
-              <motion.p
-                className="reviews-subheading"
-                initial={{ opacity: 0, y: 10 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: 0.16 }}
-              >
-                Real feedback from teams using DataHub every day.
-              </motion.p>
-              {approvedReviews.length === 0 ? (
-                <p className="reviews-empty">No reviews yet â€” be the first!</p>
-              ) : (
-                <div className="reviews-cards">
-                  {approvedReviews.map((r, rIdx) => (
-                    <motion.div
-                      key={r.id}
-                      className="review-card"
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: "-40px" }}
-                      transition={{ duration: 0.42, delay: rIdx * 0.1, ease: "easeOut" }}
-                    >
-                      <div className="review-stars">
-                        {Array.from({ length: 5 }, (_, i) => (
-                          <span key={i} className={i < r.rating ? "star-filled" : "star-empty"}>â˜…</span>
-                        ))}
-                      </div>
-                      <p className="review-body">&ldquo;{r.body}&rdquo;</p>
-                      <p className="review-author">
-                        <strong>{r.name}</strong>
-                        {r.role ? <span className="review-role"> Â· {r.role}</span> : null}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="review-form-wrap">
-              <h3 className="review-form-title">Leave a review</h3>
-              <p className="review-form-sub">Your review is published after a quick check.</p>
-              {reviewSuccess ? (
-                <div className="feedback-success">Thanks! Your review will appear once approved. ðŸ™</div>
-              ) : (
-                <form className="feedback-form" onSubmit={(e) => void handleReviewSubmit(e)}>
-                  <div className="feedback-row-two">
-                    <input className="feedback-input" placeholder="Your name" value={reviewerName} onChange={(e) => setReviewerName(e.target.value)} />
-                    <input className="feedback-input" placeholder="Role / Company (optional)" value={reviewerRole} onChange={(e) => setReviewerRole(e.target.value)} />
-                  </div>
-                  <div className="review-star-picker">
-                    <span className="review-star-label">Rating</span>
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <button key={s} type="button" className={`review-star-btn${s <= reviewRating ? " review-star-active" : ""}`} onClick={() => setReviewRating(s)} aria-label={`${s} star`}>â˜…</button>
-                    ))}
-                  </div>
-                  <textarea className="feedback-textarea" placeholder="Share your experience with DataHub..." value={reviewBody} onChange={(e) => setReviewBody(e.target.value)} />
-                  {reviewError ? <p className="feedback-error">{reviewError}</p> : null}
-                  <button type="submit" className="feedback-submit" disabled={reviewSubmitting}>
-                    <IconSend size={14} />
-                    {reviewSubmitting ? "Submitting..." : "Submit review"}
+              <div className="rating-row">
+                <span className="rating-label">Rating:</span>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`rating-star${n <= reviewRating ? " active" : ""}`}
+                    onClick={() => setReviewRating(n)}
+                    aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                  >
+                    ?
                   </button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          FEEDBACK
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <section className="hp-section hp-section-dark">
-        <div className="hp-inner">
-          <div className="feedback-card">
-            <div>
-              <span className="eyebrow">We&apos;re listening</span>
-              <h2 className="feedback-title">Help us build the right thing</h2>
-              <p className="feedback-body">
-                DataHub is actively in development. Your feedback directly shapes what we build next â€” whether it&apos;s a missing feature,
-                a confusing flow, or something you&apos;d love to see.
-              </p>
-              <div className="feedback-tag-list">
-                {feedbackTags.map((tag) => (
-                  <span key={tag} className="feedback-tag">{tag}</span>
                 ))}
               </div>
+              <textarea
+                className="form-textarea"
+                placeholder="Tell us what worked, what didn't, what you'd love to see�"
+                rows={4}
+                value={reviewBody}
+                onChange={(e) => setReviewBody(e.target.value)}
+                required
+              />
+              {reviewError ? <div className="form-error">{reviewError}</div> : null}
+              <button type="submit" className="btn-primary-lg" disabled={reviewSubmitting}>
+                {reviewSubmitting ? "Submitting�" : "Submit review"}
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      {/* ============================== FEEDBACK ============================== */}
+      <section id="feedback" className="section section-feedback">
+        <div className="section-header">
+          <p className="section-eyebrow">Get in touch</p>
+          <h2 className="section-title">Have feedback or a question?</h2>
+          <p className="section-subtitle">
+            We read everything. Tell us what you need � feature, bug, integration, or anything else.
+          </p>
+        </div>
+
+        <div className="feedback-card">
+          {successName ? (
+            <div className="form-success">
+              Thanks, {successName} � we&apos;ll get back to you shortly.
             </div>
-            <div>
-              {successName ? (
-                <div className="feedback-success">Thanks {successName} â€” we&apos;ll read every word. ðŸ™</div>
-              ) : (
-                <form className="feedback-form" onSubmit={(event) => void handleFeedbackSubmit(event)}>
-                  <div className="feedback-row-two">
-                    <input className="feedback-input" placeholder="Name" value={name} onChange={(event) => setName(event.target.value)} />
-                    <input className="feedback-input" placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-                  </div>
-                  <input className="feedback-input" placeholder="Subject â€” e.g. 'Feature request: Notion connector'" value={subject} onChange={(event) => setSubject(event.target.value)} />
-                  <textarea className="feedback-textarea" placeholder="Tell us what's on your mind â€” the more detail the better..." value={message} onChange={(event) => setMessage(event.target.value)} />
-                  {validationError ? <p className="feedback-error">{validationError}</p> : null}
-                  {requestError ? <p className="feedback-error">{requestError}</p> : null}
-                  <button type="submit" className="feedback-submit" disabled={isSubmitting}>
-                    <IconSend size={14} />
-                    {isSubmitting ? "Sending..." : "Send feedback"}
+          ) : (
+            <form className="feedback-form" onSubmit={handleFeedbackSubmit}>
+              <div className="form-row">
+                <input
+                  className="form-input"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+                <input
+                  className="form-input"
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="tag-row">
+                {feedbackTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={`tag-chip${subject === tag ? " active" : ""}`}
+                    onClick={() => setSubject(subject === tag ? "" : tag)}
+                  >
+                    {tag}
                   </button>
-                </form>
-              )}
-            </div>
+                ))}
+              </div>
+              <textarea
+                className="form-textarea"
+                placeholder="Your message�"
+                rows={5}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                required
+              />
+              {validationError ? <div className="form-error">{validationError}</div> : null}
+              {requestError ? <div className="form-error">{requestError}</div> : null}
+              <button type="submit" className="btn-primary-lg" disabled={isSubmitting}>
+                {isSubmitting ? "Sending�" : "Send message"}
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      {/* ============================== CTA ============================== */}
+      <section className="section section-cta">
+        <div className="cta-card">
+          <h2 className="home-cta-title">Ready to ship clean data?</h2>
+          <p className="cta-sub">
+            Start free in seconds. No credit card. Upgrade anytime.
+          </p>
+          <div className="hero-buttons">
+            <motion.button
+              type="button"
+              className="btn-primary-lg"
+              onClick={handleGetStarted}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Get started free
+            </motion.button>
+            <a className="btn-ghost-lg" href={`mailto:${SUPPORT_EMAIL}`}>
+              Talk to us
+            </a>
           </div>
         </div>
       </section>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          FOOTER â€“ multi-column
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <footer className="hp-footer">
-        <div className="footer-inner">
-          <div className="footer-grid">
-            <div>
-              <p className="footer-brand">DataHub</p>
-              <p className="footer-brand-desc">
-                The AI-powered data platform that shows you exactly what it&apos;s doing. Every step transparent, every action auditable.
-              </p>
-            </div>
-            <div>
-              <p className="footer-col-title">Product</p>
-              <div className="footer-links">
-                <a href="/docs" className="footer-link">Documentation</a>
-                <a href="#how" className="footer-link">How it works</a>
-                <a href="#pricing" className="footer-link">Pricing</a>
-              </div>
-            </div>
-            <div>
-              <p className="footer-col-title">Company</p>
-              <div className="footer-links">
-                <a href="mailto:mitul.srivastava000@gmail.com" className="footer-link">Contact</a>
-                <a href="#reviews" className="footer-link">Reviews</a>
-              </div>
-            </div>
-            <div>
-              <p className="footer-col-title">Legal</p>
-              <div className="footer-links">
-                <a href="/terms" className="footer-link">Terms of Service</a>
-                <a href="/privacy" className="footer-link">Privacy Policy</a>
-              </div>
-            </div>
+      {/* ============================== FOOTER ============================== */}
+      <footer className="home-footer">
+        <div className="footer-grid">
+          <div>
+            <p className="footer-brand">DataHub</p>
+            <p className="footer-tag">Plain-English data work, fully transparent.</p>
           </div>
-          <div className="footer-bottom">
-            <span>Â© {new Date().getFullYear()} DataHub. All rights reserved.</span>
+          <div className="footer-links">
+            <a className="footer-link" href="#pricing">Pricing</a>
+            <a className="footer-link" href="/docs">Docs</a>
+            <a className="footer-link" href="/privacy">Privacy</a>
+            <a className="footer-link" href="/terms">Terms</a>
+            <a className="footer-link" href={`mailto:${SUPPORT_EMAIL}`}>Contact</a>
           </div>
         </div>
+        <p className="footer-copy">� {new Date().getFullYear()} DataHub. All rights reserved.</p>
       </footer>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          WAITLIST MODAL
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ============================== WAITLIST MODAL ============================== */}
       {waitlistModal && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
-          onClick={() => { if (!waitlistSubmitting) setWaitlistModal(null); }}
-        >
-          <div
-            style={{ background: "#111118", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 20, padding: "32px 36px", maxWidth: 420, width: "90vw", boxShadow: "0 32px 100px rgba(0,0,0,0.6)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="modal-backdrop" onClick={() => setWaitlistModal(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Join the {waitlistModal.plan} waitlist</h3>
+            <p className="modal-sub">
+              We&apos;ll let you know the moment it&apos;s available.
+            </p>
             {waitlistDone ? (
-              <>
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#e8e8f0" }}>You&apos;re on the waitlist! ðŸŽ‰</p>
-                <p style={{ margin: "12px 0 24px", fontSize: 14, color: "#8888a0", lineHeight: 1.6 }}>We&apos;ll email you at <strong style={{ color: "#e8e8f0" }}>{waitlistEmail}</strong> when the {waitlistModal.plan} plan launches.</p>
-                <button onClick={() => setWaitlistModal(null)} style={{ padding: "10px 24px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Close</button>
-              </>
+              <div className="form-success">
+                You&apos;re on the list. Talk soon.
+              </div>
             ) : (
-              <form onSubmit={(e) => void handleWaitlistSubmit(e)}>
-                <p style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#e8e8f0" }}>Join the {waitlistModal.plan} waitlist</p>
-                <p style={{ margin: "0 0 24px", fontSize: 14, color: "#8888a0" }}>Enter your email and we&apos;ll notify you the moment it&apos;s available.</p>
+              <form onSubmit={handleWaitlistSubmit} className="modal-form">
                 <input
+                  className="form-input"
                   type="email"
-                  required
-                  autoFocus
+                  placeholder="you@company.com"
                   value={waitlistEmail}
                   onChange={(e) => setWaitlistEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  style={{ width: "100%", boxSizing: "border-box", padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#e8e8f0", fontSize: 14, marginBottom: 16, outline: "none" }}
+                  required
+                  autoFocus
                 />
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button type="submit" disabled={waitlistSubmitting} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: waitlistSubmitting ? 0.7 : 1 }}>
-                    {waitlistSubmitting ? "Submittingâ€¦" : "Notify me"}
-                  </button>
-                  <button type="button" onClick={() => setWaitlistModal(null)} style={{ padding: "12px 20px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "none", color: "#8888a0", fontSize: 14, cursor: "pointer" }}>Cancel</button>
-                </div>
+                <button type="submit" className="btn-primary-lg" disabled={waitlistSubmitting}>
+                  {waitlistSubmitting ? "Joining�" : "Join waitlist"}
+                </button>
               </form>
             )}
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setWaitlistModal(null)}
+              aria-label="Close"
+            >
+              �
+            </button>
           </div>
         </div>
       )}
 
-      {showWaitlistToast ? (
-        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 12, padding: "12px 24px", color: "#c7d2fe", fontSize: 14, fontWeight: 500, backdropFilter: "blur(16px)", boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}>
-          âœ“ You&apos;re on the waitlist â€” we&apos;ll be in touch!
+      {showWaitlistToast && (
+        <div className="toast">
+          ? You&apos;re on the waitlist � we&apos;ll be in touch!
         </div>
-      ) : null}
+      )}
     </main>
   );
 }

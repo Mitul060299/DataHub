@@ -4,7 +4,6 @@ import {
   api,
   fetchDatasetPipelineSteps,
   saveDatasetPipelineSteps,
-  fetchDatasetSession,
   saveDatasetSession,
 } from "../api";
 import { useWorkspaceContext } from "./WorkspaceContext";
@@ -155,9 +154,11 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced write-through of liveArtifact -> server (arch #2). Failure is
-  // silent because localStorage is already updated synchronously and remains
-  // the working fallback if the API is unreachable.
+  // Persist only the chat session binding to the server.  Live preview
+  // state (table name, row count, label) is no longer stored server-side
+  // because the server cannot reliably tell when an in-memory DuckDB table
+  // still exists.  We derive the live artifact from the latest pipeline
+  // step's output_table on the next refresh instead.
   const scheduleServerSessionSync = (
     dsId: string,
     artifact: LiveArtifactState,
@@ -165,38 +166,16 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     if (sessionSyncTimerRef.current) clearTimeout(sessionSyncTimerRef.current);
     sessionSyncTimerRef.current = setTimeout(() => {
       void saveDatasetSession(dsId, {
-        live_table_name: artifact?.tableName ?? null,
-        live_row_count: artifact?.rowCount ?? null,
-        live_step_label: artifact?.stepLabel ?? null,
-        live_rows_changed: artifact?.rowsChanged ?? null,
         chat_session_id: artifact?.sessionId ?? null,
       }).catch(() => { /* best-effort; localStorage still has it */ });
     }, 800);
   };
 
-  // Restore liveArtifact from the latest pipeline step that has output_table.
-  // This bridges the gap after page refresh where liveArtifact (React state)
-  // is lost but steps are persisted in localStorage / DB.
+  // Restore liveArtifact from localStorage (synchronous, race-immune) or
+  // from the latest pipeline step that has output_table.  We no longer
+  // consult the server for the live table name -- the server only stores
+  // the chat session binding now.
   const restoreLiveArtifact = (loadedSteps: PipelineStep[], dsId: string) => {
-    // 0. Server-side dataset_sessions (arch #2) is the most authoritative
-    //    source: it survives across tabs, devices, and localStorage clears.
-    void fetchDatasetSession(dsId)
-      .then((sess) => {
-        if (!sess || sess.live_table_name == null || sess.chat_session_id == null) return;
-        // Only adopt the server state if the dataset hasn't switched while
-        // the request was in flight.
-        if (datasetId !== dsId) return;
-        const fromServer: LiveArtifactState = {
-          tableName: sess.live_table_name,
-          rowCount: typeof sess.live_row_count === "number" ? sess.live_row_count : 0,
-          stepLabel: sess.live_step_label ?? "",
-          sessionId: sess.chat_session_id,
-          rowsChanged: typeof sess.live_rows_changed === "number" ? sess.live_rows_changed : null,
-        };
-        setLiveArtifactRaw(fromServer);
-        try { localStorage.setItem(liveArtifactKey(dsId), JSON.stringify(fromServer)); } catch { /* quota */ }
-      })
-      .catch(() => { /* fall through to local fallback */ });
 
     // 1. Prefer the directly-persisted liveArtifact (race-immune across refreshes)
     const persisted = loadPersistedLiveArtifact(dsId);

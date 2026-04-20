@@ -641,17 +641,16 @@ export async function saveDatasetPipelineSteps(datasetId: string, steps: unknown
   await api.put(`/datasets/${datasetId}/pipeline-steps`, { steps });
 }
 
-// ── Server-side live workspace state (arch #2) ──────────────────────────────
-// Replaces browser-localStorage-only state for chat-session binding and live
-// preview pointer so refresh / multi-tab / multi-device share the same workspace.
+// ── Server-side dataset session binding ─────────────────────────────────────
+// Only the chat_session_id link is persisted server-side now.  The live
+// preview state (table name / row count / step label) is derived on the
+// client from the latest pipeline step's output_table.  Older builds may
+// still send live_* fields in the PUT payload — the server silently
+// ignores them.
 
 export interface DatasetSessionState {
   dataset_id: string;
   chat_session_id: string | null;
-  live_table_name: string | null;
-  live_row_count: number | null;
-  live_step_label: string | null;
-  live_rows_changed: number | null;
   updated_at: string | null;
 }
 

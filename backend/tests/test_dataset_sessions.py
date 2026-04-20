@@ -1,8 +1,9 @@
-"""Tests for arch #2: server-side DatasetSessionDB endpoints.
+"""Tests for ``DatasetSessionDB`` HTTP endpoints (chat session binding only).
 
-The dataset_meta table uses Postgres-only JSONB columns that SQLite cannot
-render, so we exercise the new endpoints through a real SQLite session that
-ONLY creates the dataset_sessions table — no other ORM tables are needed.
+After alembic 0059 the table holds only ``chat_session_id`` -- the
+``live_*`` preview columns were dropped because they were the source of
+every "ghost artifact on refresh" bug we shipped.  The frontend now
+derives the live preview pointer from the latest ``pipeline_steps`` row.
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ def _fresh_session():
 class _Patches:
     """Context manager that patches the auth shims in the datasets router."""
 
-    def __init__(self, user_id="u-1", role="editor"):
+    def __init__(self, user_id: str = "u-1", role: str = "editor"):
         self.user_id = user_id
         self.role = role
         self._exits: list = []
@@ -60,25 +61,21 @@ class GetSessionTests(unittest.TestCase):
             )
         self.assertEqual(result["dataset_id"], "ds-1")
         self.assertIsNone(result["chat_session_id"])
-        self.assertIsNone(result["live_table_name"])
         self.assertIsNone(result["updated_at"])
 
     def test_returns_persisted_row_for_owner_only(self) -> None:
         import uuid as _uuid
         from app.routers import datasets as datasets_router
         session, _ = _fresh_session()
-        # Seed two rows: one for u-1 and one for u-other on the same dataset.
         session.add(DatasetSessionDB(
             id=str(_uuid.uuid4()),
             user_id="u-1", dataset_id="ds-1",
-            chat_session_id="chat-mine", live_table_name="t_mine",
-            live_row_count=10, live_step_label="my step", live_rows_changed=2,
+            chat_session_id="chat-mine",
         ))
         session.add(DatasetSessionDB(
             id=str(_uuid.uuid4()),
             user_id="u-other", dataset_id="ds-1",
-            chat_session_id="chat-other", live_table_name="t_other",
-            live_row_count=99, live_step_label="other step",
+            chat_session_id="chat-other",
         ))
         session.commit()
 
@@ -87,10 +84,6 @@ class GetSessionTests(unittest.TestCase):
                 dataset_id="ds-1", authorization=None, db=session
             )
         self.assertEqual(result["chat_session_id"], "chat-mine")
-        self.assertEqual(result["live_table_name"], "t_mine")
-        self.assertEqual(result["live_row_count"], 10)
-        self.assertEqual(result["live_step_label"], "my step")
-        self.assertEqual(result["live_rows_changed"], 2)
 
 
 class UpsertSessionTests(unittest.TestCase):
@@ -100,91 +93,57 @@ class UpsertSessionTests(unittest.TestCase):
         with _Patches(user_id="u-1"):
             result = datasets_router.upsert_dataset_session(
                 dataset_id="ds-1",
-                payload={
-                    "chat_session_id": "chat-1",
-                    "live_table_name": "session_t1",
-                    "live_row_count": 42,
-                    "live_step_label": "Filter rows",
-                    "live_rows_changed": 5,
-                },
+                payload={"chat_session_id": "chat-1"},
                 authorization=None,
                 db=session,
             )
         self.assertTrue(result["created"])
         self.assertEqual(result["chat_session_id"], "chat-1")
-        self.assertEqual(result["live_table_name"], "session_t1")
-        self.assertEqual(result["live_row_count"], 42)
         rows = session.query(DatasetSessionDB).all()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].user_id, "u-1")
         self.assertEqual(rows[0].dataset_id, "ds-1")
 
-    def test_partial_update_leaves_omitted_fields_untouched(self) -> None:
-        import uuid as _uuid
+    def test_legacy_live_fields_are_silently_ignored(self) -> None:
+        """Older frontend builds still send live_* keys.  The endpoint
+        accepts the request without error and simply does not persist
+        them -- this is the deprecation shim."""
         from app.routers import datasets as datasets_router
         session, _ = _fresh_session()
-        session.add(DatasetSessionDB(
-            id=str(_uuid.uuid4()),
-            user_id="u-1", dataset_id="ds-1",
-            chat_session_id="chat-keep", live_table_name="t_keep",
-            live_row_count=1, live_step_label="keep me",
-        ))
-        session.commit()
-
         with _Patches(user_id="u-1"):
             result = datasets_router.upsert_dataset_session(
                 dataset_id="ds-1",
-                payload={"live_table_name": "t_new"},
+                payload={
+                    "chat_session_id": "chat-1",
+                    "live_table_name": "ignored",
+                    "live_row_count": 999,
+                    "live_step_label": "ignored",
+                    "live_rows_changed": 7,
+                },
                 authorization=None,
                 db=session,
             )
-
-        self.assertFalse(result["created"])
-        self.assertEqual(result["live_table_name"], "t_new")
-        # Untouched fields preserved.
-        self.assertEqual(result["chat_session_id"], "chat-keep")
-        self.assertEqual(result["live_row_count"], 1)
-        self.assertEqual(result["live_step_label"], "keep me")
-        # Only one row total — no duplicate insert.
-        self.assertEqual(session.query(DatasetSessionDB).count(), 1)
-
-    def test_explicit_null_clears_field(self) -> None:
-        import uuid as _uuid
-        from app.routers import datasets as datasets_router
-        session, _ = _fresh_session()
-        session.add(DatasetSessionDB(
-            id=str(_uuid.uuid4()),
-            user_id="u-1", dataset_id="ds-1",
-            chat_session_id="chat-1", live_table_name="t1",
-            live_row_count=10,
-        ))
-        session.commit()
-
-        with _Patches(user_id="u-1"):
-            result = datasets_router.upsert_dataset_session(
-                dataset_id="ds-1",
-                payload={"live_table_name": None, "live_row_count": None},
-                authorization=None,
-                db=session,
-            )
-        self.assertIsNone(result["live_table_name"])
-        self.assertIsNone(result["live_row_count"])
-        # chat_session_id was not in payload — preserved.
         self.assertEqual(result["chat_session_id"], "chat-1")
+        self.assertNotIn("live_table_name", result)
 
-    def test_invalid_int_raises_422(self) -> None:
-        from fastapi import HTTPException
+    def test_explicit_null_clears_chat_session_id(self) -> None:
+        import uuid as _uuid
         from app.routers import datasets as datasets_router
         session, _ = _fresh_session()
+        session.add(DatasetSessionDB(
+            id=str(_uuid.uuid4()),
+            user_id="u-1", dataset_id="ds-1",
+            chat_session_id="chat-1",
+        ))
+        session.commit()
         with _Patches(user_id="u-1"):
-            with self.assertRaises(HTTPException) as ctx:
-                datasets_router.upsert_dataset_session(
-                    dataset_id="ds-1",
-                    payload={"live_row_count": "not-a-number"},
-                    authorization=None,
-                    db=session,
-                )
-        self.assertEqual(ctx.exception.status_code, 422)
+            result = datasets_router.upsert_dataset_session(
+                dataset_id="ds-1",
+                payload={"chat_session_id": None},
+                authorization=None,
+                db=session,
+            )
+        self.assertIsNone(result["chat_session_id"])
 
     def test_non_dict_payload_raises_422(self) -> None:
         from fastapi import HTTPException
@@ -208,13 +167,13 @@ class IsolationTests(unittest.TestCase):
         with _Patches(user_id="u-a"):
             datasets_router.upsert_dataset_session(
                 dataset_id="ds-1",
-                payload={"live_table_name": "t_a"},
+                payload={"chat_session_id": "chat-a"},
                 authorization=None, db=session,
             )
         with _Patches(user_id="u-b"):
             datasets_router.upsert_dataset_session(
                 dataset_id="ds-1",
-                payload={"live_table_name": "t_b"},
+                payload={"chat_session_id": "chat-b"},
                 authorization=None, db=session,
             )
 
@@ -223,8 +182,8 @@ class IsolationTests(unittest.TestCase):
         with _Patches(user_id="u-b", role="viewer"):
             b = datasets_router.get_dataset_session("ds-1", None, session)
 
-        self.assertEqual(a["live_table_name"], "t_a")
-        self.assertEqual(b["live_table_name"], "t_b")
+        self.assertEqual(a["chat_session_id"], "chat-a")
+        self.assertEqual(b["chat_session_id"], "chat-b")
         self.assertEqual(session.query(DatasetSessionDB).count(), 2)
 
 
@@ -235,11 +194,11 @@ class ClearSessionTests(unittest.TestCase):
         session, _ = _fresh_session()
         session.add(DatasetSessionDB(
             id=str(_uuid.uuid4()),
-            user_id="u-1", dataset_id="ds-1", live_table_name="mine",
+            user_id="u-1", dataset_id="ds-1", chat_session_id="mine",
         ))
         session.add(DatasetSessionDB(
             id=str(_uuid.uuid4()),
-            user_id="u-other", dataset_id="ds-1", live_table_name="other",
+            user_id="u-other", dataset_id="ds-1", chat_session_id="other",
         ))
         session.commit()
 
@@ -248,7 +207,6 @@ class ClearSessionTests(unittest.TestCase):
                 dataset_id="ds-1", authorization=None, db=session
             )
         self.assertEqual(result["deleted"], 1)
-        # u-other's row survives.
         survivors = session.query(DatasetSessionDB).all()
         self.assertEqual(len(survivors), 1)
         self.assertEqual(survivors[0].user_id, "u-other")

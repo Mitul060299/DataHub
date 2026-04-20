@@ -171,31 +171,18 @@ class DatasetDataDB(Base):
 
 
 class DatasetSessionDB(Base):
-    """Server-side live workspace state for a (user, dataset) pair.
+    """Server-side binding between a dataset and its AI chat session.
 
-    Records the bits of UI state that previously lived only in
-    ``localStorage`` so a refresh, a second tab, or a different device sees
-    the same in-progress preview:
-
-    * ``chat_session_id`` -- which AI chat session this dataset is bound to
-    * ``live_table_name`` -- the DuckDB session table representing the
-      current pipeline preview leaf (the "live artifact")
-    * ``live_row_count`` / ``live_step_label`` / ``live_rows_changed`` --
-      display metadata for the live artifact card
-
-    Pipeline steps themselves are stored on ``dataset_meta.pipeline_steps_json``
-    via ``PUT /datasets/{id}/pipeline-steps``; this table holds only the
-    transient session-scoped state on top of those steps.
+    Holds only the durable link (``chat_session_id``) needed by the agent
+    to find prior pipeline steps for this dataset.  Live preview state
+    (table name, row count, etc.) is no longer tracked server-side --
+    the frontend derives it from the latest ``pipeline_steps`` row.
     """
     __tablename__ = "dataset_sessions"
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False, index=True)
     dataset_id = Column(String, nullable=False, index=True)
     chat_session_id = Column(String, nullable=True)
-    live_table_name = Column(String, nullable=True)
-    live_row_count = Column(BigInteger, nullable=True)
-    live_step_label = Column(Text, nullable=True)
-    live_rows_changed = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     __table_args__ = (

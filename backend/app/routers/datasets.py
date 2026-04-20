@@ -1499,27 +1499,23 @@ def restore_dataset(
     return {"status": "restored", "dataset_id": dataset_id}
 
 
-# ── Server-side live workspace state (arch #2) ────────────────────────────
-# Replaces browser-localStorage-only state for the AI chat session binding
-# and the "live artifact" preview pointer so refresh / multi-tab / multi-device
-# all see the same in-progress workspace.
+# ── Server-side dataset session binding ──────────────────────────────────
+# Persists the (user, dataset) -> chat_session_id link so the agent can
+# find prior pipeline_steps rows for this dataset across refreshes and
+# different devices.  Live preview state (table name, row count, step
+# label) is NOT stored here -- the frontend derives it from the latest
+# pipeline step's output_table.  This eliminates the entire class of
+# "ghost artifact" bugs caused by the server pointing at a DuckDB table
+# that no longer exists.
 
 def _serialize_session(row: DatasetSessionDB | None) -> dict:
     if row is None:
         return {
             "chat_session_id": None,
-            "live_table_name": None,
-            "live_row_count": None,
-            "live_step_label": None,
-            "live_rows_changed": None,
             "updated_at": None,
         }
     return {
         "chat_session_id": row.chat_session_id,
-        "live_table_name": row.live_table_name,
-        "live_row_count": row.live_row_count,
-        "live_step_label": row.live_step_label,
-        "live_rows_changed": row.live_rows_changed,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 
@@ -1530,12 +1526,7 @@ def get_dataset_session(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return the live workspace state for the current user on this dataset.
-
-    If the stored ``live_table_name`` references a DuckDB session that no
-    longer exists (server restart, TTL eviction), the stale session fields
-    are cleared so the frontend doesn't render a ghost artifact card.
-    """
+    """Return the chat session binding for the current user on this dataset."""
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization) or "anonymous"
@@ -1547,37 +1538,6 @@ def get_dataset_session(
         )
         .first()
     )
-    # ── Validate liveness: if the DuckDB session was evicted the row is stale.
-    # Clear the transient session fields so the frontend sees a clean slate
-    # instead of a ghost "clean · LIVE" artifact that can't be queried.
-    if row and row.live_table_name and row.chat_session_id:
-        try:
-            from ..services.duckdb_session import session_is_alive
-            alive = session_is_alive(row.chat_session_id)
-            # Only clear when we are *certain* the session is dead (False).
-            # If alive is None (DuckDB not available / test env), leave the
-            # row untouched — the frontend will discover the failure on
-            # step-preview and show a user-friendly error.
-            if alive is False:
-                import logging as _ds_log
-                _ds_log.getLogger(__name__).info(
-                    "dataset-session: clearing stale session for dataset %s "
-                    "(DuckDB session %s / table %s no longer exists)",
-                    dataset_id[:8], row.chat_session_id[:8], row.live_table_name,
-                )
-                row.live_table_name = None
-                row.live_row_count = None
-                row.live_step_label = None
-                row.live_rows_changed = None
-                try:
-                    db.commit()
-                except Exception:
-                    db.rollback()
-        except Exception:
-            # If the check itself fails (import error, connection issue),
-            # don't block the response — the frontend will handle a failed
-            # step-preview gracefully.
-            pass
     return {"dataset_id": dataset_id, **_serialize_session(row)}
 
 
@@ -1588,14 +1548,11 @@ def upsert_dataset_session(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Upsert the live workspace state for the current user on this dataset.
+    """Upsert the chat session binding for the current user on this dataset.
 
-    Accepted keys (all optional, ``null`` clears the field):
-    ``chat_session_id``, ``live_table_name``, ``live_row_count``,
-    ``live_step_label``, ``live_rows_changed``.
-
-    Only the keys present in ``payload`` are updated -- omitted keys are
-    left untouched. Pass ``{"key": null}`` to explicitly clear a field.
+    Accepts ``{"chat_session_id": "..."}``.  Legacy ``live_*`` keys are
+    silently ignored for backward compatibility with older frontend builds
+    that may still send them.
     """
     role = get_current_role(authorization)
     require_role("editor", role)
@@ -1622,28 +1579,9 @@ def upsert_dataset_session(
         db.add(row)
         created = True
 
-    # Only mutate keys explicitly present so callers can patch one field.
-    for field in (
-        "chat_session_id",
-        "live_table_name",
-        "live_step_label",
-    ):
-        if field in payload:
-            value = payload[field]
-            setattr(row, field, str(value) if value is not None else None)
-    for field in ("live_row_count", "live_rows_changed"):
-        if field in payload:
-            value = payload[field]
-            if value is None:
-                setattr(row, field, None)
-            else:
-                try:
-                    setattr(row, field, int(value))
-                except (TypeError, ValueError):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"{field} must be an integer or null",
-                    )
+    if "chat_session_id" in payload:
+        value = payload["chat_session_id"]
+        row.chat_session_id = str(value) if value is not None else None
 
     try:
         db.commit()
@@ -1664,7 +1602,7 @@ def clear_dataset_session(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Clear the live workspace state for the current user on this dataset."""
+    """Clear the chat session binding for the current user on this dataset."""
     role = get_current_role(authorization)
     require_role("editor", role)
     user_id = get_current_user_id(authorization) or "anonymous"

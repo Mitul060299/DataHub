@@ -394,33 +394,6 @@ def table_exists(session_id: str, name: str) -> bool:
         return False
 
 
-def session_is_alive(session_id: str) -> bool | None:
-    """Check whether a DuckDB session is alive.
-
-    Returns:
-        True  – session exists in the session pool and responds to queries.
-        False – session was tracked but is dead (GC'd / closed), or pool is
-                initialised and the session is simply not present (evicted).
-        None  – cannot determine (DuckDB pool not initialised, import error,
-                etc.).  Callers should NOT treat ``None`` as "evicted".
-    """
-    try:
-        with _lock:
-            if not _pool_initialized:
-                return None  # pool never used — can't say if session is dead
-            conn = _sessions.get(session_id)
-            if conn is None:
-                # Pool is initialised (we hold _lock) but session is absent.
-                return False
-            try:
-                conn.execute("SELECT 1")
-                return True
-            except Exception:
-                return False
-    except Exception:
-        return None
-
-
 # ── Background cleanup thread ─────────────────────────────────────────────────
 # Without this, _cleanup_stale() only ran when a *new* session was opened.
 # Idle sessions after their 2-hour TTL were never reclaimed on quiet instances.

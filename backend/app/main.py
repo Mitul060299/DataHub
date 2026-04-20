@@ -354,16 +354,14 @@ def _apply_startup_ddl() -> None:
         # 0054 — soft-delete (Trash) on dataset_meta
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
         "CREATE INDEX IF NOT EXISTS ix_dataset_meta_deleted_at ON dataset_meta (deleted_at)",
-        # 0055 — server-side dataset_sessions (live workspace state)
+        # 0055 — server-side dataset_sessions (chat session binding only;
+        # the live_* preview columns were dropped in 0059 — see migration
+        # for rationale).
         """CREATE TABLE IF NOT EXISTS dataset_sessions (
             id                  TEXT PRIMARY KEY,
             user_id             TEXT NOT NULL,
             dataset_id          TEXT NOT NULL,
             chat_session_id     TEXT,
-            live_table_name     TEXT,
-            live_row_count      BIGINT,
-            live_step_label     TEXT,
-            live_rows_changed   BIGINT,
             created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )""",

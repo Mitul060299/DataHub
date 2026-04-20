@@ -116,6 +116,7 @@ async def cancel(
 @router.post("/seats")
 @limiter.limit("10/minute")
 async def update_seats(
+    request: Request,
     payload: UpdateSeatsRequest,
     user: CurrentUser = Depends(get_current_user),
 ):

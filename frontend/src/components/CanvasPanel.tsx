@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
-import type { PipelineStep } from "../contexts/PipelineContext";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
@@ -70,75 +69,6 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   const [timelineCols, setTimelineCols] = useState<string[] | null>(null);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const timelineAbortRef = useRef<AbortController | null>(null);
-
-  // ── Before/After diff view state ──────────────────────────────────────────
-  const [diffStep, setDiffStep] = useState<PipelineStep | null>(null);
-  const [diffBefore, setDiffBefore] = useState<{ rows: Record<string, unknown>[]; cols: string[] } | null>(null);
-  const [diffAfter, setDiffAfter] = useState<{ rows: Record<string, unknown>[]; cols: string[] } | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
-
-  // Listen for compare requests dispatched from PipelineSection
-  useEffect(() => {
-    function handleCompare(e: Event) {
-      const step = (e as CustomEvent<PipelineStep>).detail;
-      setDiffStep(step);
-      setTab("data");
-      setDiffBefore(null);
-      setDiffAfter(null);
-      setDiffLoading(true);
-
-      // Helper to fetch data for a step (or original dataset)
-      async function fetchForStep(s: PipelineStep | null): Promise<{ rows: Record<string, unknown>[]; columns: string[] }> {
-        if (!s) {
-          // Original dataset
-          if (dataset?.id) {
-            return fetchDatasetPage(dataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>;
-          }
-          return { rows: [], columns: [] };
-        }
-        const sp = s.snapshot_path || (typeof s.rawConfig?.snapshot_path === "string" ? s.rawConfig.snapshot_path : undefined);
-        if (sp && dataset?.id) {
-          return fetchSnapshotPreview(dataset.id, sp, 100);
-        }
-        const tbl = s.output_table || (typeof s.rawConfig?.output_table === "string" ? s.rawConfig.output_table : undefined);
-        if (tbl && dataset?.id && liveArtifact?.sessionId) {
-          return fetchStepPreview(dataset.id, liveArtifact.sessionId, tbl, 100, 0,
-            steps.map((st, i) => ({
-              step_number: st.stepNumber ?? i + 1,
-              operation: st.operation,
-              description: st.description,
-              sql: st.sql ?? st.rawConfig?.sql ?? "",
-              output_table: st.output_table ?? st.rawConfig?.output_table ?? "",
-            })).filter((st) => st.sql && st.output_table),
-          );
-        }
-        if (s.outputDataset?.id) {
-          return fetchDatasetPage(s.outputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>;
-        }
-        return { rows: [], columns: [] };
-      }
-
-      // Find the index of the compare step so we can get the previous step for "before"
-      const idx = steps.findIndex((s) => s.id === step.id);
-      const prevStep: PipelineStep | null = idx > 0 ? steps[idx - 1] : null;
-
-      Promise.all([
-        fetchForStep(prevStep),
-        fetchForStep(step),
-      ])
-        .then(([before, after]) => {
-          setDiffBefore({ rows: before.rows ?? [], cols: before.columns ?? [] });
-          setDiffAfter({ rows: after.rows ?? [], cols: after.columns ?? [] });
-        })
-        .catch(() => { /* best-effort */ })
-        .finally(() => setDiffLoading(false));
-    }
-    window.addEventListener("datahub:compare:step", handleCompare);
-    return () => window.removeEventListener("datahub:compare:step", handleCompare);
-  }, [steps, dataset?.id, liveArtifact]);
-
-  // Reset diff when steps change or dataset changes
-  useEffect(() => { setDiffStep(null); setDiffBefore(null); setDiffAfter(null); }, [dataset?.id]);
 
   // Reset timeline when dataset or steps change
   useEffect(() => { setViewingStepIndex(null); setTimelineRows(null); setTimelineCols(null); }, [dataset?.id]);
@@ -559,52 +489,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             </button>
           </div>
         )}
-        {/* ── Before/After diff view ── */}
-        {diffStep && tab === "data" ? (
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "6px 12px", background: "rgba(91,106,240,0.07)", borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: "var(--tx1)", flex: 1 }}>
-                Comparing: <strong>{diffStep.description || diffStep.operation}</strong>
-                {diffStep.row_count_before != null && diffStep.row_count_after != null ? (
-                  <span style={{ marginLeft: 10, fontSize: 10, color: diffStep.row_count_after >= diffStep.row_count_before ? "var(--gr)" : "var(--rd)" }}>
-                    {diffStep.row_count_after >= diffStep.row_count_before ? "+" : ""}{(diffStep.row_count_after - diffStep.row_count_before).toLocaleString()} rows
-                  </span>
-                ) : null}
-              </span>
-              <button className="btn" style={{ height: 22, padding: "0 8px", fontSize: 10 }} onClick={() => { setDiffStep(null); setDiffBefore(null); setDiffAfter(null); }}>✕ Exit compare</button>
-            </div>
-            {diffLoading ? (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tx2)", fontSize: 12 }}>Loading comparison…</div>
-            ) : (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 1 }}>
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--bd)" }}>
-                  <div style={{ padding: "4px 10px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)", fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
-                    BEFORE &nbsp;·&nbsp; {diffStep.inputDataset?.name ?? (steps.findIndex(s => s.id === diffStep.id) > 0 ? steps[steps.findIndex(s => s.id === diffStep.id) - 1].description || "prev step" : dataset?.name || "source")} &nbsp;·&nbsp; {(diffStep.row_count_before ?? diffBefore?.rows.length ?? 0).toLocaleString()} rows
-                  </div>
-                  <DataTable
-                    loading={false}
-                    rows={diffBefore?.rows ?? []}
-                    columns={diffBefore?.cols ?? []}
-                    stepCount={0}
-                    lastAction=""
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                  <div style={{ padding: "4px 10px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)", fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
-                    AFTER &nbsp;·&nbsp; {diffStep.outputDataset?.name ?? diffStep.description ?? "this step"} &nbsp;·&nbsp; {(diffStep.row_count_after ?? diffAfter?.rows.length ?? 0).toLocaleString()} rows
-                  </div>
-                  <DataTable
-                    loading={false}
-                    rows={diffAfter?.rows ?? []}
-                    columns={diffAfter?.cols ?? []}
-                    stepCount={0}
-                    lastAction=""
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        ) : tab === "pipeline" ? (
+        {tab === "pipeline" ? (
           <PipelineGraphTab />
         ) : tab === "schedule" && pipelineId ? (
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>

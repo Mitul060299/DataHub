@@ -443,16 +443,6 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                       </button>
                       <button
                         className="btn"
-                        style={{ height: 20, width: 20, padding: 0, fontSize: 10 }}
-                        title="Compare before/after"
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent("datahub:compare:step", { detail: step }));
-                        }}
-                      >
-                        ⊞
-                      </button>
-                      <button
-                        className="btn"
                         style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
                         title="Preview this step's data"
                         onClick={() => {

@@ -198,30 +198,10 @@ export function WorkspacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDataset?.id]);
 
-  // When liveArtifact is restored (e.g. page refresh) but sessionPreview is
-  // empty, auto-fetch the preview from the DuckDB session so the data grid
-  // shows transformed data immediately — no manual "Run Pipeline" needed.
-  useEffect(() => {
-    if (!liveArtifact || !activeDataset?.id || sessionPreview) return;
-    let cancelled = false;
-    fetchStepPreview(
-      activeDataset.id,
-      liveArtifact.sessionId,
-      liveArtifact.tableName,
-      500,
-    )
-      .then((result) => {
-        if (cancelled) return;
-        if (result.rows?.length) {
-          setSessionPreview({ rows: result.rows, columns: result.columns });
-        }
-      })
-      .catch(() => {
-        // Session may have been evicted — user can click "Run Pipeline".
-      });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveArtifact, activeDataset?.id]);
+  // NOTE: We no longer auto-fetch the session preview on page load.
+  // After refresh, the raw dataset is shown. Users click a pipeline step's
+  // preview (👁) button to see that step's snapshot, or "Run Pipeline"
+  // to replay and see the latest transformed data.
 
   // Clear session preview when the live artifact is cleared (step deleted or artifact saved).
   // When a NEW live artifact is set (user ran another step while viewing original),

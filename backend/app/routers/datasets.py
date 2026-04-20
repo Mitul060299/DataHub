@@ -875,6 +875,69 @@ def step_materialize(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+# ── Snapshot Preview (read persisted Parquet directly) ────────────────────────
+
+@router.post("/{dataset_id}/snapshot-preview")
+def snapshot_preview(
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return rows/columns from a persisted step-snapshot Parquet file.
+
+    Unlike ``step-preview`` (which needs a live DuckDB session), this reads
+    directly from the Parquet file stored in object storage.  It works even
+    after a server restart because no session state is required.
+
+    Body: { "snapshot_path": str, "limit": int?, "offset": int? }
+    """
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    snapshot_path = (payload.get("snapshot_path") or "").strip()
+    limit = min(int(payload.get("limit", 200)), 1000)
+    offset = max(int(payload.get("offset", 0)), 0)
+    if not snapshot_path:
+        raise HTTPException(status_code=422, detail="snapshot_path is required")
+
+    # Verify the snapshot belongs to this dataset (prevents path traversal via
+    # a forged snapshot_path pointing to another user's data).
+    if dataset_id not in snapshot_path:
+        raise HTTPException(status_code=403, detail="snapshot_path does not belong to this dataset")
+
+    try:
+        from ..services.object_storage import StorageService
+        query_path = StorageService.get_query_path(snapshot_path)
+
+        import duckdb as _ddb
+        con = _ddb.connect(database=":memory:")
+        try:
+            result = con.execute(
+                "SELECT * FROM read_parquet(?) LIMIT ? OFFSET ?",
+                [query_path, limit, offset],
+            )
+            columns = [desc[0] for desc in result.description]
+            raw_rows = result.fetchall()
+            rows = [dict(zip(columns, row)) for row in raw_rows]
+
+            count_result = con.execute(
+                "SELECT COUNT(*) FROM read_parquet(?)",
+                [query_path],
+            ).fetchone()
+            total = int(count_result[0]) if count_result else len(rows)
+        finally:
+            con.close()
+
+        return {"rows": rows, "columns": columns, "count": total}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not read snapshot: {exc}",
+        )
+
+
 # ── Version History endpoints ─────────────────────────────────────────────────
 
 @router.get("/{dataset_id}/versions")

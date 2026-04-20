@@ -295,8 +295,11 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
               APPLIED STEPS
             </div>
 
-            <div style={{ borderBottom: "1px solid var(--bd)", minHeight: 28, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", color: "var(--tx1)" }}>
-              <span style={{ fontSize: 12 }}>Source</span>
+            <div style={{ borderBottom: "1px solid var(--bd)", minHeight: 28, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", color: "var(--tx1)", cursor: "pointer" }}
+              onClick={() => window.dispatchEvent(new CustomEvent("datahub:view:source"))}
+              title="Click to view original source data"
+            >
+              <span style={{ fontSize: 12 }}>📄 Source</span>
               <span className="mono" style={{ fontSize: 11, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {activeDataset?.name ?? "No dataset"}
               </span>
@@ -447,6 +450,16 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                         }}
                       >
                         ⊞
+                      </button>
+                      <button
+                        className="btn"
+                        style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                        title="Preview this step's data"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: index } }));
+                        }}
+                      >
+                        👁
                       </button>
                       <button
                         className="btn"

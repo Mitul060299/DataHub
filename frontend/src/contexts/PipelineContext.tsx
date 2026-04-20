@@ -41,6 +41,8 @@ export interface PipelineStep {
   execution_time_ms?: number | null;
   status?: "completed" | "failed" | "pending";
   error_message?: string | null;
+  /** Storage path of the step's Parquet snapshot (e.g. s3://…/step_X.parquet) */
+  snapshot_path?: string | null;
   /** Full raw config dict from the agent, used for surgical step replay */
   rawConfig?: Record<string, unknown>;
 }

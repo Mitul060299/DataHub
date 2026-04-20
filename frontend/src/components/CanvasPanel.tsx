@@ -8,7 +8,7 @@ import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { DataVersionHistory } from "./DataVersionHistory";
-import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage } from "../api";
+import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview } from "../api";
 
 type CanvasTab = "data" | "pipeline" | "canvas" | "schedule" | "history";
 
@@ -64,7 +64,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   const [exportConfirmTarget, setExportConfirmTarget] = useState<"csv" | "powerbi" | "tableau" | null>(null);
   const [exportCheckpoint, setExportCheckpoint] = useState(false);
 
-  // ── Timeline breadcrumb state ─────────────────────────────────────────────
+  // ── Step-preview state (triggered from PipelineSection 👁 buttons) ────────
   const [viewingStepIndex, setViewingStepIndex] = useState<number | null>(null);
   const [timelineRows, setTimelineRows] = useState<Record<string, unknown>[] | null>(null);
   const [timelineCols, setTimelineCols] = useState<string[] | null>(null);
@@ -85,11 +85,34 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       setTab("data");
       setDiffBefore(null);
       setDiffAfter(null);
-      if (!step.inputDataset?.id || !step.outputDataset?.id) return;
       setDiffLoading(true);
+
+      // Helper to fetch data for a step (or original dataset)
+      async function fetchForStep(s: PipelineStep | null): Promise<{ rows: Record<string, unknown>[]; columns: string[] }> {
+        if (!s) {
+          // Original dataset
+          if (dataset?.id) {
+            return fetchDatasetPage(dataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>;
+          }
+          return { rows: [], columns: [] };
+        }
+        const sp = s.snapshot_path || (typeof s.rawConfig?.snapshot_path === "string" ? s.rawConfig.snapshot_path : undefined);
+        if (sp && dataset?.id) {
+          return fetchSnapshotPreview(dataset.id, sp, 100);
+        }
+        if (s.outputDataset?.id) {
+          return fetchDatasetPage(s.outputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>;
+        }
+        return { rows: [], columns: [] };
+      }
+
+      // Find the index of the compare step so we can get the previous step for "before"
+      const idx = steps.findIndex((s) => s.id === step.id);
+      const prevStep: PipelineStep | null = idx > 0 ? steps[idx - 1] : null;
+
       Promise.all([
-        fetchDatasetPage(step.inputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>,
-        fetchDatasetPage(step.outputDataset.id, 0, 100) as Promise<{ rows: Record<string, unknown>[]; columns: string[] }>,
+        fetchForStep(prevStep),
+        fetchForStep(step),
       ])
         .then(([before, after]) => {
           setDiffBefore({ rows: before.rows ?? [], cols: before.columns ?? [] });
@@ -100,7 +123,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     }
     window.addEventListener("datahub:compare:step", handleCompare);
     return () => window.removeEventListener("datahub:compare:step", handleCompare);
-  }, []);
+  }, [steps, dataset?.id]);
 
   // Reset diff when steps change or dataset changes
   useEffect(() => { setDiffStep(null); setDiffBefore(null); setDiffAfter(null); }, [dataset?.id]);
@@ -110,7 +133,12 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
 
   const handleTimelineClick = useCallback(async (idx: number) => {
     const step = steps[idx];
-    if (!step?.outputDataset?.id) return;
+    const tableName = step?.output_table
+      || (typeof step?.rawConfig?.output_table === "string" ? step.rawConfig.output_table : undefined);
+    const snapshotPath = step?.snapshot_path
+      || (typeof step?.rawConfig?.snapshot_path === "string" ? step.rawConfig.snapshot_path : undefined);
+    // Need at least one way to fetch the step data
+    if (!tableName && !snapshotPath && !step?.outputDataset?.id) return;
     // Cancel any in-flight request
     timelineAbortRef.current?.abort();
     const controller = new AbortController();
@@ -118,7 +146,28 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     setViewingStepIndex(idx);
     setTimelineLoading(true);
     try {
-      const data = await fetchDatasetPage(step.outputDataset.id, 0, 200) as { rows: Record<string, unknown>[]; columns: string[] };
+      let data: { rows: Record<string, unknown>[]; columns: string[] };
+      if (snapshotPath && dataset?.id) {
+        // Preferred: read directly from the persisted Parquet snapshot
+        // (works even after server restart / session eviction)
+        data = await fetchSnapshotPreview(dataset.id, snapshotPath, 200);
+      } else if (tableName && dataset?.id && liveArtifact?.sessionId) {
+        // Session is alive — preview via DuckDB session
+        data = await fetchStepPreview(dataset.id, liveArtifact.sessionId, tableName, 200, 0,
+          steps.map((s, i) => ({
+            step_number: s.stepNumber ?? i + 1,
+            operation: s.operation,
+            description: s.description,
+            sql: s.sql ?? s.rawConfig?.sql ?? "",
+            output_table: s.output_table ?? s.rawConfig?.output_table ?? "",
+          })).filter((s) => s.sql && s.output_table),
+        );
+      } else if (step?.outputDataset?.id) {
+        // Legacy fallback — derived dataset
+        data = await fetchDatasetPage(step.outputDataset.id, 0, 200) as { rows: Record<string, unknown>[]; columns: string[] };
+      } else {
+        data = { rows: [], columns: [] };
+      }
       if (!controller.signal.aborted) {
         setTimelineRows(data.rows ?? []);
         setTimelineCols(data.columns ?? []);
@@ -128,7 +177,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     } finally {
       if (!controller.signal.aborted) setTimelineLoading(false);
     }
-  }, [steps]);
+  }, [steps, dataset?.id, liveArtifact?.sessionId]);
 
   const handleTimelineReset = useCallback(() => {
     timelineAbortRef.current?.abort();
@@ -137,6 +186,27 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     setTimelineCols(null);
     setTimelineLoading(false);
   }, []);
+
+  // Listen for step preview requests from PipelineSection (👁 button)
+  const onViewOriginalRef = useRef(onViewOriginal);
+  onViewOriginalRef.current = onViewOriginal;
+
+  useEffect(() => {
+    function handlePreview(e: Event) {
+      const { stepIndex } = (e as CustomEvent<{ stepIndex: number }>).detail;
+      void handleTimelineClick(stepIndex);
+    }
+    function handleViewSource() {
+      handleTimelineReset();
+      onViewOriginalRef.current?.();
+    }
+    window.addEventListener("datahub:preview:step", handlePreview);
+    window.addEventListener("datahub:view:source", handleViewSource);
+    return () => {
+      window.removeEventListener("datahub:preview:step", handlePreview);
+      window.removeEventListener("datahub:view:source", handleViewSource);
+    };
+  }, [handleTimelineClick, handleTimelineReset]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -350,57 +420,19 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           )}
         </div>
       </div>
-      {/* ── Timeline Breadcrumb ────────────────────────────────────────── */}
-      {steps.length > 0 && tab === "data" && (
-        <div style={{ height: 32, borderBottom: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", alignItems: "center", padding: "0 10px", gap: 0, overflowX: "auto", flexShrink: 0 }}>
+      {/* ── Step preview indicator (when previewing a step's snapshot) ── */}
+      {viewingStepIndex !== null && tab === "data" && (
+        <div style={{ height: 32, borderBottom: "1px solid var(--bd)", background: "rgba(91,106,240,0.06)", display: "flex", alignItems: "center", padding: "0 12px", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: "var(--tx2)", flex: 1 }}>
+            👁 Previewing: <strong style={{ color: "var(--ac)" }}>{steps[viewingStepIndex]?.description || `Step ${viewingStepIndex + 1}`}</strong>
+            {timelineLoading && <span style={{ marginLeft: 8, color: "var(--tx2)" }}>Loading…</span>}
+          </span>
           <button
             onClick={handleTimelineReset}
-            title="Go back to original source"
-            style={{ flexShrink: 0, fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--bd2)", background: viewingStepIndex === null ? "var(--bg3)" : "transparent", color: "var(--tx2)", cursor: "pointer", whiteSpace: "nowrap" }}
+            style={{ fontSize: 10, padding: "2px 10px", borderRadius: 4, border: "1px solid var(--bd2)", background: "transparent", color: "var(--tx2)", cursor: "pointer" }}
           >
-            Original
+            ✕ Close preview
           </button>
-          {steps.map((step, idx) => {
-            const active = viewingStepIndex === idx;
-            const isLast = idx === steps.length - 1;
-            return (
-              <span key={step.id} style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
-                <span style={{ color: "var(--tx2)", fontSize: 10, padding: "0 4px" }}>›</span>
-                <button
-                  onClick={() => { if (!step.outputDataset?.id) return; void handleTimelineClick(idx); }}
-                  title={step.description}
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 10,
-                    padding: "2px 8px",
-                    borderRadius: 4,
-                    border: `1px solid ${active ? "var(--acg)" : isLast && viewingStepIndex === null ? "var(--acg)" : "var(--bd2)"}`,
-                    background: active ? "var(--acl)" : isLast && viewingStepIndex === null ? "var(--acl)" : "transparent",
-                    color: active || (isLast && viewingStepIndex === null) ? "var(--ac)" : "var(--tx2)",
-                    cursor: step.outputDataset?.id ? "pointer" : "default",
-                    whiteSpace: "nowrap",
-                    maxWidth: 120,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {isLast && viewingStepIndex === null ? "▶ " : ""}{step.description || `Step ${idx + 1}`}
-                </button>
-              </span>
-            );
-          })}
-          {viewingStepIndex !== null && (
-            <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
-              <span style={{ color: "var(--tx2)", fontSize: 10, padding: "0 4px" }}>›</span>
-              <button
-                onClick={handleTimelineReset}
-                style={{ flexShrink: 0, fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--bd2)", background: "transparent", color: "var(--tx2)", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                ← Current
-              </button>
-            </span>
-          )}
-          {timelineLoading && <span style={{ fontSize: 10, color: "var(--tx2)", marginLeft: 8, flexShrink: 0 }}>Loading…</span>}
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -535,7 +567,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 1 }}>
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--bd)" }}>
                   <div style={{ padding: "4px 10px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)", fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
-                    BEFORE &nbsp;·&nbsp; {diffStep.inputDataset?.name ?? "input"} &nbsp;·&nbsp; {(diffStep.row_count_before ?? diffBefore?.rows.length ?? 0).toLocaleString()} rows
+                    BEFORE &nbsp;·&nbsp; {diffStep.inputDataset?.name ?? (steps.findIndex(s => s.id === diffStep.id) > 0 ? steps[steps.findIndex(s => s.id === diffStep.id) - 1].description || "prev step" : dataset?.name || "source")} &nbsp;·&nbsp; {(diffStep.row_count_before ?? diffBefore?.rows.length ?? 0).toLocaleString()} rows
                   </div>
                   <DataTable
                     loading={false}
@@ -547,7 +579,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 </div>
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                   <div style={{ padding: "4px 10px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)", fontSize: 10, color: "var(--tx2)", flexShrink: 0 }}>
-                    AFTER &nbsp;·&nbsp; {diffStep.outputDataset?.name ?? "output"} &nbsp;·&nbsp; {(diffStep.row_count_after ?? diffAfter?.rows.length ?? 0).toLocaleString()} rows
+                    AFTER &nbsp;·&nbsp; {diffStep.outputDataset?.name ?? diffStep.description ?? "this step"} &nbsp;·&nbsp; {(diffStep.row_count_after ?? diffAfter?.rows.length ?? 0).toLocaleString()} rows
                   </div>
                   <DataTable
                     loading={false}

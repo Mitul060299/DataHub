@@ -703,6 +703,20 @@ export async function materializeStep(
   return response.data as { table_name: string; row_count: number; materialized: boolean; snapshot_url: string | null };
 }
 
+export async function fetchSnapshotPreview(
+  datasetId: string,
+  snapshotPath: string,
+  limit = 200,
+  offset = 0,
+): Promise<{ rows: Record<string, unknown>[]; columns: string[]; count: number }> {
+  const response = await api.post(`/datasets/${datasetId}/snapshot-preview`, {
+    snapshot_path: snapshotPath,
+    limit,
+    offset,
+  });
+  return response.data as { rows: Record<string, unknown>[]; columns: string[]; count: number };
+}
+
 export async function listCalculatedColumns(datasetId: string) {
   const response = await api.get(`/datasets/${datasetId}/columns`);
   return response.data as Array<{

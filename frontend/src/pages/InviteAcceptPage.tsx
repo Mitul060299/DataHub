@@ -18,8 +18,15 @@ export function InviteAcceptPage() {
     }
 
     if (!session) {
+      // Validate token format to prevent URL injection
+      const safeToken = /^[A-Za-z0-9._-]{1,256}$/.test(token) ? encodeURIComponent(token) : null;
+      if (!safeToken) {
+        setStatus("error");
+        setMessage("Invalid invite token.");
+        return;
+      }
       // Not logged in — send to login and come back
-      navigate(`/login?redirect=/invite/${token}`, { replace: true });
+      navigate(`/login?redirect=/invite/${safeToken}`, { replace: true });
       return;
     }
 

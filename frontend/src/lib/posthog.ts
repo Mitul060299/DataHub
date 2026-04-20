@@ -1,6 +1,6 @@
 import posthog from "posthog-js";
 
-const key = (import.meta as any).env?.VITE_POSTHOG_API_KEY as string | undefined;
+const key = import.meta.env.VITE_POSTHOG_API_KEY as string | undefined;
 
 if (key) {
   posthog.init(key, {

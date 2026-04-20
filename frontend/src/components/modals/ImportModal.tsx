@@ -54,6 +54,17 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
   // Auto-load a sample file when preloadUrl is provided
   useEffect(() => {
     if (!preloadUrl || !open) return;
+    // Validate URL: only allow relative paths or same-origin https to prevent SSRF
+    try {
+      const parsed = new URL(preloadUrl, window.location.origin);
+      if (parsed.origin !== window.location.origin) {
+        setErrorText("Sample URL must be from the same origin.");
+        return;
+      }
+    } catch {
+      setErrorText("Invalid sample URL.");
+      return;
+    }
     void (async () => {
       try {
         const res = await fetch(preloadUrl);

@@ -18,7 +18,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState | null;
-  const destination = state?.from?.pathname ?? "/workspace";
+  // Guard against open redirect: only allow relative paths within the app
+  const rawDest = state?.from?.pathname ?? "/workspace";
+  const destination = typeof rawDest === "string" && /^\/[^/]/.test(rawDest) ? rawDest : "/workspace";
 
   useEffect(() => {
     if (session) {

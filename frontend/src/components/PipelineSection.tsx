@@ -46,6 +46,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [runSuccess, setRunSuccess] = useState(false);
+  const runSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const formatStepLabel = (operation: string) => {
     const normalized = operation.replace(/_/g, " ").trim();
@@ -234,13 +235,17 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       if (onRunPipeline) await onRunPipeline();
       else await runPipeline();
       setRunSuccess(true);
-      setTimeout(() => setRunSuccess(false), 2500);
+      if (runSuccessTimerRef.current) clearTimeout(runSuccessTimerRef.current);
+      runSuccessTimerRef.current = setTimeout(() => setRunSuccess(false), 2500);
     } catch {
       // Error state handled by caller
     } finally {
       setRunning(false);
     }
   };
+
+  // Cleanup success timer on unmount to prevent state update on unmounted component
+  useEffect(() => () => { if (runSuccessTimerRef.current) clearTimeout(runSuccessTimerRef.current); }, []);
 
   /** Strip dataset name prefix from step labels for cleaner display */
   const cleanStepLabel = (label: string) => {

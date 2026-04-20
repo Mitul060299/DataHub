@@ -6,4 +6,6 @@ test_results*.txt
 test_err.txt
 test_output.txt
 test_result.txt
+_*.txt
+last_*.txt
 

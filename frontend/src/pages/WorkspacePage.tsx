@@ -52,6 +52,8 @@ export function WorkspacePage() {
   const [showingOriginal, setShowingOriginal] = useState(false);
   const [replayingPipeline, setReplayingPipeline] = useState(false);
   const [replayError, setReplayError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // When agent.done sets sessionPreview/liveArtifact AND switches the active
@@ -138,6 +140,7 @@ export function WorkspacePage() {
         stepLabel: steps[steps.length - 1].description,
         sessionId: sessionIdToUse,
       });
+      window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline ran \u2014 ${(previewResult.count ?? previewResult.rows?.length ?? 0).toLocaleString()} rows ready`, tone: "success" } }));
     } catch (err) {
       console.error("Pipeline replay failed", err);
       const axiosDetail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
@@ -202,6 +205,75 @@ export function WorkspacePage() {
     return () => window.removeEventListener("datahub:run:pipeline", handleRunPipelineEvent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionPreview, replayingPipeline, steps.length]);
+
+  // ── Sample loader + database connector shortcuts from canvas empty state ──
+  useEffect(() => {
+    function handleSampleLoad(e: Event) {
+      const detail = (e as CustomEvent<{ url: string }>).detail;
+      setSampleUrl(detail?.url);
+      setImportOpen(true);
+    }
+    function handleConnectDatabase() {
+      // Re-use the import modal; ImportModal has a Connectors tab
+      setImportOpen(true);
+    }
+    window.addEventListener("datahub:sample:load", handleSampleLoad);
+    window.addEventListener("datahub:connect:database", handleConnectDatabase);
+    return () => {
+      window.removeEventListener("datahub:sample:load", handleSampleLoad);
+      window.removeEventListener("datahub:connect:database", handleConnectDatabase);
+    };
+  }, []);
+
+  // ── Global keyboard shortcuts ────────────────────────────────────────────
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const meta = e.ctrlKey || e.metaKey;
+      if (!meta) return;
+      const target = e.target as HTMLElement | null;
+      const inEditable = !!target && (
+        target.tagName === "INPUT"
+        || target.tagName === "TEXTAREA"
+        || target.isContentEditable
+      );
+      // Cmd/Ctrl+R : run pipeline (only when not in an editable field)
+      if (!inEditable && e.key.toLowerCase() === "r") {
+        if (steps.length && !replayingPipeline) {
+          e.preventDefault();
+          void handleRunPipeline();
+        }
+      }
+      // Cmd/Ctrl+I : open import
+      if (!inEditable && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        setImportOpen(true);
+      }
+      // Cmd/Ctrl+/ : focus search
+      if (e.key === "/") {
+        e.preventDefault();
+        setExplorerSearchFocusNonce((n) => n + 1);
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [steps.length, replayingPipeline]);
+
+  // ── Workspace toast listener ──────────────────────────────────────────────
+  useEffect(() => {
+    function showToast(e: Event) {
+      const detail = (e as CustomEvent<{ message: string; tone?: "success" | "info" | "error"; duration?: number }>).detail;
+      if (!detail?.message) return;
+      setToast({ message: detail.message, tone: detail.tone ?? "info" });
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToast(null), detail.duration ?? 3200);
+    }
+    window.addEventListener("datahub:toast", showToast);
+    return () => {
+      window.removeEventListener("datahub:toast", showToast);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const prevActiveDatasetRef = useRef<string | null>(activeDataset?.id ?? null);
   useEffect(() => {
@@ -391,6 +463,7 @@ export function WorkspacePage() {
             source_dataset_id: activeDataset?.id,
           });
           setDatasetRefreshNonce((v) => v + 1);
+          window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Saved checkpoint \u201c${liveArtifact.stepLabel}\u201d`, tone: "success" } }));
         } : undefined}
         onRunPipeline={handleRunPipeline}
         replayingPipeline={replayingPipeline}
@@ -487,6 +560,41 @@ export function WorkspacePage() {
           onNext={() => nextStep(STEPS.length)}
           onSkip={skipTour}
         />
+      )}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1100,
+            padding: "10px 16px",
+            borderRadius: 10,
+            background: toast.tone === "success"
+              ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(16,185,129,0.18))"
+              : toast.tone === "error"
+                ? "linear-gradient(135deg, rgba(248,113,113,0.22), rgba(239,68,68,0.18))"
+                : "linear-gradient(135deg, rgba(91,106,240,0.22), rgba(124,58,237,0.18))",
+            border: `1px solid ${toast.tone === "success" ? "rgba(34,197,94,0.5)" : toast.tone === "error" ? "rgba(248,113,113,0.5)" : "rgba(91,106,240,0.5)"}`,
+            color: toast.tone === "success" ? "#86efac" : toast.tone === "error" ? "#fca5a5" : "#c7d2fe",
+            fontSize: 12.5,
+            fontWeight: 500,
+            boxShadow: "0 12px 34px rgba(0,0,0,0.45)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            animation: "ws-toast-in 0.26s cubic-bezier(0.16,1,0.3,1)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+          }}
+        >
+          <style>{`@keyframes ws-toast-in { from { opacity: 0; transform: translate(-50%, 10px) } to { opacity: 1; transform: translate(-50%, 0) } }`}</style>
+          <span>{toast.tone === "success" ? "\u2713" : toast.tone === "error" ? "!" : "\u2022"}</span>
+          <span>{toast.message}</span>
+        </div>
       )}
     </main>
     </>

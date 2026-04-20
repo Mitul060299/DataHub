@@ -366,6 +366,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
               source_dataset_id: activeDataset?.id,
             });
             void loadDatasets();
+            window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Saved checkpoint \u201c${label}\u201d`, tone: "success" } }));
           }}
         />
 

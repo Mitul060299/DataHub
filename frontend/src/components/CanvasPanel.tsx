@@ -384,14 +384,22 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         </div>
       </div>
       {/* ── Step preview indicator (when previewing a step's snapshot) ── */}
-      {viewingStepIndex !== null && tab === "data" && (
+      {viewingStepIndex !== null && tab === "data" && (() => {
+        const stepDesc = steps[viewingStepIndex]?.description || `Step ${viewingStepIndex + 1}`;
+        const dsName = dataset?.name ?? "";
+        let cleanDesc = stepDesc;
+        if (dsName && cleanDesc.toLowerCase().startsWith(dsName.toLowerCase())) {
+          const rest = cleanDesc.slice(dsName.length).replace(/^\s*[-\u2013\u2014:_]\s*/, "").trim();
+          if (rest) cleanDesc = rest.charAt(0).toUpperCase() + rest.slice(1);
+        }
+        return (
         <div style={{ minHeight: 36, borderBottom: "1px solid rgba(91,106,240,0.25)", background: "linear-gradient(90deg, rgba(91,106,240,0.12), rgba(124,58,237,0.08))", display: "flex", alignItems: "center", padding: "0 14px", gap: 10, flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999, background: "rgba(91,106,240,0.22)", border: "1px solid rgba(91,106,240,0.45)", color: "#c7d2fe", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#a5b4fc" }} />
             STEP {viewingStepIndex + 1} PREVIEW
           </span>
           <span style={{ flex: 1, fontSize: 12, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {steps[viewingStepIndex]?.description || `Step ${viewingStepIndex + 1}`}
+            {cleanDesc}
             {timelineLoading && <span style={{ marginLeft: 10, color: "var(--tx2)", fontSize: 11 }}>Loading\u2026</span>}
           </span>
           <button
@@ -402,7 +410,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             Close preview
           </button>
         </div>
-      )}
+        );
+      })()}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {dataError && tab === "data" && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
           <div style={{ padding: "10px 16px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.2)", color: "var(--rd)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
@@ -526,13 +535,17 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             <DataVersionHistory datasetId={dataset.id} />
           </div>
         ) : tab === "data" ? (
-          <DataTable
-            loading={viewingStepIndex !== null ? timelineLoading : loading}
-            rows={effectiveRows ?? []}
-            columns={effectiveCols ?? []}
-            stepCount={steps.length}
-            lastAction={viewingStepIndex !== null ? "" : lastAction}
-          />
+          !dataset && !loading ? (
+            <CanvasEmptyState onImport={onImport} />
+          ) : (
+            <DataTable
+              loading={viewingStepIndex !== null ? timelineLoading : loading}
+              rows={effectiveRows ?? []}
+              columns={effectiveCols ?? []}
+              stepCount={steps.length}
+              lastAction={viewingStepIndex !== null ? "" : lastAction}
+            />
+          )
         ) : (
           <CanvasView workspaceId={workspaceId} projectId={projectId} />
         )}
@@ -588,5 +601,110 @@ function ExportItem({ label, sub, accent, badge, onClick }: ExportItemProps) {
         <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 1 }}>{sub}</div>
       </div>
     </button>
+  );
+}
+
+// ── Canvas empty state (no dataset selected) ────────────────────────────────
+function CanvasEmptyState({ onImport }: { onImport: () => void }) {
+  const samples: { title: string; sub: string; file: string; accent: string }[] = [
+    { title: "Retail sales", sub: "Storewide transactions \u00b7 CSV", file: "/samples/sales_sample.csv", accent: "#5b6af0" },
+    { title: "Employees", sub: "HR directory \u00b7 CSV", file: "/samples/employee_sample.csv", accent: "#22c55e" },
+    { title: "Journal entries", sub: "Finance ledger \u00b7 CSV", file: "/samples/journal_entry_sample.csv", accent: "#f59e0b" },
+  ];
+  const loadSample = (file: string) => {
+    window.dispatchEvent(new CustomEvent("datahub:sample:load", { detail: { url: file } }));
+  };
+  return (
+    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32, overflow: "auto" }}>
+      <style>{`
+        @keyframes cs-float { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+        @keyframes cs-pulse { 0%, 100% { opacity: 0.5 } 50% { opacity: 1 } }
+      `}</style>
+      <div style={{ width: "100%", maxWidth: 720, textAlign: "center" }}>
+        <div
+          style={{
+            margin: "0 auto 20px",
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: "linear-gradient(135deg, rgba(91,106,240,0.18), rgba(124,58,237,0.14))",
+            border: "1px solid rgba(91,106,240,0.35)",
+            display: "grid",
+            placeItems: "center",
+            animation: "cs-float 3.5s ease-in-out infinite",
+            boxShadow: "0 8px 28px rgba(91,106,240,0.25)",
+          }}
+        >
+          <IconTable size={26} color="#a5b4fc" />
+        </div>
+        <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "var(--tx0)", letterSpacing: "-0.01em" }}>
+          Start with data
+        </h2>
+        <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--tx2)", lineHeight: 1.5 }}>
+          Upload your own file, connect a database, or try a sample dataset below.
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 420, margin: "0 auto 28px" }}>
+          <button
+            onClick={onImport}
+            style={{
+              padding: "14px 16px", borderRadius: 10, border: "1px solid var(--ac)",
+              background: "linear-gradient(135deg, rgba(91,106,240,0.2), rgba(124,58,237,0.14))",
+              color: "#c7d2fe", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+              transition: "all 0.15s ease",
+              boxShadow: "0 4px 16px rgba(91,106,240,0.2)",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 22px rgba(91,106,240,0.35)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(91,106,240,0.2)"; }}
+          >
+            Upload file
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("datahub:connect:database"))}
+            style={{
+              padding: "14px 16px", borderRadius: 10, border: "1px solid var(--bd2)",
+              background: "var(--bg2)", color: "var(--tx0)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--bd3)"; e.currentTarget.style.background = "var(--bg3)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--bd2)"; e.currentTarget.style.background = "var(--bg2)"; }}
+          >
+            Connect database
+          </button>
+        </div>
+
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--tx2)", marginBottom: 12 }}>
+          TRY A SAMPLE
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, maxWidth: 640, margin: "0 auto" }}>
+          {samples.map((s) => (
+            <button
+              key={s.file}
+              onClick={() => loadSample(s.file)}
+              style={{
+                padding: "14px 14px", borderRadius: 10, border: "1px solid var(--bd)",
+                background: "var(--bg2)", textAlign: "left", cursor: "pointer",
+                display: "flex", flexDirection: "column", gap: 6,
+                transition: "all 0.15s ease",
+                position: "relative", overflow: "hidden",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = s.accent; e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--bd)"; e.currentTarget.style.transform = "translateY(0)"; }}
+            >
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.accent, boxShadow: `0 0 8px ${s.accent}`, animation: "cs-pulse 2s ease-in-out infinite" }} />
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tx0)" }}>{s.title}</div>
+              <div style={{ fontSize: 11, color: "var(--tx2)" }}>{s.sub}</div>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 28, fontSize: 11, color: "var(--tx2)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ padding: "2px 6px", border: "1px solid var(--bd2)", borderRadius: 4, background: "var(--bg2)", fontFamily: "monospace", fontSize: 10 }}>Ctrl K</span>
+          <span>to open the command palette</span>
+        </div>
+      </div>
+    </div>
   );
 }

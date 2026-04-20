@@ -79,7 +79,6 @@ _BLOCKED_DML = re.compile(
 _lock = threading.Lock()
 _sessions: dict[str, duckdb.DuckDBPyConnection] = {}
 _last_used: dict[str, float] = {}
-_pool_initialized: bool = False  # True once the first real session is created
 
 MAX_SESSION_AGE_SECONDS = 1800  # 30 minutes — comfortable on 2 GB Standard
 _CLEANUP_INTERVAL_SECONDS = 300  # run background cleanup every 5 minutes
@@ -251,8 +250,6 @@ def get_connection(session_id: str) -> duckdb.DuckDBPyConnection:
             pass
         _sessions[session_id] = new_conn
         _last_used[session_id] = time.monotonic()
-        global _pool_initialized
-        _pool_initialized = True
         return new_conn
 
 

@@ -654,11 +654,6 @@ export interface DatasetSessionState {
   updated_at: string | null;
 }
 
-export async function fetchDatasetSession(datasetId: string): Promise<DatasetSessionState> {
-  const response = await api.get<DatasetSessionState>(`/datasets/${datasetId}/session`);
-  return response.data;
-}
-
 export async function saveDatasetSession(
   datasetId: string,
   patch: Partial<Omit<DatasetSessionState, "dataset_id" | "updated_at">>,

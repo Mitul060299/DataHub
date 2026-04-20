@@ -114,11 +114,8 @@ def purge_old_snapshots(
         for step in ttl_rows:
             stats["scanned"] += 1
             try:
-                if _evict(step, source="pipeline_snapshot_ttl", db=session):
-                    stats["purged"] += 1
-                else:
-                    # safe_storage_delete queued a retry; NULL was still set
-                    stats["purged"] += 1
+                _evict(step, source="pipeline_snapshot_ttl", db=session)
+                stats["purged"] += 1
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "purge_old_snapshots TTL: eviction failed for step %s: %s",

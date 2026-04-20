@@ -285,11 +285,11 @@ export function WorkspacePage() {
       <Breadcrumb segments={breadcrumbSegments} />
       {/* ── Dataset Lane HUD ───────────────────────────────────────── */}
       {activeLanes.length > 0 && (
-        <div style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 100, display: "flex", gap: 6 }}>
+        <div style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 100, display: "flex", gap: 6, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", background: "rgba(13,13,17,0.7)", borderRadius: 10, padding: 4, border: "1px solid var(--bd)" }}>
           {activeLanes.map((lane) => {
             const isActive = lane.id === activeDataset?.id;
             return (
-              <div key={lane.id} style={{ display: "flex", alignItems: "center", gap: 0, borderRadius: 8, border: `1px solid ${isActive ? "var(--acg)" : "var(--bd)"}`, background: isActive ? "var(--acl)" : "var(--bg2)", boxShadow: "0 4px 16px rgba(0,0,0,0.45)", overflow: "hidden" }}>
+              <div key={lane.id} style={{ display: "flex", alignItems: "center", gap: 0, borderRadius: 8, border: `1px solid ${isActive ? "var(--acg)" : "transparent"}`, background: isActive ? "var(--acl)" : "transparent", overflow: "hidden", transition: "all 0.15s ease" }}>
                 <button
                   onClick={() => setActiveDataset(lane)}
                   style={{ padding: "6px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 11, color: isActive ? "var(--ac)" : "var(--tx1)", display: "flex", alignItems: "center", gap: 6 }}
@@ -334,14 +334,10 @@ export function WorkspacePage() {
             role="separator"
             aria-orientation="vertical"
             title="Drag to resize"
+            className="resize-handle"
             onMouseDown={() => setResizingExplorer(true)}
             style={{
-              width: 6,
-              cursor: "col-resize",
-              background: resizingExplorer ? "var(--bd3)" : "transparent",
-              borderRight: "1px solid var(--bd)",
-              borderLeft: "1px solid var(--bd)",
-              flexShrink: 0,
+              background: resizingExplorer ? "var(--acl)" : undefined,
             }}
           />
         </>
@@ -385,14 +381,10 @@ export function WorkspacePage() {
             role="separator"
             aria-orientation="vertical"
             title="Drag to resize pipeline panel"
+            className="resize-handle"
             onMouseDown={() => setResizingPipeline(true)}
             style={{
-              width: 6,
-              cursor: "col-resize",
-              background: resizingPipeline ? "var(--bd3)" : "transparent",
-              borderRight: "1px solid var(--bd)",
-              borderLeft: "1px solid var(--bd)",
-              flexShrink: 0,
+              background: resizingPipeline ? "var(--acl)" : undefined,
             }}
           />
           <PipelinePanel
@@ -410,14 +402,10 @@ export function WorkspacePage() {
         role="separator"
         aria-orientation="vertical"
         title="Drag to resize AI panel"
+        className="resize-handle"
         onMouseDown={() => setResizingAI(true)}
         style={{
-          width: 6,
-          cursor: "col-resize",
-          background: resizingAI ? "var(--bd3)" : "transparent",
-          borderRight: "1px solid var(--bd)",
-          borderLeft: "1px solid var(--bd)",
-          flexShrink: 0,
+          background: resizingAI ? "var(--acl)" : undefined,
         }}
       />
       <AIPanel

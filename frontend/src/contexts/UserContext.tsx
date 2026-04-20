@@ -54,7 +54,7 @@ const planLimits: Record<UserPlan, PlanLimits> = {
   Free: {
     maxFileSize: 50 * 1024 * 1024,
     maxDatasets: 3,
-    maxStorage: 100 * 1024 * 1024,
+    maxStorage: 500 * 1024 * 1024,
     maxWorkspaces: 1,
     maxProjectsPerWorkspace: 2,
     maxDatasetsPerProject: 3,
@@ -120,7 +120,7 @@ const planLimits: Record<UserPlan, PlanLimits> = {
   Business: {
     maxFileSize: 10 * 1024 * 1024 * 1024,
     maxDatasets: -1,
-    maxStorage: 1024 * 1024 * 1024 * 1024,
+    maxStorage: 2 * 1024 * 1024 * 1024 * 1024,
     maxWorkspaces: -1,
     maxProjectsPerWorkspace: -1,
     maxDatasetsPerProject: -1,

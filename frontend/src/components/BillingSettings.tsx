@@ -4,13 +4,16 @@ import {
   PLAN_FEATURES,
   cancelSubscription,
   fetchBillingStatus,
-  getAnnualSavings,
+  fetchSeatUsage,
   getDisplayPrice,
   getInvoicePdfUrl,
   initiateSubscription,
   listInvoices,
-  type BillingCycle,
+  purchaseSeats,
+  INCLUDED_SEATS,
+  EXTRA_SEAT_PRICE_INR,
   type BillingPlanSlug,
+  type SeatUsage,
 } from "../services/billing";
 
 const TIER_COLOR: Record<BillingPlanSlug, string> = {
@@ -55,9 +58,11 @@ export function BillingSettings() {
   const [message, setMessage] = useState<string | null>(null);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [showSelector, setShowSelector] = useState(false);
-  const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+  const [seatUsage, setSeatUsage] = useState<SeatUsage | null>(null);
+  const [seatInput, setSeatInput] = useState<number | null>(null);
+  const [seatBusy, setSeatBusy] = useState(false);
   const isIndian = useIsIndian();
 
   const load = async () => {
@@ -70,6 +75,12 @@ export function BillingSettings() {
       ]);
       setBillingState(statusResponse);
       setInvoices(invoiceResponse.slice(0, 12));
+      try {
+        const seats = await fetchSeatUsage();
+        setSeatUsage(seats);
+      } catch {
+        // seat usage only available for paid plans
+      }
     } catch (loadError: unknown) {
       const maybeError = loadError as { response?: { data?: { detail?: string } } };
       setError(maybeError.response?.data?.detail ?? "Failed to load billing information.");
@@ -84,11 +95,10 @@ export function BillingSettings() {
 
   const subscription = billingState?.subscription ?? null;
   const currentPlanSlug = useMemo(() => canonicalToSlug(billingState?.plan ?? null), [billingState?.plan]);
-  const currentCycle: BillingCycle = (subscription?.billing_cycle === "annual" ? "annual" : "monthly");
   const seatCount = Math.max(Number(subscription?.quantity ?? 1), 1);
 
   const currentAmountLabel = currentPlanSlug
-    ? getDisplayPrice(currentPlanSlug, currentCycle)
+    ? getDisplayPrice(currentPlanSlug)
     : "Free";
 
   const nextBillingLabel = formatDateTime(subscription?.current_end ?? null);
@@ -116,7 +126,7 @@ export function BillingSettings() {
     setUpgradeError(null);
     setBusyPlan(plan);
     try {
-      await initiateSubscription(plan, cycle, seatCount);
+      await initiateSubscription(plan, "monthly", seatCount);
     } catch (actionError: unknown) {
       const maybeError = actionError as { response?: { data?: { detail?: string } } };
       setUpgradeError(maybeError.response?.data?.detail ?? "Failed to start checkout. Please try again.");
@@ -211,7 +221,7 @@ export function BillingSettings() {
                 <div style={{ display: "grid", gap: 4 }}>
                   <p style={{ color: "var(--tx0)", fontWeight: 600, display: "inline-flex", gap: 8, alignItems: "center" }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: TIER_COLOR[currentPlanSlug] }} />
-                    {titleCase(currentPlanSlug)} Plan · {titleCase(currentCycle)} · {currentAmountLabel}
+                    {titleCase(currentPlanSlug)} Plan · Monthly · {currentAmountLabel}
                   </p>
                   <p style={{ color: "var(--tx1)", fontSize: 13 }}>
                     Next billing: {nextBillingLabel} · {seatCount} seat{seatCount > 1 ? "s" : ""}
@@ -250,17 +260,10 @@ export function BillingSettings() {
 
       {showSelector ? (
         <div style={{ border: "1px solid var(--bd2)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
-          <div style={{ display: "inline-flex", gap: 8 }}>
-            <button className={`btn ${cycle === "monthly" ? "btn-primary" : ""}`} onClick={() => setCycle("monthly")}>Monthly</button>
-            <button className={`btn ${cycle === "annual" ? "btn-primary" : ""}`} onClick={() => setCycle("annual")}>Annual</button>
-          </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
             {PLAN_ORDER.map((plan) => {
-              const isCurrent = currentPlanSlug === plan && currentCycle === cycle && billingState?.has_active_subscription;
+              const isCurrent = currentPlanSlug === plan && billingState?.has_active_subscription;
               const canUpgrade = !currentPlanSlug || PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(currentPlanSlug);
-              const annualSavings = getAnnualSavings(plan);
-              const monthlyEquivalent = getDisplayPrice(plan, "monthly").replace("/user/month", "");
 
               return (
                 <article key={plan} style={{ border: `1px solid ${isCurrent ? TIER_COLOR[plan] : "var(--bd2)"}`, borderRadius: 8, padding: 10, display: "grid", gap: 8, position: "relative" }}>
@@ -285,15 +288,7 @@ export function BillingSettings() {
                     <h3 style={{ fontSize: 14 }}>{titleCase(plan)}</h3>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: TIER_COLOR[plan] }} />
                   </div>
-                  <p className="mono" style={{ color: "var(--tx0)", fontSize: 12 }}>{getDisplayPrice(plan, cycle)}</p>
-                  {cycle === "annual" ? (
-                    <div style={{ display: "grid", gap: 4 }}>
-                      <p style={{ color: "var(--tx2)", fontSize: 11, textDecoration: "line-through" }}>
-                        {monthlyEquivalent} × 12
-                      </p>
-                      <span style={{ color: "#16a34a", fontSize: 11, fontWeight: 600 }}>Save {annualSavings}/year</span>
-                    </div>
-                  ) : null}
+                  <p className="mono" style={{ color: "var(--tx0)", fontSize: 12 }}>{getDisplayPrice(plan)}</p>
                   <ul style={{ color: "var(--tx1)", display: "grid", gap: 3, paddingLeft: 16, fontSize: 12 }}>
                     {PLAN_FEATURES[plan].map((feature) => (
                       <li key={feature}>{feature}</li>
@@ -315,6 +310,61 @@ export function BillingSettings() {
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {/* Seat Management */}
+      {seatUsage && currentPlanSlug && (currentPlanSlug === "team" || currentPlanSlug === "business") ? (
+        <div id="add-seats" style={{ border: "1px solid var(--bd2)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
+          <h3 style={{ fontSize: 14 }}>Seat Management</h3>
+          <p style={{ color: "var(--tx1)", fontSize: 13 }}>
+            Using {seatUsage.current_seats} of {seatUsage.purchased_seats} seats ({seatUsage.included_seats} included + {seatUsage.purchased_seats - seatUsage.included_seats} extra).
+            Max {seatUsage.max_seats} seats.
+          </p>
+          <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+            <label style={{ fontSize: 13, color: "var(--tx1)" }}>Total seats:</label>
+            <input
+              type="number"
+              min={seatUsage.included_seats}
+              max={seatUsage.max_seats}
+              value={seatInput ?? seatUsage.purchased_seats}
+              onChange={(e) => setSeatInput(Math.max(seatUsage.included_seats, Math.min(seatUsage.max_seats, Number(e.target.value))))}
+              style={{ width: 70, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx0)", fontSize: 13 }}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={seatBusy || (seatInput ?? seatUsage.purchased_seats) === seatUsage.purchased_seats}
+              onClick={async () => {
+                const target = seatInput ?? seatUsage.purchased_seats;
+                setSeatBusy(true);
+                try {
+                  const result = await purchaseSeats(target);
+                  setMessage(
+                    result.changed
+                      ? target > seatUsage.purchased_seats
+                        ? `Seats updated to ${result.quantity}. Change effective immediately.`
+                        : `Seats will reduce to ${result.quantity} at next renewal.`
+                      : "No change."
+                  );
+                  await load();
+                } catch (e: unknown) {
+                  const maybeError = e as { response?: { data?: { detail?: string } } };
+                  setError(maybeError.response?.data?.detail ?? "Failed to update seats.");
+                } finally {
+                  setSeatBusy(false);
+                  setSeatInput(null);
+                }
+              }}
+            >
+              {seatBusy ? "Updating..." : "Update seats"}
+            </button>
+          </div>
+          {EXTRA_SEAT_PRICE_INR[currentPlanSlug] ? (
+            <p style={{ color: "var(--tx2)", fontSize: 12 }}>
+              Each extra seat: ₹{EXTRA_SEAT_PRICE_INR[currentPlanSlug].toLocaleString("en-IN")}/month.
+              Increases apply immediately; decreases take effect at next renewal.
+            </p>
+          ) : null}
         </div>
       ) : null}
 

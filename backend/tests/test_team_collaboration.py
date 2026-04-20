@@ -928,7 +928,7 @@ class TestAcceptInvite(unittest.TestCase):
 class TestPlanLimits(unittest.TestCase):
 
     def _limits(self, plan: str) -> dict:
-        from app.config.plan_limits import get_limits
+        from app.services.plan_limits import get_limits
         return get_limits(plan)
 
     def test_G1_free_plan_solo_only(self):

@@ -7,9 +7,10 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models_db import DatasetMetaDB, User, Workspace
+from ..models_db import DatasetMetaDB, User, Workspace, WorkspaceMemberDB
 from ..security import get_current_subject, get_current_user_id
 from . import billing_repository
+from .plan_limits import get_limits as _get_usage_limits
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ PLAN_ORDER = {
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "Free": PlanLimits(
         max_file_size_bytes=50 * 1024 * 1024,           # 50 MB
-        max_storage_bytes=100 * 1024 * 1024,             # 100 MB
+        max_storage_bytes=500 * 1024 * 1024,             # 500 MB
         max_datasets=3,
         max_collab_workspaces=0,                         # cannot CREATE collab workspaces
         max_projects_per_workspace=2,
@@ -54,7 +55,7 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
     "Professional": PlanLimits(
         max_file_size_bytes=1024 * 1024 * 1024,          # 1 GB
         max_storage_bytes=20 * 1024 * 1024 * 1024,       # 20 GB
-        max_datasets=25,
+        max_datasets=50,
         max_collab_workspaces=0,                         # cannot CREATE collab workspaces
         max_projects_per_workspace=20,
         allowed_formats={"csv", "excel", "json", "parquet"},
@@ -79,7 +80,7 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
     ),
     "Business": PlanLimits(
         max_file_size_bytes=10 * 1024 * 1024 * 1024,     # 10 GB
-        max_storage_bytes=1024 * 1024 * 1024 * 1024,     # 1 TB
+        max_storage_bytes=2 * 1024 * 1024 * 1024 * 1024, # 2 TB
         max_datasets=-1,
         max_collab_workspaces=9,                         # up to 9 collab workspaces (10 total incl. personal)
         max_projects_per_workspace=-1,
@@ -168,6 +169,70 @@ def enforce_collab_workspace_limit(plan: str, existing_collab_count: int) -> Non
         raise HTTPException(
             status_code=403,
             detail=f"Collab workspace limit reached for {normalize_plan(plan)} plan.",
+        )
+
+
+def enforce_member_seat_limit(
+    billing_user_id: str,
+    plan: str,
+    db: Session,
+) -> None:
+    """Block workspace member invites when purchased seats are exhausted.
+
+    Counts active + pending members across ALL workspaces owned by
+    *billing_user_id*.  Compares against the subscription's ``quantity``
+    (purchased seats), falling back to the plan's ``included_seats``.
+
+    Raises HTTPException(403) with a structured payload containing the
+    upgrade URL so the frontend can render a one-click resolution.
+    """
+    usage_limits = _get_usage_limits(plan)
+    included_seats: int = usage_limits["included_seats"]
+    max_seats: int = usage_limits["max_seats"]
+
+    # Read purchased seat count from active subscription (defaults to included)
+    purchased_seats = included_seats
+    if billing_user_id:
+        sub = billing_repository.get_active_subscription(billing_user_id)
+        if sub:
+            purchased_seats = max(int(sub.get("quantity") or included_seats), included_seats)
+
+    # Count active + pending members across all workspaces owned by this user
+    owned_ws_ids = [
+        ws.id for ws in
+        db.query(Workspace.id).filter(Workspace.owner_id == billing_user_id).all()
+    ]
+    if not owned_ws_ids:
+        return  # no workspaces → nothing to cap
+
+    current_seats = (
+        db.query(WorkspaceMemberDB)
+        .filter(
+            WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
+            WorkspaceMemberDB.status.in_(["active", "pending"]),
+        )
+        .count()
+    )
+    # Owner counts as 1 seat (not stored in workspace_members)
+    current_seats += 1
+
+    if max_seats != -1 and current_seats >= purchased_seats:
+        extra_seat_price = "₹2,499" if plan.strip().title() == "Team" else "₹3,999"
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "seat_limit_reached",
+                "current_seats": current_seats,
+                "max_seats": purchased_seats,
+                "extra_seat_price_inr": extra_seat_price,
+                "upgrade_url": "/settings/billing#add-seats",
+                "message": (
+                    f"You've used all {purchased_seats} "
+                    f"{'included' if purchased_seats == included_seats else 'purchased'} seats. "
+                    f"Add more seats from {extra_seat_price}/seat/month in Billing settings "
+                    f"to invite this member."
+                ),
+            },
         )
 
 

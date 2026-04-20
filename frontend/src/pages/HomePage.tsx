@@ -109,7 +109,6 @@ type PricingPlan = {
   buttonLabel: string;
   buttonStyle: "ghost" | "blue" | "primary" | "amber" | "dark";
   action: "trial" | "contact" | "waitlist" | "checkout";
-  popular?: boolean;
 };
 
 const plans: PricingPlan[] = [
@@ -125,7 +124,7 @@ const plans: PricingPlan[] = [
       "2 projects per workspace",
       "100 AI messages/month",
       "50 MB file size",
-      "100 MB storage",
+      "500 MB storage",
       "5 GB data scan/month",
       "1 team member",
       "DB connections: CSV & Excel only",
@@ -138,18 +137,17 @@ const plans: PricingPlan[] = [
   {
     tier: "Professional",
     color: "#3b82f6",
-    priceUSD: "$79",
-    priceINR: "\u20b93,299",
-    periodUSD: "/month per account",
-    periodINR: "/month per account",
+    priceUSD: "$149",
+    priceINR: "\u20b96,999",
+    periodUSD: "/month (Coming soon)",
+    periodINR: "/month",
     features: [
-      "1 personal workspace",
+      "1 personal workspace · 1 seat",
       "20 projects per workspace",
       "2,000 AI messages/month",
       "1 GB file size",
       "20 GB storage",
       "50 GB data scan/month",
-      "1 team member",
       "DB connections: PostgreSQL, MySQL, SQLite, MSSQL, Oracle",
       "Email support",
     ],
@@ -160,18 +158,17 @@ const plans: PricingPlan[] = [
   {
     tier: "Team",
     color: "#5B6AF0",
-    priceUSD: "$149",
-    priceINR: "\u20b96,199",
-    periodUSD: "/month per account",
-    periodINR: "/month per account",
+    priceUSD: "$299",
+    priceINR: "\u20b914,999",
+    periodUSD: "/month (Coming soon)",
+    periodINR: "/month",
     features: [
+      "Includes 3 seats · +₹2,499/extra seat",
       "1 personal + 2 collab workspaces",
-      "Unlimited projects",
-      "5,000 AI messages/month",
+      "5,000+ AI messages (scales with seats)",
       "5 GB file size",
-      "100 GB storage",
-      "200 GB data scan/month",
-      "Up to 10 members per workspace",
+      "100 GB+ storage (scales with seats)",
+      "200 GB+ data scan/month",
       "DB connections: + Snowflake, Redshift, BigQuery",
       "Audit log",
       "Priority email support",
@@ -179,23 +176,20 @@ const plans: PricingPlan[] = [
     buttonLabel: "Join waitlist",
     buttonStyle: "primary",
     action: "waitlist",
-    popular: true,
   },
   {
     tier: "Business",
     color: "#eab308",
-    priceUSD: "$399",
-    priceINR: "\u20b916,599",
-    periodUSD: "/month per account",
-    periodINR: "/month per account",
+    priceUSD: "$599",
+    priceINR: "\u20b929,999",
+    periodUSD: "/month (Coming soon)",
+    periodINR: "/month",
     features: [
+      "Includes 5 seats · +₹3,999/extra seat",
       "1 personal + 9 collab workspaces",
-      "Unlimited projects",
       "Unlimited AI messages",
       "10 GB file size",
-      "1 TB storage",
-      "Unlimited data scan",
-      "Up to 50 members per workspace",
+      "2 TB storage + unlimited scan",
       "DB connections: + Custom connectors",
       "Audit log",
       "SSO / SAML",
@@ -552,10 +546,10 @@ export function HomePage() {
             <div
               style={{
                 background: "#111115",
-                border: "1px solid #2e2e3a",
-                borderRadius: "14px",
+                border: "1px solid #2a2a36",
+                borderRadius: "16px",
                 overflow: "hidden",
-                boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+                boxShadow: "0 32px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(91,106,240,0.08)",
               }}
             >
               <div
@@ -1033,7 +1027,7 @@ export function HomePage() {
               return (
                 <motion.article
                   key={plan.tier}
-                  className={`pricing-card ${plan.tier === "Team" ? "pricing-card-team" : ""}`}
+                  className="pricing-card"
                   style={{ "--plan-color": plan.color } as CSSProperties}
                   initial={{ opacity: 0, y: 22 }}
                   whileInView={{ opacity: 1, y: 0 }}
@@ -1041,7 +1035,6 @@ export function HomePage() {
                   transition={{ duration: 0.42, delay: planIdx * 0.07, ease: "easeOut" }}
                   whileHover={{ y: -6, transition: { duration: 0.2 } }}
                 >
-                  {plan.popular ? <span className="pricing-popular">Popular</span> : null}
                   <p className="pricing-tier">{plan.tier}</p>
                   <p className="pricing-price">{currency === "INR" ? plan.priceINR : plan.priceUSD}</p>
                   <p className="pricing-period">{currency === "INR" ? plan.periodINR : plan.periodUSD}</p>
@@ -1285,8 +1278,8 @@ export function HomePage() {
         </div>
       </section>
 
-      <footer style={{ borderTop: "1px solid #1a1a22", padding: "24px 0", textAlign: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "24px", flexWrap: "wrap", fontSize: "13px", color: "#44445a" }}>
+      <footer style={{ borderTop: "1px solid #1a1a24", padding: "32px 0", textAlign: "center", background: "#0a0a0f" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "28px", flexWrap: "wrap", fontSize: "13px", color: "#44445a" }}>
           {([
             { href: "/docs", label: "Documentation" },
             { href: "/terms", label: "Terms of Service" },
@@ -1296,13 +1289,14 @@ export function HomePage() {
             <a
               key={label}
               href={href}
-              style={{ color: "#44445a", textDecoration: "none" }}
+              style={{ color: "#44445a", textDecoration: "none", transition: "color 0.15s ease" }}
               onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.color = "#9898b0")}
               onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.color = "#44445a")}
             >
               {label}
             </a>
           ))}
+          <span style={{ color: "#33333e" }}>·</span>
           <span>© {new Date().getFullYear()} DataHub</span>
         </div>
       </footer>

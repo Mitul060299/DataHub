@@ -1098,7 +1098,7 @@ function PlanLimits() {
             <tr><td>Projects per workspace</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
             <tr><td>AI messages / month</td><td>100</td><td>2,000</td><td>5,000</td><td>Unlimited</td><td>Unlimited</td></tr>
             <tr><td>Max file size</td><td>50 MB</td><td>1 GB</td><td>5 GB</td><td>10 GB</td><td>Unlimited</td></tr>
-            <tr><td>Storage</td><td>100 MB</td><td>20 GB</td><td>100 GB</td><td>1 TB</td><td>Unlimited</td></tr>
+            <tr><td>Storage</td><td>500 MB</td><td>20 GB</td><td>100 GB</td><td>2 TB</td><td>Unlimited</td></tr>
             <tr><td>Data scan / month</td><td>5 GB</td><td>50 GB</td><td>200 GB</td><td>Unlimited</td><td>Unlimited</td></tr>
             <tr><td>Members per workspace</td><td>1</td><td>1</td><td>10</td><td>50</td><td>Unlimited</td></tr>
             <tr><td>DB connections</td><td>CSV, Excel</td><td>+ PG, MySQL, SQLite, MSSQL, Oracle</td><td>+ Snowflake, Redshift, BigQuery</td><td>+ Custom connectors</td><td>All</td></tr>
@@ -1116,7 +1116,7 @@ function PlanLimits() {
       <p>Usage inside a <strong>collab workspace</strong> (AI calls, pipeline runs, data scanned) is charged to the <strong>workspace owner's</strong> account — not the calling member's. A Free-tier user invited into a Team collab workspace uses the Team owner's quota.</p>
 
       <div className="docs-callout docs-callout--info">
-        INR pricing: Professional ₹3,299/mo · Team ₹6,199/mo · Business ₹16,599/mo · Enterprise custom. Billing is processed via Razorpay.
+        INR pricing: Professional ₹6,999/mo · Team ₹14,999/mo (3 seats incl, +₹2,499/extra) · Business ₹29,999/mo (5 seats incl, +₹3,999/extra) · Enterprise custom. Billing is processed via Razorpay.
       </div>
     </article>
   );

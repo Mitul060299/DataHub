@@ -8,12 +8,12 @@ from typing import Any
 import razorpay
 
 from ..config import settings
-from ..razorpay_plans import MONTHLY_AMOUNTS_PAISE, RAZORPAY_PLAN_IDS
+from ..razorpay_plans import INCLUDED_SEATS, MONTHLY_AMOUNTS_PAISE, PER_SEAT_PAISE, RAZORPAY_PLAN_IDS
 from . import billing_repository
 
 
 _ALLOWED_PLANS = {"professional", "team", "business"}
-_ALLOWED_BILLING_CYCLES = {"monthly", "annual"}
+_ALLOWED_BILLING_CYCLES = {"monthly"}
 
 
 def _get_client() -> razorpay.Client:
@@ -48,7 +48,7 @@ def _normalize_plan_slug(plan: str) -> str:
 def _normalize_billing_cycle(billing_cycle: str) -> str:
     cycle = str(billing_cycle or "").strip().lower()
     if cycle not in _ALLOWED_BILLING_CYCLES:
-        raise ValueError("Invalid billing cycle. Must be monthly or annual.")
+        raise ValueError("Invalid billing cycle. Must be monthly.")
     return cycle
 
 
@@ -65,12 +65,17 @@ def _calculate_proration(subscription: dict[str, Any]) -> int:
         return 0
 
     plan_slug = billing_repository.to_plan_slug(subscription.get("plan"))
-    monthly_amount = MONTHLY_AMOUNTS_PAISE.get(plan_slug, 0)
-    if monthly_amount <= 0:
+    base_amount = MONTHLY_AMOUNTS_PAISE.get(plan_slug, 0)
+    quantity = max(int(subscription.get("quantity") or 1), 1)
+    included = INCLUDED_SEATS.get(plan_slug, 1)
+    extra_seats = max(0, quantity - included)
+    seat_price = PER_SEAT_PAISE.get(plan_slug, 0)
+    total_monthly = base_amount + extra_seats * seat_price
+    if total_monthly <= 0:
         return 0
 
     ratio = max(0.0, min(1.0, remaining_seconds / total_seconds))
-    return int(ratio * monthly_amount)
+    return int(ratio * total_monthly)
 
 
 async def create_subscription(
@@ -86,11 +91,14 @@ async def create_subscription(
     if not plan_id or plan_id == "plan_REPLACE_ME":
         raise RuntimeError("Razorpay plan IDs are not configured")
 
-    total_count = 12 if cycle == "monthly" else 1
+    # Ensure quantity is at least the included seats for the plan
+    included = INCLUDED_SEATS.get(plan_slug, 1)
+    effective_quantity = max(int(quantity or included), included)
+
     payload: dict[str, Any] = {
         "plan_id": plan_id,
-        "total_count": total_count,
-        "quantity": max(int(quantity or 1), 1),
+        "total_count": 12,
+        "quantity": effective_quantity,
         "customer_notify": 1,
         "notes": {
             "user_id": user_id,
@@ -107,9 +115,64 @@ async def create_subscription(
         subscription=subscription,
         plan=plan_slug,
         billing_cycle=cycle,
-        quantity=max(int(quantity or 1), 1),
+        quantity=effective_quantity,
     )
     return subscription
+
+
+async def update_seat_count(user_id: str, new_quantity: int) -> dict[str, Any]:
+    """Change the number of purchased seats on an active subscription.
+
+    Uses Razorpay's ``subscription.update`` API to bump ``quantity``.
+    The charge difference is applied immediately (prorated by Razorpay).
+    Seat *downgrades* take effect at the next renewal (no mid-cycle refund).
+    """
+    current_sub = billing_repository.get_active_subscription(user_id)
+    if not current_sub:
+        raise ValueError("No active subscription. Subscribe to a plan first.")
+
+    plan_slug = billing_repository.to_plan_slug(current_sub.get("plan"))
+    included = INCLUDED_SEATS.get(plan_slug, 1)
+    if new_quantity < included:
+        raise ValueError(f"Minimum seat count for {plan_slug} plan is {included} (included).")
+
+    from .plan_limits import get_limits as _get_usage_limits
+    plan_canonical = billing_repository.to_canonical_plan(plan_slug)
+    usage_limits = _get_usage_limits(plan_canonical)
+    max_seats = usage_limits["max_seats"]
+    if max_seats != -1 and new_quantity > max_seats:
+        raise ValueError(f"Maximum seat count for {plan_slug} plan is {max_seats}.")
+
+    razorpay_sub_id = str(current_sub.get("razorpay_subscription_id") or "")
+    if not razorpay_sub_id:
+        raise ValueError("Active subscription is missing Razorpay subscription id.")
+
+    old_quantity = max(int(current_sub.get("quantity") or included), included)
+
+    if new_quantity > old_quantity:
+        # Seat increase: apply immediately
+        _get_client().subscription.edit(razorpay_sub_id, {
+            "quantity": new_quantity,
+            "schedule_change_at": "now",
+        })
+    elif new_quantity < old_quantity:
+        # Seat decrease: take effect at next renewal
+        _get_client().subscription.edit(razorpay_sub_id, {
+            "quantity": new_quantity,
+            "schedule_change_at": "cycle_end",
+        })
+    else:
+        return {"quantity": new_quantity, "changed": False}
+
+    # Sync quantity in our DB, validated against the calling user
+    billing_repository.update_subscription_quantity(razorpay_sub_id, new_quantity, expected_user_id=user_id)
+
+    return {
+        "quantity": new_quantity,
+        "changed": True,
+        "previous_quantity": old_quantity,
+        "effective": "now" if new_quantity > old_quantity else "next_renewal",
+    }
 
 
 async def upgrade_subscription(user_id: str, new_plan: str, new_billing_cycle: str) -> dict[str, Any]:

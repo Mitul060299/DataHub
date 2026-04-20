@@ -246,8 +246,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         </div>
       )}
-      <div style={{ height: 38, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", background: "var(--bg1)" }}>
-        <div style={{ display: "inline-flex", gap: 1 }}>
+      <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
+        <div style={{ display: "inline-flex", gap: 3 }}>
           {([
             { key: "data",     icon: <IconTable size={16} />,     label: "Data" },
             { key: "pipeline", icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null },
@@ -267,21 +267,20 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 34,
+                  width: 38,
                   height: 34,
-                  border: "none",
-                  borderBottom: active ? "2px solid var(--ac)" : "2px solid transparent",
-                  borderRadius: 0,
-                  background: "transparent",
+                  border: active ? "1px solid rgba(91,106,240,0.2)" : "1px solid transparent",
+                  borderRadius: 8,
+                  background: active ? "rgba(91,106,240,0.12)" : "transparent",
                   color: active ? "var(--ac)" : "var(--tx2)",
                   cursor: "pointer",
                   flexShrink: 0,
-                  transition: "color 0.15s, border-color 0.15s",
+                  transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
                 {icon}
                 {badge != null && (
-                  <span style={{ position: "absolute", top: 5, right: 4, background: "var(--ac)", color: "var(--bg1)", fontSize: 8, fontWeight: 800, borderRadius: 999, minWidth: 13, height: 13, lineHeight: "13px", textAlign: "center", padding: "0 3px" }}>
+                  <span style={{ position: "absolute", top: 4, right: 3, background: "var(--ac)", color: "var(--bg1)", fontSize: 8, fontWeight: 800, borderRadius: 999, minWidth: 14, height: 14, lineHeight: "14px", textAlign: "center", padding: "0 3px" }}>
                     {badge}
                   </span>
                 )}

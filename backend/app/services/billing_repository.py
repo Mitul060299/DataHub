@@ -226,11 +226,43 @@ def store_subscription(
     return payload
 
 
+def update_subscription_quantity(
+    razorpay_subscription_id: str,
+    quantity: int,
+    *,
+    expected_user_id: str | None = None,
+) -> None:
+    """Update the seat count (quantity) on a subscription row.
+
+    Pass *expected_user_id* from user-facing call sites to prevent an
+    attacker from modifying another user's subscription quantity.
+    """
+    client = _client()
+    if not client:
+        raise RuntimeError("Supabase client is not configured")
+
+    # SECURITY: verify ownership when caller provides expected_user_id
+    if expected_user_id:
+        existing = get_subscription_by_razorpay_id(razorpay_subscription_id)
+        if existing and str(existing.get("user_id", "")) != str(expected_user_id):
+            raise ValueError(
+                f"Ownership mismatch: subscription {razorpay_subscription_id} "
+                f"does not belong to user {expected_user_id}"
+            )
+
+    client.table("subscriptions").update({
+        "quantity": max(int(quantity), 1),
+        "updated_at": _now_iso(),
+    }).eq("razorpay_subscription_id", razorpay_subscription_id).execute()
+
+
 def update_subscription_status(
     razorpay_subscription_id: str,
     status: str,
     user_id: str | None,
     plan: str | None,
+    *,
+    verify_ownership: bool = True,
 ) -> None:
     client = _client()
     if not client:
@@ -239,6 +271,17 @@ def update_subscription_status(
     normalized_status = str(status or "").lower()
     if not normalized_status:
         raise ValueError("status is required")
+
+    # SECURITY: When called from a user-facing endpoint, verify the subscription
+    # belongs to the caller before updating their plan.  Webhook paths set
+    # verify_ownership=False because ownership is implicit from the event payload.
+    if verify_ownership and user_id:
+        existing = get_subscription_by_razorpay_id(razorpay_subscription_id)
+        if existing and str(existing.get("user_id", "")) != str(user_id):
+            raise ValueError(
+                f"Ownership mismatch: subscription {razorpay_subscription_id} "
+                f"does not belong to user {user_id}"
+            )
 
     updates = {
         "status": normalized_status,

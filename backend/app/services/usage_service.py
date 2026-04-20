@@ -17,7 +17,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from .plan_limits import get_limits, USAGE_FIELD_LABELS
+from .plan_limits import compute_effective_limits, get_limits, USAGE_FIELD_LABELS
+from . import billing_repository
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,11 @@ def get_usage(user_id: str, db: Session, period: str | None = None) -> dict:
     }
 
 
+_ALLOWED_INCREMENT_FIELDS: frozenset[str] = frozenset(
+    {"api_calls", "pipeline_runs", "datasets_uploaded"}
+)
+
+
 def increment_usage(
     user_id: str,
     field: UsageField,
@@ -76,6 +82,10 @@ def increment_usage(
     amount: int = 1,
 ) -> None:
     """Atomically increment a usage counter. Creates the row if absent."""
+    # SECURITY: validate field against an explicit allowlist before interpolating
+    # into SQL.  The Literal type hint is not enforced at runtime.
+    if field not in _ALLOWED_INCREMENT_FIELDS:
+        raise ValueError(f"Invalid usage field: {field!r}")
     period = _current_period()
     try:
         db.execute(
@@ -140,10 +150,18 @@ def enforce_usage_limit(
 ) -> None:
     """
     Check whether the user has hit the monthly limit for *field*.
+    Uses seat-scaled limits when the user has purchased extra seats.
     Raises HTTPException(403) with a structured payload if exceeded.
     """
     limit_key = _FIELD_TO_LIMIT_KEY[field]
-    limits = get_limits(plan)
+
+    # Resolve purchased seat count for seat-scaled limits
+    quantity = 1
+    sub = billing_repository.get_active_subscription(user_id)
+    if sub:
+        quantity = max(int(sub.get("quantity") or 1), 1)
+
+    limits = compute_effective_limits(plan, quantity)
     cap: int = limits[limit_key]  # type: ignore[literal-required]
     if cap == -1:
         return  # unlimited

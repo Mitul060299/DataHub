@@ -20,25 +20,25 @@ const planCards: PlanCard[] = [
     key: "Free",
     price: "₹0",
     description: "Students, evaluation, and hobby workflows",
-    highlights: ["1 personal workspace", "2 projects/workspace", "100 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
+    highlights: ["1 personal workspace", "2 projects/workspace", "500 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
   },
   {
     key: "Professional",
-    price: "₹3,299 / month per account",
+    price: "₹6,999 / month",
     description: "Solo consultants and analysts",
-    highlights: ["1 personal workspace", "20 projects/workspace", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle"],
+    highlights: ["1 personal workspace · 1 seat", "20 projects/workspace", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle"],
   },
   {
     key: "Team",
-    price: "₹6,199 / month per account",
+    price: "₹14,999 / month",
     description: "Small analytics and consulting teams",
-    highlights: ["1 personal + 2 collab workspaces", "Unlimited projects", "100 GB storage · 200 GB scan/month", "5,000 AI messages/month", "Up to 10 members per workspace", "+ Snowflake, Redshift, BigQuery"],
+    highlights: ["Includes 3 seats · +₹2,499/extra seat", "1 personal + 2 collab workspaces", "100 GB+ storage · 200 GB+ scan/month", "5,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery"],
   },
   {
     key: "Business",
-    price: "₹16,599 / month per account",
+    price: "₹29,999 / month",
     description: "Governance-first mid-size enterprises",
-    highlights: ["1 personal + 9 collab workspaces", "Unlimited projects", "1 TB storage · unlimited scan", "Unlimited AI messages", "Up to 50 members per workspace", "SSO/SAML · Custom connectors"],
+    highlights: ["Includes 5 seats · +₹3,999/extra seat", "1 personal + 9 collab workspaces", "2 TB storage + unlimited scan", "Unlimited AI messages", "SSO/SAML · Custom connectors"],
   },
   {
     key: "Enterprise",
@@ -91,29 +91,34 @@ export function PricingPage() {
   };
 
   return (
-    <main className="app-page" style={{ padding: 20 }}>
-      <section className="panel" style={{ padding: 16, marginBottom: 12 }}>
-        <h1 style={{ fontSize: 22, marginBottom: 6 }}>Pricing & Plans</h1>
-        <p style={{ color: "var(--tx1)" }}>Current plan: <strong style={{ color: "var(--tx0)" }}>{plan}</strong></p>
-        {message ? <p style={{ color: "var(--tx1)", marginTop: 8 }}>{message}</p> : null}
+    <main className="app-page ds-mesh-bg" style={{ padding: "32px 24px" }}>
+      <section style={{ maxWidth: 1180, margin: "0 auto 32px", textAlign: "center" }}>
+        <span className="ds-eyebrow" style={{ marginBottom: 16 }}>Pricing</span>
+        <h1 className="ds-h1 ds-gradient-text" style={{ marginBottom: 12 }}>Simple, transparent plans</h1>
+        <p className="ds-lead" style={{ margin: "0 auto 8px" }}>
+          Currently on <strong style={{ color: "var(--tx0)" }}>{plan}</strong>. Upgrade or downgrade anytime.
+        </p>
+        {message ? <p style={{ color: "var(--tx1)", marginTop: 12, fontSize: 14 }}>{message}</p> : null}
       </section>
 
       {!isIndian && (
         <div style={{
-          background: "#1A1D27",
-          border: "1px solid #2A2D3A",
-          borderRadius: 8,
-          padding: "12px 20px",
-          marginBottom: 12,
+          maxWidth: 800,
+          margin: "0 auto 24px",
+          background: "var(--acl)",
+          border: "1px solid var(--acg)",
+          borderRadius: "var(--r12)",
+          padding: "14px 20px",
           textAlign: "center",
           fontSize: 13,
-          color: "#8B8FA8",
+          color: "var(--accent2)",
+          backdropFilter: "blur(8px)",
         }}>
           💳 International billing is coming soon. Sign up free and we'll notify you when paid plans are available in your region.
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 14, maxWidth: 1180, margin: "0 auto" }}>
         {planCards.map((card, index) => {
           const isCurrent = card.key === plan;
           const canUpgrade = index >= currentIndex && !isCurrent;
@@ -122,41 +127,42 @@ export function PricingPage() {
           return (
             <article
               key={card.key}
-              className="panel"
+              className="ds-card ds-card--hover"
               style={{
-                padding: 12,
-                borderColor: isCurrent ? "var(--ac)" : "var(--bd)",
-                background: isCurrent ? "var(--acl)" : "var(--bg1)",
+                padding: 20,
+                borderColor: isCurrent ? "var(--ac)" : "var(--bd2)",
+                background: isCurrent ? "linear-gradient(180deg, rgba(99,102,241,0.08), var(--bg2) 60%)" : "var(--bg2)",
                 display: "grid",
-                gap: 8,
+                gap: 10,
                 position: "relative",
+                boxShadow: isCurrent ? "0 0 0 1px var(--acg), 0 16px 40px rgba(0,0,0,0.3)" : undefined,
               }}
             >
               {isPaidLocked && (
-                <span style={{
+                <span className="ds-chip" style={{
                   position: "absolute",
-                  top: 8,
-                  right: 8,
-                  background: "#2A2D3A",
-                  color: "#8B8FA8",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "2px 6px",
-                  borderRadius: 4,
-                  letterSpacing: "0.04em",
+                  top: 10,
+                  right: 10,
+                  fontSize: 9,
+                  padding: "2px 8px",
+                  letterSpacing: "0.06em",
                   textTransform: "uppercase",
+                  fontWeight: 700,
                 }}>
                   Coming Soon
                 </span>
               )}
               <div>
-                <h3 style={{ marginBottom: 4 }}>{card.key}</h3>
-                <p className="mono" style={{ color: "var(--tx0)", fontSize: 12 }}>{card.price}</p>
+                <h3 style={{ marginBottom: 6, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--tx0)" }}>{card.key}</h3>
+                <p className="mono" style={{ color: "var(--tx0)", fontSize: 18, fontWeight: 700, fontFamily: "var(--display)" }}>{card.price}</p>
               </div>
-              <p style={{ color: "var(--tx1)", minHeight: 36 }}>{card.description}</p>
-              <ul style={{ color: "var(--tx1)", display: "grid", gap: 4, paddingLeft: 16 }}>
+              <p style={{ color: "var(--tx1)", minHeight: 36, fontSize: 13, lineHeight: 1.5 }}>{card.description}</p>
+              <ul style={{ color: "var(--tx1)", display: "grid", gap: 6, paddingLeft: 0, listStyle: "none", fontSize: 12.5 }}>
                 {card.highlights.map((item) => (
-                  <li key={item}>{item}</li>
+                  <li key={item} style={{ display: "flex", gap: 8, alignItems: "flex-start", lineHeight: 1.5 }}>
+                    <span style={{ color: "var(--ac)", flexShrink: 0, marginTop: 2 }}>•</span>
+                    <span>{item}</span>
+                  </li>
                 ))}
               </ul>
               {isPaidLocked ? (

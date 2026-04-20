@@ -34,21 +34,22 @@ export function PipelinePanel({ width, onClose, onRunPipeline }: PipelinePanelPr
       {/* ── Header ── */}
       <div
         style={{
-          height: 40,
+          height: 42,
           borderBottom: "1px solid var(--bd)",
           display: "flex",
           alignItems: "center",
           padding: "0 10px 0 12px",
           gap: 8,
           flexShrink: 0,
+          background: "var(--bg1)",
         }}
       >
         <IconLayers size={14} color="var(--ac)" />
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
-            letterSpacing: "0.08em",
+            letterSpacing: "0.06em",
             textTransform: "uppercase",
             color: "var(--tx1)",
             flex: 1,

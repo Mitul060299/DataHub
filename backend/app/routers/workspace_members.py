@@ -23,7 +23,8 @@ from ..dependencies import CurrentUser, get_current_user
 from ..models import WorkspaceMemberInvite, WorkspaceMemberOut, WorkspaceMemberUpdate
 from ..models_db import WorkspaceMemberDB, Workspace
 from ..config import settings
-from ..config.plan_limits import get_limits
+from ..services.plan_limits import get_limits
+from ..services.plan_guard import enforce_member_seat_limit, resolve_workspace_plan
 from ..services.email_service import send_email
 
 router = APIRouter(tags=["workspace-members"])
@@ -132,7 +133,7 @@ def invite_member(
     db: Session = Depends(get_db),
 ) -> WorkspaceMemberOut:
     """Invite a user to a workspace by email. Requires Team plan or higher."""
-    # Plan check
+    # Plan check — Free/Professional cannot invite members
     limits = get_limits(current_user.plan)
     max_members = limits["max_team_members"]
     if max_members == 1:
@@ -144,20 +145,9 @@ def invite_member(
     ws = _get_workspace_or_404(workspace_id, db)
     _require_workspace_admin(workspace_id, current_user.id, db)
 
-    # Member cap check
-    active_count = (
-        db.query(WorkspaceMemberDB)
-        .filter(
-            WorkspaceMemberDB.workspace_id == workspace_id,
-            WorkspaceMemberDB.status == "active",
-        )
-        .count()
-    )
-    if max_members != -1 and active_count >= max_members:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Your plan allows a maximum of {max_members} members.",
-        )
+    # Seat-based cap check (counts active + pending across all owner's workspaces)
+    billing_user_id, billing_plan = resolve_workspace_plan(workspace_id, current_user.id, db)
+    enforce_member_seat_limit(billing_user_id, billing_plan, db)
 
     email = payload.email.strip().lower()
 

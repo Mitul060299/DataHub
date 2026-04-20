@@ -123,11 +123,27 @@ export function TopBar() {
               type="button"
               onClick={() => navigate(tab.path)}
               style={{
-                height: "var(--th)",
-                borderBottom: activeTab === tab.key ? "2px solid #5B6AF0" : "2px solid transparent",
-                color: activeTab === tab.key ? "#e8e8f0" : "#8888a0",
+                height: 32,
+                borderRadius: 8,
+                background: activeTab === tab.key ? "rgba(91,106,240,0.12)" : "transparent",
+                border: activeTab === tab.key ? "1px solid rgba(91,106,240,0.2)" : "1px solid transparent",
+                color: activeTab === tab.key ? "#c7d2fe" : "#8888a0",
                 fontSize: 13,
-                padding: "0 2px",
+                fontWeight: activeTab === tab.key ? 600 : 400,
+                padding: "0 14px",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (activeTab !== tab.key) {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                  e.currentTarget.style.color = "#b0b0c0";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== tab.key) {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "#8888a0";
+                }
               }}
             >
               {tab.label}
@@ -136,10 +152,10 @@ export function TopBar() {
         </nav>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
         {session ? (
           <>
-            <button className="btn" style={{ width: 30, padding: 0 }} type="button" aria-label="Notifications" onClick={() => navigate("/settings?section=notifications")} title="Notification preferences">
+            <button className="btn" style={{ width: 32, height: 32, padding: 0, borderRadius: 8, display: "grid", placeItems: "center" }} type="button" aria-label="Notifications" onClick={() => navigate("/settings?section=notifications")} title="Notification preferences">
               <IconBell size={14} />
             </button>
             <div ref={menuRef} style={{ position: "relative" }}>
@@ -147,24 +163,25 @@ export function TopBar() {
                 type="button"
                 onClick={() => setMenuOpen((open) => !open)}
                 style={{
-                  height: 32,
-                  borderRadius: 999,
-                  border: "1px solid #2e2e3a",
-                  background: "#18181e",
+                  height: 34,
+                  borderRadius: 10,
+                  border: "1px solid #2a2a36",
+                  background: "#16161c",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 7,
-                  padding: "0 8px 0 4px",
+                  padding: "0 10px 0 5px",
+                  transition: "all 0.15s ease",
                 }}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
               >
                 <span
                   style={{
-                    width: 22,
-                    height: 22,
+                    width: 24,
+                    height: 24,
                     borderRadius: "50%",
-                    background: "#252532",
+                    background: "linear-gradient(135deg, #252532 0%, #1e1e2a 100%)",
                     border: "1px solid #2e2e3a",
                     display: "grid",
                     placeItems: "center",
@@ -185,13 +202,14 @@ export function TopBar() {
                     position: "absolute",
                     top: "calc(100% + 8px)",
                     right: 0,
-                    background: "#18181e",
-                    border: "1px solid #2e2e3a",
-                    borderRadius: 10,
+                    background: "#16161c",
+                    border: "1px solid #2a2a36",
+                    borderRadius: 12,
                     padding: 6,
-                    minWidth: 180,
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+                    minWidth: 190,
+                    boxShadow: "0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(91,106,240,0.06)",
                     zIndex: 50,
+                    backdropFilter: "blur(16px)",
                   }}
                 >
                   <button

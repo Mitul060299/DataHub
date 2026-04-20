@@ -7,33 +7,40 @@ declare global {
 }
 
 export type BillingPlanSlug = "professional" | "team" | "business";
-export type BillingCycle = "monthly" | "annual";
+export type BillingCycle = "monthly";
 
 const PRICES_INR: Record<BillingPlanSlug, Record<BillingCycle, number>> = {
-  professional: { monthly: 3299, annual: 32990 },
-  team: { monthly: 6199, annual: 61990 },
-  business: { monthly: 16599, annual: 165990 },
+  professional: { monthly: 6999 },
+  team: { monthly: 14999 },
+  business: { monthly: 29999 },
+};
+
+export const INCLUDED_SEATS: Record<BillingPlanSlug, number> = {
+  professional: 1,
+  team: 3,
+  business: 5,
+};
+
+export const EXTRA_SEAT_PRICE_INR: Record<string, number> = {
+  team: 2499,
+  business: 3999,
 };
 
 export const PLAN_FEATURES: Record<BillingPlanSlug, string[]> = {
-  professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "500 AI messages/month", "Scheduled pipelines"],
-  team: ["+Snowflake, Redshift, BigQuery", "Team collaboration + RBAC", "Unlimited AI messages"],
-  business: ["SSO + governance", "Webhooks + advanced controls", "Lineage + audit"],
+  professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "2,000 AI messages/month", "Scheduled pipelines"],
+  team: ["+Snowflake, Redshift, BigQuery", "Includes 3 seats · +₹2,499/extra seat", "5,000+ AI messages/month (scales with seats)"],
+  business: ["SSO + governance", "Includes 5 seats · +₹3,999/extra seat", "Unlimited AI messages"],
 };
 
-export function getDisplayPrice(plan: BillingPlanSlug, cycle: BillingCycle): string {
-  const amount = PRICES_INR[plan]?.[cycle];
+export function getDisplayPrice(plan: BillingPlanSlug): string {
+  const amount = PRICES_INR[plan]?.monthly;
   if (!amount) return "";
-  const suffix = cycle === "monthly" ? "/user/month" : "/user/year";
-  return `₹${amount.toLocaleString("en-IN")}${suffix}`;
-}
-
-export function getAnnualSavings(plan: BillingPlanSlug): string {
-  const monthly = PRICES_INR[plan]?.monthly;
-  const annual = PRICES_INR[plan]?.annual;
-  if (!monthly || !annual) return "";
-  const saving = monthly * 12 - annual;
-  return `₹${saving.toLocaleString("en-IN")}`;
+  const base = `₹${amount.toLocaleString("en-IN")}/month`;
+  const seatPrice = EXTRA_SEAT_PRICE_INR[plan];
+  if (seatPrice) {
+    return `${base} + ₹${seatPrice.toLocaleString("en-IN")}/extra seat`;
+  }
+  return base;
 }
 
 async function ensureRazorpayScriptLoaded(): Promise<void> {
@@ -149,4 +156,29 @@ export async function listInvoices() {
 export async function getInvoicePdfUrl(invoiceId: string): Promise<string> {
   const response = await api.get(`/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`);
   return String((response.data as { pdf_url?: string }).pdf_url || "");
+}
+
+export interface SeatUsage {
+  current_seats: number;
+  included_seats: number;
+  purchased_seats: number;
+  max_seats: number;
+  extra_seat_price_paise: number;
+  extra_seat_price_inr: number;
+  can_invite_more: boolean;
+}
+
+export async function fetchSeatUsage(): Promise<SeatUsage> {
+  const response = await api.get("/billing/seat-usage");
+  return response.data as SeatUsage;
+}
+
+export async function purchaseSeats(quantity: number): Promise<{
+  quantity: number;
+  changed: boolean;
+  previous_quantity?: number;
+  effective?: string;
+}> {
+  const response = await api.post("/billing/seats", { quantity });
+  return response.data;
 }

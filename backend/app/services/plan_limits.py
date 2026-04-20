@@ -3,6 +3,11 @@ plan_limits.py
 ==============
 Monthly usage quotas per plan tier.
 -1 means unlimited.
+
+Hybrid pricing model:
+  - Free / Professional: per-account (1 seat each, no extras).
+  - Team / Business: base quota + per-seat overage above included seats.
+  - Enterprise: unlimited everything.
 """
 from __future__ import annotations
 from typing import TypedDict
@@ -15,6 +20,34 @@ class UsageLimits(TypedDict):
     storage_bytes: int            # Cumulative storage cap (-1 = unlimited)
     max_team_members: int         # Max workspace members (-1 = unlimited)
     data_scan_bytes_per_month: int  # Bytes scanned by DuckDB per month (-1 = unlimited)
+    included_seats: int           # Seats included in the base plan price
+    max_seats: int                # Hard cap on purchasable seats (-1 = unlimited)
+
+
+# Per-seat increments for Team and Business plans.
+# When `quantity` (purchased seats) exceeds `included_seats`, each extra seat
+# adds these amounts to the base quota.
+class PerSeatIncrement(TypedDict):
+    api_calls_per_month: int
+    pipeline_runs_per_month: int
+    storage_bytes: int
+    data_scan_bytes_per_month: int
+
+
+PER_SEAT_INCREMENTS: dict[str, PerSeatIncrement] = {
+    "Team": {
+        "api_calls_per_month": 1_000,
+        "pipeline_runs_per_month": 200,
+        "storage_bytes": 5 * 1024 * 1024 * 1024,               # +5 GB / seat
+        "data_scan_bytes_per_month": 20 * 1024 * 1024 * 1024,   # +20 GB / seat
+    },
+    "Business": {
+        "api_calls_per_month": 0,       # Business base is already unlimited
+        "pipeline_runs_per_month": 0,   # Business base is already unlimited
+        "storage_bytes": 20 * 1024 * 1024 * 1024,              # +20 GB / seat
+        "data_scan_bytes_per_month": 0,  # Business base is already unlimited
+    },
+}
 
 
 USAGE_LIMITS: dict[str, UsageLimits] = {
@@ -22,9 +55,11 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "api_calls_per_month": 100,
         "pipeline_runs_per_month": 10,
         "datasets_per_month": 3,
-        "storage_bytes": 100 * 1024 * 1024,                     # 100 MB
+        "storage_bytes": 500 * 1024 * 1024,                     # 500 MB
         "max_team_members": 1,
         "data_scan_bytes_per_month": 5 * 1024 * 1024 * 1024,    # 5 GB
+        "included_seats": 1,
+        "max_seats": 1,
     },
     "Professional": {
         "api_calls_per_month": 2_000,
@@ -33,22 +68,28 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "storage_bytes": 20 * 1024 * 1024 * 1024,               # 20 GB
         "max_team_members": 1,
         "data_scan_bytes_per_month": 50 * 1024 * 1024 * 1024,   # 50 GB
+        "included_seats": 1,
+        "max_seats": 1,
     },
     "Team": {
         "api_calls_per_month": 5_000,
         "pipeline_runs_per_month": 1_000,
         "datasets_per_month": -1,
         "storage_bytes": 100 * 1024 * 1024 * 1024,              # 100 GB
-        "max_team_members": 10,
+        "max_team_members": 25,                                  # hard cap on purchasable seats
         "data_scan_bytes_per_month": 200 * 1024 * 1024 * 1024,  # 200 GB
+        "included_seats": 3,
+        "max_seats": 25,
     },
     "Business": {
         "api_calls_per_month": -1,
         "pipeline_runs_per_month": -1,
         "datasets_per_month": -1,
-        "storage_bytes": -1,
-        "max_team_members": 50,
+        "storage_bytes": 2 * 1024 * 1024 * 1024 * 1024,        # 2 TB
+        "max_team_members": 100,                                 # hard cap on purchasable seats
         "data_scan_bytes_per_month": -1,
+        "included_seats": 5,
+        "max_seats": 100,
     },
     "Enterprise": {
         "api_calls_per_month": -1,
@@ -57,6 +98,8 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "storage_bytes": -1,
         "max_team_members": -1,
         "data_scan_bytes_per_month": -1,
+        "included_seats": -1,
+        "max_seats": -1,
     },
 }
 
@@ -69,6 +112,34 @@ USAGE_FIELD_LABELS: dict[str, str] = {
 
 
 def get_limits(plan: str) -> UsageLimits:
+    """Return the *base* limits for a plan (no seat scaling applied)."""
     # Accept any case (e.g. "free", "Free", "FREE")
     normalized = plan.strip().title()
     return USAGE_LIMITS.get(normalized, USAGE_LIMITS["Free"])
+
+
+def compute_effective_limits(plan: str, quantity: int = 1) -> UsageLimits:
+    """Return limits scaled by purchased seat count.
+
+    For Team/Business, each seat above the included count adds per-seat
+    increments to the base quotas.  Unlimited fields (-1) stay unlimited.
+    """
+    base = dict(get_limits(plan))  # shallow copy
+    normalized = plan.strip().title()
+    increments = PER_SEAT_INCREMENTS.get(normalized)
+    if not increments:
+        return UsageLimits(**base)  # type: ignore[typeddict-item]
+
+    included = base["included_seats"]
+    extra = max(0, quantity - included)
+    if extra == 0:
+        return UsageLimits(**base)  # type: ignore[typeddict-item]
+
+    for field, per_seat in increments.items():
+        current = base.get(field, 0)
+        if current == -1 or per_seat == 0:
+            continue  # already unlimited or no increment
+        base[field] = current + extra * per_seat
+
+    # max_team_members is the hard cap, not scaled
+    return UsageLimits(**base)  # type: ignore[typeddict-item]

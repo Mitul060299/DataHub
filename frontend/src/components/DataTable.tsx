@@ -247,7 +247,10 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
                 </td>
               </tr>
             ) : filteredRows.map((row, index) => (
-              <tr key={`row-${index}`} style={{ borderBottom: "1px solid var(--bd)" }}>
+              <tr key={`row-${index}`} style={{ borderBottom: "1px solid var(--bd)", transition: "background 0.1s ease" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(91,106,240,0.04)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
                 <td className="mono" style={{ textAlign: "right", color: "var(--tx1)", padding: "7px 10px" }}>{index + 1}</td>
                 {columns.map((column) => {
                   const value = row[column];
@@ -274,8 +277,9 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
         </table>
       </div>
 
-      <div className="mono" style={{ borderTop: "1px solid var(--bd)", padding: "7px 10px", color: "var(--tx1)", fontSize: 11 }}>
-        {filteredRows.length}{activeFilterCount > 0 ? ` of ${rows.length}` : ""} rows · {(columns ?? []).length} cols · {stepCount} steps applied · Last: {lastAction}
+      <div className="mono" style={{ borderTop: "1px solid var(--bd)", padding: "8px 12px", color: "var(--tx1)", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span>{filteredRows.length}{activeFilterCount > 0 ? ` of ${rows.length}` : ""} rows · {(columns ?? []).length} cols</span>
+        <span style={{ color: "var(--tx2)" }}>{stepCount} steps · {lastAction}</span>
       </div>
 
       {/* Column filter dropdown — position:fixed so it escapes the scroll container */}

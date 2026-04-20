@@ -10,6 +10,7 @@ from app.config import settings
 from app.dependencies import CurrentUser, get_current_user
 from app.services import billing_repository, billing_service
 from app.services.analytics import track
+from app.services.rate_limiter import limiter
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -30,6 +31,10 @@ class VerifyPaymentRequest(BaseModel):
     razorpay_payment_id: str
     razorpay_subscription_id: str
     razorpay_signature: str
+
+
+class UpdateSeatsRequest(BaseModel):
+    quantity: int = Field(ge=1, description="New total seat count (must be >= included seats)")
 
 
 def _ensure_billing_enabled() -> None:
@@ -108,6 +113,80 @@ async def cancel(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@router.post("/seats")
+@limiter.limit("10/minute")
+async def update_seats(
+    payload: UpdateSeatsRequest,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Add or reduce seats on the active subscription.
+
+    Increases take effect immediately (prorated by Razorpay).
+    Decreases take effect at the next billing cycle.
+    """
+    _ensure_billing_enabled()
+
+    try:
+        result = await billing_service.update_seat_count(user.id, payload.quantity)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return result
+
+
+@router.get("/seat-usage")
+async def seat_usage(user: CurrentUser = Depends(get_current_user)):
+    """Return current seat utilisation for the calling user's account."""
+    _ensure_billing_enabled()
+
+    from app.razorpay_plans import INCLUDED_SEATS, PER_SEAT_PAISE
+    from app.services.plan_limits import get_limits
+
+    effective_plan = billing_repository.get_effective_plan(user.id) or user.plan
+    plan_slug = billing_repository.to_plan_slug(effective_plan)
+    limits = get_limits(effective_plan)
+
+    included = INCLUDED_SEATS.get(plan_slug, limits.get("included_seats", 1))
+    sub = billing_repository.get_active_subscription(user.id)
+    purchased = max(int(sub.get("quantity") or included), included) if sub else included
+
+    # Count active + pending across all workspaces owned by this user
+    from app.db import SessionLocal
+    from app.models_db import Workspace, WorkspaceMemberDB
+    db = SessionLocal()
+    try:
+        owned_ws_ids = [
+            ws.id for ws in
+            db.query(Workspace.id).filter(Workspace.owner_id == user.id).all()
+        ]
+        used = 1  # owner
+        if owned_ws_ids:
+            used += (
+                db.query(WorkspaceMemberDB)
+                .filter(
+                    WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
+                    WorkspaceMemberDB.status.in_(["active", "pending"]),
+                )
+                .count()
+            )
+    finally:
+        db.close()
+
+    extra_seat_price = PER_SEAT_PAISE.get(plan_slug, 0)
+
+    return {
+        "current_seats": used,
+        "included_seats": included,
+        "purchased_seats": purchased,
+        "max_seats": limits.get("max_seats", 1),
+        "extra_seat_price_paise": extra_seat_price,
+        "extra_seat_price_inr": round(extra_seat_price / 100, 2) if extra_seat_price else 0,
+        "can_invite_more": used < purchased,
+    }
+
+
 @router.post("/verify")
 async def verify_payment(
     payload: VerifyPaymentRequest,
@@ -123,12 +202,17 @@ async def verify_payment(
     if not verified:
         raise HTTPException(status_code=400, detail="Payment verification failed — invalid signature")
 
-    # Signature is valid — promote subscription to active immediately.
-    # store_subscription already wrote the correct plan when checkout was
-    # initiated; this just flips status from "created" to "active" so
-    # get_effective_plan returns the paid plan on the next page load.
+    # Signature is valid — promote subscription to active.
     sub = billing_repository.get_subscription_by_razorpay_id(payload.razorpay_subscription_id)
     if sub:
+        # SECURITY: verify this subscription was created by the calling user.
+        # Prevents an attacker from replaying another user's valid payment
+        # signature to claim their subscription.
+        if str(sub.get("user_id", "")) != user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Subscription ownership mismatch — this subscription does not belong to your account.",
+            )
         billing_repository.update_subscription_status(
             payload.razorpay_subscription_id,
             "active",
@@ -204,6 +288,7 @@ async def razorpay_webhook(
         "subscription.charged": _on_charged,
         "subscription.halted": _on_halted,
         "subscription.cancelled": _on_cancelled,
+        "subscription.updated": _on_updated,
         "payment.failed": _on_payment_failed,
     }
     handler = handlers.get(event)
@@ -228,8 +313,20 @@ async def _on_activated(entities: dict[str, Any], payload: dict[str, Any]):
     plan = notes.get("plan")
     razorpay_sub_id = str(sub.get("id") or "")
     if razorpay_sub_id and user_id and plan:
-        billing_repository.update_subscription_status(razorpay_sub_id, "active", str(user_id), str(plan))
+        billing_repository.update_subscription_status(razorpay_sub_id, "active", str(user_id), str(plan), verify_ownership=False)
     await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.activated", payload)
+
+
+async def _on_updated(entities: dict[str, Any], payload: dict[str, Any]):
+    """Handle subscription.updated — syncs quantity changes from Razorpay."""
+    sub = _subscription_entity(entities)
+    razorpay_sub_id = str(sub.get("id") or "")
+    quantity = sub.get("quantity")
+    if razorpay_sub_id and quantity is not None:
+        billing_repository.update_subscription_quantity(razorpay_sub_id, int(quantity))
+    notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
+    user_id = notes.get("user_id")
+    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.updated", payload)
 
 
 async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
@@ -262,7 +359,7 @@ async def _on_halted(entities: dict[str, Any], payload: dict[str, Any]):
     user_id = notes.get("user_id")
     razorpay_sub_id = str(sub.get("id") or "")
     if razorpay_sub_id and user_id:
-        billing_repository.update_subscription_status(razorpay_sub_id, "halted", str(user_id), "free")
+        billing_repository.update_subscription_status(razorpay_sub_id, "halted", str(user_id), "free", verify_ownership=False)
     await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.halted", payload)
 
 
@@ -291,11 +388,13 @@ async def _on_cancelled(entities: dict[str, Any], payload: dict[str, Any]):
             # downgrade automatically once current_end passes.
             plan = existing.get("plan") if existing else None
             billing_repository.update_subscription_status(
-                razorpay_sub_id, "pending_cancellation", str(user_id) if user_id else None, plan
+                razorpay_sub_id, "pending_cancellation", str(user_id) if user_id else None, plan,
+                verify_ownership=False,
             )
         else:
             billing_repository.update_subscription_status(
-                razorpay_sub_id, "cancelled", str(user_id) if user_id else None, "free"
+                razorpay_sub_id, "cancelled", str(user_id) if user_id else None, "free",
+                verify_ownership=False,
             )
     await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.cancelled", payload)
 

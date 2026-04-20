@@ -617,128 +617,112 @@ def get_pipeline_steps(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return the saved pipeline steps JSON for a dataset.
+    """Return the pipeline steps for a dataset.
 
-    Primary source: ``pipeline_steps_json`` on ``dataset_meta`` (written by the
-    frontend via ``PUT /datasets/{id}/pipeline-steps`` with a debounced write-
-    through that fires 1.5 s after each change).
+    Architecture (post-2026-04 simplification):
+    -------------------------------------------
+    ``pipeline_steps`` (DB rows) is the authoritative source.  Each row is
+    committed immediately by ``pipeline_recorder`` after a successful agent
+    step — no debounce, no format drift, no in-memory state to lose on a
+    server restart.
 
-    Fallback: ``pipeline_steps`` DB rows written by ``pipeline_recorder`` on
-    every successful agent step (individual commit, no debounce).  This covers
-    the critical window where the server restarts or the user closes the tab
-    before the 1.5 s frontend debounce fires — without this fallback the step
-    the user just ran would silently vanish on the next page load.
+    ``dataset_meta.pipeline_steps_json`` is a legacy column kept ONLY for
+    backward compatibility with datasets created before this refactor that
+    have JSON written but no ``pipeline_steps`` rows.  New writes do not
+    touch this column.
     """
     role = get_current_role(authorization)
     require_role("viewer", role)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # ── PRIMARY: read from pipeline_steps rows ──────────────────────────
+    from ..models_db import PipelineStepDB as _PSdb, DatasetSessionDB as _DSess
+    user_id = get_current_user_id(authorization) or "anonymous"
+    ds_session = (
+        db.query(_DSess)
+        .filter(_DSess.dataset_id == dataset_id, _DSess.user_id == user_id)
+        .first()
+    )
+    sess_id = ds_session.chat_session_id if ds_session else None
+
+    db_rows: list = []
+    if sess_id:
+        db_rows = (
+            db.query(_PSdb)
+            .filter(
+                _PSdb.user_id == user_id,
+                _PSdb.session_id == sess_id,
+                _PSdb.status == "completed",
+                _PSdb.output_table.isnot(None),
+            )
+            .order_by(_PSdb.step_number)
+            .limit(100)
+            .all()
+        )
+
+    if db_rows:
+        import uuid as _uuid_mod
+        steps = [
+            {
+                "id": str(_uuid_mod.uuid4()),
+                "stepNumber": ps.step_number,
+                "operation": ps.operation,
+                "intent": ps.intent or ps.operation,
+                "description": ps.description,
+                "sql": ps.duckdb_sql,
+                "affectedRows": str(ps.row_count_after or ""),
+                "appliedAt": ps.created_at.isoformat() if ps.created_at else None,
+                "output_table": ps.output_table,
+                "input_tables": ps.input_tables or [],
+                "row_count_before": ps.row_count_before,
+                "row_count_after": ps.row_count_after,
+                "execution_time_ms": ps.execution_time_ms,
+                "snapshot_path": ps.snapshot_path,
+            }
+            for ps in db_rows
+        ]
+        return {"dataset_id": dataset_id, "steps": steps}
+
+    # ── LEGACY FALLBACK: pipeline_steps_json on dataset_meta ────────────
+    # Only for datasets created before pipeline_steps rows became the source
+    # of truth.  No new writes happen to this column — once these legacy
+    # datasets get a fresh agent run, pipeline_steps rows take over.
     try:
         result = db.execute(
             text("SELECT pipeline_steps_json FROM dataset_meta WHERE id = :id"),
             {"id": dataset_id},
         ).fetchone()
         raw = result[0] if result else None
-        steps = json.loads(raw) if raw else []
-    except Exception:
-        steps = []
-
-    # ── Detect malformed legacy JSON ─────────────────────────────────────
-    # Older builds (and a brief window of recent ones) wrote steps with
-    # snake_case keys (step_number / timestamp / rows_affected) and no
-    # 'id' field.  The frontend can't render those — appliedAt becomes
-    # Invalid Date and the row vanishes.  Treat such payloads as empty so
-    # the PipelineStepDB fallback below kicks in and reconstructs them in
-    # the correct camelCase schema.
-    def _is_valid_frontend_step(s) -> bool:
-        return (
-            isinstance(s, dict)
-            and "id" in s
-            and "stepNumber" in s
-            and "appliedAt" in s
-        )
-
-    if isinstance(steps, list) and steps and not all(_is_valid_frontend_step(s) for s in steps):
-        import logging as _gps_log
-        _gps_log.getLogger(__name__).info(
-            "pipeline-steps: stored JSON for dataset %s is in legacy format "
-            "— triggering fallback reconstruction", dataset_id[:8],
-        )
-        steps = []
-
-    # ── Fallback: reconstruct from PipelineStepDB rows ───────────────────
-    # PipelineStepDB is committed per-row immediately after each agent step
-    # (see pipeline_recorder.py), so it's always up-to-date even when the
-    # frontend debounce didn't fire.  We reconstruct steps in the same shape
-    # the frontend writes, keyed by session_id (the DuckDB session that ran
-    # the steps for this dataset).
-    if not steps:
-        from ..models_db import PipelineStepDB as _PSdb, DatasetSessionDB as _DSess
-        # Find the chat session for this dataset so we know which
-        # PipelineStepDB.session_id to query.
-        user_id = get_current_user_id(authorization) or "anonymous"
-        ds_session = (
-            db.query(_DSess)
-            .filter(_DSess.dataset_id == dataset_id, _DSess.user_id == user_id)
-            .first()
-        )
-        sess_id = ds_session.chat_session_id if ds_session else None
-
-        # Also try to match by user_id + ordering if no session row exists.
-        q = db.query(_PSdb).filter(
-            _PSdb.user_id == user_id,
-            _PSdb.status == "completed",
-            _PSdb.output_table.isnot(None),
-        )
-        if sess_id:
-            q = q.filter(_PSdb.session_id == sess_id)
-        else:
-            # No DatasetSessionDB row means no AI commands were ever run on
-            # THIS dataset.  Do NOT fall back to a user-wide query — that
-            # would leak steps from a completely unrelated (or deleted) dataset.
-            q = None
-
-        db_rows = q.order_by(_PSdb.step_number).limit(50).all() if q is not None else []
-
-        if db_rows:
-            import logging as _gps_log
-            _gps_log.getLogger(__name__).info(
-                "pipeline-steps: recovered %d steps from PipelineStepDB "
-                "for dataset %s (pipeline_steps_json was empty)",
-                len(db_rows), dataset_id[:8],
-            )
+        legacy_steps = json.loads(raw) if raw else []
+        if isinstance(legacy_steps, list) and legacy_steps:
+            # Tolerate both camelCase (recent) and snake_case (older) shapes.
             import uuid as _uuid_mod
-            steps = [
-                {
-                    "id": str(_uuid_mod.uuid4()),
-                    "stepNumber": ps.step_number,
-                    "operation": ps.operation,
-                    "intent": ps.intent or ps.operation,
-                    "description": ps.description,
-                    "sql": ps.duckdb_sql,
-                    "affectedRows": str(ps.row_count_after or ""),
-                    "appliedAt": ps.created_at.isoformat() if ps.created_at else None,
-                    "output_table": ps.output_table,
-                    "input_tables": ps.input_tables or [],
-                    "row_count_before": ps.row_count_before,
-                    "row_count_after": ps.row_count_after,
-                    "execution_time_ms": ps.execution_time_ms,
-                    "snapshot_path": ps.snapshot_path,
-                }
-                for ps in db_rows
-            ]
-            # Back-fill pipeline_steps_json so next load is fast.
-            try:
-                db.execute(
-                    text("UPDATE dataset_meta SET pipeline_steps_json = :v WHERE id = :id"),
-                    {"v": json.dumps(steps), "id": dataset_id},
-                )
-                db.commit()
-            except Exception:
-                db.rollback()
+            normalized = []
+            for s in legacy_steps:
+                if not isinstance(s, dict):
+                    continue
+                normalized.append({
+                    "id": s.get("id") or str(_uuid_mod.uuid4()),
+                    "stepNumber": s.get("stepNumber") or s.get("step_number") or 0,
+                    "operation": s.get("operation", "transform"),
+                    "intent": s.get("intent") or s.get("operation", "transform"),
+                    "description": s.get("description", ""),
+                    "sql": s.get("sql"),
+                    "affectedRows": str(s.get("affectedRows") or s.get("rows_affected") or ""),
+                    "appliedAt": s.get("appliedAt") or s.get("timestamp"),
+                    "output_table": s.get("output_table"),
+                    "input_tables": s.get("input_tables") or [],
+                    "row_count_before": s.get("row_count_before"),
+                    "row_count_after": s.get("row_count_after"),
+                    "execution_time_ms": s.get("execution_time_ms"),
+                })
+            return {"dataset_id": dataset_id, "steps": normalized}
+    except Exception:
+        pass
 
-    return {"dataset_id": dataset_id, "steps": steps}
+    return {"dataset_id": dataset_id, "steps": []}
 
 
 @router.put("/{dataset_id}/pipeline-steps")
@@ -748,7 +732,17 @@ def save_pipeline_steps(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Persist the pipeline steps JSON for a dataset (upsert)."""
+    """Persist client-side cosmetic edits to the steps list.
+
+    DEPRECATED for source-of-truth: ``pipeline_steps`` rows are authoritative
+    (written by the agent recorder).  This endpoint persists the JSON payload
+    only as a side cache for client-side mutations the recorder doesn't see
+    (rename, reorder, remove).  After the next agent run, ``pipeline_steps``
+    rows take precedence in ``GET`` and the JSON is ignored.
+
+    Plan: replace this with a proper diff endpoint (DELETE/REORDER on
+    ``pipeline_steps`` rows) once we add ``client_step_id`` to that table.
+    """
     role = get_current_role(authorization)
     require_role("editor", role)
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()

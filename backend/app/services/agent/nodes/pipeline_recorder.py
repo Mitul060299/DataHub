@@ -200,62 +200,12 @@ async def pipeline_recorder(state: AgentState) -> dict:
                     except Exception:
                         pass
 
-            # ── Back-fill pipeline_steps_json on dataset_meta ────────────
-            # The frontend writes this with a 1.5 s debounce.  If the user
-            # refreshes or the server restarts before it fires, the steps
-            # vanish.  Writing here guarantees the JSON is always current
-            # after a successful recording — the frontend's later write is
-            # idempotent (same data, just slightly delayed).
-            all_steps = [*state.get("pipeline_steps", []), *saved_steps]
-            if all_steps and root_dataset_id:
-                try:
-                    import json as _json
-                    from sqlalchemy import text as _text
-
-                    def _to_frontend_step(s: dict) -> dict:
-                        """Normalize a step dict to the camelCase schema
-                        the frontend PipelineContext expects."""
-                        return {
-                            "id": s.get("id") or str(uuid.uuid4()),
-                            "stepNumber": s.get("stepNumber") or s.get("step_number", 0),
-                            "operation": s.get("operation", "transform"),
-                            "intent": s.get("intent") or s.get("operation", "transform"),
-                            "description": s.get("description", ""),
-                            "sql": s.get("sql"),
-                            "affectedRows": str(
-                                s.get("affectedRows")
-                                or s.get("rows_affected")
-                                or s.get("row_count_after")
-                                or ""
-                            ),
-                            "appliedAt": (
-                                s.get("appliedAt")
-                                or s.get("timestamp")
-                                or datetime.utcnow().isoformat()
-                            ),
-                            "input_tables": s.get("input_tables") or [],
-                            "output_table": s.get("output_table"),
-                            "row_count_before": s.get("row_count_before"),
-                            "row_count_after": s.get("row_count_after"),
-                            "execution_time_ms": s.get("execution_time_ms"),
-                        }
-
-                    _frontend_steps = [_to_frontend_step(s) for s in all_steps]
-                    _steps_json = _json.dumps(_frontend_steps, default=str)
-                    db.execute(
-                        _text("UPDATE dataset_meta SET pipeline_steps_json = :v WHERE id = :id"),
-                        {"v": _steps_json, "id": root_dataset_id},
-                    )
-                    db.commit()
-                except Exception as _pj_exc:
-                    import logging as _pj_log
-                    _pj_log.getLogger(__name__).warning(
-                        "PIPELINE_STEPS_JSON_BACKFILL_FAILED: %s", _pj_exc,
-                    )
-                    try:
-                        db.rollback()
-                    except Exception:
-                        pass
+            # NOTE: dataset_meta.pipeline_steps_json is no longer back-filled
+            # here.  PipelineStepDB rows (committed individually above) are
+            # the authoritative source for GET /datasets/{id}/pipeline-steps
+            # as of the 2026-04 simplification.  The JSON column survives
+            # only as a legacy fallback for datasets that have JSON but no
+            # rows (pre-refactor data).
         finally:
             db.close()
 

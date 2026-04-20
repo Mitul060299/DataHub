@@ -327,8 +327,15 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     if (datasetId === hydratedForRef.current) {
       hydratedForRef.current = null; // allow normal DB reload on subsequent switches
       stepsOwnerRef.current = datasetId;
-      // Restore liveArtifact from the steps that were loaded from localStorage
-      restoreLiveArtifact(steps, datasetId);
+      // Guard: the !datasetId branch above fires first on mount while datasets
+      // are still loading from the API, which calls setSteps([]) before we
+      // reach here.  If that cleared the steps React state, re-read from
+      // localStorage to restore the steps that useState() originally hydrated.
+      const stepsToUse = steps.length > 0 ? steps : loadPersistedSteps(datasetId);
+      if (steps.length === 0 && stepsToUse.length > 0) {
+        setSteps(stepsToUse);
+      }
+      restoreLiveArtifact(stepsToUse, datasetId);
       return;
     }
     fetchDatasetPipelineSteps(datasetId)

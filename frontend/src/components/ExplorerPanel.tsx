@@ -33,6 +33,15 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Allow other components (e.g. CanvasPanel empty state) to open the connector modal.
+  useEffect(() => {
+    function handleConnectDatabase() {
+      setConnectorModalOpen(true);
+    }
+    window.addEventListener("datahub:connect:database", handleConnectDatabase);
+    return () => window.removeEventListener("datahub:connect:database", handleConnectDatabase);
+  }, []);
+
   const operationByOutputDataset = useMemo(() => {
     const outputMap = new Map<string, string>();
     for (const step of steps) {

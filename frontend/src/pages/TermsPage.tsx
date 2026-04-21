@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 export function TermsPage() {
   return (
+    <div style={{ height: "100vh", overflowY: "auto", background: "var(--bg0)" }}>
     <div
       style={{
         maxWidth: 760,
@@ -185,6 +186,7 @@ export function TermsPage() {
         </a>
         .
       </Section>
+    </div>
     </div>
   );
 }

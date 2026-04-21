@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 export function PrivacyPage() {
   return (
+    <div style={{ height: "100vh", overflowY: "auto", background: "var(--bg0)" }}>
     <div
       style={{
         maxWidth: 760,
@@ -124,6 +125,7 @@ export function PrivacyPage() {
         </a>
         . EU/UK users may also contact their local data protection authority.
       </Section>
+    </div>
     </div>
   );
 }

@@ -48,8 +48,15 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  // Defer revoke + DOM cleanup so the browser actually starts the download in Firefox / Safari.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 1500);
 }
 
 export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
@@ -176,6 +183,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     setIsExportOpen(false);
     setIsExporting(type);
     const name = dataset.name ?? "data";
+    const labelMap = { csv: "CSV", powerbi: "Excel", tableau: "Tableau" } as const;
     try {
       if (type === "csv") {
         const blob = await exportDatasetCsv(dataset.id) as Blob;
@@ -187,8 +195,15 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         const blob = await exportDatasetTableau(dataset.id);
         triggerBlobDownload(blob, `${name}.hyper`);
       }
+      window.dispatchEvent(new CustomEvent("datahub:toast", {
+        detail: { message: `${labelMap[type]} download started`, tone: "success" },
+      }));
     } catch (err) {
       console.error(`Export ${type} failed:`, err);
+      const msg = (err instanceof Error && err.message) ? err.message : "Export failed. Please try again.";
+      window.dispatchEvent(new CustomEvent("datahub:toast", {
+        detail: { message: `${labelMap[type]} export failed \u2014 ${msg}`, tone: "error" },
+      }));
     } finally {
       setIsExporting(null);
     }

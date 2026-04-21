@@ -206,22 +206,16 @@ export function WorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionPreview, replayingPipeline, steps.length]);
 
-  // ── Sample loader + database connector shortcuts from canvas empty state ──
+  // ── Sample loader shortcut from canvas empty state ──
   useEffect(() => {
     function handleSampleLoad(e: Event) {
       const detail = (e as CustomEvent<{ url: string }>).detail;
       setSampleUrl(detail?.url);
       setImportOpen(true);
     }
-    function handleConnectDatabase() {
-      // Re-use the import modal; ImportModal has a Connectors tab
-      setImportOpen(true);
-    }
     window.addEventListener("datahub:sample:load", handleSampleLoad);
-    window.addEventListener("datahub:connect:database", handleConnectDatabase);
     return () => {
       window.removeEventListener("datahub:sample:load", handleSampleLoad);
-      window.removeEventListener("datahub:connect:database", handleConnectDatabase);
     };
   }, []);
 

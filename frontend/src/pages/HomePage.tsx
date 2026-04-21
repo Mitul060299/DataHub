@@ -52,7 +52,7 @@ const howSteps = [
     icon: <IconShare size={18} color="#38bdf8" />,
     title: "Share & publish",
     description:
-      "Publish dashboards with one link. Every step recorded and replayable. Full audit trail included.",
+      "Publish results with one link. Every step recorded and replayable. Full audit trail included.",
   },
 ];
 
@@ -83,10 +83,10 @@ const features: Feature[] = [
     visual: "pipeline",
   },
   {
-    title: "Cross-Dataset Dashboards",
+    title: "Cross-Dataset Visuals",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
-    description: "Power BI-style dashboards across multiple datasets, shared by link.",
+    description: "Power BI-style visuals across multiple datasets, shared by link.",
     span: "md",
     visual: "dashboard",
   },
@@ -749,41 +749,114 @@ export function HomePage() {
                 <span className="dot red" />
                 <span className="dot yellow" />
                 <span className="dot green" />
-                <span className="window-title">DataHub Studio</span>
+                <span className="window-title">DataHub  /  Trial  /  Workspace</span>
               </div>
-              <div className="window-body">
-                <div className="window-sidebar">
-                  <div className="sb-item active">customers.csv</div>
-                  <div className="sb-item">orders.csv</div>
-                  <div className="sb-item">revenue.parquet</div>
-                  <div className="sb-item">+ new</div>
+              <div className="ws-preview">
+                {/* Icon rail */}
+                <div className="ws-rail">
+                  <div className="ws-rail-icon active" title="Data">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+                  </div>
+                  <div className="ws-rail-icon" title="Pipelines">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h8M6 8v8M18 8v8"/></svg>
+                  </div>
                 </div>
-                <div className="window-main">
-                  <div className="prompt-line">
-                    <span className="prompt-prefix">&gt;</span> clean nulls and join with orders
+
+                {/* Explorer */}
+                <div className="ws-explorer">
+                  <div className="ws-project">
+                    <span className="ws-project-badge">T</span>
+                    <span className="ws-project-name">Trial</span>
+                    <span className="ws-chev">v</span>
                   </div>
-                  <div className="plan-step">
-                    <span className="plan-num">1</span>
-                    <span className="plan-text">Drop rows where email IS NULL</span>
-                    <span className="plan-status">approved</span>
+                  <div className="ws-search">Search datasets...</div>
+                  <div className="ws-section-head">DATA <span className="ws-plus">+</span></div>
+                  <div className="ws-row">
+                    <span className="ws-row-icon" />
+                    <span>customers.csv</span>
                   </div>
-                  <div className="plan-step">
-                    <span className="plan-num">2</span>
-                    <span className="plan-text">JOIN orders ON customer_id</span>
-                    <span className="plan-status">approved</span>
+                  <div className="ws-row active">
+                    <span className="ws-row-icon ac" />
+                    <span>orders.csv</span>
                   </div>
-                  <div className="plan-step running">
-                    <span className="plan-num">3</span>
-                    <span className="plan-text">GROUP BY region, SUM(revenue)</span>
-                    <span className="plan-status running">running</span>
+                  <div className="ws-section-head">ARTIFACTS</div>
+                  <div className="ws-row live">
+                    <span className="ws-live-dot" />
+                    <span>LIVE  revenue_by_region</span>
                   </div>
-                  <div className="mini-chart">
-                    <div className="mini-bar" style={{ height: "55%" }} />
-                    <div className="mini-bar" style={{ height: "82%" }} />
-                    <div className="mini-bar" style={{ height: "40%" }} />
-                    <div className="mini-bar" style={{ height: "92%" }} />
-                    <div className="mini-bar" style={{ height: "68%" }} />
+                  <div className="ws-section-head">VISUALIZATIONS</div>
+                  <div className="ws-row muted">Sales by region</div>
+                </div>
+
+                {/* Canvas */}
+                <div className="ws-canvas">
+                  <div className="ws-tabs">
+                    <span className="ws-tab active" title="Data">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                    </span>
+                    <span className="ws-tab"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h6a4 4 0 0 1 4 4v6"/></svg></span>
+                    <span className="ws-tab"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20h-22"/></svg></span>
+                    <span className="ws-tab"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                    <span className="ws-export">Export v</span>
                   </div>
+                  <div className="ws-canvas-body">
+                    <div className="ws-step-pill">
+                      <span className="ws-step-dot" /> Step 3 / 3 - Group by region
+                      <span className="ws-step-meta">12,575 rows</span>
+                    </div>
+                    <div className="ws-chart">
+                      <div className="ws-bar" style={{ height: "55%" }} />
+                      <div className="ws-bar" style={{ height: "82%" }} />
+                      <div className="ws-bar" style={{ height: "40%" }} />
+                      <div className="ws-bar" style={{ height: "92%" }} />
+                      <div className="ws-bar" style={{ height: "68%" }} />
+                      <div className="ws-bar" style={{ height: "76%" }} />
+                    </div>
+                    <div className="ws-table-strip">
+                      <div className="ws-th"><span /><span /><span /><span /></div>
+                      <div className="ws-tr"><span /><span /><span /><span /></div>
+                      <div className="ws-tr"><span /><span /><span /><span /></div>
+                      <div className="ws-tr"><span /><span /><span /><span /></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pipeline */}
+                <div className="ws-pipeline">
+                  <div className="ws-pipe-head">PIPELINE</div>
+                  <div className="ws-pipe-section">APPLIED STEPS</div>
+                  <div className="ws-pipe-row source">
+                    <span className="ws-pipe-icon">S</span> Source
+                  </div>
+                  <div className="ws-pipe-row">
+                    <span className="ws-pipe-num">1</span> Drop nulls (email)
+                    <span className="ws-pipe-tag ok">OK</span>
+                  </div>
+                  <div className="ws-pipe-row">
+                    <span className="ws-pipe-num">2</span> Join orders
+                    <span className="ws-pipe-tag ok">OK</span>
+                  </div>
+                  <div className="ws-pipe-row running">
+                    <span className="ws-pipe-num">3</span> Group by region
+                    <span className="ws-pipe-tag run">RUN</span>
+                  </div>
+                  <div className="ws-pipe-cta">
+                    <span className="ws-play">&#9654;</span> Run Applied Steps
+                  </div>
+                </div>
+
+                {/* AI agent */}
+                <div className="ws-ai">
+                  <div className="ws-ai-head">
+                    <span className="ws-ai-dot" /> AI Agent
+                  </div>
+                  <div className="ws-ai-msg user">
+                    Show revenue by region
+                  </div>
+                  <div className="ws-ai-msg ai">
+                    Joined orders, grouped by region. Ready to chart.
+                  </div>
+                  <div className="ws-ai-input">Ask in plain English...</div>
                 </div>
               </div>
             </div>
@@ -817,7 +890,7 @@ export function HomePage() {
         >
           <p className="section-eyebrow">Workflow</p>
           <h2 className="section-title">
-            From data to dashboard{" "}
+            From data to analysis{" "}
             <span className="hero-gradient-text">in four steps</span>
           </h2>
           <p className="section-subtitle">
@@ -1183,7 +1256,7 @@ export function HomePage() {
         <div className="footer-grid">
           <div>
             <p className="footer-brand">DataHub</p>
-            <p className="footer-tag">Plain-English data work, fully transparent.</p>
+            <p className="footer-tag">Ask in plain English. See every step. Ship trusted analysis.</p>
           </div>
           <div className="footer-links">
             <a className="footer-link" href="#pricing">Pricing</a>

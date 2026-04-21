@@ -1,8 +1,11 @@
 from typing import List
+import logging
 import uuid
 from ..models import AuditEntry
 from ..db import SessionLocal
 from ..models_db import AuditLogDB
+
+logger = logging.getLogger(__name__)
 
 
 class AuditStore:
@@ -11,6 +14,7 @@ class AuditStore:
 
     def add(self, entry: AuditEntry) -> None:
         self._entries.append(entry)
+        db = None
         try:
             db = SessionLocal()
             db.add(
@@ -24,12 +28,18 @@ class AuditStore:
             )
             db.commit()
         except Exception:
-            pass
+            logger.exception("Failed to persist audit entry action=%s actor=%s target=%s", entry.action, entry.actor, entry.target)
+            if db:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
         finally:
-            try:
-                db.close()
-            except Exception:
-                pass
+            if db:
+                try:
+                    db.close()
+                except Exception:
+                    pass
 
     def list(self) -> List[AuditEntry]:
         return list(self._entries)

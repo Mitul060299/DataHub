@@ -688,12 +688,14 @@ interface UsageStats {
     pipeline_runs: number;
     datasets_uploaded: number;
     storage_bytes_used: number;
+    data_scanned_bytes: number;
   };
   limits: {
     api_calls_per_month: number;
     pipeline_runs_per_month: number;
     datasets_per_month: number;
     storage_bytes: number;
+    data_scan_bytes_per_month: number;
   };
 }
 
@@ -722,6 +724,7 @@ function UsagePanel() {
     { label: "Pipeline Runs", used: usage.pipeline_runs, cap: limits.pipeline_runs_per_month, kind: "count" },
     { label: "Dataset Uploads", used: usage.datasets_uploaded, cap: limits.datasets_per_month, kind: "count" },
     { label: "Storage Used", used: usage.storage_bytes_used, cap: limits.storage_bytes, kind: "bytes" },
+    { label: "Data Scanned", used: usage.data_scanned_bytes, cap: limits.data_scan_bytes_per_month, kind: "bytes" },
   ];
 
   return (
@@ -789,7 +792,7 @@ function UsagePanel() {
 }
 // ── Audit Log Panel ────────────────────────────────────────────────────────────
 
-type AuditFilterAction = "" | "auth.login" | "dataset.upload" | "dataset.delete" | "pipeline.run";
+type AuditFilterAction = "" | "auth.login" | "dataset.upload" | "dataset.delete" | "dataset.export" | "dataset.query" | "pipeline.run" | "recipe.apply" | "approval.approve" | "approval.reject";
 
 interface AuditEntry {
   id: string;
@@ -811,14 +814,28 @@ const ACTION_LABELS: Record<string, string> = {
   "auth.login": "Login",
   "dataset.upload": "Upload",
   "dataset.delete": "Delete",
+  "dataset.export": "Export",
+  "dataset.query": "Query",
   "pipeline.run": "Pipeline Run",
+  "recipe.apply": "Transform",
+  "recipe.save": "Recipe Save",
+  "recipe.revert": "Recipe Revert",
+  "approval.approve": "Approved",
+  "approval.reject": "Rejected",
 };
 
 const ACTION_COLORS: Record<string, string> = {
   "auth.login": "#5B6AF0",
   "dataset.upload": "#22b573",
   "dataset.delete": "#c94040",
+  "dataset.export": "#7c3aed",
+  "dataset.query": "#0ea5e9",
   "pipeline.run": "#e8a020",
+  "recipe.apply": "#06b6d4",
+  "recipe.save": "#64748b",
+  "recipe.revert": "#f59e0b",
+  "approval.approve": "#22b573",
+  "approval.reject": "#c94040",
 };
 
 function AuditBadge({ action }: { action: string }) {
@@ -947,7 +964,12 @@ function AuditPanel() {
           <option value="auth.login">Login</option>
           <option value="dataset.upload">Dataset Upload</option>
           <option value="dataset.delete">Dataset Delete</option>
+          <option value="dataset.export">Dataset Export</option>
+          <option value="dataset.query">Dataset Query</option>
           <option value="pipeline.run">Pipeline Run</option>
+          <option value="recipe.apply">Transformation Applied</option>
+          <option value="approval.approve">Approval Granted</option>
+          <option value="approval.reject">Approval Rejected</option>
         </select>
       </div>
 

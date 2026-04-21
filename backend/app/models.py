@@ -620,6 +620,16 @@ class UsageSummary(BaseModel):
     targets: List[TargetCount] = Field(default_factory=list)
 
 
+class AdminUsageSummary(BaseModel):
+    period: str
+    total_users: int
+    total_api_calls: int
+    total_pipeline_runs: int
+    total_datasets_uploaded: int
+    total_storage_bytes: int
+    total_data_scanned_bytes: int
+
+
 class TenantIsolationViolation(BaseModel):
     category: str
     severity: Literal["high", "medium", "low"] = "medium"

@@ -1285,6 +1285,15 @@ def query_dataset(
         payload.query,
     )
 
+    user_id = get_current_user_id(authorization) or "anonymous"
+    increment_usage(user_id, "api_calls", db)
+    audit_store.add(AuditEntry(
+        action="dataset.query",
+        actor=user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"cached": cached, "row_count": len(results)},
+    ))
+
     return DatasetQueryResponse(
         results=results,
         row_count=len(results),
@@ -1777,7 +1786,15 @@ def export_dataset(
                     writer.writerow(str(row.get(c, "") or "") for c in col_names)
                 yield buf.getvalue()
 
+    user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported", {"dataset_id": dataset_id})
+    audit_store.add(AuditEntry(
+        action="dataset.export",
+        actor=user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"format": "csv"},
+    ))
+    increment_usage(user_id, "api_calls", db)
     display_name = (meta.name or dataset_id).replace('"', "")
     headers = {"Content-Disposition": f'attachment; filename="{display_name}.csv"'}
     return StreamingResponse(row_iter(), media_type="text/csv", headers=headers)
@@ -1800,7 +1817,15 @@ def export_dataset_powerbi(
         xlsx_bytes = ExportService.export_powerbi(dataset_id, meta.name or dataset_id, db)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Export failed: {exc}") from exc
+    user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported_powerbi", {"dataset_id": dataset_id})
+    audit_store.add(AuditEntry(
+        action="dataset.export",
+        actor=user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"format": "powerbi_xlsx"},
+    ))
+    increment_usage(user_id, "api_calls", db)
     safe_name = (meta.name or dataset_id).replace('"', "")
     headers = {
         "Content-Disposition": f'attachment; filename="{safe_name}.xlsx"',
@@ -1829,7 +1854,15 @@ def export_dataset_tableau(
         file_bytes, mime_type = ExportService.export_tableau(dataset_id, meta.name or dataset_id, db)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Export failed: {exc}") from exc
+    user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported_tableau", {"dataset_id": dataset_id})
+    audit_store.add(AuditEntry(
+        action="dataset.export",
+        actor=user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"format": "tableau_hyper"},
+    ))
+    increment_usage(user_id, "api_calls", db)
     safe_name = (meta.name or dataset_id).replace('"', "")
     ext = "csv" if mime_type == "text/csv" else "hyper"
     headers = {
@@ -1873,7 +1906,15 @@ def export_dataset_to_sheets(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Google Sheets sync failed: {exc}") from exc
 
+    user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported_sheets", {"dataset_id": dataset_id, "rows_written": result.get("rows_written", 0)})
+    audit_store.add(AuditEntry(
+        action="dataset.export",
+        actor=user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"format": "google_sheets"},
+    ))
+    increment_usage(user_id, "api_calls", db)
     return result
 
 

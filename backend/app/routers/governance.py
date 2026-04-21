@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from ..models import (
     AuditEntry,
     UsageSummary,
+    AdminUsageSummary,
     ActionCount,
     TargetCount,
     TenantIsolationReport,
@@ -31,7 +32,7 @@ from ..services.ai_operating_controls import (
 )
 from ..routers.datasets import dataset_cache_stats
 from ..db import get_db
-from ..models_db import AuditLogDB
+from ..models_db import AuditLogDB, UserUsageDB
 from ..security import get_current_role, require_role
 from ..config import settings
 
@@ -87,28 +88,24 @@ def list_audit(
     return audit_store.list()
 
 
-@router.get("/usage", response_model=UsageSummary)
+@router.get("/usage", response_model=AdminUsageSummary)
 def usage_summary(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> UsageSummary:
+) -> AdminUsageSummary:
     role = get_current_role(authorization)
     require_role("admin", role)
-    rows = db.query(AuditLogDB).all()
-    total_events = len(rows)
-    unique_actors = len({row.actor for row in rows})
-    action_counts: dict[str, int] = {}
-    target_counts: dict[str, int] = {}
-    for row in rows:
-        action_counts[row.action] = action_counts.get(row.action, 0) + 1
-        target_counts[row.target] = target_counts.get(row.target, 0) + 1
-    actions = [ActionCount(action=k, count=v) for k, v in sorted(action_counts.items(), key=lambda item: item[1], reverse=True)]
-    targets = [TargetCount(target=k, count=v) for k, v in sorted(target_counts.items(), key=lambda item: item[1], reverse=True)[:10]]
-    return UsageSummary(
-        total_events=total_events,
-        unique_actors=unique_actors,
-        actions=actions,
-        targets=targets,
+    from datetime import date
+    period = date.today().strftime("%Y-%m")
+    rows = db.query(UserUsageDB).filter(UserUsageDB.period == period).all()
+    return AdminUsageSummary(
+        period=period,
+        total_users=len({r.user_id for r in rows}),
+        total_api_calls=sum(r.api_calls for r in rows),
+        total_pipeline_runs=sum(r.pipeline_runs for r in rows),
+        total_datasets_uploaded=sum(r.datasets_uploaded for r in rows),
+        total_storage_bytes=sum(r.storage_bytes_used for r in rows),
+        total_data_scanned_bytes=sum(r.data_scanned_bytes for r in rows),
     )
 
 

@@ -13,6 +13,7 @@ from .datasets import get_dataset, get_dataset_from_db, save_dataset
 from ..security import get_current_role, get_current_user_id, require_role
 from ..db import get_db
 from ..services.audit import audit_store
+from ..services.usage_service import increment_usage
 from ..models import AuditEntry
 
 router = APIRouter(prefix="/transformations", tags=["transformations"])
@@ -145,6 +146,7 @@ def apply_recipe(
             metadata={"new_dataset_id": new_id, "steps": len(recipe.steps)},
         )
     )
+    increment_usage(user_id, "api_calls", db)
     try:
         from ..services.events import emit_event
 

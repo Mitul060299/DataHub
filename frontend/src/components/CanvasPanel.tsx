@@ -330,6 +330,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         <div style={{ display: "inline-flex", gap: 6, position: "relative" }} ref={dropdownRef}>
           <button
             className="btn"
+            data-tour="export-button"
             title="Export dataset"
             disabled={!(columns ?? []).length || isExporting !== null}
             onClick={() => setIsExportOpen((o) => !o)}

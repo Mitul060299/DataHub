@@ -19,8 +19,8 @@ const STEPS = [
   },
   {
     id: "complete",
-    label: "Explore insights & charts",
-    hint: "Pin charts to a dashboard, export to Excel, or share",
+    label: "Explore insights & export",
+    hint: "Create charts for analysis, export to CSV or Excel, or save a checkpoint",
   },
 ];
 

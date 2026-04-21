@@ -40,14 +40,14 @@ const STEPS: TourStep[] = [
   },
   {
     target: "canvas-tab",
-    title: "Charts & visual analysis",
-    content: "Switch to the Canvas tab to create bar, line, and scatter charts from your data. Great for spotting trends and sharing quick visual insights with your team.",
+    title: "Arrange your visuals on the Canvas",
+    content: "Switch to the Canvas tab and drag your saved charts onto it to build a personal analysis view. Great for laying out insights side by side or sharing a quick visual summary with your team.",
     position: "bottom",
   },
   {
     target: "viz-section",
     title: "Your saved charts",
-    content: "Charts you create during analysis are saved here for quick access. Pick up where you left off or share specific visuals with teammates.",
+    content: "Charts you create during analysis are saved here. Drag them onto the Canvas tab to arrange them for deeper analysis, or pick one up later to continue exploring.",
     position: "right",
   },
   {

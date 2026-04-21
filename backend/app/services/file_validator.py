@@ -90,6 +90,13 @@ def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
             result.encoding_converted = True
             result.converted_bytes = file_bytes
             result.warnings.append("File was automatically converted from non-UTF-8 encoding to UTF-8.")
+        # ── 6b. Formula injection check (CSV Injection / Formula Injection) ───
+        # Cells starting with =, +, -, @ can execute as formulas in Excel/Sheets
+        # when the file is opened after being downloaded. Strip the prefix.
+        file_bytes, formula_warning = _strip_formula_injection(file_bytes)
+        if formula_warning:
+            result.warnings.append(formula_warning)
+            result.converted_bytes = file_bytes
 
     # ── 3. File is readable (attempt DuckDB open) ─────────────────────────────
     try:
@@ -253,3 +260,44 @@ def _ensure_utf8(file_bytes: bytes) -> tuple[bytes, bool]:
         return text.encode("utf-8"), True
     except Exception:
         return file_bytes, False
+
+
+# ── CSV formula injection / CSV-injection sanitisation ───────────────────────
+# Cells beginning with =, +, -, @ are interpreted as formulas by spreadsheet
+# apps (Excel, Google Sheets, LibreOffice) when the file is opened.  This is
+# a common vector for data-exfiltration attacks against users who download and
+# open exported CSVs.  We prefix such cells with a tab character (\t) which
+# causes spreadsheets to treat the value as text while preserving readability.
+
+import csv as _csv_mod
+import io as _io_mod
+
+_FORMULA_PREFIXES = ('=', '+', '-', '@', '\r', '\t')
+
+
+def _strip_formula_injection(file_bytes: bytes) -> tuple[bytes, Optional[str]]:
+    """Sanitise CSV formula injection.  Returns (sanitised_bytes, warning_or_None)."""
+    try:
+        text = file_bytes.decode("utf-8", errors="replace")
+        reader = _csv_mod.reader(_io_mod.StringIO(text))
+        out_buf = _io_mod.StringIO()
+        writer = _csv_mod.writer(out_buf)
+        found = 0
+        for row in reader:
+            sanitised_row = []
+            for cell in row:
+                if cell and cell[0] in _FORMULA_PREFIXES:
+                    sanitised_row.append("\t" + cell)
+                    found += 1
+                else:
+                    sanitised_row.append(cell)
+            writer.writerow(sanitised_row)
+        if found:
+            return out_buf.getvalue().encode("utf-8"), (
+                f"{found} cell(s) contained formula characters (=, +, -, @) and were sanitised "
+                "to prevent formula injection when opened in spreadsheet applications."
+            )
+        return file_bytes, None
+    except Exception:
+        # Never block an upload because of sanitisation failure — just skip
+        return file_bytes, None

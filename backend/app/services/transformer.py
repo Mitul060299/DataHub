@@ -1,6 +1,76 @@
 from typing import List, Optional
+import ast
+import operator as _op
 import pandas as pd
 from ..models import TransformationStep
+
+# ── Safe arithmetic formula evaluator ────────────────────────────────────────
+# Replaces pandas.eval() / df.eval() which allow arbitrary Python execution.
+# Only numeric literals, column references, and arithmetic operators are allowed.
+
+_SAFE_OPS = {
+    ast.Add: _op.add,
+    ast.Sub: _op.sub,
+    ast.Mult: _op.mul,
+    ast.Div: _op.truediv,
+    ast.Pow: _op.pow,
+    ast.USub: _op.neg,
+    ast.UAdd: _op.pos,
+    ast.Mod: _op.mod,
+    ast.FloorDiv: _op.floordiv,
+}
+
+_SAFE_FUNCS = {
+    "abs": abs,
+    "round": round,
+}
+
+
+def _safe_eval_formula(df: pd.DataFrame, expression: str):
+    """Evaluate a simple arithmetic formula over DataFrame columns.
+
+    Only allows: column references, numeric literals, +/-/*//**//%, abs(), round().
+    Raises ValueError for any disallowed node (no eval, no exec, no attribute access).
+    """
+    try:
+        tree = ast.parse(expression.strip(), mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Invalid formula syntax: {exc}") from exc
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        elif isinstance(node, ast.Constant):
+            if not isinstance(node.value, (int, float)):
+                raise ValueError(f"Only numeric literals allowed, got: {node.value!r}")
+            return node.value
+        elif isinstance(node, ast.Name):
+            col = node.id
+            if col not in df.columns:
+                raise ValueError(f"Column '{col}' not found in dataset")
+            return df[col]
+        elif isinstance(node, ast.BinOp):
+            op_type = type(node.op)
+            if op_type not in _SAFE_OPS:
+                raise ValueError(f"Operator {op_type.__name__} is not allowed")
+            return _SAFE_OPS[op_type](_eval(node.left), _eval(node.right))
+        elif isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+            if op_type not in _SAFE_OPS:
+                raise ValueError(f"Unary operator {op_type.__name__} is not allowed")
+            return _SAFE_OPS[op_type](_eval(node.operand))
+        elif isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Only simple function calls allowed (no attribute access)")
+            func_name = node.func.id
+            if func_name not in _SAFE_FUNCS:
+                raise ValueError(f"Function '{func_name}' is not allowed. Allowed: {sorted(_SAFE_FUNCS)}")
+            args = [_eval(a) for a in node.args]
+            return _SAFE_FUNCS[func_name](*args)
+        else:
+            raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+
+    return _eval(tree)
 
 
 def apply_steps(
@@ -98,7 +168,7 @@ def apply_steps(
             new_column = params.get("new_column")
             expression = params.get("expression")
             if new_column and expression:
-                result[new_column] = result.eval(expression)
+                result[new_column] = _safe_eval_formula(result, expression)
         elif name == "drop_duplicates":
             keep = params.get("keep", "first")
             result = result.drop_duplicates(keep=keep)

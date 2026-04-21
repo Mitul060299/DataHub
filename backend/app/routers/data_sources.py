@@ -12,6 +12,7 @@ POST   /api/sources/{id}/test   — validate connection, return 5-row preview
 GET    /api/sources/{id}/pipelines — pipelines that reference this source
 """
 
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -26,6 +27,28 @@ from ..models_db import DataSourceDB, PipelineScheduleDB, PipelineV2DB
 from ..security import get_current_user_id, get_current_role, require_role
 
 router = APIRouter(prefix="/sources", tags=["data_sources"])
+
+# Allowlist for DuckDB preview paths: S3/R2/GCS/Azure URIs and safe local paths.
+# Prevents injection via single-quote escape or path traversal.
+_PATH_RE = re.compile(
+    r'^(?:'
+    r's3[a-z]*://[A-Za-z0-9.\-_/]+|'       # s3://, s3a://, s3n://
+    r'gs://[A-Za-z0-9.\-_/]+|'              # GCS
+    r'https://[A-Za-z0-9.\-_/@?=&%]+|'     # HTTPS (Azure Blob, presigned URLs)
+    r'/[A-Za-z0-9._\-/]+'                   # absolute local paths (no spaces, no ..)
+    r')$'
+)
+
+
+def _validate_preview_path(path: str) -> str:
+    """Raise HTTPException if path contains injection characters; return escaped path."""
+    if not path or not _PATH_RE.match(path):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or disallowed data source path. Only S3, GCS, HTTPS, and absolute local paths are supported.",
+        )
+    # Escape any single quotes (defence-in-depth; should never occur after regex check)
+    return path.replace("'", "\\'")
 
 
 # ---------------------------------------------------------------------------
@@ -206,14 +229,15 @@ async def test_source(
         return DataSourceTest(ok=False, message="No readable path configured for this source type", preview=[])
 
     try:
+        safe_path = _validate_preview_path(path)
         con = duckdb.connect(":memory:")
         try:
             rows = con.execute(
-                f"SELECT * FROM read_parquet('{path}') LIMIT 5"
+                f"SELECT * FROM read_parquet('{safe_path}') LIMIT 5"
             ).df().to_dict(orient="records")
         except Exception:
             rows = con.execute(
-                f"SELECT * FROM read_csv_auto('{path}') LIMIT 5"
+                f"SELECT * FROM read_csv_auto('{safe_path}') LIMIT 5"
             ).df().to_dict(orient="records")
         finally:
             con.close()
@@ -222,10 +246,14 @@ async def test_source(
         db.commit()
         return DataSourceTest(ok=True, message="Connection successful", preview=rows)
 
+    except HTTPException:
+        raise
     except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Data source test failed for source %s: %s", source_id, exc)
         src.last_tested_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
-        return DataSourceTest(ok=False, message=str(exc), preview=[])
+        return DataSourceTest(ok=False, message="Connection test failed. Check your data source configuration.", preview=[])
 
 
 # ---------------------------------------------------------------------------

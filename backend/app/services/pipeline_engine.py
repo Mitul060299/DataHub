@@ -152,9 +152,10 @@ def _apply_pipeline_operation(
             formula = config.get("formula", "")
             if formula:
                 try:
-                    df[new_col] = df.eval(formula)
+                    from app.services.transformer import _safe_eval_formula
+                    df[new_col] = _safe_eval_formula(df, formula)
                 except Exception as exc:
-                    logger.warning("add_calculated_column eval failed: %s", exc)
+                    logger.warning("add_calculated_column safe eval failed: %s", exc)
             return df
 
         elif operation == "normalize_column":

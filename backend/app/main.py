@@ -4,6 +4,7 @@ import os
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import _rate_limit_exceeded_handler  # noqa: F401 (kept for reference)
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -21,6 +22,28 @@ def _json_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
         },
         headers={"Retry-After": str(retry_after)},
     )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Inject OWASP-recommended security headers on every response."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # Content-Security-Policy: API only serves JSON — block all resource loads
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'"
+        )
+        # Only set HSTS in production to avoid breaking local dev
+        from .config import settings as _s
+        if _s.app_env == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
 from .routers import ml_routes, full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
@@ -47,6 +70,9 @@ logger = logging.getLogger(__name__)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _json_rate_limit_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
+
+# ── Security headers ──────────────────────────────────────────────────────────
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Single source of truth: driven by the CORS_ORIGINS env var (comma-separated).
 # Localhost origins are included automatically in development (see config.py).

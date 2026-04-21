@@ -178,10 +178,20 @@ if settings.app_env == "production":
             "APP_SECRET_KEY is set to an insecure default value. "
             "Set a strong random secret before deploying to production."
         )
+    if len(settings.app_secret_key) < 32:
+        raise ValueError(
+            "APP_SECRET_KEY must be at least 32 characters long in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
     if settings.supabase_url and settings.supabase_jwt_secret in _INSECURE_DEFAULTS:
         raise ValueError(
             "SUPABASE_JWT_SECRET is empty but SUPABASE_URL is configured. "
             "Set SUPABASE_JWT_SECRET to the HS256 secret from your Supabase project settings."
+        )
+    if settings.cron_secret in _INSECURE_DEFAULTS:
+        raise ValueError(
+            "CRON_SECRET is set to an insecure default value. "
+            "Set CRON_SECRET to a strong random secret in production."
         )
 
 try:

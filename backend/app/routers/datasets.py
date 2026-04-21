@@ -873,7 +873,8 @@ def step_materialize(
             snapshot_url = engine.snapshot_to_parquet(table_name, dataset_id, user_id)
         return {"table_name": table_name, "row_count": row_count, "materialized": True, "snapshot_url": snapshot_url}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("Live table materialization failed for dataset %s", dataset_id)
+        raise HTTPException(status_code=500, detail="Failed to materialise dataset. Please try again.")
 
 
 # ── Snapshot Preview (read persisted Parquet directly) ────────────────────────
@@ -940,9 +941,10 @@ def snapshot_preview(
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("Snapshot preview failed for dataset %s path %s", dataset_id, snapshot_path)
         raise HTTPException(
             status_code=422,
-            detail=f"Could not read snapshot: {exc}",
+            detail="Could not read snapshot. The file may have been moved or deleted.",
         )
 
 
@@ -1699,7 +1701,9 @@ def clear_dataset_session(
 
 
 @router.get("/{dataset_id}/export")
+@limiter.limit("15/hour")
 def export_dataset(
+    request: Request,
     dataset_id: str,
     authorization: str | None = Header(default=None),
     sort_by: str | None = None,
@@ -1801,7 +1805,9 @@ def export_dataset(
 
 
 @router.get("/{dataset_id}/export/powerbi")
+@limiter.limit("10/hour")
 def export_dataset_powerbi(
+    request: Request,
     dataset_id: str,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -1816,7 +1822,8 @@ def export_dataset_powerbi(
     try:
         xlsx_bytes = ExportService.export_powerbi(dataset_id, meta.name or dataset_id, db)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Export failed: {exc}") from exc
+        logger.exception("Power BI export failed for dataset %s", dataset_id)
+        raise HTTPException(status_code=500, detail="Export failed. Please try again.") from exc
     user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported_powerbi", {"dataset_id": dataset_id})
     audit_store.add(AuditEntry(
@@ -1838,7 +1845,9 @@ def export_dataset_powerbi(
 
 
 @router.get("/{dataset_id}/export/tableau")
+@limiter.limit("10/hour")
 def export_dataset_tableau(
+    request: Request,
     dataset_id: str,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -1853,7 +1862,8 @@ def export_dataset_tableau(
     try:
         file_bytes, mime_type = ExportService.export_tableau(dataset_id, meta.name or dataset_id, db)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Export failed: {exc}") from exc
+        logger.exception("Tableau export failed for dataset %s", dataset_id)
+        raise HTTPException(status_code=500, detail="Export failed. Please try again.") from exc
     user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported_tableau", {"dataset_id": dataset_id})
     audit_store.add(AuditEntry(
@@ -1876,7 +1886,9 @@ class SheetsExportPayload(dict):
 
 
 @router.post("/{dataset_id}/export/sheets")
+@limiter.limit("10/hour")
 def export_dataset_to_sheets(
+    request: Request,
     dataset_id: str,
     payload: dict,
     authorization: str | None = Header(default=None),
@@ -1902,9 +1914,10 @@ def export_dataset_to_sheets(
     try:
         result = ExportService.export_sheets(dataset_id, spreadsheet_url, sheet_name, mode, db)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Invalid Google Sheets configuration. Check the spreadsheet URL and mode.") from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Google Sheets sync failed: {exc}") from exc
+        logger.exception("Google Sheets export failed for dataset %s", dataset_id)
+        raise HTTPException(status_code=500, detail="Google Sheets sync failed. Please try again.") from exc
 
     user_id = get_current_user_id(authorization) or "anonymous"
     emit_event("dataset.exported_sheets", {"dataset_id": dataset_id, "rows_written": result.get("rows_written", 0)})
@@ -1974,7 +1987,7 @@ def get_presigned_url(
     try:
         url = StorageService.get_signed_url(meta.storage_path, expires_in=expires_in)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not generate presigned URL: {exc}")
+        raise HTTPException(status_code=500, detail="Could not generate download URL. Please try again.")
 
     import datetime
     expires_at = (

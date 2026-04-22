@@ -66,6 +66,7 @@ def _calculate_proration(subscription: dict[str, Any]) -> int:
 
     plan_slug = billing_repository.to_plan_slug(subscription.get("plan"))
     base_amount = MONTHLY_AMOUNTS_PAISE.get(plan_slug, 0)
+    # Our DB ``quantity`` column stores total purchased seats (including extras).
     quantity = max(int(subscription.get("quantity") or 1), 1)
     included = INCLUDED_SEATS.get(plan_slug, 1)
     extra_seats = max(0, quantity - included)
@@ -76,6 +77,60 @@ def _calculate_proration(subscription: dict[str, Any]) -> int:
 
     ratio = max(0.0, min(1.0, remaining_seconds / total_seconds))
     return int(ratio * total_monthly)
+
+
+def _create_extra_seat_addon(
+    razorpay_subscription_id: str,
+    plan_slug: str,
+    extra_seats: int,
+) -> dict[str, Any] | None:
+    """Add a Razorpay add-on for the per-seat overage.
+
+    Razorpay add-ons are appended to the *next invoice* raised on the
+    subscription. Called once at signup (lands on the first invoice) and
+    once on each ``subscription.charged`` webhook (lands on the following
+    cycle's invoice) so seat overage continues to bill recurringly while
+    keeping the subscription's own ``quantity`` fixed at 1.
+    """
+    if extra_seats <= 0 or not razorpay_subscription_id:
+        return None
+    seat_price = PER_SEAT_PAISE.get(plan_slug, 0)
+    if seat_price <= 0:
+        return None
+    payload = {
+        "item": {
+            "name": f"Extra seat ({plan_slug.title()})",
+            "amount": int(seat_price),
+            "currency": "INR",
+            "description": f"{extra_seats} extra seat(s) at \u20b9{seat_price // 100:,}/mo",
+        },
+        "quantity": int(extra_seats),
+    }
+    try:
+        return _get_client().subscription.create_addon(razorpay_subscription_id, payload)
+    except Exception:  # pragma: no cover - never block billing on addon errors
+        return None
+
+
+def queue_next_cycle_seat_addon(razorpay_subscription_id: str) -> dict[str, Any] | None:
+    """Webhook helper: ensure the *next* invoice charges for current extras.
+
+    Looks up the subscription in our DB, computes ``extras = quantity - included``
+    for the stored plan, and creates a fresh Razorpay add-on. Called from the
+    ``subscription.charged`` webhook after a successful renewal.
+    """
+    if not razorpay_subscription_id:
+        return None
+    sub = billing_repository.get_subscription_by_razorpay_id(razorpay_subscription_id)
+    if not sub:
+        return None
+    plan_slug = billing_repository.to_plan_slug(sub.get("plan"))
+    included = INCLUDED_SEATS.get(plan_slug, 1)
+    quantity = max(int(sub.get("quantity") or included), included)
+    extra = max(0, quantity - included)
+    if extra <= 0:
+        return None
+    return _create_extra_seat_addon(razorpay_subscription_id, plan_slug, extra)
 
 
 async def create_subscription(
@@ -91,14 +146,18 @@ async def create_subscription(
     if not plan_id or plan_id == "plan_REPLACE_ME":
         raise RuntimeError("Razorpay plan IDs are not configured")
 
-    # Ensure quantity is at least the included seats for the plan
+    # Ensure total purchased seats >= included seats for the plan.
     included = INCLUDED_SEATS.get(plan_slug, 1)
     effective_quantity = max(int(quantity or included), included)
+    extra_seats = max(0, effective_quantity - included)
 
+    # IMPORTANT: Razorpay multiplies plan_amount * quantity. Our base plan
+    # already includes the included-seat allotment, so we always set
+    # quantity=1 and bill extras via add-ons.
     payload: dict[str, Any] = {
         "plan_id": plan_id,
         "total_count": 12,
-        "quantity": effective_quantity,
+        "quantity": 1,
         "customer_notify": 1,
         "notes": {
             "user_id": user_id,
@@ -110,6 +169,16 @@ async def create_subscription(
         payload["notify_info"] = {"notify_email": notify_email}
 
     subscription = _get_client().subscription.create(payload)
+
+    # Add extra-seat charge to the first invoice (subscription is still in
+    # ``created`` state so the addon flows into the authorization invoice).
+    if extra_seats > 0:
+        _create_extra_seat_addon(
+            str(subscription.get("id") or ""),
+            plan_slug,
+            extra_seats,
+        )
+
     billing_repository.store_subscription(
         user_id=user_id,
         subscription=subscription,
@@ -123,9 +192,14 @@ async def create_subscription(
 async def update_seat_count(user_id: str, new_quantity: int) -> dict[str, Any]:
     """Change the number of purchased seats on an active subscription.
 
-    Uses Razorpay's ``subscription.update`` API to bump ``quantity``.
-    The charge difference is applied immediately (prorated by Razorpay).
-    Seat *downgrades* take effect at the next renewal (no mid-cycle refund).
+    Seats are billed via Razorpay add-ons (not subscription ``quantity``),
+    so changes are reflected only in our DB. Capacity (the number of seats
+    a user may invite) is updated immediately. The billing impact:
+
+    * **Increase** → next renewal invoice will include an add-on for the
+      new extra-seat count. There is no mid-cycle prorated charge.
+    * **Decrease** → next renewal invoice add-on will be smaller (or absent
+      if seats fall back to the included allotment). No mid-cycle refund.
     """
     current_sub = billing_repository.get_active_subscription(user_id)
     if not current_sub:
@@ -148,30 +222,21 @@ async def update_seat_count(user_id: str, new_quantity: int) -> dict[str, Any]:
         raise ValueError("Active subscription is missing Razorpay subscription id.")
 
     old_quantity = max(int(current_sub.get("quantity") or included), included)
-
-    if new_quantity > old_quantity:
-        # Seat increase: apply immediately
-        _get_client().subscription.edit(razorpay_sub_id, {
-            "quantity": new_quantity,
-            "schedule_change_at": "now",
-        })
-    elif new_quantity < old_quantity:
-        # Seat decrease: take effect at next renewal
-        _get_client().subscription.edit(razorpay_sub_id, {
-            "quantity": new_quantity,
-            "schedule_change_at": "cycle_end",
-        })
-    else:
+    if new_quantity == old_quantity:
         return {"quantity": new_quantity, "changed": False}
 
-    # Sync quantity in our DB, validated against the calling user
-    billing_repository.update_subscription_quantity(razorpay_sub_id, new_quantity, expected_user_id=user_id)
+    # Update our DB only. Razorpay sub ``quantity`` stays at 1; the next
+    # renewal's add-on (queued from the subscription.charged webhook) will
+    # reflect the new seat count.
+    billing_repository.update_subscription_quantity(
+        razorpay_sub_id, new_quantity, expected_user_id=user_id
+    )
 
     return {
         "quantity": new_quantity,
         "changed": True,
         "previous_quantity": old_quantity,
-        "effective": "now" if new_quantity > old_quantity else "next_renewal",
+        "effective": "capacity_now_billing_next_renewal",
     }
 
 

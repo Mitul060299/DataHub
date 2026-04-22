@@ -319,12 +319,15 @@ async def _on_activated(entities: dict[str, Any], payload: dict[str, Any]):
 
 
 async def _on_updated(entities: dict[str, Any], payload: dict[str, Any]):
-    """Handle subscription.updated — syncs quantity changes from Razorpay."""
+    """Handle subscription.updated.
+
+    Razorpay subscription ``quantity`` is intentionally pinned at 1 in our
+    flow (extras billed via add-ons), so we no longer mirror it into our
+    DB — our ``subscriptions.quantity`` column is the source of truth for
+    purchased seats.
+    """
     sub = _subscription_entity(entities)
     razorpay_sub_id = str(sub.get("id") or "")
-    quantity = sub.get("quantity")
-    if razorpay_sub_id and quantity is not None:
-        billing_repository.update_subscription_quantity(razorpay_sub_id, int(quantity))
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
     await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.updated", payload)
@@ -337,14 +340,24 @@ async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
     user_id = notes.get("user_id")
     plan = notes.get("plan") or ""
     amount = payment.get("amount")
+    razorpay_sub_id = str(sub.get("id") or "")
+
+    # Queue extra-seat add-on for the *next* invoice so the per-seat
+    # overage continues to bill recurringly. Safe to call every cycle:
+    # it is a no-op when the user has no extras.
+    try:
+        billing_service.queue_next_cycle_seat_addon(razorpay_sub_id)
+    except Exception:
+        pass
+
     track(
         str(user_id) if user_id else "unknown",
         "payment_completed",
-        {"plan": plan, "amount_inr": (amount / 100) if isinstance(amount, (int, float)) else None, "subscription_id": str(sub.get("id") or "")},
+        {"plan": plan, "amount_inr": (amount / 100) if isinstance(amount, (int, float)) else None, "subscription_id": razorpay_sub_id},
     )
     await _log(
         str(user_id) if user_id else None,
-        str(sub.get("id") or "") or None,
+        razorpay_sub_id or None,
         "subscription.charged",
         payload,
         payment_id=str(payment.get("id") or "") or None,

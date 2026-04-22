@@ -2,18 +2,16 @@ import os
 _IS_TEST = os.getenv("RAZORPAY_KEY_ID", "").startswith("rzp_test_")
 _TEST_PLAN = "plan_SW9abXgqVnqDXQ"
 
-# NOTE: Plan IDs need to be recreated in Razorpay dashboard for the new prices.
-# Replace the "plan_REPLACE_ME" placeholders with actual live plan IDs after
-# creating new plans in the Razorpay dashboard.
+# Live Razorpay plan IDs (created 22 Apr 2026, "V2" pricing).
 RAZORPAY_PLAN_IDS = {
     "professional": {
-        "monthly": _TEST_PLAN if _IS_TEST else "plan_REPLACE_ME",
+        "monthly": _TEST_PLAN if _IS_TEST else "plan_SgY6POEnN2ZzRA",
     },
     "team": {
-        "monthly": _TEST_PLAN if _IS_TEST else "plan_REPLACE_ME",
+        "monthly": _TEST_PLAN if _IS_TEST else "plan_SgY7HxP1BqrRIH",
     },
     "business": {
-        "monthly": _TEST_PLAN if _IS_TEST else "plan_REPLACE_ME",
+        "monthly": _TEST_PLAN if _IS_TEST else "plan_SgY7ow2NuF1cwi",
     },
 }
 

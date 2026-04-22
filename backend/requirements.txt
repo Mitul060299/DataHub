@@ -28,6 +28,7 @@ supabase==2.6.0
 apscheduler==3.10.4
 razorpay==1.4.2
 posthog==3.7.4
+sentry-sdk[fastapi]==2.18.0
 psutil==6.1.1
 croniter==3.0.3
 pytz==2024.1

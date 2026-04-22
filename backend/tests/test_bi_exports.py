@@ -66,10 +66,18 @@ import asyncio
 # ── Stub optional heavy deps before any app import ────────────────────────────
 for _mod in [
     "chromadb", "chromadb.utils", "chromadb.config", "chromadb.api",
-    "slowapi", "slowapi.util", "slowapi.errors", "slowapi.middleware",
+    "slowapi.util", "slowapi.errors", "slowapi.middleware",
 ]:
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
+
+# Stub slowapi so that @limiter.limit("x/hour") is a no-op passthrough decorator
+if "slowapi" not in sys.modules:
+    _slowapi_stub = MagicMock()
+    # Make Limiter().limit(rate)(func) return func unchanged
+    _passthrough = lambda rate: (lambda fn: fn)
+    _slowapi_stub.Limiter.return_value.limit = _passthrough
+    sys.modules["slowapi"] = _slowapi_stub
 
 os.environ.setdefault("GROQ_API_KEY", "test-dummy-key")
 
@@ -478,9 +486,16 @@ class TestExportCsvEndpoint(unittest.TestCase):
 
     def _invoke(self, dataset_id: str, db: MagicMock, **kwargs):
         from app.routers.datasets import export_dataset
+        mock_request = MagicMock()
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        # Use __wrapped__ to bypass the @limiter.limit decorator applied at import time
+        func = getattr(export_dataset, "__wrapped__", export_dataset)
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
-             patch("app.routers.datasets.require_role"):
-            return export_dataset(dataset_id=dataset_id, authorization=None, db=db, **kwargs)
+             patch("app.routers.datasets.require_role"), \
+             patch("app.routers.datasets.audit_store"), \
+             patch("app.routers.datasets.increment_usage"):
+            return func(request=mock_request, dataset_id=dataset_id, authorization=None, db=db, **kwargs)
 
     def test_E1_duckdb_path_uses_read_parquet(self):
         """storage_path present → DuckDB read_parquet SQL is executed."""
@@ -587,9 +602,15 @@ class TestPowerBIEndpoint(unittest.TestCase):
 
     def _invoke(self, dataset_id: str, db: MagicMock):
         from app.routers.datasets import export_dataset_powerbi
+        mock_request = MagicMock()
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        func = getattr(export_dataset_powerbi, "__wrapped__", export_dataset_powerbi)
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
-             patch("app.routers.datasets.require_role"):
-            return export_dataset_powerbi(dataset_id=dataset_id, authorization=None, db=db)
+             patch("app.routers.datasets.require_role"), \
+             patch("app.routers.datasets.audit_store"), \
+             patch("app.routers.datasets.increment_usage"):
+            return func(request=mock_request, dataset_id=dataset_id, authorization=None, db=db)
 
     def test_F1_returns_404_for_unknown_dataset(self):
         from fastapi import HTTPException
@@ -646,9 +667,15 @@ class TestTableauEndpoint(unittest.TestCase):
 
     def _invoke(self, dataset_id: str, db: MagicMock):
         from app.routers.datasets import export_dataset_tableau
+        mock_request = MagicMock()
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        func = getattr(export_dataset_tableau, "__wrapped__", export_dataset_tableau)
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
-             patch("app.routers.datasets.require_role"):
-            return export_dataset_tableau(dataset_id=dataset_id, authorization=None, db=db)
+             patch("app.routers.datasets.require_role"), \
+             patch("app.routers.datasets.audit_store"), \
+             patch("app.routers.datasets.increment_usage"):
+            return func(request=mock_request, dataset_id=dataset_id, authorization=None, db=db)
 
     def test_G1_returns_404_for_unknown_dataset(self):
         from fastapi import HTTPException
@@ -693,9 +720,15 @@ class TestSheetsEndpoint(unittest.TestCase):
 
     def _invoke(self, dataset_id: str, payload: dict, db: MagicMock):
         from app.routers.datasets import export_dataset_to_sheets
+        mock_request = MagicMock()
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        func = getattr(export_dataset_to_sheets, "__wrapped__", export_dataset_to_sheets)
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
-             patch("app.routers.datasets.require_role"):
-            return export_dataset_to_sheets(dataset_id=dataset_id, payload=payload, authorization=None, db=db)
+             patch("app.routers.datasets.require_role"), \
+             patch("app.routers.datasets.audit_store"), \
+             patch("app.routers.datasets.increment_usage"):
+            return func(request=mock_request, dataset_id=dataset_id, payload=payload, authorization=None, db=db)
 
     def _db_with_meta(self):
         db = MagicMock()

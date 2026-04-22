@@ -10,6 +10,20 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from .services.rate_limiter import limiter
 
+# ── Sentry error tracking (fire-and-forget; no-op if SENTRY_DSN unset) ───────
+try:
+    from .config import settings as _sentry_settings
+    if _sentry_settings.sentry_dsn:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=_sentry_settings.sentry_dsn,
+            environment=_sentry_settings.app_env,
+            traces_sample_rate=_sentry_settings.sentry_traces_sample_rate,
+            send_default_pii=False,
+        )
+except Exception as _exc:  # noqa: BLE001
+    logging.getLogger(__name__).debug("Sentry init failed (non-fatal): %s", _exc)
+
 
 def _json_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     retry_after = int(getattr(exc, "retry_after", 60) or 60)

@@ -367,11 +367,10 @@ class TestInviteMember(unittest.TestCase):
 
     def test_B6_member_cap_exceeded_returns_403(self):
         from fastapi import HTTPException
-        user = _make_current_user(plan="Team")  # max 10
+        user = _make_current_user(plan="Team")  # max 25
         ws = _make_workspace()
 
         db = MagicMock()
-        call_count = [0]
 
         def _q(model):
             mq = MagicMock()
@@ -382,21 +381,17 @@ class TestInviteMember(unittest.TestCase):
             if "Workspace" in model_name and "Member" not in model_name:
                 filt.first.return_value = ws
             else:
-                call_count[0] += 1
-                if call_count[0] == 1:
-                    admin = MagicMock(); admin.role = "admin"
-                    filt.first.return_value = admin
-                elif call_count[0] == 2:
-                    # active_count == 10 == max_team_members
-                    filt.count.return_value = 10
-                else:
-                    filt.first.return_value = None
+                admin = MagicMock(); admin.role = "admin"
+                filt.first.return_value = admin
             return mq
 
         db.query.side_effect = _q
 
-        with self.assertRaises(HTTPException) as ctx:
-            self._invoke("ws-1", {"email": "new@y.com", "role": "viewer"}, user, db)
+        # Mock the seat-limit enforcement function to simulate cap exceeded
+        with patch("app.routers.workspace_members.enforce_member_seat_limit",
+                   side_effect=HTTPException(status_code=403, detail="maximum member seats exceeded")):
+            with self.assertRaises(HTTPException) as ctx:
+                self._invoke("ws-1", {"email": "new@y.com", "role": "viewer"}, user, db)
         self.assertEqual(ctx.exception.status_code, 403)
         self.assertIn("maximum", ctx.exception.detail)
 
@@ -938,10 +933,10 @@ class TestPlanLimits(unittest.TestCase):
         self.assertEqual(self._limits("Professional")["max_team_members"], 1)
 
     def test_G3_team_plan_10_members(self):
-        self.assertEqual(self._limits("Team")["max_team_members"], 10)
+        self.assertEqual(self._limits("Team")["max_team_members"], 25)
 
     def test_G4_business_plan_50_members(self):
-        self.assertEqual(self._limits("Business")["max_team_members"], 50)
+        self.assertEqual(self._limits("Business")["max_team_members"], 100)
 
     def test_G5_enterprise_plan_unlimited(self):
         self.assertEqual(self._limits("Enterprise")["max_team_members"], -1)

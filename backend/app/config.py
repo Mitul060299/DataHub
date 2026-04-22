@@ -80,6 +80,8 @@ class Settings(BaseModel):
     razorpay_key_secret: str = os.getenv("RAZORPAY_KEY_SECRET", "")
     razorpay_webhook_secret: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
     posthog_api_key: str = os.getenv("POSTHOG_API_KEY", "")
+    sentry_dsn: str = os.getenv("SENTRY_DSN", "")
+    sentry_traces_sample_rate: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
     dataset_cache_max: int = int(os.getenv("DATASET_CACHE_MAX", "20"))
     dataset_cache_ttl_seconds: int = int(os.getenv("DATASET_CACHE_TTL", "1800"))
     # ── Phase 4: Upstash QStash background jobs ───────────────────────────────

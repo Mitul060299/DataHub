@@ -4,6 +4,7 @@ import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { clearAuthToken, setAuthToken } from "../utils/auth";
 import { identify, reset } from "../lib/posthog";
+import { setSentryUser, clearSentryUser } from "../lib/sentry";
 
 type AuthContextValue = {
   session: Session | null;
@@ -55,10 +56,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAuthToken(nextSession.access_token);
         if (nextSession.user) {
           identify(nextSession.user.id, { email: nextSession.user.email });
+          setSentryUser(nextSession.user.id, nextSession.user.email ?? undefined);
         }
       } else {
         clearAuthToken();
         reset();
+        clearSentryUser();
       }
       setLoading(false);
     });

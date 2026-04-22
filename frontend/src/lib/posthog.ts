@@ -5,15 +5,28 @@ const key = import.meta.env.VITE_POSTHOG_API_KEY as string | undefined;
 if (key) {
   posthog.init(key, {
     api_host: "https://app.posthog.com",
-    capture_pageview: false,
-    autocapture: false,
+    capture_pageview: false, // tracked manually on route change for SPA
+    autocapture: true,        // clicks/inputs/forms — needed for funnels & heatmaps
     persistence: "localStorage",
+    disable_session_recording: false, // session replay enabled
+    session_recording: {
+      maskAllInputs: true,
+      maskTextSelector: "[data-private]",
+    },
   });
 }
 
 export const capture = (event: string, props?: Record<string, unknown>): void => {
   try {
     if (key) posthog.capture(event, props);
+  } catch {
+    // never throw
+  }
+};
+
+export const capturePageview = (path?: string): void => {
+  try {
+    if (key) posthog.capture("$pageview", path ? { $current_url: window.location.origin + path } : undefined);
   } catch {
     // never throw
   }

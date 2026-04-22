@@ -1,3 +1,20 @@
+"""Create Razorpay plans for the current DataHub pricing.
+
+Run once per Razorpay account (test + live). After it prints the plan IDs,
+copy them into ``backend/app/razorpay_plans.py`` (the ``RAZORPAY_PLAN_IDS`` map).
+
+Usage:
+    # Test mode
+    RAZORPAY_KEY_ID=rzp_test_xxx RAZORPAY_KEY_SECRET=yyy \
+        python scripts/setup_razorpay_plans.py
+
+    # Live mode
+    RAZORPAY_KEY_ID=rzp_live_xxx RAZORPAY_KEY_SECRET=yyy \
+        python scripts/setup_razorpay_plans.py
+
+Pricing source of truth: ``backend/app/razorpay_plans.py`` (PLAN_AMOUNTS_PAISE).
+Keep both files in sync whenever prices change.
+"""
 import os
 
 import razorpay
@@ -15,61 +32,40 @@ def _get_client() -> razorpay.Client:
     return razorpay.Client(auth=(key_id, key_secret))
 
 
-# Amounts in paise (INR × 100)
-# Monthly: INR/user/month × 100
-# Annual: full-year upfront charge (monthly × 12 × 0.80)
+# Amounts in paise (INR × 100). Monthly billing only — annual is not offered yet.
+# Mirrors PLAN_AMOUNTS_PAISE in backend/app/razorpay_plans.py.
 PLANS = [
-    # Monthly
     {
-        "interval": 1,
         "tier": "professional",
         "cycle": "monthly",
-        "amount": 329900,
+        "interval": 1,
+        "amount": 699900,                              # ₹6,999 / month (1 seat)
         "name": "DataHub Professional Monthly",
     },
     {
-        "interval": 1,
         "tier": "team",
         "cycle": "monthly",
-        "amount": 619900,
+        "interval": 1,
+        "amount": 1499900,                             # ₹14,999 / month (3 seats included)
         "name": "DataHub Team Monthly",
     },
     {
-        "interval": 1,
         "tier": "business",
         "cycle": "monthly",
-        "amount": 829900,
+        "interval": 1,
+        "amount": 2999900,                             # ₹29,999 / month (5 seats included)
         "name": "DataHub Business Monthly",
-    },
-    # Annual (single upfront charge, 12-month interval)
-    {
-        "interval": 12,
-        "tier": "professional",
-        "cycle": "annual",
-        "amount": 3167040,
-        "name": "DataHub Professional Annual",
-    },
-    {
-        "interval": 12,
-        "tier": "team",
-        "cycle": "annual",
-        "amount": 5951040,
-        "name": "DataHub Team Annual",
-    },
-    {
-        "interval": 12,
-        "tier": "business",
-        "cycle": "annual",
-        "amount": 7966080,
-        "name": "DataHub Business Annual",
     },
 ]
 
 
 def main() -> int:
     client = _get_client()
+    key_id = os.getenv("RAZORPAY_KEY_ID", "")
+    mode = "TEST" if key_id.startswith("rzp_test_") else "LIVE"
 
-    print("Creating Razorpay plans...\n")
+    print(f"\nCreating Razorpay plans in {mode} mode (key: {key_id[:14]}…)\n")
+    created: list[tuple[str, str]] = []
     for plan in PLANS:
         result = client.plan.create(
             {
@@ -83,12 +79,20 @@ def main() -> int:
                 },
             }
         )
+        plan_id = result["id"]
+        created.append((plan["tier"], plan_id))
         print(
-            f"✓ {plan['tier']:15} {plan['cycle']:8}  "
-            f"plan_id: {result['id']}  amount: ₹{plan['amount'] // 100:,}"
+            f"  ✓ {plan['tier']:13} {plan['cycle']:8}  "
+            f"plan_id: {plan_id}  amount: ₹{plan['amount'] // 100:,}"
         )
 
-    print("\nCopy the plan IDs above into backend/app/razorpay_plans.py")
+    print("\n──────────────────────────────────────────────────────────────")
+    print("Paste these into backend/app/razorpay_plans.py (RAZORPAY_PLAN_IDS):\n")
+    print("RAZORPAY_PLAN_IDS = {")
+    for tier, plan_id in created:
+        print(f'    "{tier}": {{"monthly": "{plan_id}"}},')
+    print("}")
+    print("──────────────────────────────────────────────────────────────\n")
     return 0
 
 

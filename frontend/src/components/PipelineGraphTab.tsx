@@ -274,25 +274,45 @@ function buildLayout(
 
   const edges: Edge[] = [];
 
-  // Compute parent for each step from input_tables / output_table.
+  // Compute parent for each step.
   //
-  // Why: chart steps (`create_chart`, `visualise`) don't produce a new table
-  // — their output_table is null. The next *transform* step's `input_tables`
-  // therefore references whichever earlier step actually produced the data
-  // it read from (typically the previous transform). Falling back to array
-  // order would incorrectly chain a clean step under a chart step even
-  // though the chart didn't change the data.
+  // Background: write-op steps (clean / filter / transform / pivot / union /
+  // reconcile) almost always have `input_tables = [<source_dataset_alias>]`
+  // because the agent re-reads the dataset alias each command — they don't
+  // explicitly reference the prior step's auto-generated `output_table`.
+  // Chart steps (`create_chart`, `visualise`) likewise don't produce a new
+  // table. So a literal `input_tables ⊇ output_table` match almost never
+  // succeeds, and naive parenting puts every step under the source.
   //
-  // Algorithm:
-  //   parent = the most recent earlier step whose output_table appears in
-  //            this step's input_tables.
-  //   If none, parent = "source".
+  // Power Query semantics: each write-op mutates the *logical* dataset, so
+  // any subsequent step (chart or write-op) implicitly builds on the
+  // freshest write-op output. Charts are leaves — they read the current
+  // state but don't change it, so they should NOT anchor downstream steps.
+  //
+  // Algorithm (priority order):
+  //   1. If any earlier step's `output_table` appears in this step's
+  //      `input_tables`, that step is the parent (explicit dependency).
+  //   2. Else, the parent is the most recent earlier *write-op* step
+  //      (chain through the latest data state).
+  //   3. Else, parent = "source".
+  const WRITE_OPS = new Set([
+    "clean",
+    "filter",
+    "transform",
+    "pivot",
+    "union",
+    "reconcile",
+  ]);
+  const isWriteOp = (s: PipelineStep) =>
+    WRITE_OPS.has(String(s.operation ?? ""));
   const stepNodeId = (s: PipelineStep) => `step-${s.id}`;
   const parentIds: string[] = [];
   for (let i = 0; i < steps.length; i += 1) {
     const cur = steps[i];
     const inputs = new Set((cur.input_tables ?? []).map((t) => String(t)));
-    let parent = "source";
+    let parent: string | null = null;
+
+    // 1. Explicit table dependency.
     for (let j = i - 1; j >= 0; j -= 1) {
       const cand = steps[j];
       const out = cand.output_table ? String(cand.output_table) : "";
@@ -301,7 +321,19 @@ function buildLayout(
         break;
       }
     }
-    parentIds.push(parent);
+
+    // 2. Implicit: chain through the latest write-op.
+    if (parent === null) {
+      for (let j = i - 1; j >= 0; j -= 1) {
+        if (isWriteOp(steps[j])) {
+          parent = stepNodeId(steps[j]);
+          break;
+        }
+      }
+    }
+
+    // 3. Fall back to source.
+    parentIds.push(parent ?? "source");
   }
 
   // Compute depth (Y row) and sibling index (X column) per step so branches

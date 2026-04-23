@@ -141,9 +141,19 @@ class ExportService:
             return 0
 
     @staticmethod
-    def _load_df_for_dataset(dataset_id: str, db) -> "pd.DataFrame":
+    def _load_df_for_dataset(
+        dataset_id: str,
+        db,
+        *,
+        storage_path_override: str | None = None,
+    ) -> "pd.DataFrame":
         """Load the full dataset as a DataFrame — uses DuckDB read_parquet on stored artifact.
-        Falls back to DatasetChunkDB chunks for legacy datasets with no storage_path."""
+        Falls back to DatasetChunkDB chunks for legacy datasets with no storage_path.
+
+        ``storage_path_override`` lets callers point at a pipeline-step snapshot
+        parquet (post-transformation) instead of the original upload, so exports
+        reflect changes made by the AI agent.
+        """
         import pandas as pd
         from ..models_db import DatasetChunkDB
         from .duckdb_service import DuckDBService
@@ -152,8 +162,9 @@ class ExportService:
         if not meta:
             raise ValueError(f"Dataset '{dataset_id}' not found")
 
-        if meta.storage_path:
-            query_path = StorageService.get_query_path(meta.storage_path)
+        effective_path = storage_path_override or meta.storage_path
+        if effective_path:
+            query_path = StorageService.get_query_path(effective_path)
             conn = DuckDBService._ensure_db()
             df = conn.execute(f"SELECT * FROM read_parquet('{query_path}')").df()
         else:
@@ -173,13 +184,21 @@ class ExportService:
         return df
 
     @staticmethod
-    def export_powerbi(dataset_id: str, display_name: str, db) -> bytes:
+    def export_powerbi(
+        dataset_id: str,
+        display_name: str,
+        db,
+        *,
+        storage_path_override: str | None = None,
+    ) -> bytes:
         """Export full dataset as a Power BI-ready .xlsx file (openpyxl, no LIMIT)."""
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
 
-        df = ExportService._load_df_for_dataset(dataset_id, db)
+        df = ExportService._load_df_for_dataset(
+            dataset_id, db, storage_path_override=storage_path_override
+        )
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -237,10 +256,18 @@ class ExportService:
         return buf.read()
 
     @staticmethod
-    def export_tableau(dataset_id: str, display_name: str, db) -> tuple[bytes, str]:
+    def export_tableau(
+        dataset_id: str,
+        display_name: str,
+        db,
+        *,
+        storage_path_override: str | None = None,
+    ) -> tuple[bytes, str]:
         """Export full dataset as a Tableau .hyper file (pantab).
         Returns (file_bytes, mime_type).  Falls back to CSV if pantab is unavailable."""
-        df = ExportService._load_df_for_dataset(dataset_id, db)
+        df = ExportService._load_df_for_dataset(
+            dataset_id, db, storage_path_override=storage_path_override
+        )
 
         try:
             import pantab
@@ -290,6 +317,8 @@ class ExportService:
         sheet_name: str,
         mode: str,
         db,
+        *,
+        storage_path_override: str | None = None,
     ) -> dict:
         """Sync full dataset to a Google Sheet via a service-account credential.
         mode='replace' clears the sheet first; mode='append' adds below last row.
@@ -318,7 +347,9 @@ class ExportService:
         creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
         gc = gspread.authorize(creds)
 
-        df = ExportService._load_df_for_dataset(dataset_id, db)
+        df = ExportService._load_df_for_dataset(
+            dataset_id, db, storage_path_override=storage_path_override
+        )
 
         spreadsheet = gc.open_by_url(spreadsheet_url)
         try:

@@ -1700,6 +1700,53 @@ def clear_dataset_session(
     return {"dataset_id": dataset_id, "deleted": int(deleted)}
 
 
+def _latest_pipeline_snapshot_path(
+    dataset_id: str, user_id: str | None, db: Session
+) -> str | None:
+    """Return the latest pipeline-step snapshot parquet path for this user's
+    session on this dataset, or None if no replayable snapshot exists.
+
+    Exports must reflect AI-agent transformations the user has applied in the
+    current session.  Each successful agent step writes a parquet snapshot to
+    object storage (``pipeline_steps.snapshot_path``).  Walking back from the
+    most recent step and returning the first one with a snapshot keeps export
+    parity with what the user sees in the live preview, even if the very last
+    step's snapshot upload happened to fail.
+    """
+    if not user_id:
+        return None
+    try:
+        from ..models_db import PipelineStepDB as _PSdb
+        ds_session = (
+            db.query(DatasetSessionDB)
+            .filter(
+                DatasetSessionDB.dataset_id == dataset_id,
+                DatasetSessionDB.user_id == user_id,
+            )
+            .first()
+        )
+        sess_id = ds_session.chat_session_id if ds_session else None
+        if not sess_id:
+            return None
+        latest = (
+            db.query(_PSdb)
+            .filter(
+                _PSdb.user_id == user_id,
+                _PSdb.session_id == sess_id,
+                _PSdb.status == "completed",
+                _PSdb.snapshot_path.isnot(None),
+            )
+            .order_by(_PSdb.step_number.desc())
+            .first()
+        )
+        return (latest.snapshot_path or None) if latest else None
+    except Exception:
+        # Never block an export if the lookup fails — fall back to the
+        # original storage_path.
+        logger.exception("pipeline-snapshot lookup failed for dataset %s", dataset_id)
+        return None
+
+
 @router.get("/{dataset_id}/export")
 @limiter.limit("15/hour")
 def export_dataset(
@@ -1719,6 +1766,11 @@ def export_dataset(
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    # Prefer the latest pipeline-step snapshot so the CSV reflects any
+    # transformations the AI agent has applied in this session.
+    _user_id_for_snap = get_current_user_id(authorization)
+    _snapshot_path = _latest_pipeline_snapshot_path(dataset_id, _user_id_for_snap, db)
+    _effective_storage_path = _snapshot_path or meta.storage_path
 
     # ── Legacy path pre-load ──────────────────────────────────────────────────
     # FastAPI closes the DB session as soon as this route function returns
@@ -1729,7 +1781,7 @@ def export_dataset(
     # `db` inside the generator so it is unaffected.
     _legacy_col_names: list[str] = []
     _legacy_chunk_rows: list[list[dict]] = []
-    if not meta.storage_path:
+    if not _effective_storage_path:
         col_names_raw = meta.columns or []
         if col_names_raw and isinstance(col_names_raw[0], dict):
             _legacy_col_names = [c.get("name", "") for c in col_names_raw]
@@ -1746,8 +1798,8 @@ def export_dataset(
     def row_iter():
         import csv as _csv
         import io as _sio
-        if meta.storage_path:
-            query_path = StorageService.get_query_path(meta.storage_path)
+        if _effective_storage_path:
+            query_path = StorageService.get_query_path(_effective_storage_path)
             conn = DuckDBService._ensure_db()
 
             # Build optional WHERE / ORDER BY clauses
@@ -1831,8 +1883,15 @@ def export_dataset_powerbi(
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    _user_id_for_snap = get_current_user_id(authorization)
+    _snapshot_path = _latest_pipeline_snapshot_path(dataset_id, _user_id_for_snap, db)
     try:
-        xlsx_bytes = ExportService.export_powerbi(dataset_id, meta.name or dataset_id, db)
+        xlsx_bytes = ExportService.export_powerbi(
+            dataset_id,
+            meta.name or dataset_id,
+            db,
+            storage_path_override=_snapshot_path,
+        )
     except Exception as exc:
         logger.exception("Power BI export failed for dataset %s", dataset_id)
         raise HTTPException(status_code=500, detail="Export failed. Please try again.") from exc
@@ -1871,8 +1930,15 @@ def export_dataset_tableau(
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    _user_id_for_snap = get_current_user_id(authorization)
+    _snapshot_path = _latest_pipeline_snapshot_path(dataset_id, _user_id_for_snap, db)
     try:
-        file_bytes, mime_type = ExportService.export_tableau(dataset_id, meta.name or dataset_id, db)
+        file_bytes, mime_type = ExportService.export_tableau(
+            dataset_id,
+            meta.name or dataset_id,
+            db,
+            storage_path_override=_snapshot_path,
+        )
     except Exception as exc:
         logger.exception("Tableau export failed for dataset %s", dataset_id)
         raise HTTPException(status_code=500, detail="Export failed. Please try again.") from exc
@@ -1924,7 +1990,16 @@ def export_dataset_to_sheets(
         raise HTTPException(status_code=422, detail="mode must be 'replace' or 'append'")
 
     try:
-        result = ExportService.export_sheets(dataset_id, spreadsheet_url, sheet_name, mode, db)
+        _user_id_for_snap = get_current_user_id(authorization)
+        _snapshot_path = _latest_pipeline_snapshot_path(dataset_id, _user_id_for_snap, db)
+        result = ExportService.export_sheets(
+            dataset_id,
+            spreadsheet_url,
+            sheet_name,
+            mode,
+            db,
+            storage_path_override=_snapshot_path,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid Google Sheets configuration. Check the spreadsheet URL and mode.") from exc
     except Exception as exc:

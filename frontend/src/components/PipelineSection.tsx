@@ -740,10 +740,8 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
         open={templatePickerOpen}
         workspaceId={activeProject?.workspaceId ?? "default"}
         onClose={() => setTemplatePickerOpen(false)}
-        onCreated={(pipelineId, _pipelineName) => {
-          setSelectedTemplateId(pipelineId);
-          setPipelineWorkflowId(pipelineId);
-          setWorkflowMessage(`Pipeline created from template. Ready to run.`);
+        onCreated={(_pipelineId, _pipelineName) => {
+          setTemplatePickerOpen(false);
         }}
       />
       <input

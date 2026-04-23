@@ -4,14 +4,13 @@ import ReactFlow, {
   Controls,
   Handle,
   Position,
-  ReactFlowProvider,
   useNodesState,
   useEdgesState,
-  useReactFlow,
   type Node,
   type Edge,
   type NodeProps,
 } from "reactflow";
+import { ReactFlowProvider, useReactFlow } from "@reactflow/core";
 import "reactflow/dist/style.css";
 import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";

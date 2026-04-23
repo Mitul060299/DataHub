@@ -237,6 +237,10 @@ type Message = ConversationMessage & {
   artifactUrl?: string;
   queryResults?: Array<Record<string, unknown>>;
   sessionTableName?: string;
+  /** When set, render this short English description instead of any data table
+   *  for write-op step results (clean / filter / transform / pivot / union / reconcile).
+   *  The full preview is shown in the Data tab — the chat just summarises what changed. */
+  stepSummary?: string;
   dataProfile?: DataProfile;
   qualityIssues?: QualityIssue[];
   followUpChips?: string[];
@@ -751,32 +755,67 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         if (results.length > 0) {
           const opLabel = typeof event.operation === "string" ? event.operation : "Results";
           const sessionTableName = typeof event.session_table_name === "string" ? event.session_table_name : undefined;
-          setMessages((previous) => [
-            ...previous,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: `${opLabel} (${results.length} row${results.length !== 1 ? "s" : ""}):`  ,
-              queryResults: results,
-              sessionTableName,
-            },
-          ]);
+          const WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile"]);
+          const isWriteOp = WRITE_OPS.has(String(event.operation ?? ""));
+          const description = typeof event.description === "string" ? event.description.trim() : "";
+          const rowCountAfter = event.row_count_after != null ? Number(event.row_count_after) : null;
+          const rowCountBefore = event.row_count_before != null ? Number(event.row_count_before) : null;
+          const rowsChangedRaw = event.rows_changed != null ? Number(event.rows_changed) : null;
+
+          // For data-changing steps the user can already see the result in the
+          // Data tab — dumping the rows back into chat is redundant. Show a
+          // short English summary instead.
+          const buildSummary = (): string => {
+            const fmt = (n: number | null) => (n != null ? n.toLocaleString() : null);
+            const after = fmt(rowCountAfter);
+            const before = fmt(rowCountBefore);
+            const changed = fmt(rowsChangedRaw);
+            let metric = "";
+            if (changed != null) metric = `${changed} row${rowsChangedRaw === 1 ? "" : "s"} affected`;
+            else if (after != null && before != null && rowCountBefore !== rowCountAfter) metric = `${before} → ${after} rows`;
+            else if (after != null) metric = `${after} rows`;
+            const base = description || `${opLabel} step applied.`;
+            return metric ? `${base} (${metric})` : base;
+          };
+
+          if (isWriteOp) {
+            setMessages((previous) => [
+              ...previous,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: buildSummary(),
+                stepSummary: buildSummary(),
+                sessionTableName,
+              },
+            ]);
+          } else {
+            setMessages((previous) => [
+              ...previous,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: `${opLabel} (${results.length} row${results.length !== 1 ? "s" : ""}):`,
+                queryResults: results,
+                sessionTableName,
+              },
+            ]);
+          }
           // Push transformed preview to the Canvas Data tab for write operations.
           // agent.done never carries execution_results, so this is the correct hook.
-          const WRITE_OPS = new Set(["clean", "filter", "transform", "pivot", "union", "reconcile"]);
-          if (WRITE_OPS.has(String(event.operation ?? "")) && onSessionPreview && results.length > 0 && results[0]) {
+          if (isWriteOp && onSessionPreview && results.length > 0 && results[0]) {
             onSessionPreview(results, Object.keys(results[0]));
           }
           // Set the LIVE artifact entry so the sidebar shows the editable save card.
           // Use row_count_after from the server for the true total — results[] is
           // capped at 50 rows (preview), so results.length is NOT the full count.
-          if (sessionTableName && WRITE_OPS.has(String(event.operation ?? ""))) {
+          if (sessionTableName && isWriteOp) {
             const currentSid = sessionIdRef.current || sessionId;
             if (currentSid) {
               const actualRowCount = Number(
                 event.row_count_after ?? event.total_rows ?? event.rows_affected ?? results.length
               );
-              const rowsChanged = event.rows_changed != null ? Number(event.rows_changed) : undefined;
+              const rowsChanged = rowsChangedRaw != null ? rowsChangedRaw : undefined;
               setLiveArtifact({ tableName: sessionTableName, rowCount: actualRowCount, stepLabel: opLabel, sessionId: currentSid, rowsChanged });
             }
           }

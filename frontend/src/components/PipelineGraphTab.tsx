@@ -255,6 +255,7 @@ const nodeTypes = {
 
 // ─── Layout builder ────────────────────────────────────────────────────────────
 const Y_GAP = 170;
+const X_GAP = 260;
 
 function buildLayout(
   datasetName: string,
@@ -274,13 +275,72 @@ function buildLayout(
 
   const edges: Edge[] = [];
 
+  // Compute parent for each step from input_tables / output_table.
+  //
+  // Why: chart steps (`create_chart`, `visualise`) don't produce a new table
+  // — their output_table is null. The next *transform* step's `input_tables`
+  // therefore references whichever earlier step actually produced the data
+  // it read from (typically the previous transform). Falling back to array
+  // order would incorrectly chain a clean step under a chart step even
+  // though the chart didn't change the data.
+  //
+  // Algorithm:
+  //   parent = the most recent earlier step whose output_table appears in
+  //            this step's input_tables.
+  //   If none, parent = "source".
+  const stepNodeId = (s: PipelineStep) => `step-${s.id}`;
+  const parentIds: string[] = [];
+  for (let i = 0; i < steps.length; i += 1) {
+    const cur = steps[i];
+    const inputs = new Set((cur.input_tables ?? []).map((t) => String(t)));
+    let parent = "source";
+    for (let j = i - 1; j >= 0; j -= 1) {
+      const cand = steps[j];
+      const out = cand.output_table ? String(cand.output_table) : "";
+      if (out && inputs.has(out)) {
+        parent = stepNodeId(cand);
+        break;
+      }
+    }
+    parentIds.push(parent);
+  }
+
+  // Compute depth (Y row) and sibling index (X column) per step so branches
+  // don't overlap. Siblings sharing the same parent are spread horizontally.
+  const depth: number[] = [];
+  const childrenByParent = new Map<string, number[]>();
+  for (let i = 0; i < steps.length; i += 1) {
+    const parent = parentIds[i];
+    const parentDepth = parent === "source" ? 0 : depth[steps.findIndex((s) => stepNodeId(s) === parent)];
+    depth.push((parentDepth ?? 0) + 1);
+    const list = childrenByParent.get(parent) ?? [];
+    list.push(i);
+    childrenByParent.set(parent, list);
+  }
+
+  // Assign X position: centre each parent's children around x=0 of the parent.
+  // For a single child, x stays at the parent's x. For multiple children,
+  // spread them by X_GAP. Source is at x=0; child x is parent.x + offset.
+  const xPos: number[] = new Array(steps.length).fill(0);
+  childrenByParent.forEach((childIndices, parent) => {
+    const parentX =
+      parent === "source"
+        ? 0
+        : xPos[steps.findIndex((s) => stepNodeId(s) === parent)] ?? 0;
+    const n = childIndices.length;
+    childIndices.forEach((idx, k) => {
+      const offset = (k - (n - 1) / 2) * X_GAP;
+      xPos[idx] = parentX + offset;
+    });
+  });
+
   steps.forEach((step, i) => {
-    const nodeId = `step-${step.id}`;
-    const prevId = i === 0 ? "source" : `step-${steps[i - 1].id}`;
+    const nodeId = stepNodeId(step);
+    const prevId = parentIds[i];
     nodes.push({
       id: nodeId,
       type: "operationNode",
-      position: { x: 0, y: (i + 1) * Y_GAP },
+      position: { x: xPos[i], y: depth[i] * Y_GAP },
       data: { step, onClick: onNodeClick, onDelete: onNodeDelete } as OperationNodeData,
     });
     edges.push({

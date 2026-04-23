@@ -271,9 +271,21 @@ class AgentGraphService:
                 elif node_name == "execute_step":
                     output = data.get("output", {})
                     results = output.get("execution_results", [])
+                    # Pull the matching plan step so we can surface a non-technical
+                    # English description in step events instead of dumping the SQL
+                    # output table back into the chat.
+                    _exec_input_state = data.get("input", {}) or {}
+                    _exec_plan = _exec_input_state.get("plan", []) or []
+                    _exec_plan_by_num = {
+                        s.get("step_number", i + 1): s
+                        for i, s in enumerate(_exec_plan)
+                        if isinstance(s, dict)
+                    }
                     if results:
                         last = results[-1]
                         if last.get("success"):
+                            _plan_step = _exec_plan_by_num.get(last.get("step_number")) or {}
+                            _step_description = str(_plan_step.get("description") or "").strip()
                             if isinstance(last.get("column_added"), dict):
                                 column = last.get("column_added", {})
                                 yield {
@@ -312,6 +324,7 @@ class AgentGraphService:
                                     "results": qr,
                                     "step": last.get("step_number"),
                                     "operation": last.get("operation"),
+                                    "description": _step_description,
                                     "session_table_name": last.get("session_table_name"),
                                     "row_count_after": last.get("row_count_after"),
                                     "row_count_before": last.get("row_count_before"),
@@ -321,6 +334,7 @@ class AgentGraphService:
                                 "type": "agent.step.done",
                                 "step": last.get("step_number"),
                                 "operation": last.get("operation"),
+                                "description": _step_description,
                                 "rows_affected": last.get("rows_affected"),
                                 "row_count_before": last.get("row_count_before"),
                                 "row_count_after": last.get("row_count_after"),

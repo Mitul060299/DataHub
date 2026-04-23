@@ -45,7 +45,9 @@ export function WorkspacePage() {
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => localStorage.getItem("datahub_onboarding_dismissed") === "1",
+  );
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
@@ -516,7 +518,7 @@ export function WorkspacePage() {
         }}
         onUploadClick={() => setImportOpen(true)}
       />
-      <ImportModal workspaceId={workspaceId} projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => void refetch()} preloadUrl={sampleUrl} />
+      <ImportModal workspaceId={workspaceId} projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); }} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
@@ -542,6 +544,7 @@ export function WorkspacePage() {
             hasAskedFirstQuestion={hasAskedFirstQuestion}
             onDismiss={() => {
               setOnboardingDismissed(true);
+              localStorage.setItem("datahub_onboarding_dismissed", "1");
               capture("onboarding_progress_dismissed");
             }}
             onStartTour={!tourActive ? startTour : undefined}

@@ -355,6 +355,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         <ArtifactsSection
           artifacts={artifacts}
           activeDatasetId={activeDataset?.id}
+          projectId={activeProject?.id}
           refreshNonce={refreshNonce}
           onSelect={setActiveDataset}
           onRemove={(dataset) => void removeDataset(dataset)}

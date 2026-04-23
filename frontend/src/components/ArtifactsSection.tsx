@@ -37,6 +37,8 @@ interface ArtifactsSectionProps {
   artifacts: ArtifactItem[];
   activeDatasetId?: string;
   sessionId?: string;
+  /** Active project id — scopes the stored artifacts list to this project */
+  projectId?: string;
   refreshNonce?: number;
   onSelect: (dataset: Dataset) => void;
   onRemove: (dataset: Dataset) => void;
@@ -70,6 +72,7 @@ export function ArtifactsSection({
   artifacts,
   activeDatasetId,
   sessionId: _sessionId,
+  projectId,
   refreshNonce,
   onSelect,
   onRemove,
@@ -104,14 +107,16 @@ export function ArtifactsSection({
   const fetchStored = useCallback(async () => {
     setStoredLoading(true);
     try {
-      const response = await api.get<StoredArtifact[]>("/api/artifacts");
+      const response = await api.get<StoredArtifact[]>("/api/artifacts", {
+        params: projectId ? { project_id: projectId } : undefined,
+      });
       setStored(response.data ?? []);
     } catch {
       setStored([]);
     } finally {
       setStoredLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     void fetchStored();

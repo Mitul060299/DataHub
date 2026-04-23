@@ -65,6 +65,7 @@ def _serialize(artifact: ArtifactDB, download_url: Optional[str] = None, dataset
 def list_artifacts(
     session_id: Optional[str] = Query(None),
     pipeline_run_id: Optional[str] = Query(None),
+    project_id: Optional[str] = Query(None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -79,16 +80,41 @@ def list_artifacts(
     # Bulk-resolve dataset_id via storage_path == s3_key
     s3_keys = [art.s3_key for art in artifacts if art.s3_key]
     datasets_by_key: dict[str, str] = {}
+    dataset_project_by_key: dict[str, Optional[str]] = {}
     if s3_keys:
         ds_rows = (
-            db.query(DatasetMetaDB.id, DatasetMetaDB.storage_path)
+            db.query(
+                DatasetMetaDB.id,
+                DatasetMetaDB.storage_path,
+                DatasetMetaDB.project_id,
+                DatasetMetaDB.deleted_at,
+            )
             .filter(DatasetMetaDB.storage_path.in_(s3_keys))
             .all()
         )
-        datasets_by_key = {row.storage_path: str(row.id) for row in ds_rows}
+        for row in ds_rows:
+            # Skip soft-deleted datasets so the artifact looks orphaned
+            # (and gets filtered out below when project_id is requested).
+            if row.deleted_at is not None:
+                continue
+            datasets_by_key[row.storage_path] = str(row.id)
+            dataset_project_by_key[row.storage_path] = (
+                str(row.project_id) if row.project_id else None
+            )
 
     result = []
     for art in artifacts:
+        # ── Project scoping ──────────────────────────────────────────────
+        # When a project_id filter is supplied, only return artifacts whose
+        # underlying dataset still exists AND belongs to that project.
+        # This stops artifacts from a deleted project leaking into a brand-new
+        # project (the artifact rows themselves are user-scoped, not project-
+        # scoped, in the schema — so we filter via the linked dataset).
+        if project_id is not None:
+            ds_project = dataset_project_by_key.get(art.s3_key) if art.s3_key else None
+            if ds_project != project_id:
+                continue
+
         download_url: Optional[str] = None
         if art.s3_key and not str(art.s3_key).startswith("local://"):
             try:

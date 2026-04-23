@@ -199,15 +199,24 @@ class ExportService:
 
         for row_idx, row in enumerate(df.itertuples(index=False), start=2):
             for col_idx, (h, val) in enumerate(zip(headers, row), start=1):
-                # Convert numpy/pandas scalars to Python natives for openpyxl
+                # Convert numpy/pandas scalars to Python natives for openpyxl.
+                # openpyxl cannot serialise pd.NaT, pd.NA, pd.Timestamp, or
+                # numpy scalar types — convert all of them to plain Python objects.
                 try:
                     import numpy as np
-                    if isinstance(val, (np.integer,)):
+                    import pandas as _pd
+                    if val is _pd.NaT or val is _pd.NA:
+                        val = None
+                    elif isinstance(val, _pd.Timestamp):
+                        val = val.to_pydatetime()
+                    elif isinstance(val, (np.integer,)):
                         val = int(val)
                     elif isinstance(val, (np.floating,)):
                         val = None if np.isnan(val) else float(val)
                     elif isinstance(val, (np.bool_,)):
                         val = bool(val)
+                    elif isinstance(val, float) and val != val:  # bare NaN
+                        val = None
                 except ImportError:
                     pass
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)

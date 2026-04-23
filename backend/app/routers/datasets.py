@@ -1720,6 +1720,29 @@ def export_dataset(
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+    # ── Legacy path pre-load ──────────────────────────────────────────────────
+    # FastAPI closes the DB session as soon as this route function returns
+    # (before Starlette actually iterates the StreamingResponse generator).
+    # For the legacy chunk path (no storage_path) we therefore load all rows
+    # eagerly here, while the session is still open, and pass them into the
+    # generator via closure.  The storage_path / DuckDB path never touches
+    # `db` inside the generator so it is unaffected.
+    _legacy_col_names: list[str] = []
+    _legacy_chunk_rows: list[list[dict]] = []
+    if not meta.storage_path:
+        col_names_raw = meta.columns or []
+        if col_names_raw and isinstance(col_names_raw[0], dict):
+            _legacy_col_names = [c.get("name", "") for c in col_names_raw]
+        else:
+            _legacy_col_names = list(col_names_raw)
+        _chunks = (
+            db.query(DatasetChunkDB)
+            .filter(DatasetChunkDB.dataset_id == dataset_id)
+            .order_by(DatasetChunkDB.chunk_index.asc())
+            .all()
+        )
+        _legacy_chunk_rows = [chunk.rows or [] for chunk in _chunks]
+
     def row_iter():
         import csv as _csv
         import io as _sio
@@ -1761,33 +1784,22 @@ def export_dataset(
                 buf = _sio.StringIO()
                 writer = _csv.writer(buf, lineterminator='\n')
                 for row in batch.to_pylist():
-                    writer.writerow(row.get(c, "") or "" for c in col_names)
+                    writer.writerow(("" if (v := row.get(c)) is None else v) for c in col_names)
                 yield buf.getvalue()
         else:
-            # Legacy fallback: stream from DatasetChunkDB chunks (no bulk load)
-            col_names_raw = meta.columns or []
-            # meta.columns may be list[str] or list[dict]
-            if col_names_raw and isinstance(col_names_raw[0], dict):
-                col_names = [c.get("name", "") for c in col_names_raw]
-            else:
-                col_names = list(col_names_raw)
+            # Legacy fallback: use pre-loaded rows (loaded before session close).
+            col_names = _legacy_col_names
 
             buf = _sio.StringIO()
             writer = _csv.writer(buf, lineterminator='\n')
             writer.writerow(col_names)
             yield buf.getvalue()
 
-            chunks = (
-                db.query(DatasetChunkDB)
-                .filter(DatasetChunkDB.dataset_id == dataset_id)
-                .order_by(DatasetChunkDB.chunk_index.asc())
-                .all()
-            )
-            for chunk in chunks:
+            for chunk_rows in _legacy_chunk_rows:
                 buf = _sio.StringIO()
                 writer = _csv.writer(buf, lineterminator='\n')
-                for row in (chunk.rows or []):
-                    writer.writerow(str(row.get(c, "") or "") for c in col_names)
+                for row in chunk_rows:
+                    writer.writerow(("" if (v := row.get(c)) is None else v) for c in col_names)
                 yield buf.getvalue()
 
     user_id = get_current_user_id(authorization) or "anonymous"

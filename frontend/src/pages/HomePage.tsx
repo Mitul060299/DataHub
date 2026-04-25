@@ -399,9 +399,9 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – Simple & Reliable AI Data Preparation & Analysis Tool",
+    title: "DataHub – The Simple, Reliable Way to Prepare & Analyse Your Data",
     description:
-      "Data preparation and analysis made simple. DataHub cleans, transforms, and analyses CSV, Excel, and database data in plain English — 100% transparent, reliable SQL you can review, edit, and replay. No black boxes.",
+      "DataHub cleans, transforms, and analyses your CSV, Excel, and database data in plain English. Every step runs as readable SQL you can review, edit, and replay — so the result is always one you can trust.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });
@@ -772,10 +772,10 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            Data preparation &amp; analysis,{" "}
-            <span className="hero-gradient-text">simple and reliable</span>
+            The{" "}
+            <span className="hero-gradient-text">simple, reliable way</span>
             <br />
-            in plain English
+            to prepare and analyse your data
           </motion.h1>
 
           <motion.p
@@ -784,9 +784,9 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            DataHub turns messy CSVs, Excel files, and database tables into clean, analysis-ready data
-            — simple enough for anyone to use, reliable enough to trust. Every step shown as plain SQL
-            you can review, edit, and replay.
+            DataHub cleans, transforms, and analyses your CSVs, Excel files, and database tables —
+            all in plain English. Every step runs as readable SQL you can review, edit, and replay,
+            so you can always trust the result.
           </motion.p>
 
           <motion.div

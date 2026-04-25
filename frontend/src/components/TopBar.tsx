@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { IconBell, IconChevronDown, IconCreditCard, IconLogOut, IconSettings, IconUser } from "./Icons";
 
@@ -90,10 +90,10 @@ export function TopBar() {
         transition: "background 0.35s ease, border-color 0.35s ease, backdrop-filter 0.35s ease",
       }}
     >
-      <button
-        type="button"
-        onClick={() => navigate("/home")}
-        style={{ display: "inline-flex", alignItems: "center", gap: 10, width: "fit-content" }}
+      <Link
+        to="/"
+        style={{ display: "inline-flex", alignItems: "center", gap: 10, width: "fit-content", textDecoration: "none" }}
+        aria-label="DataHub home"
       >
         <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
           <rect width="32" height="32" rx="8" fill="#5B6AF0" />
@@ -112,15 +112,14 @@ export function TopBar() {
         >
           Data<span style={{ color: "#818cf8" }}>Hub</span>
         </span>
-      </button>
+      </Link>
 
       <div className="topbar__nav" style={{ display: "flex", justifyContent: "center" }}>
         <nav style={{ display: "inline-flex", alignItems: "center", gap: 22 }}>
           {tabs.map((tab) => (
-            <button
+            <Link
               key={tab.key}
-              type="button"
-              onClick={() => navigate(tab.path)}
+              to={tab.path}
               style={{
                 height: 32,
                 borderRadius: 8,
@@ -130,6 +129,9 @@ export function TopBar() {
                 fontSize: 13,
                 fontWeight: activeTab === tab.key ? 600 : 400,
                 padding: "0 14px",
+                display: "inline-flex",
+                alignItems: "center",
+                textDecoration: "none",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
@@ -146,7 +148,7 @@ export function TopBar() {
               }}
             >
               {tab.label}
-            </button>
+            </Link>
           ))}
         </nav>
       </div>

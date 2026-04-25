@@ -1,5 +1,6 @@
-import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { type CSSProperties, type FormEvent, useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import {
   IconBrain,
@@ -302,11 +303,108 @@ const SUPPORT_EMAIL = "mitul.srivastava000@gmail.com";
    COMPONENT
    =========================================================================== */
 
+const HOME_HOWTO_LD = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to analyse data with DataHub's AI agent",
+  description:
+    "Go from a raw CSV, Excel file, or database connection to a trusted, shareable analysis in four reviewable steps.",
+  totalTime: "PT10M",
+  step: [
+    {
+      "@type": "HowToStep",
+      position: 1,
+      name: "Upload your data",
+      text: "Upload CSV, Excel, JSON, or Parquet files, or connect directly to PostgreSQL, MySQL, Snowflake, BigQuery, or Redshift.",
+      url: "https://datahub.org.in/#how",
+    },
+    {
+      "@type": "HowToStep",
+      position: 2,
+      name: "Ask in plain English",
+      text: "Describe what you want — 'remove duplicates', 'join with customers', 'show revenue by region as a bar chart'. The AI agent translates it to SQL.",
+      url: "https://datahub.org.in/#how",
+    },
+    {
+      "@type": "HowToStep",
+      position: 3,
+      name: "Review the SQL plan",
+      text: "DataHub shows the exact SQL or operation it intends to run. Approve, edit the plan, or ask the agent to try a different approach.",
+      url: "https://datahub.org.in/#how",
+    },
+    {
+      "@type": "HowToStep",
+      position: 4,
+      name: "Share and publish results",
+      text: "Publish the analysis with one link. Every step is recorded, replayable, and audit-logged.",
+      url: "https://datahub.org.in/#how",
+    },
+  ],
+};
+
+const HOME_FAQ_LD = [
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Is DataHub a black box? Will I know what it is doing to my data?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Every action is a named step shown to you before it runs. You see the exact SQL or operation, then choose Approve, Edit, or Reject. Nothing executes without your go-ahead.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Will the AI hallucinate results or make up numbers?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "DataHub runs real, deterministic SQL on your actual data. The AI writes the query. Your data produces the result. No generation, no guessing, no invented rows.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Will I lose control of my pipeline once the AI builds it?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Is my sensitive data safe with DataHub?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Your data is stored in encrypted, isolated cloud storage — never shared between accounts. We never use your data to train the AI. Full audit logs record every access.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Does DataHub only work with clean, nicely formatted CSV files?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "DataHub was built for the messy real world. It auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel files out of the box.",
+        },
+      },
+    ],
+  },
+];
+
 export function HomePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const mainRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLElement>(null);
+
+  const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
+  useSEO({
+    title: "DataHub – AI Data Analysis Tool | See Exactly What the AI Does",
+    description:
+      "Upload CSV, Excel, or connect PostgreSQL, Snowflake, BigQuery. Ask in plain English — DataHub writes step-by-step SQL, shows the plan, and waits for your approval. Free to start.",
+    canonical: "https://datahub.org.in/",
+    structuredData: pageLd,
+  });
 
   const { scrollYProgress } = useScroll({ container: mainRef });
   const progressOpacity = useTransform(scrollYProgress, [0, 0.005, 1], [0, 1, 1]);
@@ -674,10 +772,10 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            The data tool that lets you{" "}
-            <span className="hero-gradient-text">see exactly</span>
+            AI data analysis that lets you{" "}
+            <span className="hero-gradient-text">see every SQL step</span>
             <br />
-            what it&apos;s doing
+            before it runs
           </motion.h1>
 
           <motion.p
@@ -890,11 +988,12 @@ export function HomePage() {
         >
           <p className="section-eyebrow">Workflow</p>
           <h2 className="section-title">
-            From data to analysis{" "}
+            From raw data to trusted analysis{" "}
             <span className="hero-gradient-text">in four steps</span>
           </h2>
           <p className="section-subtitle">
-            Every action is transparent, reviewable, and replayable. You stay in control end to end.
+            Every SQL action is transparent, reviewable, and replayable. You stay in control end to end.{" "}
+            <Link to="/docs" style={{ color: "#a78bfa", textDecoration: "underline" }}>Read the full documentation →</Link>
           </p>
         </motion.div>
 
@@ -932,11 +1031,12 @@ export function HomePage() {
         >
           <p className="section-eyebrow">Capabilities</p>
           <h2 className="section-title">
-            Everything you need to{" "}
-            <span className="hero-gradient-text">ship clean data</span>
+            One platform for data transformation,{" "}
+            <span className="hero-gradient-text">SQL pipelines &amp; dashboards</span>
           </h2>
           <p className="section-subtitle">
-            Built for the messy, real-world data that breaks every other tool.
+            Built for the messy, real-world data that breaks every other tool.{" "}
+            <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "underline" }}>Compare plans →</Link>
           </p>
         </motion.div>
 
@@ -1015,7 +1115,7 @@ export function HomePage() {
           transition={{ duration: 0.5 }}
         >
           <p className="section-eyebrow">Why DataHub is different</p>
-          <h2 className="section-title">Common concerns about AI data tools</h2>
+          <h2 className="section-title">Common concerns about AI data tools &amp; SQL automation</h2>
           <p className="section-subtitle">
             We built DataHub specifically to address every one of these.
           </p>
@@ -1259,10 +1359,10 @@ export function HomePage() {
             <p className="footer-tag">Ask in plain English. See every step. Ship trusted analysis.</p>
           </div>
           <div className="footer-links">
-            <a className="footer-link" href="#pricing">Pricing</a>
-            <a className="footer-link" href="/docs">Docs</a>
-            <a className="footer-link" href="/privacy">Privacy</a>
-            <a className="footer-link" href="/terms">Terms</a>
+            <Link className="footer-link" to="/pricing">Pricing</Link>
+            <Link className="footer-link" to="/docs">Docs</Link>
+            <Link className="footer-link" to="/privacy">Privacy</Link>
+            <Link className="footer-link" to="/terms">Terms</Link>
             <a className="footer-link" href={`mailto:${SUPPORT_EMAIL}`}>Contact</a>
           </div>
         </div>

@@ -1,6 +1,13 @@
 import { Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 
 export function TermsPage() {
+  useSEO({
+    title: "Terms of Service – DataHub",
+    description:
+      "Read the DataHub Terms of Service. Learn about acceptable use, data handling, subscription terms, and user rights.",
+    canonical: "https://datahub.org.in/terms",
+  });
   return (
     <div style={{ height: "100vh", overflowY: "auto", background: "var(--bg0)" }}>
     <div

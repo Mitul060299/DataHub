@@ -17,6 +17,7 @@ import { DocsPage } from "./pages/DocsPage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export function App() {
@@ -45,7 +46,7 @@ export function App() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/" element={<AppShell />}>
-        <Route index element={<Navigate to="/home" replace />} />
+        <Route index element={<HomePage />} />
         <Route path="home" element={<HomePage />} />
         <Route path="workspace" element={<WorkspaceHomePage />} />
         <Route path="workspace/project/:projectId" element={<Navigate to="pipeline/new" replace />} />
@@ -63,7 +64,7 @@ export function App() {
         <Route path="sources" element={<SourcesPage />} />
         <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/home" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
       {rateLimitMsg && (

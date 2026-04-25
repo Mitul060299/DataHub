@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useSEO } from "../hooks/useSEO";
 
 export function SignupPage() {
   const { signUpWithPassword, signInWithProvider, session } = useAuth();
@@ -13,6 +14,13 @@ export function SignupPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"analyst" | "engineer" | "manager" | "admin">("analyst");
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  useSEO({
+    title: "Sign Up – Start Analyzing Data with AI | DataHub",
+    description:
+      "Create your free DataHub account. No credit card required. Connect your data sources and start building AI-powered SQL pipelines in minutes.",
+    canonical: "https://datahub.org.in/signup",
+  });
 
   const navigate = useNavigate();
 

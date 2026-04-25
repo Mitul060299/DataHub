@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useSEO } from "../hooks/useSEO";
 
 type LocationState = {
   from?: { pathname?: string };
@@ -14,6 +15,13 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+
+  useSEO({
+    title: "Log In – DataHub",
+    description: "Sign in to your DataHub account to access your data pipelines, workspaces, and dashboards.",
+    canonical: "https://datahub.org.in/login",
+    noIndex: true,
+  });
 
   const navigate = useNavigate();
   const location = useLocation();

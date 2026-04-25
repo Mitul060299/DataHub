@@ -5,6 +5,7 @@ import { billingEnabled } from "../utils/featureFlags";
 import { capture } from "../lib/posthog";
 import { joinWaitlist } from "../api";
 import { useIsIndian } from "../hooks/useIsIndian";
+import { useSEO } from "../hooks/useSEO";
 
 type PlanKey = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
 
@@ -48,6 +49,63 @@ const planCards: PlanCard[] = [
   },
 ];
 
+// Structured data for the Pricing page – Product with multiple Offers.
+// Helps Google show pricing/feature snippets and rich results.
+const PRICING_LD = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  name: "DataHub",
+  description:
+    "AI-powered data analysis platform. Upload CSV/Excel or connect databases (PostgreSQL, MySQL, Snowflake, BigQuery, Redshift). Generate transparent, auditable SQL pipelines with the AI agent.",
+  brand: { "@type": "Brand", name: "DataHub" },
+  url: "https://datahub.org.in/pricing",
+  offers: {
+    "@type": "AggregateOffer",
+    priceCurrency: "INR",
+    lowPrice: "0",
+    highPrice: "29999",
+    offerCount: "5",
+    offers: [
+      {
+        "@type": "Offer",
+        name: "Free",
+        price: "0",
+        priceCurrency: "INR",
+        url: "https://datahub.org.in/pricing",
+        availability: "https://schema.org/InStock",
+        description: "100 AI messages/month, 500 MB storage, CSV + Excel uploads.",
+      },
+      {
+        "@type": "Offer",
+        name: "Professional",
+        price: "6999",
+        priceCurrency: "INR",
+        url: "https://datahub.org.in/pricing",
+        availability: "https://schema.org/InStock",
+        description: "20 projects, 20 GB storage, 2,000 AI messages, all SQL databases.",
+      },
+      {
+        "@type": "Offer",
+        name: "Team",
+        price: "14999",
+        priceCurrency: "INR",
+        url: "https://datahub.org.in/pricing",
+        availability: "https://schema.org/InStock",
+        description: "3 seats included, collaboration workspaces, +Snowflake/Redshift/BigQuery.",
+      },
+      {
+        "@type": "Offer",
+        name: "Business",
+        price: "29999",
+        priceCurrency: "INR",
+        url: "https://datahub.org.in/pricing",
+        availability: "https://schema.org/InStock",
+        description: "5 seats included, SSO/SAML, custom connectors, 2 TB storage.",
+      },
+    ],
+  },
+};
+
 export function PricingPage() {
   const { plan } = useUser();
   const navigate = useNavigate();
@@ -55,6 +113,14 @@ export function PricingPage() {
   const [message, setMessage] = useState<string | null>(null);
   type NotifyState = { open: boolean; email: string; submitted: boolean };
   const [notifyState, setNotifyState] = useState<Record<string, NotifyState>>({});
+
+  useSEO({
+    title: "DataHub Pricing – Free, Pro & Team Plans | AI Data Analysis",
+    description:
+      "Start free forever. Upgrade to Professional from ₹6,999/month. All plans include the AI agent, transparent SQL pipelines, and database connectors. No credit card to get started.",
+    canonical: "https://datahub.org.in/pricing",
+    structuredData: PRICING_LD,
+  });
 
   const currentIndex = useMemo(() => planCards.findIndex((p) => p.key === plan), [plan]);
 

@@ -1,6 +1,13 @@
 import { Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 
 export function PrivacyPage() {
+  useSEO({
+    title: "Privacy Policy – DataHub",
+    description:
+      "DataHub Privacy Policy. Understand how we collect, use, store, and protect your personal information and data.",
+    canonical: "https://datahub.org.in/privacy",
+  });
   return (
     <div style={{ height: "100vh", overflowY: "auto", background: "var(--bg0)" }}>
     <div

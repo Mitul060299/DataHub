@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 import "./DocsPage.css";
 
 // ── Types ────────────────────────────────────────────────────
@@ -1672,6 +1673,58 @@ export function DocsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const page = searchParams.get("page") ?? "welcome";
+
+  const pageLabel = FLAT_PAGES.find((p) => p.id === page)?.label ?? "Documentation";
+  const docsCanonical = `https://datahub.org.in/docs${page !== "welcome" ? `?page=${page}` : ""}`;
+
+  // Find the section this page belongs to (for breadcrumbs)
+  const sectionLabel =
+    SECTIONS.find((s) => s.pages.some((p) => p.id === page))?.label ?? "DOCUMENTATION";
+
+  const breadcrumbLd = useMemo(() => {
+    const items: Array<Record<string, unknown>> = [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: "https://datahub.org.in/",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Documentation",
+        item: "https://datahub.org.in/docs",
+      },
+    ];
+    if (page !== "welcome") {
+      items.push({
+        "@type": "ListItem",
+        position: 3,
+        name: sectionLabel
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase()),
+      });
+      items.push({
+        "@type": "ListItem",
+        position: 4,
+        name: pageLabel,
+        item: docsCanonical,
+      });
+    }
+    return {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: items,
+    };
+  }, [page, pageLabel, sectionLabel, docsCanonical]);
+
+  useSEO({
+    title: `${pageLabel} – DataHub Documentation`,
+    description:
+      "Step-by-step guides to upload data, connect databases, build AI pipelines, and use the DataHub agent. Full API reference and connector documentation.",
+    canonical: docsCanonical,
+    structuredData: breadcrumbLd,
+  });
 
   const currentIdx = FLAT_PAGES.findIndex((p) => p.id === page);
   const prevPage = currentIdx > 0 ? FLAT_PAGES[currentIdx - 1] : null;

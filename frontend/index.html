@@ -3,47 +3,118 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f111a" />
+    <!-- ── Preconnect hints (reduce font load latency) ──── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap" rel="stylesheet" />
 
     <!-- ── Primary meta ─────────────────────────────── -->
-    <title>DataHub – The data tool that shows you exactly what it's doing</title>
-    <meta name="description" content="Describe what you want. DataHub builds a step-by-step plan with the exact SQL, then executes it — no black boxes." />
+    <title>DataHub – AI Data Analysis Tool | SQL Pipelines, No Black Boxes</title>
+    <meta name="description" content="Upload CSV, Excel, or connect PostgreSQL, Snowflake, BigQuery. Ask in plain English — DataHub generates transparent, step-by-step SQL plans you approve before anything runs. Free to start." />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="DataHub" />
     <link rel="canonical" href="https://datahub.org.in/" />
+    <link rel="alternate" hreflang="en-IN" href="https://datahub.org.in/" />
+    <link rel="alternate" hreflang="x-default" href="https://datahub.org.in/" />
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
 
     <!-- ── Favicon / app icon ───────────────────────── -->
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- ── Open Graph (used by Google for rich results) -->
+    <!-- ── Open Graph ────────────────────────────────── -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://datahub.org.in/" />
-    <meta property="og:title" content="DataHub" />
-    <meta property="og:description" content="The data tool that lets you see exactly what it's doing." />
+    <meta property="og:site_name" content="DataHub" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:title" content="DataHub – AI Data Analysis Tool | SQL Pipelines, No Black Boxes" />
+    <meta property="og:description" content="Upload CSV, Excel, or connect PostgreSQL, Snowflake, BigQuery. Ask in plain English — DataHub generates transparent, step-by-step SQL plans you approve before anything runs." />
     <meta property="og:image" content="https://datahub.org.in/logo.png" />
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="DataHub – AI Data Analysis Platform" />
 
-    <!-- ── Organisation structured data (Google sitelinks logo) -->
+    <!-- ── Twitter Card ───────────────────────────────── -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="DataHub – AI Data Analysis Tool | SQL Pipelines, No Black Boxes" />
+    <meta name="twitter:description" content="Upload CSV, Excel, or connect PostgreSQL, Snowflake, BigQuery. Ask in plain English — DataHub generates transparent, step-by-step SQL plans you approve before anything runs." />
+    <meta name="twitter:image" content="https://datahub.org.in/logo.png" />
+    <meta name="twitter:image:alt" content="DataHub – AI Data Analysis Platform" />
+
+    <!-- ── Structured data ────────────────────────────── -->
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "DataHub",
-      "url": "https://datahub.org.in",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://datahub.org.in/logo.png",
-        "width": 512,
-        "height": 512
+    [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "DataHub",
+        "url": "https://datahub.org.in",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://datahub.org.in/logo.png",
+          "width": 512,
+          "height": 512
+        },
+        "description": "AI-powered data analysis and pipeline automation. Ask in plain English — DataHub generates transparent, step-by-step SQL plans you approve before anything runs.",
+        "sameAs": []
       },
-      "description": "The data tool that lets you see exactly what it's doing. Describe what you want. DataHub builds a step-by-step plan with the exact SQL.",
-      "sameAs": []
-    }
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "DataHub",
+        "url": "https://datahub.org.in",
+        "description": "AI-powered data analysis platform. Connect CSV, Excel, PostgreSQL, Snowflake, BigQuery and more.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://datahub.org.in/docs?page={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "DataHub",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://datahub.org.in",
+        "description": "AI-powered data analysis and pipeline automation tool. Describe what you want in plain English — DataHub builds a step-by-step plan with the exact SQL, then executes it with your approval.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "INR",
+          "description": "Free plan with 100 AI messages/month, 500 MB storage, CSV & Excel uploads. No credit card required."
+        },
+        "featureList": [
+          "AI-powered SQL generation with step-by-step plan preview",
+          "Replayable, auditable data pipelines",
+          "PostgreSQL, MySQL, Snowflake, BigQuery, Redshift connectors",
+          "CSV, Excel, JSON, Parquet file upload",
+          "Cross-dataset dashboards and visualizations",
+          "Team collaboration with roles and permissions",
+          "Full audit log and data lineage tracking",
+          "SOC2-ready governance controls"
+        ]
+      }
+    ]
     </script>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Fallback content for crawlers that don't execute JavaScript -->
+    <noscript>
+      <div style="font-family:sans-serif;max-width:760px;margin:40px auto;padding:0 24px">
+        <h1>DataHub &ndash; AI Data Analysis Platform</h1>
+        <p>Upload CSV, Excel, or connect PostgreSQL, Snowflake, and BigQuery. Ask in plain English &mdash; DataHub generates transparent, step-by-step SQL plans you approve before anything runs.</p>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/pricing">Pricing</a></li>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/signup">Sign up free</a></li>
+        </ul>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

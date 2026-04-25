@@ -399,9 +399,9 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – AI Data Preparation & Analysis Tool | Clean, Transform, Explore",
+    title: "DataHub – Simple & Reliable AI Data Preparation & Analysis Tool",
     description:
-      "Turn messy CSV, Excel, and database data into analysis-ready tables in minutes. DataHub's AI agent handles the cleaning, joining, and transformation — every step shown as plain SQL you can review, edit, and replay.",
+      "Data preparation and analysis made simple. DataHub cleans, transforms, and analyses CSV, Excel, and database data in plain English — 100% transparent, reliable SQL you can review, edit, and replay. No black boxes.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });
@@ -772,8 +772,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            AI data preparation &amp; analysis —{" "}
-            <span className="hero-gradient-text">clean, transform, explore</span>
+            Data preparation &amp; analysis,{" "}
+            <span className="hero-gradient-text">simple and reliable</span>
             <br />
             in plain English
           </motion.h1>
@@ -784,8 +784,9 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            Stop wrestling with messy CSVs and broken pipelines. DataHub turns raw, dirty data into
-            analysis-ready tables — every step shown as plain SQL you can review, edit, and replay.
+            DataHub turns messy CSVs, Excel files, and database tables into clean, analysis-ready data
+            — simple enough for anyone to use, reliable enough to trust. Every step shown as plain SQL
+            you can review, edit, and replay.
           </motion.p>
 
           <motion.div

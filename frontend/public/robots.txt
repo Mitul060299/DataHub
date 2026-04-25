@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Don't index authenticated/dynamic app routes
+Disallow: /home
+Disallow: /workspace
+Disallow: /marketplace
+Disallow: /settings
+Disallow: /sources
+Disallow: /dashboard/
+Disallow: /invite/
+Disallow: /public-dashboard/
+
+Sitemap: https://datahub.org.in/sitemap.xml

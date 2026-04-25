@@ -399,9 +399,9 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – AI Data Analysis Tool | See Exactly What the AI Does",
+    title: "DataHub – AI Data Preparation & Analysis Tool | Clean, Transform, Explore",
     description:
-      "Upload CSV, Excel, or connect PostgreSQL, Snowflake, BigQuery. Ask in plain English — DataHub writes step-by-step SQL, shows the plan, and waits for your approval. Free to start.",
+      "Turn messy CSV, Excel, and database data into analysis-ready tables in minutes. DataHub's AI agent handles the cleaning, joining, and transformation — every step shown as plain SQL you can review, edit, and replay.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });
@@ -772,10 +772,10 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            AI data analysis that lets you{" "}
-            <span className="hero-gradient-text">see every SQL step</span>
+            AI data preparation &amp; analysis —{" "}
+            <span className="hero-gradient-text">clean, transform, explore</span>
             <br />
-            before it runs
+            in plain English
           </motion.h1>
 
           <motion.p
@@ -784,8 +784,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            Describe what you want. DataHub builds a step-by-step plan with the exact SQL.
-            You review and approve before anything touches your data.
+            Stop wrestling with messy CSVs and broken pipelines. DataHub turns raw, dirty data into
+            analysis-ready tables — every step shown as plain SQL you can review, edit, and replay.
           </motion.p>
 
           <motion.div

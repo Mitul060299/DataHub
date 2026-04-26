@@ -95,12 +95,13 @@ export function TopBar() {
         style={{ display: "inline-flex", alignItems: "center", gap: 10, width: "fit-content", textDecoration: "none" }}
         aria-label="datahub.org.in home"
       >
-        <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#5B6AF0" />
-          <ellipse cx="16" cy="22" rx="10" ry="3.5" fill="white" opacity="0.35" />
-          <ellipse cx="16" cy="16" rx="10" ry="3.5" fill="white" opacity="0.6" />
-          <ellipse cx="16" cy="10" rx="10" ry="3.5" fill="white" opacity="0.95" />
-        </svg>
+        <img
+          src="/logo.png"
+          alt=""
+          width={30}
+          height={30}
+          style={{ display: "block", borderRadius: 8 }}
+        />
         <span
           style={{
             fontFamily: "'Syne', sans-serif",

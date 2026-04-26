@@ -964,9 +964,6 @@ export function HomePage() {
         </motion.div>
       </section>
 
-      {/* WATCH DEMO */}
-      <DemoVideoSection />
-
       {/* MARQUEE */}
       <section className="marquee-section">
         <div className="marquee-label">Connects to</div>
@@ -1418,69 +1415,5 @@ export function HomePage() {
         </div>
       )}
     </main>
-  );
-}
-
-function DemoVideoSection() {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-
-  const handlePlay = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.play().then(() => setPlaying(true)).catch(() => {
-      // Autoplay/play() can reject if blocked — leave overlay visible.
-      setPlaying(false);
-    });
-  };
-
-  return (
-    <section className="demo-video-section" id="demo">
-      <div className="demo-video-inner">
-        <p className="section-eyebrow">See it in action</p>
-        <h2 className="section-title">A 60-second walkthrough</h2>
-        <p className="section-sub">
-          Watch how datahub.org.in turns a plain-English request into a transparent SQL pipeline you can review and replay.
-        </p>
-
-        <motion.div
-          className="demo-video-frame"
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.55, ease: "easeOut" }}
-        >
-          <video
-            ref={videoRef}
-            className="demo-video"
-            src="/demo.mp4"
-            poster="/logo.png"
-            playsInline
-            controls={playing}
-            preload="metadata"
-            onEnded={() => setPlaying(false)}
-            onPause={() => {
-              const v = videoRef.current;
-              if (v && v.ended) setPlaying(false);
-            }}
-          />
-          {!playing && (
-            <button
-              type="button"
-              className="demo-video-overlay"
-              onClick={handlePlay}
-              aria-label="Play demo video"
-            >
-              <span className="demo-video-play">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M8 5v14l11-7z" fill="currentColor" />
-                </svg>
-              </span>
-              <span className="demo-video-cta">Watch demo</span>
-            </button>
-          )}
-        </motion.div>
-      </div>
-    </section>
   );
 }

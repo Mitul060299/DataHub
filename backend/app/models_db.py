@@ -17,7 +17,8 @@ class User(Base):
     notification_prefs = Column(JSONB, nullable=True, default=dict)
     # Billing columns — added to DB by migration 0025; also accessed via Supabase client in billing_repository
     razorpay_customer_id = Column(String, nullable=True)
-    subscription_id = Column(String, nullable=True)
+    # subscription_id is a UUID FK to subscriptions.id (see migration 0025)
+    subscription_id = Column(UUID(as_uuid=False), nullable=True)
 
 
 class UserUsageDB(Base):

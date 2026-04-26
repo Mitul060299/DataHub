@@ -356,6 +356,18 @@ def save_checkpoint(
     # 4. Persist DatasetMetaDB so dataset appears in the datasets list
     from ..services.persistence_policy import materialize_artifact, materialize_dataset
     ds_id = str(_uuid.uuid4())
+    # Inherit the source dataset's project so the saved artifact stays scoped
+    # to the same project the user is working in. Without this, list_artifacts
+    # filters the saved artifact out (project_id NULL != active project_id).
+    source_project_id = None
+    if source_dataset_id:
+        src_meta = (
+            db.query(DatasetMetaDB)
+            .filter(DatasetMetaDB.id == source_dataset_id)
+            .first()
+        )
+        if src_meta is not None:
+            source_project_id = getattr(src_meta, "project_id", None)
     try:
         ds_row = materialize_dataset(
             db,
@@ -363,6 +375,7 @@ def save_checkpoint(
             id=ds_id,
             user_id=current_user.id,
             workspace_id=getattr(current_user, "workspace_id", None) or "default",
+            project_id=source_project_id,
             name=artifact_name,
             source_type="checkpoint",
             storage_path=s3_key,

@@ -655,7 +655,13 @@ def get_pipeline_steps(
                 _PSdb.user_id == user_id,
                 _PSdb.session_id == sess_id,
                 _PSdb.status == "completed",
-                _PSdb.output_table.isnot(None),
+                # NOTE: do NOT filter on output_table.isnot(None). Chart /
+                # visualization steps (operation="create_chart") legitimately
+                # have a NULL output_table because they don't produce a new
+                # data table. Excluding them caused branched pipelines to
+                # lose their chart branches on reload (the visualization
+                # itself survived in VisualizationDB, but the pipeline graph
+                # branch was missing).
             )
             .order_by(_PSdb.step_number)
             .limit(100)

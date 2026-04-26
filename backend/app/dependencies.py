@@ -50,8 +50,17 @@ async def get_current_user(
             db.commit()
             db.refresh(user)
         except Exception:
+            # Two concurrent first-time requests can both miss the SELECT and
+            # then both try to INSERT, hitting either a primary-key collision
+            # or a unique(username) violation.  Recover by re-reading the row
+            # the other request just wrote rather than 500-ing the user.
             db.rollback()
-            raise HTTPException(status_code=500, detail="Failed to initialize user")
+            user = (
+                db.query(User).filter(User.id == created_id).first()
+                or db.query(User).filter(User.username == subject).first()
+            )
+            if not user:
+                raise HTTPException(status_code=500, detail="Failed to initialize user")
 
     return CurrentUser(
         id=str(user.id),

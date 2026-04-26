@@ -12,9 +12,9 @@ import { useSEO } from "../hooks/useSEO";
  */
 export function NotFoundPage() {
   useSEO({
-    title: "Page not found – DataHub",
+    title: "Page not found – datahub.org.in",
     description:
-      "The page you are looking for does not exist. Visit the DataHub homepage, pricing, or documentation.",
+      "The page you are looking for does not exist. Visit the datahub.org.in homepage, pricing, or documentation.",
     canonical: "https://datahub.org.in/",
     noIndex: true,
   });

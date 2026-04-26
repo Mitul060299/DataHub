@@ -3,9 +3,9 @@ import { useSEO } from "../hooks/useSEO";
 
 export function TermsPage() {
   useSEO({
-    title: "Terms of Service – DataHub",
+    title: "Terms of Service – datahub.org.in",
     description:
-      "Read the DataHub Terms of Service. Learn about acceptable use, data handling, subscription terms, and user rights.",
+      "Read the datahub.org.in Terms of Service. Learn about acceptable use, data handling, subscription terms, and user rights.",
     canonical: "https://datahub.org.in/terms",
   });
   return (
@@ -29,7 +29,7 @@ export function TermsPage() {
           marginBottom: 32,
         }}
       >
-        ← Back to DataHub
+        ← Back to datahub.org.in
       </Link>
 
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Terms of Service</h1>

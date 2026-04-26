@@ -35,7 +35,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
     const metadataName = authUser?.user_metadata?.full_name as string | undefined;
     if (metadataName?.trim()) return metadataName.trim();
     if (user?.username?.trim()) return user.username.trim();
-    return "DataHub User";
+    return "datahub.org.in User";
   }, [authUser?.user_metadata?.full_name, user?.username]);
   const email = authUser?.email ?? user?.username ?? "user@datahub.dev";
   const provider = String(authUser?.app_metadata?.provider ?? "").toLowerCase();
@@ -331,7 +331,7 @@ function ProfilePanel({ displayName, email, isSsoUser }: { displayName: string; 
           {name?.[0]?.toUpperCase() ?? "U"}
         </div>
         <div>
-          <div style={{ fontSize: "15px", fontWeight: 600, color: "#e8e8f0" }}>{name || "DataHub User"}</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: "#e8e8f0" }}>{name || "datahub.org.in User"}</div>
           <div style={{ fontSize: "13px", color: "#8888a0" }}>{email}</div>
         </div>
       </div>

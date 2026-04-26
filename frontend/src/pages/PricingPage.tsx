@@ -54,10 +54,10 @@ const planCards: PlanCard[] = [
 const PRICING_LD = {
   "@context": "https://schema.org",
   "@type": "Product",
-  name: "DataHub",
+  name: "datahub.org.in",
   description:
     "AI-powered data analysis platform. Upload CSV/Excel or connect databases (PostgreSQL, MySQL, Snowflake, BigQuery, Redshift). Generate transparent, auditable SQL pipelines with the AI agent.",
-  brand: { "@type": "Brand", name: "DataHub" },
+  brand: { "@type": "Brand", name: "datahub.org.in" },
   url: "https://datahub.org.in/pricing",
   offers: {
     "@type": "AggregateOffer",
@@ -115,7 +115,7 @@ export function PricingPage() {
   const [notifyState, setNotifyState] = useState<Record<string, NotifyState>>({});
 
   useSEO({
-    title: "DataHub Pricing – Free, Pro & Team Plans | AI Data Analysis",
+    title: "datahub.org.in Pricing – Free, Pro & Team Plans | AI Data Analysis",
     description:
       "Start free forever. Upgrade to Professional from ₹6,999/month. All plans include the AI agent, transparent SQL pipelines, and database connectors. No credit card to get started.",
     canonical: "https://datahub.org.in/pricing",

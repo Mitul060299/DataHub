@@ -93,7 +93,7 @@ export function TopBar() {
       <Link
         to="/"
         style={{ display: "inline-flex", alignItems: "center", gap: 10, width: "fit-content", textDecoration: "none" }}
-        aria-label="DataHub home"
+        aria-label="datahub.org.in home"
       >
         <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
           <rect width="32" height="32" rx="8" fill="#5B6AF0" />
@@ -110,7 +110,7 @@ export function TopBar() {
             letterSpacing: "-0.02em",
           }}
         >
-          Data<span style={{ color: "#818cf8" }}>Hub</span>
+          data<span style={{ color: "#818cf8" }}>hub</span><span style={{ color: "#94A3B8", fontWeight: 600 }}>.org.in</span>
         </span>
       </Link>
 

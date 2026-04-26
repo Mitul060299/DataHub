@@ -51,14 +51,14 @@ export function useSEO({
     upsertMeta("property", "og:description", description);
     upsertMeta("property", "og:type", ogType);
     upsertMeta("property", "og:image", ogImage);
-    upsertMeta("property", "og:image:alt", "DataHub – AI Data Analysis Platform");
+    upsertMeta("property", "og:image:alt", "datahub.org.in – AI Data Analysis Platform");
     if (canonical) upsertMeta("property", "og:url", canonical);
 
     // Twitter Card
     upsertMeta("name", "twitter:title", title);
     upsertMeta("name", "twitter:description", description);
     upsertMeta("name", "twitter:image", ogImage);
-    upsertMeta("name", "twitter:image:alt", "DataHub – AI Data Analysis Platform");
+    upsertMeta("name", "twitter:image:alt", "datahub.org.in – AI Data Analysis Platform");
 
     // Canonical link
     if (canonical) {

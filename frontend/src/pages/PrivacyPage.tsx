@@ -3,9 +3,9 @@ import { useSEO } from "../hooks/useSEO";
 
 export function PrivacyPage() {
   useSEO({
-    title: "Privacy Policy – DataHub",
+    title: "Privacy Policy – datahub.org.in",
     description:
-      "DataHub Privacy Policy. Understand how we collect, use, store, and protect your personal information and data.",
+      "datahub.org.in Privacy Policy. Understand how we collect, use, store, and protect your personal information and data.",
     canonical: "https://datahub.org.in/privacy",
   });
   return (
@@ -29,7 +29,7 @@ export function PrivacyPage() {
           marginBottom: 32,
         }}
       >
-        ← Back to DataHub
+        ← Back to datahub.org.in
       </Link>
 
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Privacy Policy</h1>

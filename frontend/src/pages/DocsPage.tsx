@@ -19,7 +19,7 @@ const SECTIONS: Section[] = [
   {
     label: "GETTING STARTED",
     pages: [
-      { id: "welcome", label: "Welcome to DataHub" },
+      { id: "welcome", label: "Welcome to datahub.org.in" },
       { id: "quickstart", label: "Quick Start" },
       { id: "concepts", label: "Key Concepts" },
     ],
@@ -74,7 +74,7 @@ const FLAT_PAGES: Page[] = SECTIONS.flatMap((s) => s.pages);
 function Welcome() {
   return (
     <article className="docs-article">
-      <h1>Welcome to DataHub</h1>
+      <h1>Welcome to datahub.org.in</h1>
       <p className="docs-lead">
         DataHub is an AI-powered data platform that lets you upload, transform, analyse, and visualise your data — without writing a single line of
         SQL or code.
@@ -1719,9 +1719,9 @@ export function DocsPage() {
   }, [page, pageLabel, sectionLabel, docsCanonical]);
 
   useSEO({
-    title: `${pageLabel} – DataHub Documentation`,
+    title: `${pageLabel} – datahub.org.in Documentation`,
     description:
-      "Step-by-step guides to upload data, connect databases, build AI pipelines, and use the DataHub agent. Full API reference and connector documentation.",
+      "Step-by-step guides to upload data, connect databases, build AI pipelines, and use the datahub.org.in agent. Full API reference and connector documentation.",
     canonical: docsCanonical,
     structuredData: breadcrumbLd,
   });
@@ -1748,7 +1748,7 @@ export function DocsPage() {
       {/* Top bar */}
       <header className="docs-topbar">
         <span className="docs-topbar__logo">
-          <span className="docs-topbar__brand">DataHub</span>
+          <span className="docs-topbar__brand">datahub.org.in</span>
           <span className="docs-topbar__docsLabel">Docs</span>
         </span>
         <button

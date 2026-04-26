@@ -40,13 +40,13 @@ export const WelcomeModal = ({ onClose, onUploadSample }: WelcomeModalProps) => 
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Welcome to DataHub"
+        aria-label="Welcome to datahub.org.in"
       >
         <button className="welcome-modal__close" onClick={onClose} aria-label="Close">
           ×
         </button>
         <div className="welcome-modal__header">
-          <h2>Welcome to DataHub 👋</h2>
+          <h2>Welcome to datahub.org.in 👋</h2>
           <p>Your AI-powered data analysis workspace. Upload your data or try a sample to get started.</p>
         </div>
 

@@ -86,7 +86,7 @@ export async function initiateSubscription(
   const options = {
     key: razorpayKeyId,
     subscription_id: subscriptionId,
-    name: "DataHub",
+    name: "datahub.org.in",
     description: planLabel,
     image: "/logo.png",
     theme: { color: "#5B6AF0" },

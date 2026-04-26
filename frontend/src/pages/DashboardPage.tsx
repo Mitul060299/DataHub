@@ -248,7 +248,7 @@ function SettingsOverlay({
             onChange={(e) => setShowBranding(e.target.checked)}
             style={{ width: 16, height: 16, accentColor: "#5B6AF0" }}
           />
-          <span style={{ fontSize: 13, color: "#94A3B8" }}>Show DataHub branding</span>
+          <span style={{ fontSize: 13, color: "#94A3B8" }}>Show datahub.org.in branding</span>
         </label>
 
         <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
@@ -477,7 +477,7 @@ export function DashboardPage() {
 
           {showBranding && (
             <footer style={{ textAlign: "center", padding: "12px 0", color: "#334155", fontSize: 11 }}>
-              Powered by <strong style={{ color: "#5B6AF0" }}>DataHub</strong>
+              Powered by <strong style={{ color: "#5B6AF0" }}>datahub.org.in</strong>
             </footer>
           )}
         </div>

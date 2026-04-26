@@ -16,9 +16,9 @@ export function SignupPage() {
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useSEO({
-    title: "Sign Up – Start Analyzing Data with AI | DataHub",
+    title: "Sign Up – Start Analyzing Data with AI | datahub.org.in",
     description:
-      "Create your free DataHub account. No credit card required. Connect your data sources and start building AI-powered SQL pipelines in minutes.",
+      "Create your free datahub.org.in account. No credit card required. Connect your data sources and start building AI-powered SQL pipelines in minutes.",
     canonical: "https://datahub.org.in/signup",
   });
 
@@ -63,7 +63,7 @@ export function SignupPage() {
   return (
     <div className="auth-shell">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-title">Create your DataHub account</h1>
+        <h1 className="auth-title">Create your datahub.org.in account</h1>
         <p className="auth-sub">Start importing, transforming, and scheduling data workflows.</p>
         {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
         {successMessage ? <p className="auth-success">{successMessage}</p> : null}
@@ -99,7 +99,7 @@ export function SignupPage() {
             style={{ marginTop: 2, accentColor: "#5B6AF0", width: 15, height: 15, flexShrink: 0, cursor: "pointer" }}
           />
           <label htmlFor="terms" style={{ fontSize: 12, color: "var(--tx1)", lineHeight: 1.5, cursor: "pointer" }}>
-            I agree to DataHub&apos;s{" "}
+            I agree to datahub.org.in&apos;s{" "}
             <a href="/terms" target="_blank" rel="noreferrer" style={{ color: "#5B6AF0", textDecoration: "underline" }} onClick={(e) => e.stopPropagation()}>
               Terms of Service
             </a>

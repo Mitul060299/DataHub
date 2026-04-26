@@ -112,7 +112,7 @@ export function PublicDashboardPage() {
 
         {showBranding && (
           <footer style={{ textAlign: "center", color: "#334155", fontSize: 11, paddingTop: 8 }}>
-            Powered by <strong style={{ color: "#5B6AF0" }}>DataHub</strong>
+            Powered by <strong style={{ color: "#5B6AF0" }}>datahub.org.in</strong>
           </footer>
         )}
       </section>

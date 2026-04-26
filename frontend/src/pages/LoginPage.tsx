@@ -17,8 +17,8 @@ export function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
 
   useSEO({
-    title: "Log In – DataHub",
-    description: "Sign in to your DataHub account to access your data pipelines, workspaces, and dashboards.",
+    title: "Log In – datahub.org.in",
+    description: "Sign in to your datahub.org.in account to access your data pipelines, workspaces, and dashboards.",
     canonical: "https://datahub.org.in/login",
     noIndex: true,
   });
@@ -102,7 +102,7 @@ export function LoginPage() {
   return (
     <div className="auth-shell">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-title">Welcome back to DataHub</h1>
+        <h1 className="auth-title">Welcome back to datahub.org.in</h1>
         <p className="auth-sub">Sign in to continue your workspace session.</p>
         {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
 
@@ -129,7 +129,7 @@ export function LoginPage() {
         </div>
 
         <div className="auth-row" style={{ marginTop: 12 }}>
-          <span style={{ color: "var(--tx1)" }}>New to DataHub?</span>
+          <span style={{ color: "var(--tx1)" }}>New to datahub.org.in?</span>
           <Link className="auth-link" to="/signup">Create account</Link>
         </div>
       </form>

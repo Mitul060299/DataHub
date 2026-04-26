@@ -399,7 +399,7 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – The Simple, Reliable Way to Prepare & Analyse Your Data",
+    title: "DataHub – The Simple and Reliable Way to Prepare & Analyse Your Data",
     description:
       "DataHub cleans, transforms, and analyses your CSV, Excel, and database data in plain English. Every step runs as readable SQL you can review, edit, and replay — so the result is always one you can trust.",
     canonical: "https://datahub.org.in/",
@@ -773,7 +773,7 @@ export function HomePage() {
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
             The{" "}
-            <span className="hero-gradient-text">simple, reliable way</span>
+            <span className="hero-gradient-text">simple and reliable way</span>
             <br />
             to prepare and analyse your data
           </motion.h1>

@@ -54,10 +54,14 @@ def import_from_connector(
     effective_config = dict(payload.config)
 
     if payload.credential_id:
-        # Use a previously saved credential
+        # Use a previously saved credential. Scope strictly to the requesting
+        # user so user A cannot reuse user B's saved DB credentials.
         cred_row = (
             db.query(ConnectorCredentialDB)
-            .filter(ConnectorCredentialDB.id == payload.credential_id)
+            .filter(
+                ConnectorCredentialDB.id == payload.credential_id,
+                ConnectorCredentialDB.user_id == user_id,
+            )
             .first()
         )
         if not cred_row:
@@ -215,7 +219,15 @@ def delete_connector_credential(
     """Revoke a saved credential.  Datasets using it will lose fold/live capability."""
     role = get_current_role(authorization)
     require_role("editor", role)
-    row = db.query(ConnectorCredentialDB).filter(ConnectorCredentialDB.id == credential_id).first()
+    user_id = get_current_user_id(authorization)
+    row = (
+        db.query(ConnectorCredentialDB)
+        .filter(
+            ConnectorCredentialDB.id == credential_id,
+            ConnectorCredentialDB.user_id == user_id,
+        )
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Credential not found")
     db.delete(row)
@@ -271,7 +283,7 @@ def sync_connector(
         try:
             df = get_dataset(dataset_id)
         except KeyError:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id or "anonymous")
         if not hasattr(connector, "write"):
             raise HTTPException(status_code=400, detail="Connector does not support push")
         rows = df.to_dict(orient="records")

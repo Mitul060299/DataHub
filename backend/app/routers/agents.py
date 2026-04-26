@@ -7,7 +7,7 @@ from ..services.context_store import context_store
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
 from ..models_db import AgentFeedbackDB
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..services.rate_limiter import limiter
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -22,11 +22,12 @@ def suggest(
 ) -> AgentSuggestion:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     try:
         df = get_dataset(dataset_id)
     except KeyError:
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -48,11 +49,12 @@ def chat(
 ) -> ChatResponse:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     try:
         df = get_dataset(dataset_id)
     except KeyError:
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 

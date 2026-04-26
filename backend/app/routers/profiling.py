@@ -7,7 +7,7 @@ from ..services.correlation import compute_correlations
 from ..services.cache import profile_cache
 from .datasets import get_dataset, get_dataset_from_db
 from ..db import get_db
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 
 router = APIRouter(prefix="/profiling", tags=["profiling"])
 
@@ -21,6 +21,7 @@ def profile_dataset(
 ) -> ProfileSummary:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     cache_key = f"profile:{dataset_id}:{columns or 'all'}"
     cached = profile_cache.get(cache_key)
     if cached:
@@ -29,7 +30,7 @@ def profile_dataset(
         df = get_dataset(dataset_id)
     except KeyError:
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -53,6 +54,7 @@ def profile_summary(
 ) -> ChartSummary:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     cache_key = f"summary:{dataset_id}:{column}"
     cached = profile_cache.get(cache_key)
     if cached:
@@ -66,7 +68,7 @@ def profile_summary(
         df = get_dataset(dataset_id)
     except KeyError:
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -93,6 +95,7 @@ def profile_correlations(
 ) -> CorrelationSummary:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     cache_key = f"corr:{dataset_id}"
     cached = profile_cache.get(cache_key)
     if cached:
@@ -104,7 +107,7 @@ def profile_correlations(
         df = get_dataset(dataset_id)
     except KeyError:
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 

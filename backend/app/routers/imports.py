@@ -740,8 +740,12 @@ async def list_tables(
 async def table_preview(
     table_name: str,
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
     if workspace_id:
         query = query.filter(ImportTableDB.workspace_id == workspace_id)
@@ -749,7 +753,7 @@ async def table_preview(
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
     try:
-        df = get_dataset_from_db(table.dataset_id, db)
+        df = get_dataset_from_db(table.dataset_id, db, user_id=user_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Dataset not found") from exc
     rows = df.head(100).to_dict(orient="records")
@@ -791,8 +795,12 @@ async def delete_table(
 async def export_table(
     table_name: str,
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization) or "anonymous"
     query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
     if workspace_id:
         query = query.filter(ImportTableDB.workspace_id == workspace_id)
@@ -800,7 +808,7 @@ async def export_table(
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
     try:
-        df = get_dataset_from_db(table.dataset_id, db)
+        df = get_dataset_from_db(table.dataset_id, db, user_id=user_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Dataset not found") from exc
     csv_buffer = StringIO()

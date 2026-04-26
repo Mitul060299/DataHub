@@ -512,7 +512,38 @@ def get_dataset(dataset_id: str) -> pd.DataFrame:
     raise KeyError("Dataset not found — use get_dataset_from_db")
 
 
-def get_dataset_from_db(dataset_id: str, db: Session) -> pd.DataFrame:
+def get_dataset_from_db(
+    dataset_id: str,
+    db: Session,
+    user_id: str | None = None,
+) -> pd.DataFrame:
+    """Load a dataset's rows from DB / object storage.
+
+    Security: when ``user_id`` is provided (recommended for any caller that
+    services HTTP requests), the dataset's metadata row is checked first and
+    ``KeyError`` is raised for datasets the user does not own. Callers MUST
+    pass ``user_id`` for any code path reachable by an external request —
+    the optional default exists only for legacy internal callers and emits
+    a warning log.
+    """
+    if user_id is None:
+        logger.warning(
+            "get_dataset_from_db called without user_id (dataset_id=%s) — "
+            "this skips ownership validation and is unsafe for HTTP-reachable code paths",
+            dataset_id,
+        )
+    else:
+        meta = (
+            db.query(DatasetMetaDB)
+            .filter(
+                DatasetMetaDB.id == dataset_id,
+                DatasetMetaDB.user_id == user_id,
+            )
+            .first()
+        )
+        if not meta:
+            raise KeyError("Dataset not found")
+
     chunks = (
         db.query(DatasetChunkDB)
         .filter(DatasetChunkDB.dataset_id == dataset_id)
@@ -633,7 +664,15 @@ def get_pipeline_steps(
     """
     role = get_current_role(authorization)
     require_role("viewer", role)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    user_id = get_current_user_id(authorization) or "anonymous"
+    meta = (
+        db.query(DatasetMetaDB)
+        .filter(
+            DatasetMetaDB.id == dataset_id,
+            DatasetMetaDB.user_id == user_id,
+        )
+        .first()
+    )
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -2069,7 +2108,15 @@ def get_presigned_url(
     require_role("viewer", role)
     if expires_in > 3600:
         expires_in = 3600
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    user_id = get_current_user_id(authorization)
+    meta = (
+        db.query(DatasetMetaDB)
+        .filter(
+            DatasetMetaDB.id == dataset_id,
+            DatasetMetaDB.user_id == user_id,
+        )
+        .first()
+    )
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
     if not meta.storage_path or str(meta.storage_path).startswith("local://"):
@@ -2114,7 +2161,15 @@ def preview_dataset(
     require_role("viewer", role)
     if limit > 500:
         limit = 500
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    user_id = get_current_user_id(authorization) or "anonymous"
+    meta = (
+        db.query(DatasetMetaDB)
+        .filter(
+            DatasetMetaDB.id == dataset_id,
+            DatasetMetaDB.user_id == user_id,
+        )
+        .first()
+    )
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -2145,7 +2200,7 @@ def preview_dataset(
             # empty file while the raw rows were persisted to DatasetChunkDB.
             if not page_rows and (meta.row_count or 0) > 0:
                 try:
-                    df_fallback = get_dataset_from_db(dataset_id, db)
+                    df_fallback = get_dataset_from_db(dataset_id, db, user_id=user_id)
                     if not df_fallback.empty:
                         rows_fb = df_fallback.to_dict(orient="records")
                         sliced = rows_fb[offset: offset + limit]
@@ -2192,7 +2247,7 @@ def preview_dataset(
             ) from exc
     else:
         # ── Chunk / DB fallback — hard cap at 10K rows to prevent OOM ─────────
-        df = get_dataset_from_db(dataset_id, db)
+        df = get_dataset_from_db(dataset_id, db, user_id=user_id)
 
     _PREVIEW_RAM_CAP = 10_000
     rows: list[dict] = df.to_dict(orient="records")[:_PREVIEW_RAM_CAP]
@@ -2253,9 +2308,10 @@ def cross_dataset_query(
         raise HTTPException(status_code=422, detail="dataset_ids must not be empty")
 
     relation_rows: dict[str, list[dict]] = {}
+    user_id = get_current_user_id(authorization) or "anonymous"
     for alias, dataset_id in payload.dataset_ids.items():
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id)
             relation_rows[alias] = df.astype(object).where(pd.notnull(df), None).to_dict(orient="records")
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found (alias: {alias})")
@@ -2289,7 +2345,14 @@ def get_joinable_datasets(
     role = get_current_role(authorization)
     require_role("viewer", role)
 
-    source_meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    source_meta = (
+        db.query(DatasetMetaDB)
+        .filter(
+            DatasetMetaDB.id == dataset_id,
+            DatasetMetaDB.user_id == get_current_user_id(authorization),
+        )
+        .first()
+    )
     if not source_meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -2297,7 +2360,11 @@ def get_joinable_datasets(
     if not source_cols:
         return JoinableResponse(dataset_id=dataset_id, joinable=[])
 
-    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id != dataset_id)
+    user_id = get_current_user_id(authorization)
+    query = db.query(DatasetMetaDB).filter(
+        DatasetMetaDB.id != dataset_id,
+        DatasetMetaDB.user_id == user_id,
+    )
     if workspace_id:
         query = query.filter(
             (DatasetMetaDB.workspace_id == workspace_id) | DatasetMetaDB.workspace_id.is_(None)
@@ -2349,7 +2416,15 @@ def export_dataset_to_connector(
     user_plan = resolve_user_plan(db, authorization)
     enforce_connector_access(user_plan, payload.connector_type)
 
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    user_id = get_current_user_id(authorization)
+    meta = (
+        db.query(DatasetMetaDB)
+        .filter(
+            DatasetMetaDB.id == dataset_id,
+            DatasetMetaDB.user_id == user_id,
+        )
+        .first()
+    )
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -2357,7 +2432,10 @@ def export_dataset_to_connector(
     if payload.credential_id:
         cred_row = (
             db.query(ConnectorCredentialDB)
-            .filter(ConnectorCredentialDB.id == payload.credential_id)
+            .filter(
+                ConnectorCredentialDB.id == payload.credential_id,
+                ConnectorCredentialDB.user_id == user_id,
+            )
             .first()
         )
         if not cred_row:
@@ -2375,7 +2453,7 @@ def export_dataset_to_connector(
     try:
         df = get_dataset(dataset_id)
     except KeyError:
-        df = get_dataset_from_db(dataset_id, db)
+        df = get_dataset_from_db(dataset_id, db, user_id=user_id or "anonymous")
 
     if df.empty:
         raise HTTPException(status_code=400, detail="Dataset is empty — nothing to write")

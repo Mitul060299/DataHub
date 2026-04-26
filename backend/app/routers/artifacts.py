@@ -359,15 +359,25 @@ def save_checkpoint(
     # Inherit the source dataset's project so the saved artifact stays scoped
     # to the same project the user is working in. Without this, list_artifacts
     # filters the saved artifact out (project_id NULL != active project_id).
+    # SECURITY: scope the lookup to the requesting user so a malicious caller
+    # cannot pass another user's dataset_id and have their artifact silently
+    # adopted into the victim's project.
     source_project_id = None
     if source_dataset_id:
         src_meta = (
             db.query(DatasetMetaDB)
-            .filter(DatasetMetaDB.id == source_dataset_id)
+            .filter(
+                DatasetMetaDB.id == source_dataset_id,
+                DatasetMetaDB.user_id == current_user.id,
+            )
             .first()
         )
-        if src_meta is not None:
-            source_project_id = getattr(src_meta, "project_id", None)
+        if src_meta is None:
+            raise HTTPException(
+                status_code=404,
+                detail="source_dataset_id not found",
+            )
+        source_project_id = getattr(src_meta, "project_id", None)
     try:
         ds_row = materialize_dataset(
             db,

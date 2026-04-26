@@ -121,7 +121,7 @@ def apply_recipe(
         df = get_dataset(dataset_id)
     except KeyError:
         try:
-            df = get_dataset_from_db(dataset_id, db)
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id or "anonymous")
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -129,7 +129,7 @@ def apply_recipe(
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    transformed = apply_steps(df, recipe.steps)
+    transformed = apply_steps(df, recipe.steps, db=db, user_id=user_id)
     new_id = save_dataset(transformed, db, parent_id=dataset_id, user_id=user_id)
     preview = DatasetPreview(
         dataset_id=new_id,

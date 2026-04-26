@@ -77,6 +77,7 @@ def apply_steps(
     df: pd.DataFrame,
     steps: List[TransformationStep],
     db=None,  # optional sqlalchemy Session – required for join/union by dataset_id
+    user_id: str | None = None,  # required when db is provided to scope cross-dataset reads
 ) -> pd.DataFrame:
     result = df.copy()
 
@@ -135,7 +136,7 @@ def apply_steps(
                 # Load the other dataset from storage by ID
                 from ..routers.datasets import get_dataset_from_db  # local import to avoid circular
                 try:
-                    other_df = get_dataset_from_db(str(other_dataset_id), db)
+                    other_df = get_dataset_from_db(str(other_dataset_id), db, user_id=user_id)
                 except KeyError:
                     raise ValueError(f"Join dataset '{other_dataset_id}' not found")
             elif isinstance(other_inline, list):
@@ -154,7 +155,7 @@ def apply_steps(
             if other_dataset_id and db is not None:
                 from ..routers.datasets import get_dataset_from_db
                 try:
-                    other_df = get_dataset_from_db(str(other_dataset_id), db)
+                    other_df = get_dataset_from_db(str(other_dataset_id), db, user_id=user_id)
                 except KeyError:
                     raise ValueError(f"Union dataset '{other_dataset_id}' not found")
             elif isinstance(other_inline, list):

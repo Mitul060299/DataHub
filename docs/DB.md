@@ -29,6 +29,8 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 | 0034 | `version_number`, `version_note` columns on `dataset_meta` |
 | 0035 | `dashboard_comments` table |
 | 0036 | `reviews` table |
+| 0063 | `project_members` table — project-level collaboration |
+| 0064 | data migration: copy `workspace_members` rows onto each owned project (admin → editor) |
 
 ## Table Inventory
 
@@ -42,7 +44,9 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 | Table | Key Columns | Notes |
 |---|---|---|
 | `workspaces` | id, owner_id, share_token, scope, expires_at | Share link state |
+| `workspace_members` | id, workspace_id, user_id, email, role, status, invite_token | **Legacy** — retained alongside `project_members` during the workspace → project migration. Will be dropped once Phase 6 dual-read window closes. |
 | `projects` | id, user_id, workspace_id, name, description, colour, icon | User-scoped grouping for pipelines + dashboards |
+| `project_members` | id, project_id, user_id, email, role (`editor`/`viewer`), status (`active`/`pending`), invite_token, invited_by, accepted_at | Project-level collaboration. Owner is implicit via `projects.user_id` and is *not* stored here. Unique on (project_id, email). Billing flows through project owner's plan. |
 
 ### Datasets
 | Table | Key Columns | Notes |

@@ -3,49 +3,60 @@ import { useNavigate } from "react-router-dom";
 import { useUser } from "../contexts/UserContext";
 import { billingEnabled } from "../utils/featureFlags";
 import { capture } from "../lib/posthog";
-import { joinWaitlist } from "../api";
-import { useIsIndian } from "../hooks/useIsIndian";
+import { useBillingRegion } from "../hooks/useIsIndian";
 import { useSEO } from "../hooks/useSEO";
 
 type PlanKey = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
 
 type PlanCard = {
   key: PlanKey;
-  price: string;
+  priceINR: string;
+  priceUSD: string;
   description: string;
-  highlights: string[];
+  highlightsINR: string[];
+  highlightsUSD: string[];
 };
 
 const planCards: PlanCard[] = [
   {
     key: "Free",
-    price: "₹0",
+    priceINR: "₹0",
+    priceUSD: "$0",
     description: "Students, evaluation, and hobby workflows",
-    highlights: ["1 personal workspace", "2 projects/workspace", "500 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
+    highlightsINR: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
+    highlightsUSD: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
   },
   {
     key: "Professional",
-    price: "₹6,999 / month",
+    priceINR: "₹6,999 / month",
+    priceUSD: "$149 / month",
     description: "Solo consultants and analysts",
-    highlights: ["1 personal workspace · 1 seat", "20 projects/workspace", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle"],
+    highlightsINR: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
+    highlightsUSD: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
   },
   {
     key: "Team",
-    price: "₹14,999 / month",
+    priceINR: "₹14,999 / month",
+    priceUSD: "$299 / month",
     description: "Small analytics and consulting teams",
-    highlights: ["Includes 3 seats · +₹2,499/extra seat", "1 personal + 2 collab workspaces", "100 GB+ storage · 200 GB+ scan/month", "5,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery"],
+    highlightsINR: ["Includes 3 seats · +₹2,499/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 200 GB+ scan/month", "5,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery"],
+    highlightsUSD: ["Includes 3 seats · +$49/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 200 GB+ scan/month", "5,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery"],
   },
   {
     key: "Business",
-    price: "₹29,999 / month",
+    priceINR: "₹29,999 / month",
+    priceUSD: "$599 / month",
     description: "Governance-first mid-size enterprises",
-    highlights: ["Includes 5 seats · +₹3,999/extra seat", "1 personal + 9 collab workspaces", "2 TB storage + unlimited scan", "Unlimited AI messages", "SSO/SAML · Custom connectors"],
+    highlightsINR: ["Includes 5 seats · +₹3,999/extra seat", "50 members per project · unlimited collaborative projects", "2 TB storage + unlimited scan", "Unlimited AI messages", "SSO/SAML · Custom connectors"],
+    highlightsUSD: ["Includes 5 seats · +$79/extra seat", "50 members per project · unlimited collaborative projects", "2 TB storage + unlimited scan", "Unlimited AI messages", "SSO/SAML · Custom connectors"],
   },
   {
     key: "Enterprise",
-    price: "Custom",
+    priceINR: "Custom",
+    priceUSD: "Custom",
     description: "Fortune 500 and regulated environments",
-    highlights: ["Unlimited workspaces", "Custom TB-scale storage", "Unlimited AI messages", "Unlimited team members", "24/7 dedicated support", "Custom compliance + integrations"],
+    highlightsINR: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Unlimited AI messages", "24/7 dedicated support", "Custom compliance + integrations"],
+    highlightsUSD: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Unlimited AI messages", "24/7 dedicated support", "Custom compliance + integrations"],
   },
 ];
 
@@ -91,7 +102,7 @@ const PRICING_LD = {
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
-        description: "3 seats included, collaboration workspaces, +Snowflake/Redshift/BigQuery.",
+        description: "3 seats included, collaborative projects up to 5, +Snowflake/Redshift/BigQuery.",
       },
       {
         "@type": "Offer",
@@ -109,10 +120,9 @@ const PRICING_LD = {
 export function PricingPage() {
   const { plan } = useUser();
   const navigate = useNavigate();
-  const isIndian = useIsIndian();
+  const region = useBillingRegion();
+  const isIndian = region.isIndian;
   const [message, setMessage] = useState<string | null>(null);
-  type NotifyState = { open: boolean; email: string; submitted: boolean };
-  const [notifyState, setNotifyState] = useState<Record<string, NotifyState>>({});
 
   useSEO({
     title: "datahub.org.in Pricing – Free, Pro & Team Plans | AI Data Analysis",
@@ -123,24 +133,6 @@ export function PricingPage() {
   });
 
   const currentIndex = useMemo(() => planCards.findIndex((p) => p.key === plan), [plan]);
-
-  const getNotify = (key: string): NotifyState =>
-    notifyState[key] ?? { open: false, email: "", submitted: false };
-
-  const patchNotify = (key: string, patch: Partial<NotifyState>) =>
-    setNotifyState((prev) => ({ ...prev, [key]: { ...getNotify(key), ...patch } }));
-
-  const handleNotifySubmit = async (key: string) => {
-    const state = getNotify(key);
-    if (!state.email) return;
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await joinWaitlist({ email: state.email, plan: key.toLowerCase(), region: tz });
-    } catch {
-      // silently ignore duplicate / network errors
-    }
-    patchNotify(key, { submitted: true });
-  };
 
   const upgrade = async (target: PlanKey) => {
     setMessage(null);
@@ -180,7 +172,7 @@ export function PricingPage() {
           color: "var(--accent2)",
           backdropFilter: "blur(8px)",
         }}>
-          💳 International billing is coming soon. Sign up free and we'll notify you when paid plans are available in your region.
+          💳 Prices shown in USD. International payments accepted via Razorpay.
         </div>
       )}
 
@@ -188,8 +180,8 @@ export function PricingPage() {
         {planCards.map((card, index) => {
           const isCurrent = card.key === plan;
           const canUpgrade = index >= currentIndex && !isCurrent;
-          const isPaidLocked = !isIndian && card.key !== "Free" && card.key !== "Enterprise";
-          const notify = getNotify(card.key);
+          const price = isIndian ? card.priceINR : card.priceUSD;
+          const highlights = isIndian ? card.highlightsINR : card.highlightsUSD;
           return (
             <article
               key={card.key}
@@ -204,76 +196,20 @@ export function PricingPage() {
                 boxShadow: isCurrent ? "0 0 0 1px var(--acg), 0 16px 40px rgba(0,0,0,0.3)" : undefined,
               }}
             >
-              {isPaidLocked && (
-                <span className="ds-chip" style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  fontSize: 9,
-                  padding: "2px 8px",
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}>
-                  Coming Soon
-                </span>
-              )}
               <div>
                 <h3 style={{ marginBottom: 6, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--tx0)" }}>{card.key}</h3>
-                <p className="mono" style={{ color: "var(--tx0)", fontSize: 18, fontWeight: 700, fontFamily: "var(--display)" }}>{card.price}</p>
+                <p className="mono" style={{ color: "var(--tx0)", fontSize: 18, fontWeight: 700, fontFamily: "var(--display)" }}>{price}</p>
               </div>
               <p style={{ color: "var(--tx1)", minHeight: 36, fontSize: 13, lineHeight: 1.5 }}>{card.description}</p>
               <ul style={{ color: "var(--tx1)", display: "grid", gap: 6, paddingLeft: 0, listStyle: "none", fontSize: 12.5 }}>
-                {card.highlights.map((item) => (
+                {highlights.map((item) => (
                   <li key={item} style={{ display: "flex", gap: 8, alignItems: "flex-start", lineHeight: 1.5 }}>
                     <span style={{ color: "var(--ac)", flexShrink: 0, marginTop: 2 }}>•</span>
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
-              {isPaidLocked ? (
-                notify.submitted ? (
-                  <p style={{ fontSize: 12, color: "#8B8FA8", marginTop: 6 }}>
-                    ✓ We'll notify you when international billing is available.
-                  </p>
-                ) : notify.open ? (
-                  <div style={{ marginTop: 6, display: "grid", gap: 6 }}>
-                    <input
-                      type="email"
-                      placeholder="your@email.com"
-                      value={notify.email}
-                      onChange={(e) => patchNotify(card.key, { email: e.target.value })}
-                      style={{
-                        padding: "6px 8px",
-                        background: "var(--bg2)",
-                        border: "1px solid var(--bd2)",
-                        borderRadius: 6,
-                        color: "var(--tx0)",
-                        fontSize: 12,
-                        width: "100%",
-                        boxSizing: "border-box",
-                      }}
-                      onKeyDown={(e) => { if (e.key === "Enter") void handleNotifySubmit(card.key); }}
-                    />
-                    <button
-                      className="btn btn-primary"
-                      style={{ fontSize: 12 }}
-                      onClick={() => void handleNotifySubmit(card.key)}
-                      disabled={!notify.email}
-                    >
-                      Notify me
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    className="btn"
-                    style={{ marginTop: 6, fontSize: 12 }}
-                    onClick={() => patchNotify(card.key, { open: true })}
-                  >
-                    Notify me
-                  </button>
-                )
-              ) : isCurrent ? (
+              {isCurrent ? (
                 <button className="btn" disabled style={{ marginTop: 6 }}>Current Plan</button>
               ) : (
                 <button

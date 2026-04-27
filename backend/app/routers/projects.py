@@ -77,6 +77,7 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
         colour=project.colour,
         icon=project.icon,
         workspace_id=project.workspace_id,
+        user_id=project.user_id,
         pipeline_count=pipeline_count,
         dashboard_count=dashboard_count,
         source_count=source_count,

@@ -1382,6 +1382,377 @@ class SalesforceConnector:
             return {"success": False, "error": str(e)}
 
 
+# ===========================================
+# CLOUD OBJECT STORAGE CONNECTORS (Professional+)
+# ===========================================
+
+_ALLOWED_OBJECT_FORMATS = {"csv", "tsv", "json", "jsonl", "ndjson", "parquet", "xlsx", "xls"}
+
+
+def _infer_object_format(key: str, explicit: str | None = None) -> str:
+    if explicit:
+        fmt = explicit.lower().lstrip(".")
+        if fmt in _ALLOWED_OBJECT_FORMATS:
+            return fmt
+        raise ValueError(
+            f"Unsupported format {explicit!r}. Allowed: {sorted(_ALLOWED_OBJECT_FORMATS)}"
+        )
+    lowered = (key or "").lower()
+    for ext in _ALLOWED_OBJECT_FORMATS:
+        if lowered.endswith("." + ext):
+            return ext
+    raise ValueError(
+        f"Cannot infer file format from key {key!r}. Pass explicit 'format'."
+    )
+
+
+def _read_object_bytes(payload: bytes, fmt: str, options: Dict[str, Any] | None = None) -> pd.DataFrame:
+    """Decode a downloaded object's bytes into a DataFrame."""
+    from io import BytesIO
+    options = options or {}
+    if fmt == "csv":
+        return pd.read_csv(BytesIO(payload), **{k: v for k, v in options.items() if k in {"sep", "delimiter", "encoding", "header", "skiprows", "nrows"}})
+    if fmt == "tsv":
+        return pd.read_csv(BytesIO(payload), sep="\t", **{k: v for k, v in options.items() if k in {"encoding", "header", "skiprows", "nrows"}})
+    if fmt in ("json",):
+        return pd.read_json(BytesIO(payload))
+    if fmt in ("jsonl", "ndjson"):
+        return pd.read_json(BytesIO(payload), lines=True)
+    if fmt == "parquet":
+        return pd.read_parquet(BytesIO(payload))
+    if fmt in ("xlsx", "xls"):
+        sheet = options.get("sheet_name", 0)
+        return pd.read_excel(BytesIO(payload), sheet_name=sheet)
+    raise ValueError(f"Unsupported format: {fmt}")
+
+
+def _validate_object_key(key: str) -> str:
+    """Reject suspicious object keys."""
+    if not key or not isinstance(key, str):
+        raise ValueError("key is required")
+    if len(key) > 1024:
+        raise ValueError("key is too long (max 1024 chars)")
+    if key.startswith("/") or ".." in key.split("/"):
+        raise ValueError("key must not start with '/' or contain '..'")
+    return key
+
+
+class S3Connector:
+    """Amazon S3 object storage connector."""
+    name = "s3"
+
+    def _client(self, config: Dict[str, Any]):
+        try:
+            import boto3
+            from botocore.config import Config as BotoConfig
+        except ImportError:
+            raise ImportError("boto3 is required for the S3 connector")
+
+        access_key = config.get("access_key_id") or config.get("aws_access_key_id")
+        secret_key = config.get("secret_access_key") or config.get("aws_secret_access_key")
+        region = config.get("region") or config.get("aws_region") or "us-east-1"
+        endpoint_url = config.get("endpoint_url")  # optional, for S3-compatible (MinIO, R2, etc.)
+        session_token = config.get("session_token")
+
+        if not access_key or not secret_key:
+            raise ValueError("access_key_id and secret_access_key are required")
+
+        kwargs: Dict[str, Any] = {
+            "aws_access_key_id": access_key,
+            "aws_secret_access_key": secret_key,
+            "region_name": region,
+            "config": BotoConfig(
+                connect_timeout=10,
+                read_timeout=30,
+                retries={"max_attempts": 3, "mode": "standard"},
+                signature_version="s3v4",
+            ),
+        }
+        if session_token:
+            kwargs["aws_session_token"] = session_token
+        if endpoint_url:
+            kwargs["endpoint_url"] = endpoint_url
+        return boto3.client("s3", **kwargs)
+
+    def read(self, config: Dict[str, Any]) -> pd.DataFrame:
+        bucket = config.get("bucket")
+        key = config.get("key") or config.get("path")
+        if not bucket:
+            raise ValueError("bucket is required")
+        _validate_object_key(key or "")
+        fmt = _infer_object_format(key, config.get("format"))
+
+        client = self._client(config)
+        obj = client.get_object(Bucket=bucket, Key=key)
+        body = obj["Body"].read()
+        return _read_object_bytes(body, fmt, config.get("options") or {})
+
+    def write(self, config: Dict[str, Any], df: pd.DataFrame, key: str | None = None, mode: str = "replace") -> int:
+        from io import BytesIO
+
+        bucket = config.get("bucket")
+        target_key = key or config.get("key") or config.get("path")
+        if not bucket or not target_key:
+            raise ValueError("bucket and key are required")
+        _validate_object_key(target_key)
+
+        fmt = _infer_object_format(target_key, config.get("format"))
+        buf = BytesIO()
+        if fmt == "csv":
+            df.to_csv(buf, index=False)
+            content_type = "text/csv"
+        elif fmt == "parquet":
+            df.to_parquet(buf, index=False)
+            content_type = "application/octet-stream"
+        elif fmt in ("json",):
+            buf.write(df.to_json(orient="records").encode("utf-8"))
+            content_type = "application/json"
+        elif fmt in ("jsonl", "ndjson"):
+            buf.write(df.to_json(orient="records", lines=True).encode("utf-8"))
+            content_type = "application/x-ndjson"
+        else:
+            raise ValueError(f"Write not supported for format: {fmt}")
+        buf.seek(0)
+
+        client = self._client(config)
+        client.put_object(Bucket=bucket, Key=target_key, Body=buf.getvalue(), ContentType=content_type)
+        return len(df)
+
+    def list_objects(self, config: Dict[str, Any]) -> list:
+        bucket = config.get("bucket")
+        prefix = config.get("prefix", "")
+        if not bucket:
+            raise ValueError("bucket is required")
+        client = self._client(config)
+        paginator = client.get_paginator("list_objects_v2")
+        out: list = []
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix, MaxKeys=1000):
+            for entry in page.get("Contents") or []:
+                out.append({
+                    "key": entry.get("Key"),
+                    "size": entry.get("Size"),
+                    "last_modified": entry.get("LastModified").isoformat() if entry.get("LastModified") else None,
+                })
+                if len(out) >= 1000:
+                    return out
+        return out
+
+    def test_connection(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            bucket = config.get("bucket")
+            if not bucket:
+                return {"success": False, "error": "bucket is required"}
+            client = self._client(config)
+            client.head_bucket(Bucket=bucket)
+            return {"success": True, "message": f"Successfully connected to S3 bucket '{bucket}'"}
+        except ImportError as exc:
+            return {"success": False, "error": str(exc)}
+        except Exception as e:
+            logger.error(f"S3 connection test failed: {e}")
+            return {"success": False, "error": str(e)}
+
+
+class GCSConnector:
+    """Google Cloud Storage object connector."""
+    name = "gcs"
+
+    def _client(self, config: Dict[str, Any]):
+        try:
+            from google.cloud import storage as gcs_storage
+            from google.oauth2 import service_account
+        except ImportError:
+            raise ImportError("google-cloud-storage is required for the GCS connector")
+
+        project_id = config.get("project_id")
+        credentials_json = config.get("credentials_json")
+
+        if credentials_json:
+            import json as _json
+            creds_dict = _json.loads(credentials_json) if isinstance(credentials_json, str) else credentials_json
+            credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            return gcs_storage.Client(project=project_id, credentials=credentials)
+        # Fall back to ADC (e.g., GOOGLE_APPLICATION_CREDENTIALS env var)
+        return gcs_storage.Client(project=project_id) if project_id else gcs_storage.Client()
+
+    def read(self, config: Dict[str, Any]) -> pd.DataFrame:
+        bucket_name = config.get("bucket")
+        key = config.get("key") or config.get("path") or config.get("blob")
+        if not bucket_name:
+            raise ValueError("bucket is required")
+        _validate_object_key(key or "")
+        fmt = _infer_object_format(key, config.get("format"))
+
+        client = self._client(config)
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(key)
+        body = blob.download_as_bytes()
+        return _read_object_bytes(body, fmt, config.get("options") or {})
+
+    def write(self, config: Dict[str, Any], df: pd.DataFrame, key: str | None = None, mode: str = "replace") -> int:
+        from io import BytesIO
+
+        bucket_name = config.get("bucket")
+        target_key = key or config.get("key") or config.get("path") or config.get("blob")
+        if not bucket_name or not target_key:
+            raise ValueError("bucket and key are required")
+        _validate_object_key(target_key)
+        fmt = _infer_object_format(target_key, config.get("format"))
+
+        buf = BytesIO()
+        content_type = "application/octet-stream"
+        if fmt == "csv":
+            df.to_csv(buf, index=False)
+            content_type = "text/csv"
+        elif fmt == "parquet":
+            df.to_parquet(buf, index=False)
+        elif fmt == "json":
+            buf.write(df.to_json(orient="records").encode("utf-8"))
+            content_type = "application/json"
+        elif fmt in ("jsonl", "ndjson"):
+            buf.write(df.to_json(orient="records", lines=True).encode("utf-8"))
+            content_type = "application/x-ndjson"
+        else:
+            raise ValueError(f"Write not supported for format: {fmt}")
+
+        client = self._client(config)
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(target_key)
+        blob.upload_from_string(buf.getvalue(), content_type=content_type)
+        return len(df)
+
+    def list_objects(self, config: Dict[str, Any]) -> list:
+        bucket_name = config.get("bucket")
+        prefix = config.get("prefix", "")
+        if not bucket_name:
+            raise ValueError("bucket is required")
+        client = self._client(config)
+        out: list = []
+        for blob in client.list_blobs(bucket_name, prefix=prefix, max_results=1000):
+            out.append({
+                "key": blob.name,
+                "size": blob.size,
+                "last_modified": blob.updated.isoformat() if blob.updated else None,
+            })
+        return out
+
+    def test_connection(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            bucket_name = config.get("bucket")
+            if not bucket_name:
+                return {"success": False, "error": "bucket is required"}
+            client = self._client(config)
+            bucket = client.bucket(bucket_name)
+            if not bucket.exists():
+                return {"success": False, "error": f"Bucket '{bucket_name}' not found or no access"}
+            return {"success": True, "message": f"Successfully connected to GCS bucket '{bucket_name}'"}
+        except ImportError as exc:
+            return {"success": False, "error": str(exc)}
+        except Exception as e:
+            logger.error(f"GCS connection test failed: {e}")
+            return {"success": False, "error": str(e)}
+
+
+class AzureBlobConnector:
+    """Azure Blob Storage object connector."""
+    name = "azure_blob"
+
+    def _service(self, config: Dict[str, Any]):
+        try:
+            from azure.storage.blob import BlobServiceClient
+        except ImportError:
+            raise ImportError("azure-storage-blob is required for the Azure Blob connector")
+
+        connection_string = config.get("connection_string")
+        account_url = config.get("account_url")
+        account_key = config.get("account_key")
+        sas_token = config.get("sas_token")
+
+        if connection_string:
+            return BlobServiceClient.from_connection_string(connection_string)
+        if account_url:
+            credential = account_key or sas_token
+            if not credential:
+                raise ValueError("account_key or sas_token is required when using account_url")
+            return BlobServiceClient(account_url=account_url, credential=credential)
+        raise ValueError("connection_string or (account_url + account_key/sas_token) is required")
+
+    def read(self, config: Dict[str, Any]) -> pd.DataFrame:
+        container = config.get("container")
+        key = config.get("key") or config.get("path") or config.get("blob")
+        if not container:
+            raise ValueError("container is required")
+        _validate_object_key(key or "")
+        fmt = _infer_object_format(key, config.get("format"))
+
+        service = self._service(config)
+        blob_client = service.get_blob_client(container=container, blob=key)
+        downloader = blob_client.download_blob(max_concurrency=2)
+        body = downloader.readall()
+        return _read_object_bytes(body, fmt, config.get("options") or {})
+
+    def write(self, config: Dict[str, Any], df: pd.DataFrame, key: str | None = None, mode: str = "replace") -> int:
+        from io import BytesIO
+
+        container = config.get("container")
+        target_key = key or config.get("key") or config.get("path") or config.get("blob")
+        if not container or not target_key:
+            raise ValueError("container and key are required")
+        _validate_object_key(target_key)
+        fmt = _infer_object_format(target_key, config.get("format"))
+
+        buf = BytesIO()
+        if fmt == "csv":
+            df.to_csv(buf, index=False)
+        elif fmt == "parquet":
+            df.to_parquet(buf, index=False)
+        elif fmt == "json":
+            buf.write(df.to_json(orient="records").encode("utf-8"))
+        elif fmt in ("jsonl", "ndjson"):
+            buf.write(df.to_json(orient="records", lines=True).encode("utf-8"))
+        else:
+            raise ValueError(f"Write not supported for format: {fmt}")
+
+        service = self._service(config)
+        blob_client = service.get_blob_client(container=container, blob=target_key)
+        blob_client.upload_blob(buf.getvalue(), overwrite=(mode == "replace"))
+        return len(df)
+
+    def list_objects(self, config: Dict[str, Any]) -> list:
+        container = config.get("container")
+        prefix = config.get("prefix", "")
+        if not container:
+            raise ValueError("container is required")
+        service = self._service(config)
+        container_client = service.get_container_client(container)
+        out: list = []
+        for blob in container_client.list_blobs(name_starts_with=prefix):
+            out.append({
+                "key": blob.name,
+                "size": blob.size,
+                "last_modified": blob.last_modified.isoformat() if blob.last_modified else None,
+            })
+            if len(out) >= 1000:
+                break
+        return out
+
+    def test_connection(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            container = config.get("container")
+            if not container:
+                return {"success": False, "error": "container is required"}
+            service = self._service(config)
+            container_client = service.get_container_client(container)
+            # exists() does a HEAD request; cheap and decisive.
+            if not container_client.exists():
+                return {"success": False, "error": f"Container '{container}' not found or no access"}
+            return {"success": True, "message": f"Successfully connected to Azure Blob container '{container}'"}
+        except ImportError as exc:
+            return {"success": False, "error": str(exc)}
+        except Exception as e:
+            logger.error(f"Azure Blob connection test failed: {e}")
+            return {"success": False, "error": str(e)}
+
+
 class ConnectorRegistry:
     def __init__(self) -> None:
         self._connectors = {
@@ -1399,7 +1770,12 @@ class ConnectorRegistry:
             OracleConnector.name: OracleConnector(),
             SQLiteConnector.name: SQLiteConnector(),
             MongoDBConnector.name: MongoDBConnector(),
-            
+
+            # Cloud object storage (Professional tier)
+            S3Connector.name: S3Connector(),
+            GCSConnector.name: GCSConnector(),
+            AzureBlobConnector.name: AzureBlobConnector(),
+
             # Cloud data warehouses (Team/Enterprise tier)
             SnowflakeConnector.name: SnowflakeConnector(),
             BigQueryConnector.name: BigQueryConnector(),

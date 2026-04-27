@@ -20,6 +20,7 @@ class SubscribeRequest(BaseModel):
     plan: str
     billing_cycle: str
     quantity: int = Field(default=1, ge=1)
+    currency: str = Field(default="INR", description="ISO 4217 currency code (INR or USD)")
 
 
 class UpgradeRequest(BaseModel):
@@ -73,6 +74,7 @@ async def subscribe(
             billing_cycle=billing_cycle,
             quantity=payload.quantity,
             notify_email=user.email,
+            currency=payload.currency,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -83,6 +85,7 @@ async def subscribe(
         "subscription_id": subscription.get("id"),
         "short_url": subscription.get("short_url"),
         "razorpay_key_id": settings.razorpay_key_id,
+        "currency": (payload.currency or "INR").upper(),
     }
 
 
@@ -142,7 +145,7 @@ async def seat_usage(user: CurrentUser = Depends(get_current_user)):
     """Return current seat utilisation for the calling user's account."""
     _ensure_billing_enabled()
 
-    from app.razorpay_plans import INCLUDED_SEATS, PER_SEAT_PAISE
+    from app.razorpay_plans import INCLUDED_SEATS, get_per_seat_amount
     from app.services.plan_limits import get_limits
 
     effective_plan = billing_repository.get_effective_plan(user.id) or user.plan
@@ -152,38 +155,65 @@ async def seat_usage(user: CurrentUser = Depends(get_current_user)):
     included = INCLUDED_SEATS.get(plan_slug, limits.get("included_seats", 1))
     sub = billing_repository.get_active_subscription(user.id)
     purchased = max(int(sub.get("quantity") or included), included) if sub else included
+    sub_currency = (sub or {}).get("currency") or "INR"
 
-    # Count active + pending across all workspaces owned by this user
+    # Count distinct member emails across all workspaces AND projects owned by
+    # this user. During the workspace→project cutover, the union ensures a
+    # migrated invite isn't counted twice. Workspace counting is removed in
+    # the workspace tear-down phase.
     from app.db import SessionLocal
-    from app.models_db import Workspace, WorkspaceMemberDB
+    from app.models_db import ProjectDB, ProjectMemberDB, Workspace, WorkspaceMemberDB
     db = SessionLocal()
     try:
         owned_ws_ids = [
             ws.id for ws in
             db.query(Workspace.id).filter(Workspace.owner_id == user.id).all()
         ]
-        used = 1  # owner
+        owned_project_ids = [
+            p.id for p in
+            db.query(ProjectDB.id).filter(ProjectDB.user_id == user.id).all()
+        ]
+
+        ws_emails: set[str] = set()
         if owned_ws_ids:
-            used += (
-                db.query(WorkspaceMemberDB)
+            ws_emails = {
+                (e or "").lower()
+                for (e,) in db.query(WorkspaceMemberDB.email)
                 .filter(
                     WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
                     WorkspaceMemberDB.status.in_(["active", "pending"]),
                 )
-                .count()
-            )
+                .all()
+            }
+
+        proj_emails: set[str] = set()
+        if owned_project_ids:
+            proj_emails = {
+                (e or "").lower()
+                for (e,) in db.query(ProjectMemberDB.email)
+                .filter(
+                    ProjectMemberDB.project_id.in_(owned_project_ids),
+                    ProjectMemberDB.status.in_(["active", "pending"]),
+                )
+                .all()
+            }
+
+        used = 1 + len(ws_emails | proj_emails)  # +1 for owner
     finally:
         db.close()
 
-    extra_seat_price = PER_SEAT_PAISE.get(plan_slug, 0)
+    extra_seat_price = get_per_seat_amount(plan_slug, sub_currency)
 
     return {
         "current_seats": used,
         "included_seats": included,
         "purchased_seats": purchased,
         "max_seats": limits.get("max_seats", 1),
-        "extra_seat_price_paise": extra_seat_price,
-        "extra_seat_price_inr": round(extra_seat_price / 100, 2) if extra_seat_price else 0,
+        "currency": str(sub_currency).upper(),
+        "extra_seat_price_paise": extra_seat_price if str(sub_currency).upper() == "INR" else 0,
+        "extra_seat_price_inr": round(extra_seat_price / 100, 2) if str(sub_currency).upper() == "INR" and extra_seat_price else 0,
+        "extra_seat_price_minor": extra_seat_price,
+        "extra_seat_price_major": round(extra_seat_price / 100, 2) if extra_seat_price else 0,
         "can_invite_more": used < purchased,
     }
 
@@ -281,6 +311,11 @@ async def razorpay_webhook(
     event = str(payload.get("event") or "")
     entities = payload.get("payload", {})
 
+    # Razorpay webhooks may be retried; dedupe on the event id.
+    razorpay_event_id = (
+        str(payload.get("id") or payload.get("event_id") or "") or None
+    )
+
     # Plan authority note:
     # users.plan must only be updated through webhook status handlers below
     # via billing_repository.update_subscription_status.
@@ -294,7 +329,7 @@ async def razorpay_webhook(
     }
     handler = handlers.get(event)
     if handler:
-        await handler(entities, payload)
+        await handler(entities, payload, razorpay_event_id)
 
     return {"status": "ok"}
 
@@ -307,7 +342,7 @@ def _payment_entity(entities: dict[str, Any]) -> dict[str, Any]:
     return entities.get("payment", {}).get("entity", {}) if isinstance(entities, dict) else {}
 
 
-async def _on_activated(entities: dict[str, Any], payload: dict[str, Any]):
+async def _on_activated(entities: dict[str, Any], payload: dict[str, Any], event_id: str | None = None):
     sub = _subscription_entity(entities)
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
@@ -315,10 +350,10 @@ async def _on_activated(entities: dict[str, Any], payload: dict[str, Any]):
     razorpay_sub_id = str(sub.get("id") or "")
     if razorpay_sub_id and user_id and plan:
         billing_repository.update_subscription_status(razorpay_sub_id, "active", str(user_id), str(plan), verify_ownership=False)
-    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.activated", payload)
+    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.activated", payload, event_id=event_id)
 
 
-async def _on_updated(entities: dict[str, Any], payload: dict[str, Any]):
+async def _on_updated(entities: dict[str, Any], payload: dict[str, Any], event_id: str | None = None):
     """Handle subscription.updated.
 
     Razorpay subscription ``quantity`` is intentionally pinned at 1 in our
@@ -330,16 +365,17 @@ async def _on_updated(entities: dict[str, Any], payload: dict[str, Any]):
     razorpay_sub_id = str(sub.get("id") or "")
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
-    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.updated", payload)
+    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.updated", payload, event_id=event_id)
 
 
-async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
+async def _on_charged(entities: dict[str, Any], payload: dict[str, Any], event_id: str | None = None):
     sub = _subscription_entity(entities)
     payment = _payment_entity(entities)
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
     plan = notes.get("plan") or ""
     amount = payment.get("amount")
+    currency = str(payment.get("currency") or notes.get("currency") or "INR").upper()
     razorpay_sub_id = str(sub.get("id") or "")
 
     # Queue extra-seat add-on for the *next* invoice so the per-seat
@@ -353,7 +389,7 @@ async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
     track(
         str(user_id) if user_id else "unknown",
         "payment_completed",
-        {"plan": plan, "amount_inr": (amount / 100) if isinstance(amount, (int, float)) else None, "subscription_id": razorpay_sub_id},
+        {"plan": plan, "amount": (amount / 100) if isinstance(amount, (int, float)) else None, "currency": currency, "subscription_id": razorpay_sub_id},
     )
     await _log(
         str(user_id) if user_id else None,
@@ -363,21 +399,23 @@ async def _on_charged(entities: dict[str, Any], payload: dict[str, Any]):
         payment_id=str(payment.get("id") or "") or None,
         invoice_id=str(payment.get("invoice_id") or "") or None,
         amount=amount,
+        currency=currency,
         status="captured",
+        event_id=event_id,
     )
 
 
-async def _on_halted(entities: dict[str, Any], payload: dict[str, Any]):
+async def _on_halted(entities: dict[str, Any], payload: dict[str, Any], event_id: str | None = None):
     sub = _subscription_entity(entities)
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
     razorpay_sub_id = str(sub.get("id") or "")
     if razorpay_sub_id and user_id:
         billing_repository.update_subscription_status(razorpay_sub_id, "halted", str(user_id), "free", verify_ownership=False)
-    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.halted", payload)
+    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.halted", payload, event_id=event_id)
 
 
-async def _on_cancelled(entities: dict[str, Any], payload: dict[str, Any]):
+async def _on_cancelled(entities: dict[str, Any], payload: dict[str, Any], event_id: str | None = None):
     sub = _subscription_entity(entities)
     notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
     user_id = notes.get("user_id")
@@ -410,11 +448,12 @@ async def _on_cancelled(entities: dict[str, Any], payload: dict[str, Any]):
                 razorpay_sub_id, "cancelled", str(user_id) if user_id else None, "free",
                 verify_ownership=False,
             )
-    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.cancelled", payload)
+    await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.cancelled", payload, event_id=event_id)
 
 
-async def _on_payment_failed(entities: dict[str, Any], payload: dict[str, Any]):
+async def _on_payment_failed(entities: dict[str, Any], payload: dict[str, Any], event_id: str | None = None):
     payment = _payment_entity(entities)
+    currency = str(payment.get("currency") or "INR").upper()
     await _log(
         None,
         str(payment.get("subscription_id") or "") or None,
@@ -423,7 +462,9 @@ async def _on_payment_failed(entities: dict[str, Any], payload: dict[str, Any]):
         payment_id=str(payment.get("id") or "") or None,
         invoice_id=str(payment.get("invoice_id") or "") or None,
         amount=payment.get("amount"),
+        currency=currency,
         status="failed",
+        event_id=event_id,
     )
 
 
@@ -435,7 +476,9 @@ async def _log(
     payment_id: str | None = None,
     invoice_id: str | None = None,
     amount: int | None = None,
+    currency: str = "INR",
     status: str | None = None,
+    event_id: str | None = None,
 ):
     await billing_service.log_payment_event(
         user_id=user_id,
@@ -445,5 +488,7 @@ async def _log(
         payment_id=payment_id,
         invoice_id=invoice_id,
         amount=amount,
+        currency=currency,
         status=status,
+        razorpay_event_id=event_id,
     )

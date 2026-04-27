@@ -103,7 +103,7 @@ const features: Feature[] = [
     title: "Team Collaboration",
     color: "#ec4899",
     icon: <IconTeam size={20} color="#ec4899" />,
-    description: "Shared workspaces, roles, and version history.",
+    description: "Project-level collaboration with roles, invites, and version history.",
     span: "sm",
     visual: "team",
   },
@@ -139,8 +139,8 @@ const plans: PricingPlan[] = [
     periodUSD: "forever",
     periodINR: "forever",
     features: [
-      "1 personal workspace",
-      "2 projects per workspace",
+      "Solo projects only",
+      "Up to 2 projects",
       "100 AI messages/month",
       "50 MB file size",
       "500 MB storage",
@@ -161,8 +161,8 @@ const plans: PricingPlan[] = [
     periodUSD: "/month (Coming soon)",
     periodINR: "/month",
     features: [
-      "1 personal workspace, 1 seat",
-      "20 projects per workspace",
+      "Solo projects · 1 seat",
+      "Up to 20 projects",
       "2,000 AI messages/month",
       "1 GB file size",
       "20 GB storage",
@@ -183,7 +183,7 @@ const plans: PricingPlan[] = [
     periodINR: "/month",
     features: [
       "Includes 3 seats. +\u20b92,499/extra seat",
-      "1 personal + 2 collab workspaces",
+      "10 members per project · 5 collaborative projects",
       "5,000+ AI messages (scales with seats)",
       "5 GB file size",
       "100 GB+ storage (scales with seats)",
@@ -205,7 +205,7 @@ const plans: PricingPlan[] = [
     periodINR: "/month",
     features: [
       "Includes 5 seats. +\u20b93,999/extra seat",
-      "1 personal + 9 collab workspaces",
+      "50 members per project · unlimited collaborative projects",
       "Unlimited AI messages",
       "10 GB file size",
       "2 TB storage + unlimited scan",
@@ -226,7 +226,7 @@ const plans: PricingPlan[] = [
     periodUSD: "contact us",
     periodINR: "contact us",
     features: [
-      "Unlimited workspaces",
+      "Unlimited members per project · unlimited collaborative projects",
       "Unlimited everything",
       "Custom storage",
       "Unlimited team members",

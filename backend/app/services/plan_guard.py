@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models_db import DatasetMetaDB, User, Workspace, WorkspaceMemberDB
+from ..models_db import DatasetMetaDB, ProjectDB, ProjectMemberDB, User, Workspace, WorkspaceMemberDB
 from ..security import get_current_subject, get_current_user_id
 from . import billing_repository
 from .plan_limits import get_limits as _get_usage_limits
@@ -21,6 +21,9 @@ class PlanLimits:
     # Collab workspaces the user may *own/create* (personal workspace is always 1, not counted here)
     max_collab_workspaces: int
     max_projects_per_workspace: int  # -1 = unlimited
+    # Project-level collaboration limits (replace workspace-collab limits).
+    max_project_members: int       # cap on members per project (-1 = unlimited)
+    max_collaborative_projects: int  # number of distinct owned projects allowed to have >=1 member (-1 = unlimited)
     allowed_formats: set[str]
     allowed_connectors: set[str]
     sso_enabled: bool
@@ -45,6 +48,8 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=3,
         max_collab_workspaces=0,                         # cannot CREATE collab workspaces
         max_projects_per_workspace=2,
+        max_project_members=1,                           # solo only
+        max_collaborative_projects=0,
         allowed_formats={"csv", "excel"},
         allowed_connectors={"csv", "excel"},
         sso_enabled=False,
@@ -58,6 +63,8 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=50,
         max_collab_workspaces=0,                         # cannot CREATE collab workspaces
         max_projects_per_workspace=20,
+        max_project_members=1,                           # solo only
+        max_collaborative_projects=0,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle"},
         sso_enabled=False,
@@ -69,8 +76,10 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_file_size_bytes=5 * 1024 * 1024 * 1024,      # 5 GB
         max_storage_bytes=100 * 1024 * 1024 * 1024,       # 100 GB
         max_datasets=-1,
-        max_collab_workspaces=2,                         # up to 2 collab workspaces (3 total incl. personal)
+        max_collab_workspaces=5,                         # up to 5 collab workspaces (6 total incl. personal)
         max_projects_per_workspace=-1,
+        max_project_members=10,
+        max_collaborative_projects=5,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle", "snowflake", "redshift", "bigquery"},
         sso_enabled=False,
@@ -84,6 +93,8 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=-1,
         max_collab_workspaces=9,                         # up to 9 collab workspaces (10 total incl. personal)
         max_projects_per_workspace=-1,
+        max_project_members=50,
+        max_collaborative_projects=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"*"},
         sso_enabled=True,
@@ -97,6 +108,8 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         max_datasets=-1,
         max_collab_workspaces=-1,
         max_projects_per_workspace=-1,
+        max_project_members=-1,
+        max_collaborative_projects=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
         allowed_connectors={"*"},
         sso_enabled=True,
@@ -172,6 +185,138 @@ def enforce_collab_workspace_limit(plan: str, existing_collab_count: int) -> Non
         )
 
 
+def resolve_project_plan(
+    project_id: str,
+    calling_user_id: str,
+    db: Session,
+) -> Tuple[str, str]:
+    """Return (billing_user_id, plan) for a project.
+
+    The project owner pays for usage inside their project — invited members
+    consume the owner's quota, not their own. This replaces the
+    workspace-level billing attribution from ``resolve_workspace_plan``.
+    """
+    if not project_id:
+        return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
+
+    proj = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if proj is None or not proj.user_id:
+        return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
+
+    billing_user_id = proj.user_id
+    return billing_user_id, resolve_user_plan_by_id(billing_user_id, db)
+
+
+def enforce_project_member_limit(
+    project_id: str,
+    plan: str,
+    db: Session,
+) -> None:
+    """Block project member invites when this project's per-project cap is reached.
+
+    Counts active + pending rows in ``project_members`` for this project. The
+    project owner is *implicit* (via projects.user_id) and counts as 1 toward
+    the cap.
+    """
+    limits = limits_for_plan(plan)
+    if limits.max_project_members == -1:
+        return
+    if limits.max_project_members <= 1:
+        # Free / Professional: no collaborators allowed
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "member_limit_reached",
+                "code": "member_limit_reached",
+                "plan": normalize_plan(plan),
+                "limit": limits.max_project_members,
+                "message": format_upgrade_message(
+                    "Project members", plan, "Team"
+                ),
+            },
+        )
+    current_members = (
+        db.query(ProjectMemberDB)
+        .filter(
+            ProjectMemberDB.project_id == project_id,
+            ProjectMemberDB.status.in_(["active", "pending"]),
+        )
+        .count()
+    )
+    # Owner counts as 1 (not stored in project_members)
+    current_members += 1
+    if current_members >= limits.max_project_members:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "member_limit_reached",
+                "code": "member_limit_reached",
+                "plan": normalize_plan(plan),
+                "limit": limits.max_project_members,
+                "current": current_members,
+                "message": (
+                    f"This project already has {current_members} of "
+                    f"{limits.max_project_members} members allowed on the "
+                    f"{normalize_plan(plan)} plan. Upgrade to invite more."
+                ),
+            },
+        )
+
+
+def enforce_collaborative_project_limit(
+    owner_id: str,
+    plan: str,
+    db: Session,
+) -> None:
+    """Block creating a NEW collaborative project when at the owner's plan cap.
+
+    A "collaborative project" is one owned by ``owner_id`` that has at least
+    one ``project_members`` row. Should be called only when transitioning a
+    project from 0→1 member.
+    """
+    limits = limits_for_plan(plan)
+    if limits.max_collaborative_projects == -1:
+        return
+    if limits.max_collaborative_projects == 0:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "collaborative_project_limit_reached",
+                "code": "collaborative_project_limit_reached",
+                "plan": normalize_plan(plan),
+                "limit": 0,
+                "message": format_upgrade_message(
+                    "Shared projects", plan, "Team"
+                ),
+            },
+        )
+
+    current = (
+        db.query(ProjectMemberDB.project_id)
+        .join(ProjectDB, ProjectDB.id == ProjectMemberDB.project_id)
+        .filter(ProjectDB.user_id == owner_id)
+        .distinct()
+        .count()
+    )
+    if current >= limits.max_collaborative_projects:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "collaborative_project_limit_reached",
+                "code": "collaborative_project_limit_reached",
+                "plan": normalize_plan(plan),
+                "limit": limits.max_collaborative_projects,
+                "current": current,
+                "message": (
+                    f"You're already sharing {current} of "
+                    f"{limits.max_collaborative_projects} collaborative projects "
+                    f"allowed on the {normalize_plan(plan)} plan. Upgrade to "
+                    "share more projects."
+                ),
+            },
+        )
+
+
 def enforce_member_seat_limit(
     billing_user_id: str,
     plan: str,
@@ -202,19 +347,42 @@ def enforce_member_seat_limit(
         ws.id for ws in
         db.query(Workspace.id).filter(Workspace.owner_id == billing_user_id).all()
     ]
-    if not owned_ws_ids:
-        return  # no workspaces → nothing to cap
+    owned_project_ids = [
+        p.id for p in
+        db.query(ProjectDB.id).filter(ProjectDB.user_id == billing_user_id).all()
+    ]
 
-    current_seats = (
-        db.query(WorkspaceMemberDB)
-        .filter(
-            WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
-            WorkspaceMemberDB.status.in_(["active", "pending"]),
-        )
-        .count()
-    )
-    # Owner counts as 1 seat (not stored in workspace_members)
-    current_seats += 1
+    workspace_emails: set[str] = set()
+    if owned_ws_ids:
+        workspace_emails = {
+            (email or "").lower()
+            for (email,) in db.query(WorkspaceMemberDB.email)
+            .filter(
+                WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
+                WorkspaceMemberDB.status.in_(["active", "pending"]),
+            )
+            .all()
+        }
+
+    project_emails: set[str] = set()
+    if owned_project_ids:
+        project_emails = {
+            (email or "").lower()
+            for (email,) in db.query(ProjectMemberDB.email)
+            .filter(
+                ProjectMemberDB.project_id.in_(owned_project_ids),
+                ProjectMemberDB.status.in_(["active", "pending"]),
+            )
+            .all()
+        }
+
+    if not (owned_ws_ids or owned_project_ids):
+        return  # no workspaces or projects → nothing to cap
+
+    # Owner counts as 1 seat (not stored in member tables). Members are
+    # de-duplicated by email across both surfaces during the workspace→project
+    # cutover so a migrated invite isn't double-counted.
+    current_seats = len(workspace_emails | project_emails) + 1
 
     if max_seats != -1 and current_seats >= purchased_seats:
         extra_seat_price = "₹2,499" if plan.strip().title() == "Team" else "₹3,999"
@@ -421,6 +589,8 @@ def summarize_plan(plan: str) -> dict[str, Any]:
         "max_datasets": limits.max_datasets,
         "max_collab_workspaces": limits.max_collab_workspaces,
         "max_projects_per_workspace": limits.max_projects_per_workspace,
+        "max_project_members": limits.max_project_members,
+        "max_collaborative_projects": limits.max_collaborative_projects,
         "sso_enabled": limits.sso_enabled,
         "webhooks_enabled": limits.webhooks_enabled,
         "scheduling_enabled": limits.scheduling_enabled,

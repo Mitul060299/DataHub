@@ -61,6 +61,34 @@ class ProjectDB(Base):
     )
 
 
+class ProjectMemberDB(Base):
+    """Per-project membership rows (active + pending invites).
+
+    Replaces ``WorkspaceMemberDB`` as the source of truth for collaboration
+    once the workspace abstraction is removed. The project owner is implicit
+    via ``projects.user_id`` and is *not* inserted into this table.
+    """
+    __tablename__ = "project_members"
+
+    id = Column(String, primary_key=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String, nullable=True)         # null until invite is accepted
+    email = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="editor")  # owner|editor|viewer
+    status = Column(String, nullable=False, default="pending")  # pending|active
+    invite_token = Column(String, unique=True, nullable=True)
+    invited_by = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_pm_project_id", "project_id"),
+        Index("idx_pm_user_id", "user_id"),
+        Index("idx_pm_invite_token", "invite_token", unique=True),
+        Index("idx_pm_project_email", "project_id", "email", unique=True),
+    )
+
+
 class Workspace(Base):
     __tablename__ = "workspaces"
     id = Column(String, primary_key=True)

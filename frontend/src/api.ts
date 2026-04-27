@@ -1273,6 +1273,7 @@ export interface ProjectOut {
   colour: string;
   icon: string;
   workspace_id: string;
+  user_id?: string | null;
   pipeline_count: number;
   dashboard_count: number;
   source_count: number;
@@ -1420,6 +1421,67 @@ export async function updateMemberRole(
 
 export async function removeMember(workspaceId: string, memberId: string): Promise<void> {
   await api.delete(`/workspaces/${workspaceId}/members/${memberId}`);
+}
+
+// ── Project Members ─────────────────────────────────────────────────────────
+
+export interface ProjectMemberOut {
+  id: string;
+  project_id: string;
+  user_id: string | null;
+  email: string;
+  role: "owner" | "editor" | "viewer";
+  status: "pending" | "active";
+  invited_by: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
+export async function fetchProjectMembers(projectId: string): Promise<ProjectMemberOut[]> {
+  const response = await api.get(`/projects/${projectId}/members`);
+  return response.data;
+}
+
+export async function inviteProjectMember(
+  projectId: string,
+  email: string,
+  role: "editor" | "viewer",
+): Promise<ProjectMemberOut> {
+  const response = await api.post(`/projects/${projectId}/members`, { email, role });
+  return response.data;
+}
+
+export async function updateProjectMemberRole(
+  projectId: string,
+  memberId: string,
+  role: "editor" | "viewer",
+): Promise<ProjectMemberOut> {
+  const response = await api.put(`/projects/${projectId}/members/${memberId}`, { role });
+  return response.data;
+}
+
+export async function removeProjectMember(projectId: string, memberId: string): Promise<void> {
+  await api.delete(`/projects/${projectId}/members/${memberId}`);
+}
+
+export interface ProjectMemberUsage {
+  project_id: string;
+  owner_id: string;
+  plan: string;
+  member_count: number;
+  owner_usage: {
+    period: string;
+    api_calls: number;
+    pipeline_runs: number;
+    datasets_uploaded: number;
+    storage_bytes_used: number;
+    data_scanned_bytes: number;
+  };
+}
+
+export async function fetchProjectMemberUsage(projectId: string): Promise<ProjectMemberUsage> {
+  const response = await api.get(`/projects/${projectId}/member-usage`);
+  return response.data;
 }
 
 // ── Reviews ─────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 ﻿# DataHub Pricing
 
-> Pricing is **hybrid base + per-seat** for Team and Business tiers. Professional is per-account (single seat). Free is free. All amounts in INR. USD pricing coming soon.
+> Pricing is **hybrid base + per-seat** for Team and Business tiers. Professional is per-account (single seat). Free is free. Indian customers are billed in **INR** via Razorpay's domestic flow; international customers are billed in **USD** via Razorpay International on the same merchant account. Currency is auto-detected from browser timezone and locked at subscription creation.
 
 ---
 
@@ -9,12 +9,14 @@
 | Feature | Free | Professional | Team | Business | Enterprise |
 |---|---|---|---|---|---|
 | **Price (INR/mo)** | ₹0 | ₹6,999 | ₹14,999 | ₹29,999 | Custom |
-| **Included seats** | 1 | 1 | 3 | 5 | Unlimited |
-| **Extra seat price** | — | — | ₹2,499/seat/mo | ₹3,999/seat/mo | Custom |
+| **Price (USD/mo)** | $0 | $149 | $299 | $599 | Min $5,000/mo |
+| **Included seats** | 1 | 1 | 3 | 5 | Custom |
+| **Extra seat (INR)** | — | — | ₹2,499/seat/mo | ₹3,999/seat/mo | Negotiated |
+| **Extra seat (USD)** | — | — | $49/seat/mo | $79/seat/mo | Negotiated |
 | **Max seats** | 1 | 1 | 25 | 100 | Unlimited |
-| **Personal workspace** | 1 | 1 | 1 | 1 | Unlimited |
-| **Collab workspaces** | 0 | 0 | 2 | 9 | Unlimited |
-| **Projects per workspace** | 2 | 20 | Unlimited | Unlimited | Unlimited |
+| **Members per project** | 1 | 1 | 10 | 50 | Unlimited |
+| **Collaborative projects** | 0 | 0 | 5 | Unlimited | Unlimited |
+| **Projects (total)** | 2 | 20 | Unlimited | Unlimited | Unlimited |
 | **AI messages / month** | 100 | 2,000 | 5,000 (scales) | Unlimited | Unlimited |
 | **Pipeline runs / month** | 10 | 200 | 1,000 (scales) | Unlimited | Unlimited |
 | **Dataset uploads / month** | 3 | 50 | Unlimited | Unlimited | Unlimited |
@@ -52,31 +54,31 @@ Business has unlimited AI messages, pipeline runs, and data scan. Storage adds +
 
 ---
 
-## Workspace Model
+## Project Model
 
-### Personal Workspace
-Every account gets exactly **one personal workspace** at sign-up, regardless of plan. Usage is billed to the account owner.
+### Solo Projects
+Every user can create projects on any plan. Solo projects have a single member — the owner — and all usage is billed to that owner.
 
-### Collab Workspaces
-Collab workspaces allow multiple members to collaborate:
+### Collaborative Projects
+A collaborative project is one with at least one invited member in addition to the owner:
 
-- **Free / Professional** — cannot create collab workspaces.
-- **Team** — up to 2 collab workspaces (3 total including personal).
-- **Business** — up to 9 collab workspaces (10 total including personal).
-- **Enterprise** — unlimited.
+- **Free / Professional** — cannot invite members. Solo projects only.
+- **Team** — up to **5 collaborative projects**, **10 members per project**.
+- **Business** — unlimited collaborative projects, **50 members per project**.
+- **Enterprise** — unlimited members per project, unlimited collaborative projects.
 
-All usage inside a collab workspace is billed to the **workspace owner's** account.
+All usage inside any project (solo or collaborative) is billed to the **project owner's** account. Invited members consume the owner's quota — a Free-tier user invited into a Team owner's project uses the Team owner's allowance.
 
 ---
 
 ## Billing Attribution Rules
 
-| Workspace type | Billing account |
+| Project type | Billing account |
 |---|---|
-| Personal | Calling user |
-| Collab | Workspace owner |
+| Solo | Project owner |
+| Collaborative | Project owner (members consume owner's quota) |
 
-A Free-tier user invited into a Team collab workspace uses the Team owner's quota.
+A Free-tier user invited into a Team owner's project uses the Team owner's quota.
 
 ---
 

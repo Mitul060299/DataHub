@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useIsIndian } from "../hooks/useIsIndian";
+import { useBillingRegion } from "../hooks/useIsIndian";
 import {
   PLAN_FEATURES,
   cancelSubscription,
@@ -11,8 +11,9 @@ import {
   listInvoices,
   purchaseSeats,
   INCLUDED_SEATS,
-  EXTRA_SEAT_PRICE_INR,
+  EXTRA_SEAT_PRICE,
   type BillingPlanSlug,
+  type BillingCurrency,
   type SeatUsage,
 } from "../services/billing";
 
@@ -42,9 +43,14 @@ const formatDateTime = (value?: string | number | null) => {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
 
-const formatAmount = (amountPaise?: number | null) => {
-  if (!amountPaise) return "—";
-  return `₹${Math.round(amountPaise / 100).toLocaleString("en-IN")}`;
+const formatAmount = (amountMinor?: number | null, currency: string = "INR") => {
+  if (!amountMinor) return "—";
+  const cur = (currency || "INR").toUpperCase();
+  const major = Math.round(amountMinor / 100);
+  if (cur === "USD") {
+    return `$${major.toLocaleString("en-US")}`;
+  }
+  return `₹${major.toLocaleString("en-IN")}`;
 };
 
 type BillingState = Awaited<ReturnType<typeof fetchBillingStatus>>;
@@ -63,7 +69,8 @@ export function BillingSettings() {
   const [seatUsage, setSeatUsage] = useState<SeatUsage | null>(null);
   const [seatInput, setSeatInput] = useState<number | null>(null);
   const [seatBusy, setSeatBusy] = useState(false);
-  const isIndian = useIsIndian();
+  const region = useBillingRegion();
+  const currency: BillingCurrency = region.currency;
 
   const load = async () => {
     setLoading(true);
@@ -98,8 +105,8 @@ export function BillingSettings() {
   const seatCount = Math.max(Number(subscription?.quantity ?? 1), 1);
 
   const currentAmountLabel = currentPlanSlug
-    ? getDisplayPrice(currentPlanSlug)
-    : "Free";
+    ? getDisplayPrice(currentPlanSlug, currency)
+    : currency === "USD" ? "Free" : "Free";
 
   const nextBillingLabel = formatDateTime(subscription?.current_end ?? null);
   const isHalted = String(subscription?.status || "").toLowerCase() === "halted";
@@ -126,7 +133,7 @@ export function BillingSettings() {
     setUpgradeError(null);
     setBusyPlan(plan);
     try {
-      await initiateSubscription(plan, "monthly", seatCount);
+      await initiateSubscription(plan, "monthly", seatCount, currency);
     } catch (actionError: unknown) {
       const maybeError = actionError as { response?: { data?: { detail?: string } } };
       setUpgradeError(maybeError.response?.data?.detail ?? "Failed to start checkout. Please try again.");
@@ -230,8 +237,6 @@ export function BillingSettings() {
                 <div style={{ display: "inline-flex", gap: 8 }}>
                   <button
                     className="btn btn-primary"
-                    disabled={!isIndian}
-                    title={!isIndian ? "International billing coming soon. We'll notify you when available in your region." : undefined}
                     onClick={() => setShowSelector((v) => !v)}
                   >
                     {showSelector ? "Hide Upgrade" : "Upgrade"}
@@ -247,8 +252,6 @@ export function BillingSettings() {
               <p style={{ color: "var(--tx0)", fontWeight: 600 }}>You’re on the Free plan.</p>
               <button
                 className="btn btn-primary"
-                disabled={!isIndian}
-                title={!isIndian ? "International billing coming soon. We'll notify you when available in your region." : undefined}
                 onClick={() => setShowSelector(true)}
               >
                 Upgrade
@@ -267,28 +270,11 @@ export function BillingSettings() {
 
               return (
                 <article key={plan} style={{ border: `1px solid ${isCurrent ? TIER_COLOR[plan] : "var(--bd2)"}`, borderRadius: 8, padding: 10, display: "grid", gap: 8, position: "relative" }}>
-                  {!isIndian && (
-                    <span style={{
-                      position: "absolute",
-                      top: 6,
-                      right: 6,
-                      background: "#2A2D3A",
-                      color: "#8B8FA8",
-                      fontSize: 9,
-                      fontWeight: 600,
-                      padding: "2px 5px",
-                      borderRadius: 4,
-                      letterSpacing: "0.04em",
-                      textTransform: "uppercase",
-                    }}>
-                      Coming Soon
-                    </span>
-                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <h3 style={{ fontSize: 14 }}>{titleCase(plan)}</h3>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: TIER_COLOR[plan] }} />
                   </div>
-                  <p className="mono" style={{ color: "var(--tx0)", fontSize: 12 }}>{getDisplayPrice(plan)}</p>
+                  <p className="mono" style={{ color: "var(--tx0)", fontSize: 12 }}>{getDisplayPrice(plan, currency)}</p>
                   <ul style={{ color: "var(--tx1)", display: "grid", gap: 3, paddingLeft: 16, fontSize: 12 }}>
                     {PLAN_FEATURES[plan].map((feature) => (
                       <li key={feature}>{feature}</li>
@@ -300,8 +286,7 @@ export function BillingSettings() {
                     <button
                       className="btn btn-primary"
                       onClick={() => void handleSelectPlan(plan)}
-                      disabled={Boolean(busyPlan) || !canUpgrade || !isIndian}
-                      title={!isIndian ? "International billing coming soon. We'll notify you when available in your region." : undefined}
+                      disabled={Boolean(busyPlan) || !canUpgrade}
                     >
                       {busyPlan === plan ? "Processing..." : `Select ${titleCase(plan)}`}
                     </button>
@@ -359,9 +344,9 @@ export function BillingSettings() {
               {seatBusy ? "Updating..." : "Update seats"}
             </button>
           </div>
-          {EXTRA_SEAT_PRICE_INR[currentPlanSlug] ? (
+          {EXTRA_SEAT_PRICE[currency]?.[currentPlanSlug] ? (
             <p style={{ color: "var(--tx2)", fontSize: 12 }}>
-              Each extra seat: ₹{EXTRA_SEAT_PRICE_INR[currentPlanSlug].toLocaleString("en-IN")}/month.
+              Each extra seat: {currency === "USD" ? `$${EXTRA_SEAT_PRICE.USD[currentPlanSlug].toLocaleString("en-US")}` : `₹${EXTRA_SEAT_PRICE.INR[currentPlanSlug].toLocaleString("en-IN")}`}/month.
               Increases apply immediately; decreases take effect at next renewal.
             </p>
           ) : null}
@@ -393,7 +378,7 @@ export function BillingSettings() {
                     <tr key={invoice.id} style={{ borderBottom: "1px solid var(--bd)" }}>
                       <td style={{ padding: "8px 6px", color: "var(--tx1)" }}>{formatDateTime(invoice.date ?? invoice.created_at)}</td>
                       <td style={{ padding: "8px 6px", color: "var(--tx0)" }}>{description}</td>
-                      <td style={{ padding: "8px 6px", color: "var(--tx0)" }}>{formatAmount(invoice.amount)}</td>
+                      <td style={{ padding: "8px 6px", color: "var(--tx0)" }}>{formatAmount(invoice.amount, (invoice as { currency?: string }).currency)}</td>
                       <td style={{ padding: "8px 6px", color: "var(--tx1)" }}>{statusLabel}</td>
                       <td style={{ padding: "8px 6px", textAlign: "right" }}>
                         <button

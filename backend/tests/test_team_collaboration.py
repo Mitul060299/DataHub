@@ -313,9 +313,6 @@ class TestInviteMember(unittest.TestCase):
                     admin = MagicMock(); admin.role = "admin"
                     filt.first.return_value = admin
                 elif call_count[0] == 2:
-                    # active_count query
-                    filt.count.return_value = 1
-                elif call_count[0] == 3:
                     # duplicate check — existing active member
                     filt.first.return_value = existing_active
                 else:
@@ -324,8 +321,12 @@ class TestInviteMember(unittest.TestCase):
 
         db.query.side_effect = _q
 
-        with self.assertRaises(HTTPException) as ctx:
-            self._invoke("ws-1", {"email": "x@y.com", "role": "viewer"}, user, db)
+        # Bypass plan/seat resolution so internal query order isn't depended on
+        with patch("app.routers.workspace_members.resolve_workspace_plan",
+                   return_value=("user-1", "Team")), \
+             patch("app.routers.workspace_members.enforce_member_seat_limit"):
+            with self.assertRaises(HTTPException) as ctx:
+                self._invoke("ws-1", {"email": "x@y.com", "role": "viewer"}, user, db)
         self.assertEqual(ctx.exception.status_code, 409)
 
     def test_B5_duplicate_pending_refreshes_token_and_sends_email(self):
@@ -350,8 +351,6 @@ class TestInviteMember(unittest.TestCase):
                     admin = MagicMock(); admin.role = "admin"
                     filt.first.return_value = admin
                 elif call_count[0] == 2:
-                    filt.count.return_value = 1
-                elif call_count[0] == 3:
                     filt.first.return_value = existing_pending
                 else:
                     filt.first.return_value = None
@@ -359,7 +358,10 @@ class TestInviteMember(unittest.TestCase):
 
         db.query.side_effect = _q
 
-        with patch("app.routers.workspace_members._send_invite_email") as mock_email:
+        with patch("app.routers.workspace_members.resolve_workspace_plan",
+                   return_value=("user-1", "Team")), \
+             patch("app.routers.workspace_members.enforce_member_seat_limit"), \
+             patch("app.routers.workspace_members._send_invite_email") as mock_email:
             result = self._invoke("ws-1", {"email": "pending@y.com", "role": "editor"}, user, db)
 
         mock_email.assert_called_once()
@@ -419,8 +421,6 @@ class TestInviteMember(unittest.TestCase):
                     admin = MagicMock(); admin.role = "admin"
                     filt.first.return_value = admin
                 elif call_count[0] == 2:
-                    filt.count.return_value = 2
-                elif call_count[0] == 3:
                     filt.first.return_value = None  # no duplicate
                 else:
                     filt.first.return_value = None
@@ -432,7 +432,10 @@ class TestInviteMember(unittest.TestCase):
         added_members = []
         db.add.side_effect = lambda m: added_members.append(m)
 
-        with patch("app.routers.workspace_members._send_invite_email") as mock_email:
+        with patch("app.routers.workspace_members.resolve_workspace_plan",
+                   return_value=("user-1", "Team")), \
+             patch("app.routers.workspace_members.enforce_member_seat_limit"), \
+             patch("app.routers.workspace_members._send_invite_email") as mock_email:
             # patch db.refresh to set values on the added object
             def _refresh(m):
                 m.id = created_member.id
@@ -471,8 +474,6 @@ class TestInviteMember(unittest.TestCase):
                     admin = MagicMock(); admin.role = "admin"
                     filt.first.return_value = admin
                 elif call_count[0] == 2:
-                    filt.count.return_value = 1
-                elif call_count[0] == 3:
                     filt.first.return_value = None
                 else:
                     filt.first.return_value = None
@@ -488,7 +489,10 @@ class TestInviteMember(unittest.TestCase):
 
         db.refresh.side_effect = _refresh
 
-        with patch("app.routers.workspace_members._send_invite_email"):
+        with patch("app.routers.workspace_members.resolve_workspace_plan",
+                   return_value=("user-1", "Team")), \
+             patch("app.routers.workspace_members.enforce_member_seat_limit"), \
+             patch("app.routers.workspace_members._send_invite_email"):
             self._invoke("ws-1", {"email": "  UPPER@Example.COM  ", "role": "viewer"}, user, db)
 
         self.assertEqual(added[0].email, "upper@example.com")

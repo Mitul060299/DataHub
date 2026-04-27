@@ -8,11 +8,19 @@ declare global {
 
 export type BillingPlanSlug = "professional" | "team" | "business";
 export type BillingCycle = "monthly";
+export type BillingCurrency = "INR" | "USD";
 
-const PRICES_INR: Record<BillingPlanSlug, Record<BillingCycle, number>> = {
-  professional: { monthly: 6999 },
-  team: { monthly: 14999 },
-  business: { monthly: 29999 },
+const PRICES: Record<BillingCurrency, Record<BillingPlanSlug, Record<BillingCycle, number>>> = {
+  INR: {
+    professional: { monthly: 6999 },
+    team: { monthly: 14999 },
+    business: { monthly: 29999 },
+  },
+  USD: {
+    professional: { monthly: 149 },
+    team: { monthly: 299 },
+    business: { monthly: 599 },
+  },
 };
 
 export const INCLUDED_SEATS: Record<BillingPlanSlug, number> = {
@@ -21,24 +29,34 @@ export const INCLUDED_SEATS: Record<BillingPlanSlug, number> = {
   business: 5,
 };
 
-export const EXTRA_SEAT_PRICE_INR: Record<string, number> = {
-  team: 2499,
-  business: 3999,
+export const EXTRA_SEAT_PRICE: Record<BillingCurrency, Record<string, number>> = {
+  INR: { team: 2499, business: 3999 },
+  USD: { team: 49, business: 79 },
 };
+
+/** @deprecated kept for back-compat, prefer EXTRA_SEAT_PRICE. */
+export const EXTRA_SEAT_PRICE_INR: Record<string, number> = EXTRA_SEAT_PRICE.INR;
 
 export const PLAN_FEATURES: Record<BillingPlanSlug, string[]> = {
-  professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "2,000 AI messages/month", "Scheduled pipelines"],
-  team: ["+Snowflake, Redshift, BigQuery", "Includes 3 seats · +₹2,499/extra seat", "5,000+ AI messages/month (scales with seats)"],
-  business: ["SSO + governance", "Includes 5 seats · +₹3,999/extra seat", "Unlimited AI messages"],
+  professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage", "2,000 AI messages/month", "Scheduled pipelines"],
+  team: ["+Snowflake, Redshift, BigQuery", "Includes 3 seats", "5,000+ AI messages/month (scales with seats)"],
+  business: ["SSO + governance", "Includes 5 seats", "Unlimited AI messages"],
 };
 
-export function getDisplayPrice(plan: BillingPlanSlug): string {
-  const amount = PRICES_INR[plan]?.monthly;
+function formatMoney(amount: number, currency: BillingCurrency): string {
+  if (currency === "USD") {
+    return `$${amount.toLocaleString("en-US")}`;
+  }
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
+
+export function getDisplayPrice(plan: BillingPlanSlug, currency: BillingCurrency = "INR"): string {
+  const amount = PRICES[currency]?.[plan]?.monthly;
   if (!amount) return "";
-  const base = `₹${amount.toLocaleString("en-IN")}/month`;
-  const seatPrice = EXTRA_SEAT_PRICE_INR[plan];
+  const base = `${formatMoney(amount, currency)}/month`;
+  const seatPrice = EXTRA_SEAT_PRICE[currency]?.[plan];
   if (seatPrice) {
-    return `${base} + ₹${seatPrice.toLocaleString("en-IN")}/extra seat`;
+    return `${base} + ${formatMoney(seatPrice, currency)}/extra seat`;
   }
   return base;
 }
@@ -62,11 +80,13 @@ export async function initiateSubscription(
   plan: BillingPlanSlug,
   billingCycle: BillingCycle,
   quantity: number = 1,
+  currency: BillingCurrency = "INR",
 ): Promise<void> {
   const response = await api.post("/billing/subscribe", {
     plan,
     billing_cycle: billingCycle,
     quantity,
+    currency,
   });
 
   const {
@@ -75,6 +95,7 @@ export async function initiateSubscription(
   } = response.data as {
     subscription_id: string;
     razorpay_key_id: string;
+    currency?: BillingCurrency;
   };
 
   await ensureRazorpayScriptLoaded();

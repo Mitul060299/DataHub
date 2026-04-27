@@ -8,12 +8,20 @@ from typing import Any
 import razorpay
 
 from ..config import settings
-from ..razorpay_plans import INCLUDED_SEATS, MONTHLY_AMOUNTS_PAISE, PER_SEAT_PAISE, RAZORPAY_PLAN_IDS
+from ..razorpay_plans import (
+    INCLUDED_SEATS,
+    SUPPORTED_CURRENCIES,
+    get_per_seat_amount,
+    get_plan_amount,
+    get_plan_id,
+    normalize_currency,
+)
 from . import billing_repository
 
 
 _ALLOWED_PLANS = {"professional", "team", "business"}
 _ALLOWED_BILLING_CYCLES = {"monthly"}
+_DEFAULT_CURRENCY = "INR"
 
 
 def _get_client() -> razorpay.Client:
@@ -65,12 +73,13 @@ def _calculate_proration(subscription: dict[str, Any]) -> int:
         return 0
 
     plan_slug = billing_repository.to_plan_slug(subscription.get("plan"))
-    base_amount = MONTHLY_AMOUNTS_PAISE.get(plan_slug, 0)
+    currency = normalize_currency(subscription.get("currency") or _DEFAULT_CURRENCY)
+    base_amount = get_plan_amount(plan_slug, currency)
     # Our DB ``quantity`` column stores total purchased seats (including extras).
     quantity = max(int(subscription.get("quantity") or 1), 1)
     included = INCLUDED_SEATS.get(plan_slug, 1)
     extra_seats = max(0, quantity - included)
-    seat_price = PER_SEAT_PAISE.get(plan_slug, 0)
+    seat_price = get_per_seat_amount(plan_slug, currency)
     total_monthly = base_amount + extra_seats * seat_price
     if total_monthly <= 0:
         return 0
@@ -83,6 +92,7 @@ def _create_extra_seat_addon(
     razorpay_subscription_id: str,
     plan_slug: str,
     extra_seats: int,
+    currency: str = _DEFAULT_CURRENCY,
 ) -> dict[str, Any] | None:
     """Add a Razorpay add-on for the per-seat overage.
 
@@ -94,15 +104,22 @@ def _create_extra_seat_addon(
     """
     if extra_seats <= 0 or not razorpay_subscription_id:
         return None
-    seat_price = PER_SEAT_PAISE.get(plan_slug, 0)
+    currency = normalize_currency(currency)
+    seat_price = get_per_seat_amount(plan_slug, currency)
     if seat_price <= 0:
         return None
+    if currency == "INR":
+        symbol = "\u20b9"
+        unit_label = f"{symbol}{seat_price // 100:,}/mo"
+    else:  # USD
+        symbol = "$"
+        unit_label = f"{symbol}{seat_price / 100:,.2f}/mo"
     payload = {
         "item": {
             "name": f"Extra seat ({plan_slug.title()})",
             "amount": int(seat_price),
-            "currency": "INR",
-            "description": f"{extra_seats} extra seat(s) at \u20b9{seat_price // 100:,}/mo",
+            "currency": currency,
+            "description": f"{extra_seats} extra seat(s) at {unit_label}",
         },
         "quantity": int(extra_seats),
     }
@@ -125,12 +142,13 @@ def queue_next_cycle_seat_addon(razorpay_subscription_id: str) -> dict[str, Any]
     if not sub:
         return None
     plan_slug = billing_repository.to_plan_slug(sub.get("plan"))
+    currency = normalize_currency(sub.get("currency") or _DEFAULT_CURRENCY)
     included = INCLUDED_SEATS.get(plan_slug, 1)
     quantity = max(int(sub.get("quantity") or included), included)
     extra = max(0, quantity - included)
     if extra <= 0:
         return None
-    return _create_extra_seat_addon(razorpay_subscription_id, plan_slug, extra)
+    return _create_extra_seat_addon(razorpay_subscription_id, plan_slug, extra, currency)
 
 
 async def create_subscription(
@@ -139,12 +157,12 @@ async def create_subscription(
     billing_cycle: str,
     quantity: int = 1,
     notify_email: str | None = None,
+    currency: str = _DEFAULT_CURRENCY,
 ) -> dict[str, Any]:
     plan_slug = _normalize_plan_slug(plan)
     cycle = _normalize_billing_cycle(billing_cycle)
-    plan_id = RAZORPAY_PLAN_IDS[plan_slug][cycle]
-    if not plan_id or plan_id == "plan_REPLACE_ME":
-        raise RuntimeError("Razorpay plan IDs are not configured")
+    currency = normalize_currency(currency)
+    plan_id = get_plan_id(plan_slug, currency, cycle)
 
     # Ensure total purchased seats >= included seats for the plan.
     included = INCLUDED_SEATS.get(plan_slug, 1)
@@ -163,6 +181,7 @@ async def create_subscription(
             "user_id": user_id,
             "plan": plan_slug,
             "billing_cycle": cycle,
+            "currency": currency,
         },
     }
     if notify_email:
@@ -177,6 +196,7 @@ async def create_subscription(
             str(subscription.get("id") or ""),
             plan_slug,
             extra_seats,
+            currency,
         )
 
     billing_repository.store_subscription(
@@ -185,6 +205,7 @@ async def create_subscription(
         plan=plan_slug,
         billing_cycle=cycle,
         quantity=effective_quantity,
+        currency=currency,
     )
     return subscription
 
@@ -252,6 +273,8 @@ async def upgrade_subscription(user_id: str, new_plan: str, new_billing_cycle: s
     if not current_razorpay_sub_id:
         raise ValueError("Active subscription is missing Razorpay subscription id")
 
+    currency = normalize_currency(current_sub.get("currency") or _DEFAULT_CURRENCY)
+
     _get_client().subscription.cancel(
         current_razorpay_sub_id,
         {"cancel_at_cycle_end": 1},
@@ -259,7 +282,7 @@ async def upgrade_subscription(user_id: str, new_plan: str, new_billing_cycle: s
 
     credit_paise = _calculate_proration(current_sub)
 
-    new_sub = await create_subscription(user_id, new_plan_slug, new_cycle)
+    new_sub = await create_subscription(user_id, new_plan_slug, new_cycle, currency=currency)
     billing_repository.store_proration_note(user_id, credit_paise, str(new_sub.get("id") or ""))
 
     return {
@@ -365,8 +388,9 @@ async def log_payment_event(
     amount: int | None = None,
     currency: str = "INR",
     status: str | None = None,
-) -> None:
-    billing_repository.log_payment_event(
+    razorpay_event_id: str | None = None,
+) -> bool:
+    return billing_repository.log_payment_event(
         user_id=user_id,
         subscription_id=subscription_id,
         event_type=event_type,
@@ -376,4 +400,5 @@ async def log_payment_event(
         amount=amount,
         currency=currency,
         status=status,
+        razorpay_event_id=razorpay_event_id,
     )

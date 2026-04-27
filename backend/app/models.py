@@ -531,6 +531,29 @@ class WorkspaceMemberOut(BaseModel):
     accepted_at: Optional[str] = None
 
 
+# ── Project membership models ────────────────────────────────────────────────
+
+class ProjectMemberInvite(BaseModel):
+    email: str
+    role: Literal["editor", "viewer"] = "editor"
+
+
+class ProjectMemberUpdate(BaseModel):
+    role: Literal["editor", "viewer"]
+
+
+class ProjectMemberOut(BaseModel):
+    id: str
+    project_id: str
+    user_id: Optional[str] = None
+    email: str
+    role: str
+    status: str          # pending | active
+    invited_by: str
+    created_at: str
+    accepted_at: Optional[str] = None
+
+
 class BusinessRule(BaseModel):
     key: str
     description: str
@@ -803,6 +826,7 @@ class ProjectOut(BaseModel):
     colour: str
     icon: str
     workspace_id: str
+    user_id: Optional[str] = None
     pipeline_count: int = 0
     dashboard_count: int = 0
     source_count: int = 0

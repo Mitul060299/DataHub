@@ -59,11 +59,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
-from .routers import ml_routes, full_auto_routes
+from .routers import full_auto_routes
+# ml_routes intentionally not imported — ML/AutoML services are not yet
+# production-ready. The endpoints have been removed for the GA launch and
+# will be re-introduced once the underlying training pipeline is real.
 from .routers import pipeline_refresh, cron, data_sources
 from .routers import waitlist
 from .routers import dashboard_access
 from .routers.workspace_members import router as workspace_members_router, invite_router as workspace_invite_router
+from .routers.project_members import router as project_members_router, project_invite_router as project_invite_router
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
 from .routers.saved_visualizations import router as saved_visualizations_router
@@ -612,7 +616,7 @@ app.include_router(dashboards_v2.router)
 app.include_router(dashboards_v2.public_router)
 app.include_router(dashboard_access.router)
 app.include_router(visualizations.router)
-app.include_router(ml_routes.router)
+# app.include_router(ml_routes.router)  # disabled — see import note above
 app.include_router(full_auto_routes.router)
 app.include_router(chat_sessions.router)
 app.include_router(pipeline_workflows.router)
@@ -630,3 +634,5 @@ app.include_router(canvas_router)
 app.include_router(waitlist.router)
 app.include_router(workspace_members_router, prefix="/workspaces")
 app.include_router(workspace_invite_router)
+app.include_router(project_members_router)
+app.include_router(project_invite_router)

@@ -45,7 +45,9 @@ export function SettingsPage({ section }: SettingsPageProps) {
     <div
       style={{
         paddingTop: "52px",
-        minHeight: "100vh",
+        height: "100vh",
+        overflowY: "auto",
+        overflowX: "hidden",
         background: "#0a0a0c",
         display: "flex",
         flexDirection: "column",

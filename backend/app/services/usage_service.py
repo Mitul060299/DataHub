@@ -19,6 +19,7 @@ from sqlalchemy import text
 
 from .plan_limits import compute_effective_limits, get_limits, USAGE_FIELD_LABELS
 from . import billing_repository
+from ..models_db import ProjectDB
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,30 @@ _FIELD_TO_LIMIT_KEY: dict[str, str] = {
 
 def _current_period() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m")
+
+
+def resolve_billing_user_for_project(
+    project_id: str | None,
+    calling_user_id: str,
+    db: Session,
+) -> str:
+    """Return the user_id whose quota should be debited for work done in a project.
+
+    The project owner always pays for any usage inside their project — invited
+    members consume the owner's quota, not their own. Falls back to the
+    caller's user_id when ``project_id`` is missing or the project doesn't
+    resolve (legacy / single-user paths).
+    """
+    if not project_id:
+        return calling_user_id
+    row = (
+        db.query(ProjectDB.user_id)
+        .filter(ProjectDB.id == project_id)
+        .first()
+    )
+    if row and row[0]:
+        return row[0]
+    return calling_user_id
 
 
 def get_usage(user_id: str, db: Session, period: str | None = None) -> dict:

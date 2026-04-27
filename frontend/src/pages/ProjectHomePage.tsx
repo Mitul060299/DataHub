@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { deleteProject, fetchProjectDetail } from "../api";
 import type { ProjectDetailOut, ProjectDashboardOut, ProjectPipelineOut, ProjectSourceOut } from "../api";
 import { Breadcrumb } from "../components/Breadcrumb";
+import { ProjectMemberSettings } from "../components/ProjectMemberSettings";
+import { useUser } from "../contexts/UserContext";
 
 function Skeleton({ width, height = 14 }: { width: string | number; height?: number }) {
   return (
@@ -68,6 +70,7 @@ function ActionBtn({ label, onClick, variant = "ghost" }: { label: string; onCli
 export function ProjectHomePage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { user, plan } = useUser();
   const [detail, setDetail] = useState<ProjectDetailOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -299,6 +302,17 @@ export function ProjectHomePage() {
             </div>
           )}
         </section>
+
+        {/* ── Members ───────────────────────────────────────── */}
+        {projectId && (
+          <section>
+            <ProjectMemberSettings
+              projectId={projectId}
+              isOwner={!!user && !!detail?.project.user_id && detail.project.user_id === user.id}
+              callerPlan={plan}
+            />
+          </section>
+        )}
       </div>
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>

@@ -179,6 +179,7 @@ def store_subscription(
     plan: str,
     billing_cycle: str,
     quantity: int,
+    currency: str = "INR",
 ) -> dict[str, Any]:
     client = _client()
     if not client:
@@ -212,10 +213,20 @@ def store_subscription(
         "current_start": current_start,
         "current_end": current_end,
         "quantity": max(int(quantity or 1), 1),
+        "currency": (currency or "INR").upper(),
         "updated_at": _now_iso(),
     }
 
-    client.table("subscriptions").upsert(payload, on_conflict="razorpay_subscription_id").execute()
+    try:
+        client.table("subscriptions").upsert(payload, on_conflict="razorpay_subscription_id").execute()
+    except Exception as exc:
+        # ``currency`` column is added in alembic 0062; fall back so older
+        # databases (pre-migration) keep working until the migration runs.
+        if "currency" in str(exc).lower():
+            payload.pop("currency", None)
+            client.table("subscriptions").upsert(payload, on_conflict="razorpay_subscription_id").execute()
+        else:
+            raise
 
     user_update: dict[str, Any] = {"subscription_id": subscription_row_id}
     try:
@@ -320,12 +331,33 @@ def log_payment_event(
     amount: int | None = None,
     currency: str = "INR",
     status: str | None = None,
-) -> None:
+    razorpay_event_id: str | None = None,
+) -> bool:
+    """Persist a webhook/payment event with idempotency.
+
+    Returns ``True`` if a new row was inserted, ``False`` if the event was
+    already recorded (deduplicated by ``razorpay_event_id``).
+    """
     client = _client()
     if not client:
         raise RuntimeError("Supabase client is not configured")
 
-    row = {
+    if razorpay_event_id:
+        try:
+            existing = (
+                client.table("payment_events")
+                .select("id")
+                .eq("razorpay_event_id", razorpay_event_id)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                return False
+        except Exception:
+            # Column may not exist yet (pre-migration). Fall through and insert.
+            pass
+
+    row: dict[str, Any] = {
         "user_id": user_id,
         "subscription_id": subscription_id,
         "razorpay_payment_id": payment_id,
@@ -336,7 +368,18 @@ def log_payment_event(
         "status": status,
         "payload": payload,
     }
-    client.table("payment_events").insert(row).execute()
+    if razorpay_event_id:
+        row["razorpay_event_id"] = razorpay_event_id
+
+    try:
+        client.table("payment_events").insert(row).execute()
+    except Exception as exc:
+        if "razorpay_event_id" in str(exc).lower():
+            row.pop("razorpay_event_id", None)
+            client.table("payment_events").insert(row).execute()
+        else:
+            raise
+    return True
 
 
 def store_proration_note(user_id: str, credit_paise: int, new_subscription_id: str) -> None:

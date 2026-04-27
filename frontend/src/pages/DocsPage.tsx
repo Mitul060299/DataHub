@@ -1078,7 +1078,7 @@ function PlanLimits() {
   return (
     <article className="docs-article">
       <h1>Plan limits</h1>
-      <p className="docs-lead">All plans are billed monthly <strong>per account</strong>. Personal workspaces draw from the account owner's quota; collab workspaces draw from the workspace owner's quota.</p>
+      <p className="docs-lead">All plans are billed monthly <strong>per account</strong>. Solo projects draw from the project owner's quota; shared projects draw from the project owner's quota too — invited members consume the owner's allowance.</p>
 
       <h2>Feature comparison</h2>
       <div className="docs-table-wrap">
@@ -1087,21 +1087,20 @@ function PlanLimits() {
             <tr>
               <th>Feature</th>
               <th>Free</th>
-              <th>Professional ($79/mo)</th>
-              <th>Team ($149/mo)</th>
-              <th>Business ($399/mo)</th>
-              <th>Enterprise</th>
+              <th>Professional ($149/mo)</th>
+              <th>Team ($299/mo)</th>
+              <th>Business ($599/mo)</th>
+              <th>Enterprise (min $5k/mo)</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>Personal workspace</td><td>1</td><td>1</td><td>1</td><td>1</td><td>Unlimited</td></tr>
-            <tr><td>Collab workspaces</td><td>0</td><td>0</td><td>2</td><td>9</td><td>Unlimited</td></tr>
-            <tr><td>Projects per workspace</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Collaborative projects</td><td>0</td><td>0</td><td>5</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Members per project</td><td>1</td><td>1</td><td>10</td><td>50</td><td>Unlimited</td></tr>
+            <tr><td>Projects (total)</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
             <tr><td>AI messages / month</td><td>100</td><td>2,000</td><td>5,000</td><td>Unlimited</td><td>Unlimited</td></tr>
             <tr><td>Max file size</td><td>50 MB</td><td>1 GB</td><td>5 GB</td><td>10 GB</td><td>Unlimited</td></tr>
             <tr><td>Storage</td><td>500 MB</td><td>20 GB</td><td>100 GB</td><td>2 TB</td><td>Unlimited</td></tr>
             <tr><td>Data scan / month</td><td>5 GB</td><td>50 GB</td><td>200 GB</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>Members per workspace</td><td>1</td><td>1</td><td>10</td><td>50</td><td>Unlimited</td></tr>
             <tr><td>DB connections</td><td>CSV, Excel</td><td>+ PG, MySQL, SQLite, MSSQL, Oracle</td><td>+ Snowflake, Redshift, BigQuery</td><td>+ Custom connectors</td><td>All</td></tr>
             <tr><td>Scheduling</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
             <tr><td>Dashboard sharing</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
@@ -1114,7 +1113,7 @@ function PlanLimits() {
       </div>
 
       <h2>Billing attribution</h2>
-      <p>Usage inside a <strong>collab workspace</strong> (AI calls, pipeline runs, data scanned) is charged to the <strong>workspace owner's</strong> account — not the calling member's. A Free-tier user invited into a Team collab workspace uses the Team owner's quota.</p>
+      <p>Usage inside a <strong>collaborative project</strong> (AI calls, pipeline runs, data scanned) is charged to the <strong>project owner's</strong> account — not the calling member's. A Free-tier user invited into a Team project uses the Team owner's quota.</p>
 
       <div className="docs-callout docs-callout--info">
         INR pricing: Professional ₹6,999/mo · Team ₹14,999/mo (3 seats incl, +₹2,499/extra) · Business ₹29,999/mo (5 seats incl, +₹3,999/extra) · Enterprise custom. Billing is processed via Razorpay.

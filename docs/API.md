@@ -147,6 +147,15 @@ An email warning is sent when any metric crosses 80% of its limit (requires `RES
 - DELETE /api/projects/{project_id} — delete project
 - GET /api/workspace/recent — recent pipelines and dashboards across all projects
 
+## Project Members
+Project-level collaboration. Billing flows through the project owner's plan.
+- GET /projects/{project_id}/members — list members (owner or any active member)
+- POST /projects/{project_id}/members — invite by email + role (`editor`|`viewer`); owner-only. Enforces `max_project_members`, `max_collaborative_projects`, and seat limits per the owner's plan. Returns inline error code `member_limit_reached` or `collaborative_project_limit_reached` when caps hit.
+- PUT /projects/{project_id}/members/{member_id} — change role; owner-only.
+- DELETE /projects/{project_id}/members/{member_id} — remove member; owner or self.
+- GET /projects/{project_id}/member-usage — owner-id, plan, member count, owner usage snapshot.
+- GET /invites/projects/{token}/accept — invite acceptance landing; redirects to `/projects/{project_id}?joined=1`.
+
 ## Pipeline Workflows
 - POST /api/pipelines
 - GET /api/pipelines

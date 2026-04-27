@@ -32,7 +32,15 @@ Current production stack:
 
 ### Supabase
 - Auth provider (email/password + OIDC).
-- Postgres for all transactional data: users, workspaces, projects, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback.
+- Postgres for all transactional data: users, workspaces, projects, project_members, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback.
+
+### Collaboration Model
+DataHub is migrating from workspace-level to **project-level** collaboration:
+- `project_members` (added in alembic 0063) carries email, role (`editor`/`viewer`), status, invite_token. Owner is implicit via `projects.user_id`.
+- Billing flows through the **project owner's** plan — invitees do not consume their own seats; the project owner does.
+- Plan caps: `max_project_members` (members per project) and `max_collaborative_projects` (projects with ≥1 member).
+- Seat limit is the union of `workspace_members` + `project_members` emails per owner (during the migration window).
+- `workspace_members` retained alongside `project_members` until Phase 6 dual-read closes; both code paths run in parallel with no functional regression.
 
 ### Upstash Redis
 - Rate limit counters.

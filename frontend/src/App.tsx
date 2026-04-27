@@ -13,6 +13,7 @@ import { SignupPage } from "./pages/SignupPage";
 import { SourcesPage } from "./pages/SourcesPage";
 import { WorkspaceHomePage } from "./pages/WorkspaceHomePage";
 import { WorkspacePage } from "./pages/WorkspacePage";
+import { ProjectHomePage } from "./pages/ProjectHomePage";
 import { DocsPage } from "./pages/DocsPage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
@@ -51,6 +52,7 @@ export function App() {
         <Route path="workspace" element={<WorkspaceHomePage />} />
         <Route path="workspace/project/:projectId" element={<Navigate to="pipeline/new" replace />} />
         <Route path="workspace/project/:projectId/pipeline/:pipelineId" element={<WorkspacePage />} />
+        <Route path="projects/:projectId" element={<ProjectHomePage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="pricing" element={<PricingPage />} />
         <Route path="settings" element={<SettingsPage section="settings" />} />

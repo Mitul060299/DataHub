@@ -58,6 +58,7 @@ class DashboardsV2Service:
         user_id: str,
         workspace_id: str | None = None,
         visible_user_ids: list[str] | None = None,
+        project_id: str | None = None,
     ) -> list[DashboardV2Out]:
         db = SessionLocal()
         try:
@@ -65,6 +66,10 @@ class DashboardsV2Service:
             query = db.query(DashboardV2DB).filter(DashboardV2DB.user_id.in_(ids_to_query))
             if workspace_id:
                 query = query.filter(DashboardV2DB.workspace_id == workspace_id)
+            if project_id:
+                # Strict filter — do NOT include NULL-project rows (orphans from
+                # deleted projects) when a specific project context is requested.
+                query = query.filter(DashboardV2DB.project_id == project_id)
             dashboards = query.order_by(DashboardV2DB.created_at.desc()).all()
 
             dashboard_ids = [str(d.id) for d in dashboards]

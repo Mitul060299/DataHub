@@ -1028,7 +1028,7 @@ class VisualizationDB(Base):
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
     workspace_id = Column(String, nullable=False, default="default")
-    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False)
     chart_type = Column(String, nullable=False, default="bar")
     echarts_config = Column(JSONB, nullable=False, default=dict)   # full ECharts option object
@@ -1049,7 +1049,7 @@ class CanvasLayoutDB(Base):
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
     workspace_id = Column(String, nullable=False, default="default")
-    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False, default="Untitled Dashboard")
     # Array of layout items: {id, viz_id, x, y, w, h, z, type, text_content, echarts_config, chart_type, title}
     layout = Column(JSONB, nullable=False, default=list)

@@ -8,7 +8,7 @@ in the AI Agent panel. Ephemeral charts (not saved) are never written here.
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -63,15 +63,20 @@ def _viz_out(v: VisualizationDB) -> dict:
 
 @router.get("")
 def list_visualizations(
+    project_id: str | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    rows = (
+    q = (
         db.query(VisualizationDB)
         .filter(VisualizationDB.user_id == current_user.id)
-        .order_by(VisualizationDB.created_at.desc())
-        .all()
     )
+    if project_id:
+        # Strict project filter — do NOT include NULL-project rows here.
+        # Rows with project_id IS NULL are from deleted projects; they must not
+        # leak into another project just because the user/project_id combo exists.
+        q = q.filter(VisualizationDB.project_id == project_id)
+    rows = q.order_by(VisualizationDB.created_at.desc()).all()
     return [_viz_out(v) for v in rows]
 
 

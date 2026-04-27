@@ -27,6 +27,7 @@ _public_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
 @router.get("", response_model=list[DashboardV2Out])
 def list_dashboards(
     workspace_id: str | None = Query(default=None),
+    project_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> list[DashboardV2Out]:
@@ -36,7 +37,7 @@ def list_dashboards(
     visible = set(get_visible_user_ids(db, user_id, workspace_id or "default"))
     visible.update(list_visible_owner_user_ids(user_id, db))
     return DashboardsV2Service.list_dashboards(
-        user_id=user_id, workspace_id=workspace_id, visible_user_ids=list(visible)
+        user_id=user_id, workspace_id=workspace_id, visible_user_ids=list(visible), project_id=project_id
     )
 
 

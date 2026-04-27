@@ -87,7 +87,11 @@ function PreviewPopover({ viz, anchorRect, onClose }: PreviewPopoverProps) {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export function VisualizationsSection() {
+interface VisualizationsSectionProps {
+  projectId?: string;
+}
+
+export function VisualizationsSection({ projectId }: VisualizationsSectionProps) {
   const [open, setOpen] = useState(true);
   const [items, setItems] = useState<SavedVisualization[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,14 +110,14 @@ export function VisualizationsSection() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listVisualizations();
+      const data = await listVisualizations(projectId);
       setItems(data);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     void fetchAll();

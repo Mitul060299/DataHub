@@ -383,7 +383,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
         </div>
 
         <div data-tour="viz-section">
-        <VisualizationsSection />
+        <VisualizationsSection projectId={activeProject?.id} />
         </div>
 
       </div>

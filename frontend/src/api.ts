@@ -1522,8 +1522,10 @@ export interface SavedVisualization {
   updated_at: string;
 }
 
-export async function listVisualizations(): Promise<SavedVisualization[]> {
-  const response = await api.get("/api/visualizations/saved");
+export async function listVisualizations(projectId?: string): Promise<SavedVisualization[]> {
+  const response = await api.get("/api/visualizations/saved", {
+    params: projectId ? { project_id: projectId } : {},
+  });
   return response.data;
 }
 

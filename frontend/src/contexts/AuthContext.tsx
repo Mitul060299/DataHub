@@ -32,6 +32,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
+    const identifyFromSession = (s: Session | null) => {
+      const u = s?.user;
+      if (!u) return;
+      const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+      const email = u.email ?? (typeof meta.email === "string" ? meta.email : undefined);
+      const name =
+        (typeof meta.full_name === "string" && meta.full_name) ||
+        (typeof meta.name === "string" && meta.name) ||
+        undefined;
+      const traits: Record<string, unknown> = {};
+      if (email) {
+        // Set both keys so PostHog's persons list shows the email regardless
+        // of which property it inspects.
+        traits.email = email;
+        traits.$email = email;
+      }
+      if (name) {
+        traits.name = name;
+        traits.$name = name;
+      }
+      identify(u.id, traits);
+      setSentryUser(u.id, email);
+    };
+
     const loadSession = async () => {
       const { data, error } = await supabase.auth.getSession();
       if (!mounted) return;
@@ -42,6 +66,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(nextSession);
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
+        // Re-identify returning visitors on every page load so PostHog never
+        // falls back to the anonymous distinct_id for an already-logged-in user.
+        identifyFromSession(nextSession);
       } else {
         clearAuthToken();
       }
@@ -54,10 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(nextSession);
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
-        if (nextSession.user) {
-          identify(nextSession.user.id, { email: nextSession.user.email });
-          setSentryUser(nextSession.user.id, nextSession.user.email ?? undefined);
-        }
+        identifyFromSession(nextSession);
       } else {
         clearAuthToken();
         reset();

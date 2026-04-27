@@ -125,6 +125,7 @@ type PricingPlan = {
   periodUSD: string;
   periodINR: string;
   features: string[];
+  featuresUSD?: string[];
   buttonLabel: string;
   buttonStyle: "ghost" | "blue" | "primary" | "amber" | "dark";
   action: "trial" | "contact" | "waitlist" | "checkout";
@@ -192,6 +193,17 @@ const plans: PricingPlan[] = [
       "Audit log",
       "Priority email support",
     ],
+    featuresUSD: [
+      "Includes 3 seats. +$49/extra seat",
+      "10 members per project · 5 collaborative projects",
+      "5,000+ AI messages (scales with seats)",
+      "5 GB file size",
+      "100 GB+ storage (scales with seats)",
+      "200 GB+ data scan/month",
+      "DB: + Snowflake, Redshift, BigQuery",
+      "Audit log",
+      "Priority email support",
+    ],
     buttonLabel: "Join waitlist",
     buttonStyle: "primary",
     action: "waitlist",
@@ -205,6 +217,17 @@ const plans: PricingPlan[] = [
     periodINR: "/month",
     features: [
       "Includes 5 seats. +\u20b93,999/extra seat",
+      "50 members per project · unlimited collaborative projects",
+      "Unlimited AI messages",
+      "10 GB file size",
+      "2 TB storage + unlimited scan",
+      "DB: + Custom connectors",
+      "Audit log",
+      "SSO / SAML",
+      "24/7 dedicated support",
+    ],
+    featuresUSD: [
+      "Includes 5 seats. +$79/extra seat",
       "50 members per project · unlimited collaborative projects",
       "Unlimited AI messages",
       "10 GB file size",
@@ -710,7 +733,7 @@ export function HomePage() {
         <p className="pricing-price">{currency === "INR" ? plan.priceINR : plan.priceUSD}</p>
         <p className="pricing-period">{currency === "INR" ? plan.periodINR : plan.periodUSD}</p>
         <ul className="pricing-features">
-          {plan.features.map((item) => (
+          {(currency === "USD" && plan.featuresUSD ? plan.featuresUSD : plan.features).map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>

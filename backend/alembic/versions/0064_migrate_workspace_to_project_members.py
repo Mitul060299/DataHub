@@ -67,7 +67,7 @@ def upgrade() -> None:
         WHERE wm.status IN ('active', 'pending')
           AND (wm.user_id IS NULL OR wm.user_id <> p.user_id)
           AND LOWER(wm.email) <> COALESCE(
-            (SELECT LOWER(u.email) FROM users u WHERE u.id = p.user_id),
+            (SELECT LOWER(u.username) FROM users u WHERE u.id = p.user_id),
             ''
           )
         ON CONFLICT (project_id, email) DO NOTHING

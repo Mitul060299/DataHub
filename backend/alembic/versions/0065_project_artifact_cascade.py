@@ -13,14 +13,14 @@ keep SET NULL because those are valuable, reusable assets — they become visibl
 the workspace-level "no filter" view rather than being silently destroyed.
 
 Revision ID: 0065
-Revises: 0064
+Revises: 0064_migrate_workspace_to_project_members
 Create Date: 2026-04-27
 """
 from alembic import op
 
 # revision identifiers
 revision = "0065"
-down_revision = "0064"
+down_revision = "0064_migrate_workspace_to_project_members"
 branch_labels = None
 depends_on = None
 

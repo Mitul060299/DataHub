@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
-import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 
@@ -43,7 +42,7 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects, activeWorkspaceId, workspaces } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects } = useWorkspaceContext();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -61,22 +60,9 @@ export function WorkspaceHomePage() {
       .finally(() => setRecentLoading(false));
   }, []);
 
-  // Filter projects to only those belonging to the active workspace
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-  const workspaceProjects = projects.filter((p) => {
-    if (!activeWorkspaceId || activeWorkspaceId === "default") {
-      // Synthetic "My Workspace": show only legacy "default" projects + personal-typed workspaces
-      return p.workspaceId === "default" || workspaces.find((w) => w.id === p.workspaceId)?.workspace_type === "personal";
-    }
-    if (activeWorkspace?.workspace_type === "collab") {
-      // Collab workspace: strict — only this workspace's projects
-      return p.workspaceId === activeWorkspaceId;
-    }
-    // Personal DB workspace: include this workspace + legacy "default" tagged projects
-    return p.workspaceId === activeWorkspaceId || p.workspaceId === "default";
-  });
-
-  const filteredProjects = workspaceProjects.filter((p) =>
+  // Project-level model: show every project the user can see.
+  // Backend list_projects already enforces visibility (owner + workspace co-members).
+  const filteredProjects = projects.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -119,35 +105,17 @@ export function WorkspaceHomePage() {
   };
 
   return (
-    <div style={{ flex: 1, overflow: "hidden", background: "var(--bg0)", display: "flex", flexDirection: "row" }}>
-
-      {/* ── Left sidebar: workspace switcher ──────────────── */}
-      <div style={{
-        width: 220,
-        flexShrink: 0,
-        borderRight: "1px solid var(--bd)",
-        background: "var(--bg1)",
-        display: "flex",
-        flexDirection: "column",
-        padding: "20px 0",
-        overflowY: "auto",
-      }}>
-        <div style={{ padding: "0 16px 12px", fontSize: 11, fontWeight: 600, color: "var(--tx2, #888)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Workspaces
-        </div>
-        <WorkspaceSwitcher />
-      </div>
-
+    <div style={{ flex: 1, overflow: "hidden", background: "var(--bg0)", display: "flex", flexDirection: "column" }}>
       {/* ── Main content ──────────────────────────────────── */}
       <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
         {/* Page header */}
         <div style={{ padding: "28px 32px 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--tx0)", letterSpacing: "-0.02em" }}>
-              {activeWorkspace?.workspace_type === "collab" ? activeWorkspace.name : (activeWorkspace ? "My Workspace" : "Workspace")}
+              Workspace
             </h1>
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--tx1)" }}>
-              {activeWorkspace?.workspace_type === "collab" ? "Collab workspace · shared projects" : "Your personal workspace"}
+              All your projects in one place. Invite collaborators per project from each project's settings.
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>

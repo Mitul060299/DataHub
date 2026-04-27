@@ -198,7 +198,10 @@ async def list_pipelines(
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
     from ..services.workspace_access import get_visible_user_ids
-    visible = get_visible_user_ids(db, current_user_id, workspace_id or "default")
+    from ..services.project_access import list_visible_owner_user_ids
+    visible = set(get_visible_user_ids(db, current_user_id, workspace_id or "default"))
+    visible.update(list_visible_owner_user_ids(current_user_id, db))
+    visible = list(visible)
     pipelines, total = engine.list_pipelines(
         workspace_id=workspace_id,
         status=status,

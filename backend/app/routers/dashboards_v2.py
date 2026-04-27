@@ -17,6 +17,7 @@ from ..db import get_db
 from ..models_db import DashboardViewDB, DashboardCommentDB
 from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
 from ..services.workspace_access import get_visible_user_ids
+from ..services.project_access import list_visible_owner_user_ids
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards-v2"])
 public_router = APIRouter(prefix="/api/public/dashboards", tags=["dashboards-public"])
@@ -32,9 +33,10 @@ def list_dashboards(
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_subject(authorization)
-    visible = get_visible_user_ids(db, user_id, workspace_id or "default")
+    visible = set(get_visible_user_ids(db, user_id, workspace_id or "default"))
+    visible.update(list_visible_owner_user_ids(user_id, db))
     return DashboardsV2Service.list_dashboards(
-        user_id=user_id, workspace_id=workspace_id, visible_user_ids=visible
+        user_id=user_id, workspace_id=workspace_id, visible_user_ids=list(visible)
     )
 
 

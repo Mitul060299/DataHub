@@ -18,6 +18,7 @@ from ..models_db import CanvasLayoutDB, DatasetMetaDB, User
 from ..services.duckdb_service import DuckDBService
 from ..services.plan_guard import normalize_plan
 from ..services.workspace_access import get_visible_user_ids
+from ..services.project_access import list_visible_owner_user_ids
 
 router = APIRouter(prefix="/api/canvas", tags=["canvas"])
 
@@ -95,8 +96,10 @@ def list_canvas_layouts(
     db: Session = Depends(get_db),
 ):
     workspace_id = getattr(current_user, "workspace_id", "default") or "default"
-    visible = get_visible_user_ids(db, current_user.id, workspace_id)
-    q = db.query(CanvasLayoutDB).filter(CanvasLayoutDB.user_id.in_(visible))
+    visible = set(get_visible_user_ids(db, current_user.id, workspace_id))
+    # Project-level: also include owners of projects the user is an active member of.
+    visible.update(list_visible_owner_user_ids(current_user.id, db))
+    q = db.query(CanvasLayoutDB).filter(CanvasLayoutDB.user_id.in_(list(visible)))
     if project_id:
         q = q.filter(CanvasLayoutDB.project_id == project_id)
     rows = q.order_by(CanvasLayoutDB.updated_at.desc()).all()

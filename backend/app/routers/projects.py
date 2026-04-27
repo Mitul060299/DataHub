@@ -40,6 +40,10 @@ from ..models_db import (
     ProjectDB,
 )
 from ..services.workspace_access import get_visible_user_ids
+from ..services.project_access import (
+    user_can_access_project,
+    list_visible_project_ids,
+)
 from ..services.plan_guard import resolve_workspace_plan, enforce_project_limit
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -105,8 +109,25 @@ def list_projects(
             (ProjectDB.workspace_id == workspace_id)
             | (ProjectDB.workspace_id == "default")
         )
-    projects = q.order_by(ProjectDB.updated_at.desc()).all()
-    return [_project_out(p, db) for p in projects]
+    owned_or_workspace = q.order_by(ProjectDB.updated_at.desc()).all()
+
+    # Project-level collaboration: also surface projects the user is an active
+    # member of (regardless of workspace), so invited collaborators see the
+    # shared project in their workspace tab.
+    if not workspace_id or workspace_id == "default":
+        member_project_ids = list_visible_project_ids(current_user.id, db)
+        already = {p.id for p in owned_or_workspace}
+        extra_ids = member_project_ids - already
+        if extra_ids:
+            extras = (
+                db.query(ProjectDB)
+                .filter(ProjectDB.id.in_(extra_ids))
+                .order_by(ProjectDB.updated_at.desc())
+                .all()
+            )
+            owned_or_workspace.extend(extras)
+
+    return [_project_out(p, db) for p in owned_or_workspace]
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
@@ -156,6 +177,7 @@ def create_project(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _get_project_or_404(project_id: str, user_id: str, db: Session) -> ProjectDB:
+    """Owner-only access. Use for mutating endpoints (PATCH, DELETE)."""
     project = (
         db.query(ProjectDB)
         .filter(ProjectDB.id == project_id, ProjectDB.user_id == user_id)
@@ -166,13 +188,29 @@ def _get_project_or_404(project_id: str, user_id: str, db: Session) -> ProjectDB
     return project
 
 
+def _get_accessible_project_or_404(project_id: str, user_id: str, db: Session) -> ProjectDB:
+    """Owner OR active project_member. Use for read-only endpoints (GET detail)."""
+    project = (
+        db.query(ProjectDB)
+        .filter(ProjectDB.id == project_id)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    if project.user_id == user_id:
+        return project
+    if user_can_access_project(project_id, user_id, db):
+        return project
+    raise HTTPException(status_code=404, detail="Project not found.")
+
+
 @router.get("/{project_id}", response_model=ProjectDetailOut)
 def get_project(
     project_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ProjectDetailOut:
-    project = _get_project_or_404(project_id, current_user.id, db)
+    project = _get_accessible_project_or_404(project_id, current_user.id, db)
 
     # Pipelines — guarded: project_id column may not yet exist in older DBs
     from sqlalchemy.exc import ProgrammingError as _ProgrammingError

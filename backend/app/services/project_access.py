@@ -80,3 +80,32 @@ def get_project_owner(project_id: str, db: Session) -> str | None:
         .first()
     )
     return row[0] if row else None
+
+
+def list_visible_owner_user_ids(user_id: str, db: Session) -> list[str]:
+    """Return the set of project-owner user_ids whose artifacts are visible to ``user_id``.
+
+    This is the union of:
+    - ``user_id`` itself (their own artifacts)
+    - the owner user_id of every project where ``user_id`` is an active member
+
+    Use this for artifact list endpoints (dashboards, pipelines, canvas, datasets)
+    that key off ``<artifact>.user_id``. The project-billing rule guarantees
+    artifacts inside a shared project are always stored under the owner's user_id.
+    """
+    if not user_id:
+        return []
+    owners = {user_id}
+    rows = (
+        db.query(ProjectDB.user_id)
+        .join(ProjectMemberDB, ProjectMemberDB.project_id == ProjectDB.id)
+        .filter(
+            ProjectMemberDB.user_id == user_id,
+            ProjectMemberDB.status == "active",
+        )
+        .all()
+    )
+    for (owner_id,) in rows:
+        if owner_id:
+            owners.add(owner_id)
+    return list(owners)

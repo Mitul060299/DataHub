@@ -31,6 +31,24 @@ export function InviteAcceptPage() {
     }
 
     const accept = async () => {
+      // Try project-level invite first (new collaboration model);
+      // fall back to workspace-level invite for legacy/in-flight tokens.
+      try {
+        await api.get(`/invites/projects/${token}/accept`);
+        setStatus("success");
+        setMessage("You've joined the project!");
+        setTimeout(() => navigate("/home?joined=1", { replace: true }), 1500);
+        return;
+      } catch (err) {
+        const e = err as { response?: { status?: number; data?: { detail?: string } } };
+        // Only fall back on 404 (token not in project_members);
+        // surface 403/410/etc so the user sees the real error.
+        if (e.response?.status !== 404) {
+          setStatus("error");
+          setMessage(e.response?.data?.detail ?? "Invite could not be accepted.");
+          return;
+        }
+      }
       try {
         await api.get(`/invites/${token}/accept`);
         setStatus("success");

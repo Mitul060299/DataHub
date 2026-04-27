@@ -86,6 +86,9 @@ export function useSEO({
     return () => {
       document.title = prevTitle;
       sdScript?.remove();
+      // Remove the canonical tag on unmount so stale canonicals don't persist
+      // when navigating to a page that doesn't set one.
+      document.querySelector('link[rel="canonical"]')?.remove();
     };
     // structuredData intentionally excluded — objects passed inline would cause
     // infinite re-runs. Callers should memoise the value with useMemo if dynamic.

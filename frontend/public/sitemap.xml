@@ -29,67 +29,10 @@
     <priority>0.7</priority>
   </url>
 
-  <!-- Docs sub-pages (high-intent search queries) -->
-  <url>
-    <loc>https://datahub.org.in/docs?page=quickstart</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=ai-agent</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=pipelines</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=guide-database</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=guide-upload</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=guide-dashboard</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=concepts</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=faq</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=formats</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://datahub.org.in/docs?page=limits</loc>
-    <lastmod>2026-04-25</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
+  <!-- Docs sub-pages: served as SPA query params — Google treats query-param
+       variants as duplicates of the base /docs URL. Removed from sitemap to
+       prevent "Duplicate without user-selected canonical" in Search Console.
+       The DocsPage component sets per-page canonicals via useSEO at runtime. -->
 
   <url>
     <loc>https://datahub.org.in/terms</loc>

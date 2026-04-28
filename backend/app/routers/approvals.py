@@ -100,8 +100,17 @@ def approve_request(
 ) -> ApprovalRequestOut:
     role = get_current_role(authorization)
     require_role("admin", role)
-    request = db.query(ApprovalRequestDB).filter(ApprovalRequestDB.id == request_id).first()
+    requester = get_current_user_id(authorization)
+    request = (
+        db.query(ApprovalRequestDB)
+        .filter(
+            ApprovalRequestDB.id == request_id,
+            ApprovalRequestDB.requester == requester,
+        )
+        .first()
+    )
     if not request:
+        # 404 (not 403) to avoid leaking existence of other tenants' requests.
         raise HTTPException(status_code=404, detail="Request not found")
     request.status = "approved"
     db.commit()
@@ -133,7 +142,15 @@ def reject_request(
 ) -> ApprovalRequestOut:
     role = get_current_role(authorization)
     require_role("admin", role)
-    request = db.query(ApprovalRequestDB).filter(ApprovalRequestDB.id == request_id).first()
+    requester = get_current_user_id(authorization)
+    request = (
+        db.query(ApprovalRequestDB)
+        .filter(
+            ApprovalRequestDB.id == request_id,
+            ApprovalRequestDB.requester == requester,
+        )
+        .first()
+    )
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
     request.status = "rejected"

@@ -162,6 +162,17 @@ api.interceptors.response.use(
       );
     }
 
+    // Auto-handle expired/invalid sessions. We avoid auto-redirecting on the
+    // public auth pages themselves (otherwise a failed login would bounce the
+    // user away from the form they're filling out).
+    if (status === 401 && typeof window !== "undefined") {
+      const path = window.location.pathname || "";
+      const onAuthPage = ["/login", "/signup", "/reset", "/forgot"].some((p) => path.startsWith(p));
+      if (!onAuthPage) {
+        window.dispatchEvent(new CustomEvent("datahub:session-expired"));
+      }
+    }
+
     return Promise.reject(error);
   }
 );

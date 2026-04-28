@@ -129,14 +129,20 @@ export function BillingSettings() {
   };
 
   const handleSelectPlan = async (plan: BillingPlanSlug) => {
+    if (busyPlan) return; // guard against double-click race
     setMessage(null);
     setUpgradeError(null);
     setBusyPlan(plan);
     try {
       await initiateSubscription(plan, "monthly", seatCount, currency);
     } catch (actionError: unknown) {
-      const maybeError = actionError as { response?: { data?: { detail?: string } } };
-      setUpgradeError(maybeError.response?.data?.detail ?? "Failed to start checkout. Please try again.");
+      const maybeBilling = actionError as { message?: string; code?: string };
+      const maybeAxios = actionError as { response?: { data?: { detail?: string } } };
+      setUpgradeError(
+        maybeBilling.message
+        ?? maybeAxios.response?.data?.detail
+        ?? "Failed to start checkout. Please try again.",
+      );
     } finally {
       setBusyPlan(null);
     }

@@ -470,6 +470,12 @@ async def share_dashboard(
     if not dashboard.share_token:
         dashboard.share_token = viz_service.generate_share_token()
         dashboard.is_public = True
+        # Default share lifetime: 90 days. Owners can revoke earlier via DELETE.
+        try:
+            from datetime import datetime, timedelta, timezone
+            dashboard.share_expires_at = datetime.now(timezone.utc) + timedelta(days=90)
+        except Exception:
+            pass
         db.commit()
     
     return {
@@ -495,6 +501,10 @@ async def revoke_share(
     
     dashboard.share_token = None
     dashboard.is_public = False
+    try:
+        dashboard.share_expires_at = None
+    except Exception:
+        pass
     db.commit()
     
     return {"message": "Share access revoked"}

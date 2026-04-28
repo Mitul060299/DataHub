@@ -48,6 +48,30 @@ from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
 logger = logging.getLogger(__name__)
 
+
+def _load_user_dataset(
+    db: Session,
+    dataset_id: str,
+    user_id: str | None,
+    *,
+    include_deleted: bool = False,
+) -> DatasetMetaDB:
+    """Load a dataset by id, enforcing tenant ownership and soft-delete.
+
+    Centralised so user-facing endpoints can't accidentally leak across tenants
+    or surface trashed datasets. Raises 404 (not 403) on failure to avoid
+    leaking the existence of other tenants' datasets.
+    """
+    q = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
+    if user_id:
+        q = q.filter(DatasetMetaDB.user_id == user_id)
+    if not include_deleted:
+        q = q.filter(DatasetMetaDB.deleted_at.is_(None))
+    meta = q.first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return meta
+
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 # _DATASETS in-process LRU cache removed (Phase 5 statelessness).
@@ -791,9 +815,8 @@ def save_pipeline_steps(
     """
     role = get_current_role(authorization)
     require_role("editor", role)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-    if not meta:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    user_id = get_current_user_id(authorization)
+    meta = _load_user_dataset(db, dataset_id, user_id)
     steps = payload.get("steps", [])
     if not isinstance(steps, list):
         raise HTTPException(status_code=422, detail="steps must be a list")
@@ -1235,9 +1258,8 @@ def rename_dataset(
     """Rename a dataset (user-facing label only)."""
     role = get_current_role(authorization)
     require_role("viewer", role)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-    if not meta:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    user_id = get_current_user_id(authorization)
+    meta = _load_user_dataset(db, dataset_id, user_id)
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="name is required")
@@ -1256,9 +1278,8 @@ def suggest_columns(
 ) -> dict:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-    if not meta:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    user_id = get_current_user_id(authorization)
+    meta = _load_user_dataset(db, dataset_id, user_id)
     columns = meta.columns or []
     normalized = [str(col) for col in columns]
     close = difflib.get_close_matches(query, normalized, n=max(1, min(limit, 20)), cutoff=0.4)
@@ -1276,6 +1297,7 @@ def compare_schemas(
     """Compare column schemas of two datasets and return alignment info."""
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
 
     dataset_ids = [d.strip() for d in ids.split(",") if d.strip()]
     if len(dataset_ids) < 2:
@@ -1283,9 +1305,7 @@ def compare_schemas(
 
     results = []
     for did in dataset_ids[:2]:
-        meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == did).first()
-        if not meta:
-            raise HTTPException(status_code=404, detail=f"Dataset {did!r} not found")
+        meta = _load_user_dataset(db, did, user_id)
         columns = list(meta.columns or [])
         results.append({"id": did, "name": meta.name or did, "columns": columns})
 
@@ -1319,9 +1339,10 @@ def query_dataset(
 ) -> DatasetQueryResponse:
     role = get_current_role(authorization)
     require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
 
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-    if not meta or not meta.storage_path:
+    meta = _load_user_dataset(db, dataset_id, user_id)
+    if not meta.storage_path:
         raise HTTPException(status_code=404, detail="Dataset not found or not in object storage")
 
     results, cached = DuckDBService.query_with_cache(
@@ -1356,9 +1377,8 @@ def clear_dataset_cache(
 ) -> dict:
     role = get_current_role(authorization)
     require_role("editor", role)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
-    if not meta:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    user_id = get_current_user_id(authorization)
+    meta = _load_user_dataset(db, dataset_id, user_id)
     QueryCacheService.clear_dataset_cache(db, dataset_id)
     return {"success": True, "message": "Cache cleared"}
 
@@ -1384,7 +1404,10 @@ def delete_dataset(
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    # Enforce ownership on both soft and hard delete paths so a malicious caller
+    # can't trash someone else's dataset by guessing IDs. include_deleted=True
+    # so a hard delete can still purge a previously soft-deleted row.
+    meta = _load_user_dataset(db, dataset_id, user_id, include_deleted=True)
 
     if not hard:
         # ── Soft delete: mark deleted_at on this dataset and any descendants

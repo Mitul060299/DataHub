@@ -169,6 +169,30 @@ class Settings(BaseModel):
 
 settings = Settings()
 
+# Refuse to boot in production with placeholder secrets. These keys gate webhook
+# replay (cron_secret), share-token integrity, and request-signing — leaving the
+# default values in a public deployment is equivalent to no auth at all.
+if settings.app_env == "production":
+    _PLACEHOLDER_TOKENS = {"", "change-me", "change-me-in-production", "changeme", "placeholder", "secret"}
+    _required = {
+        "CRON_SECRET": settings.cron_secret,
+        "APP_SECRET_KEY": settings.app_secret_key,
+    }
+    _missing = [k for k, v in _required.items() if (v or "").strip().lower() in _PLACEHOLDER_TOKENS]
+    if _missing:
+        raise RuntimeError(
+            "Refusing to start in production: the following environment variables "
+            "are unset or use placeholder values: " + ", ".join(sorted(_missing))
+            + ". Generate strong random secrets and set them before deploying."
+        )
+    # SHARE_SIGNING_SECRET is only required if anyone has minted a share token,
+    # but warn loudly so the operator notices before the first share is issued.
+    if not settings.share_signing_secret:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "SHARE_SIGNING_SECRET is not set — public share tokens will be rejected at sign time."
+        )
+
 try:
     _razorpay_plans = importlib.import_module("app.razorpay_plans")
     sys.modules[__name__ + ".razorpay_plans"] = _razorpay_plans

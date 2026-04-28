@@ -86,6 +86,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         clearAuthToken();
         reset();
         clearSentryUser();
+        // Scrub per-user state from localStorage so a subsequent user on a shared
+        // computer doesn't inherit the previous tenant's workspace/dataset context.
+        try {
+          const keysToClear = [
+            "activeWorkspaceId",
+            "activeDatasetId",
+            "activeProjectId",
+            "datahub_onboarding_dismissed",
+          ];
+          for (const k of keysToClear) {
+            localStorage.removeItem(k);
+          }
+          // Per-dataset chat sessions: enumerate and drop any datahub_chat_session_*
+          for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("datahub_chat_session_")) {
+              localStorage.removeItem(key);
+            }
+          }
+        } catch {
+          // ignore quota / disabled storage errors
+        }
       }
       setLoading(false);
     });
@@ -94,6 +116,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       mounted = false;
       data.subscription.unsubscribe();
     };
+  }, []);
+
+  // React to expired/invalid sessions surfaced by the axios interceptor.
+  useEffect(() => {
+    const handler = () => {
+      void supabase.auth.signOut().finally(() => {
+        if (typeof window !== "undefined") {
+          const path = window.location.pathname || "";
+          const onAuthPage = ["/login", "/signup", "/reset", "/forgot"].some((p) => path.startsWith(p));
+          if (!onAuthPage) {
+            window.location.assign("/login?reason=session_expired");
+          }
+        }
+      });
+    };
+    window.addEventListener("datahub:session-expired", handler);
+    return () => window.removeEventListener("datahub:session-expired", handler);
   }, []);
 
   const signInWithPassword = async (email: string, password: string) => {

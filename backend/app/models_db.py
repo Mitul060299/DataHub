@@ -505,6 +505,7 @@ class VizDashboardDB(Base):
     refresh_interval = Column(Integer, nullable=True)
     is_public = Column(Boolean, default=False)
     share_token = Column(String, nullable=True, unique=True)
+    share_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -550,6 +551,7 @@ class DashboardV2DB(Base):
     theme = Column(JSONB, nullable=True, default=dict)
     is_published = Column(Boolean, nullable=False, default=False)
     share_token = Column(Text, nullable=True, unique=True)
+    share_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

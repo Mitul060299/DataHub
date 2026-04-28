@@ -391,6 +391,11 @@ class DashboardsV2Service:
             dashboard = db.query(DashboardV2DB).filter(DashboardV2DB.share_token == share_token).first()
             if not dashboard:
                 return None
+            # Reject expired share tokens. NULL means "never expires" for
+            # backward compatibility with tokens minted before 0066.
+            expires_at = getattr(dashboard, "share_expires_at", None)
+            if expires_at and expires_at < datetime.now(timezone.utc):
+                return None
             tiles = (
                 db.query(DashboardTileDB)
                 .filter(DashboardTileDB.dashboard_id == dashboard.id)

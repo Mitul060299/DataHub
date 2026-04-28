@@ -76,31 +76,69 @@ async function ensureRazorpayScriptLoaded(): Promise<void> {
   });
 }
 
+export class BillingError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 export async function initiateSubscription(
   plan: BillingPlanSlug,
   billingCycle: BillingCycle,
   quantity: number = 1,
   currency: BillingCurrency = "INR",
 ): Promise<void> {
-  const response = await api.post("/billing/subscribe", {
-    plan,
-    billing_cycle: billingCycle,
-    quantity,
-    currency,
-  });
+  let response;
+  try {
+    response = await api.post("/billing/subscribe", {
+      plan,
+      billing_cycle: billingCycle,
+      quantity,
+      currency,
+    });
+  } catch (err: unknown) {
+    const maybe = err as { response?: { data?: { detail?: { error?: string; message?: string } | string } } };
+    const detail = maybe?.response?.data?.detail;
+    if (detail && typeof detail === "object") {
+      const friendly: Record<string, string> = {
+        usd_billing_unavailable: "USD billing is not enabled yet. Please choose INR or contact support.",
+        plan_not_configured: "This plan is not yet configured for the selected currency. Please contact support.",
+      };
+      const code = detail.error;
+      throw new BillingError(friendly[code ?? ""] || detail.message || "Failed to start checkout.", code);
+    }
+    if (typeof detail === "string") {
+      throw new BillingError(detail);
+    }
+    throw new BillingError("Failed to start checkout. Please try again.");
+  }
 
-  const {
-    subscription_id: subscriptionId,
-    razorpay_key_id: razorpayKeyId,
-  } = response.data as {
+  const data = response.data as {
     subscription_id: string;
     razorpay_key_id: string;
     currency?: BillingCurrency;
+    reused_existing?: boolean;
+    short_url?: string;
   };
+  const {
+    subscription_id: subscriptionId,
+    razorpay_key_id: razorpayKeyId,
+    reused_existing: reusedExisting,
+    short_url: shortUrl,
+  } = data;
+
+  // If the backend deduped to an existing pending subscription and provided a hosted
+  // checkout URL, prefer redirecting there instead of opening a fresh modal.
+  if (reusedExisting && shortUrl) {
+    window.open(shortUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
 
   await ensureRazorpayScriptLoaded();
   if (typeof window.Razorpay === "undefined") {
-    throw new Error("Razorpay SDK is unavailable. Please refresh and try again.");
+    throw new BillingError("Razorpay SDK is unavailable. Please refresh and try again.");
   }
 
   const planLabel = `${plan.charAt(0).toUpperCase() + plan.slice(1)} — ${billingCycle}`;

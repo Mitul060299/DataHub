@@ -76,6 +76,12 @@ class Settings(BaseModel):
     supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     billing_enabled: bool = _parse_bool(os.getenv("BILLING_ENABLED"), False)
+    # USD/international billing is launched separately from INR. When False (the
+    # default), /billing/subscribe rejects USD requests with a clean 400 instead
+    # of failing deep inside the Razorpay client because the USD plan IDs are
+    # placeholders. Set USD_BILLING_ENABLED=true after running
+    # scripts/setup_razorpay_plans.py and configuring RAZORPAY_*_USD_PLAN env vars.
+    usd_billing_enabled: bool = _parse_bool(os.getenv("USD_BILLING_ENABLED"), False)
     razorpay_key_id: str = os.getenv("RAZORPAY_KEY_ID", "")
     razorpay_key_secret: str = os.getenv("RAZORPAY_KEY_SECRET", "")
     razorpay_webhook_secret: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")

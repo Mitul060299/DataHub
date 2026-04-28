@@ -331,6 +331,22 @@ async def get_invoice_pdf_url(invoice_id: str) -> str:
     return str(invoice.get("short_url") or "")
 
 
+def get_subscription_short_url(razorpay_subscription_id: str) -> str:
+    """Return the hosted checkout URL for an existing Razorpay subscription.
+
+    Used by /billing/subscribe to reuse an in-flight subscription instead of
+    creating a duplicate one. Failures are swallowed so callers can degrade
+    gracefully (the frontend can still call /billing/subscribe again later).
+    """
+    if not razorpay_subscription_id:
+        return ""
+    try:
+        fetched = _get_client().subscription.fetch(razorpay_subscription_id)
+        return str(fetched.get("short_url") or "")
+    except Exception:  # pragma: no cover - network/credentials issues
+        return ""
+
+
 def verify_payment_signature(
     razorpay_payment_id: str,
     razorpay_subscription_id: str,

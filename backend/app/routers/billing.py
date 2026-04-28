@@ -1,5 +1,6 @@
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,8 @@ from app.services import billing_repository, billing_service
 from app.services.analytics import track
 from app.services.rate_limiter import limiter
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -66,6 +69,36 @@ async def subscribe(
 
     plan = _normalize_plan_slug(payload.plan)
     billing_cycle = _normalize_cycle(payload.billing_cycle)
+    currency = (payload.currency or "INR").strip().upper()
+
+    # USD launch gate — INR is live first; USD requires plan IDs configured
+    # in Razorpay dashboard + USD_BILLING_ENABLED=true env var.
+    if currency == "USD" and not settings.usd_billing_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "usd_billing_unavailable",
+                "message": "USD billing is coming soon. Please contact support@datahub.org.in or use INR for now.",
+            },
+        )
+
+    # Idempotency: if the user already has an in-flight or active Razorpay
+    # subscription, return that one instead of creating a duplicate. This
+    # protects against double-clicks, network retries, and replayed requests —
+    # otherwise the user could be charged twice for the same plan.
+    existing_active = billing_repository.get_active_subscription(user.id)
+    if existing_active:
+        existing_status = str(existing_active.get("status") or "").lower()
+        existing_rzp_id = str(existing_active.get("razorpay_subscription_id") or "")
+        if existing_status in {"created", "authenticated", "active"} and existing_rzp_id:
+            short_url = billing_service.get_subscription_short_url(existing_rzp_id)
+            return {
+                "subscription_id": existing_rzp_id,
+                "short_url": short_url,
+                "razorpay_key_id": settings.razorpay_key_id,
+                "currency": str(existing_active.get("currency") or currency).upper(),
+                "reused_existing": True,
+            }
 
     try:
         subscription = await billing_service.create_subscription(
@@ -74,18 +107,29 @@ async def subscribe(
             billing_cycle=billing_cycle,
             quantity=payload.quantity,
             notify_email=user.email,
-            currency=payload.currency,
+            currency=currency,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # Plan-not-configured (e.g. USD plan ID placeholder) lands here.
+        # Surface as 400 with a clear code so the frontend can show a useful message.
+        message = str(exc)
+        if "plan ID" in message and "not configured" in message:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "plan_not_configured",
+                    "message": "This plan/currency combination is not yet available. Please try a different plan or contact support.",
+                },
+            ) from exc
+        raise HTTPException(status_code=503, detail=message) from exc
 
     return {
         "subscription_id": subscription.get("id"),
         "short_url": subscription.get("short_url"),
         "razorpay_key_id": settings.razorpay_key_id,
-        "currency": (payload.currency or "INR").upper(),
+        "currency": currency,
     }
 
 
@@ -349,6 +393,27 @@ async def _on_activated(entities: dict[str, Any], payload: dict[str, Any], event
     plan = notes.get("plan")
     razorpay_sub_id = str(sub.get("id") or "")
     if razorpay_sub_id and user_id and plan:
+        # Self-heal: if our subscriptions row is missing (e.g. the webhook
+        # raced ahead of store_subscription, or the originating request died
+        # before persisting), insert it from the webhook entity so the user
+        # is not left in a half-paid state.
+        existing = billing_repository.get_subscription_by_razorpay_id(razorpay_sub_id)
+        if not existing:
+            logger.warning(
+                "subscription.activated arrived without a local subs row; self-healing rzp_sub=%s user=%s plan=%s",
+                razorpay_sub_id, user_id, plan,
+            )
+            try:
+                billing_repository.store_subscription(
+                    user_id=str(user_id),
+                    subscription=sub,
+                    plan=str(plan),
+                    billing_cycle=str(notes.get("billing_cycle") or "monthly"),
+                    quantity=int(sub.get("quantity") or 1),
+                    currency=str(notes.get("currency") or "INR"),
+                )
+            except Exception:
+                logger.exception("Failed to self-heal subscription row for %s", razorpay_sub_id)
         billing_repository.update_subscription_status(razorpay_sub_id, "active", str(user_id), str(plan), verify_ownership=False)
     await _log(str(user_id) if user_id else None, razorpay_sub_id or None, "subscription.activated", payload, event_id=event_id)
 

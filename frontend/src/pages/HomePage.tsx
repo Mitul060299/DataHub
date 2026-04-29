@@ -147,7 +147,8 @@ const plans: PricingPlan[] = [
       "500 MB storage",
       "5 GB data scan/month",
       "1 team member",
-      "DB connections: CSV & Excel only",
+      "Files: CSV, Excel",
+      "Databases: \u2014",
       "Community support",
     ],
     buttonLabel: "Get started",
@@ -171,7 +172,7 @@ const plans: PricingPlan[] = [
       "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle",
       "Email support",
     ],
-    buttonLabel: "Start free trial",
+    buttonLabel: "Subscribe",
     buttonStyle: "blue",
     action: "checkout",
   },
@@ -189,7 +190,8 @@ const plans: PricingPlan[] = [
       "5 GB file size",
       "100 GB+ storage (scales with seats)",
       "200 GB+ data scan/month",
-      "DB: + Snowflake, Redshift, BigQuery",
+      "Files: CSV, Excel, JSON, Parquet",
+      "Databases: PostgreSQL, MySQL, SQLite, MSSQL, Oracle, Snowflake, Redshift, BigQuery",
       "Audit log",
       "Priority email support",
     ],
@@ -200,7 +202,8 @@ const plans: PricingPlan[] = [
       "5 GB file size",
       "100 GB+ storage (scales with seats)",
       "200 GB+ data scan/month",
-      "DB: + Snowflake, Redshift, BigQuery",
+      "Files: CSV, Excel, JSON, Parquet",
+      "Databases: PostgreSQL, MySQL, SQLite, MSSQL, Oracle, Snowflake, Redshift, BigQuery",
       "Audit log",
       "Priority email support",
     ],
@@ -221,7 +224,8 @@ const plans: PricingPlan[] = [
       "Unlimited AI messages",
       "10 GB file size",
       "2 TB storage + unlimited scan",
-      "DB: + Custom connectors",
+      "Files: CSV, Excel, JSON, Parquet",
+      "Databases: All supported + custom connectors on request",
       "Audit log",
       "SSO / SAML",
       "24/7 dedicated support",
@@ -232,7 +236,8 @@ const plans: PricingPlan[] = [
       "Unlimited AI messages",
       "10 GB file size",
       "2 TB storage + unlimited scan",
-      "DB: + Custom connectors",
+      "Files: CSV, Excel, JSON, Parquet",
+      "Databases: All supported + custom connectors on request",
       "Audit log",
       "SSO / SAML",
       "24/7 dedicated support",
@@ -253,7 +258,8 @@ const plans: PricingPlan[] = [
       "Unlimited everything",
       "Custom storage",
       "Unlimited team members",
-      "Custom DB connections",
+      "Files: CSV, Excel, JSON, Parquet (any format on request)",
+      "Databases: All supported + bespoke connectors",
       "White-label option",
       "SSO / SAML",
       "Audit log",
@@ -716,6 +722,12 @@ export function HomePage() {
               : "pricing-button-ghost",
     ].join(" ");
 
+    // INR billing is live: promote any waitlist CTA to a real checkout for INR users.
+    const effectiveAction =
+      currency === "INR" && plan.action === "waitlist" ? "checkout" : plan.action;
+    const effectiveLabel =
+      currency === "INR" && plan.action === "waitlist" ? "Subscribe" : plan.buttonLabel;
+
     return (
       <motion.article
         key={plan.tier}
@@ -737,21 +749,21 @@ export function HomePage() {
             <li key={item}>{item}</li>
           ))}
         </ul>
-        {plan.action === "contact" ? (
+        {effectiveAction === "contact" ? (
           <a className={buttonClass} href={`mailto:${SUPPORT_EMAIL}`}>
-            {plan.buttonLabel}
+            {effectiveLabel}
           </a>
-        ) : plan.action === "checkout" ? (
+        ) : effectiveAction === "checkout" ? (
           <button type="button" className={buttonClass} onClick={handleCheckout}>
-            {plan.buttonLabel}
+            {effectiveLabel}
           </button>
-        ) : plan.action === "waitlist" ? (
+        ) : effectiveAction === "waitlist" ? (
           <button type="button" className={buttonClass} onClick={() => handleWaitlist(plan.tier)}>
-            {plan.buttonLabel}
+            {effectiveLabel}
           </button>
         ) : (
           <button type="button" className={buttonClass} onClick={() => handlePlanCta("trial")}>
-            {plan.buttonLabel}
+            {effectiveLabel}
           </button>
         )}
       </motion.article>

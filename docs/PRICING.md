@@ -23,7 +23,8 @@
 | **Max file size** | 50 MB | 1 GB | 5 GB | 10 GB | Unlimited |
 | **Storage** | 500 MB | 20 GB | 100 GB (scales) | 2 TB (scales) | Unlimited |
 | **Data scan / month** | 5 GB | 50 GB | 200 GB (scales) | Unlimited | Unlimited |
-| **DB connectors** | CSV, Excel | + PostgreSQL, MySQL, SQLite, MSSQL, Oracle | + Snowflake, Redshift, BigQuery | + Custom connectors | All |
+| **File formats** | CSV, Excel | + JSON, Parquet | CSV, Excel, JSON, Parquet | CSV, Excel, JSON, Parquet | All (any format on request) |
+| **Database connectors** | — | PostgreSQL, MySQL, SQLite, MSSQL, Oracle | + Snowflake, Redshift, BigQuery | All supported + custom on request | All + bespoke connectors |
 | **Scheduling** | — | ✓ | ✓ | ✓ | ✓ |
 | **Dashboard sharing** | — | ✓ | ✓ | ✓ | ✓ |
 | **Webhooks** | — | — | — | ✓ | ✓ |

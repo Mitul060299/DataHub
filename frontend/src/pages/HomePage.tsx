@@ -723,10 +723,16 @@ export function HomePage() {
     ].join(" ");
 
     // INR billing is live: promote any waitlist CTA to a real checkout for INR users.
-    const effectiveAction =
-      currency === "INR" && plan.action === "waitlist" ? "checkout" : plan.action;
-    const effectiveLabel =
-      currency === "INR" && plan.action === "waitlist" ? "Subscribe" : plan.buttonLabel;
+    // USD billing is not yet enabled: demote any paid checkout CTA to waitlist for USD users.
+    let effectiveAction = plan.action;
+    let effectiveLabel = plan.buttonLabel;
+    if (currency === "INR" && plan.action === "waitlist") {
+      effectiveAction = "checkout";
+      effectiveLabel = "Subscribe";
+    } else if (currency === "USD" && plan.action === "checkout") {
+      effectiveAction = "waitlist";
+      effectiveLabel = "Join waitlist";
+    }
 
     return (
       <motion.article
@@ -1118,22 +1124,6 @@ export function HomePage() {
           <p className="section-subtitle">
             Start free. Upgrade when your team is ready. No surprises.
           </p>
-          <div className="currency-toggle">
-            <button
-              type="button"
-              className={`currency-btn${currency === "USD" ? " active" : ""}`}
-              onClick={() => setCurrency("USD")}
-            >
-              USD
-            </button>
-            <button
-              type="button"
-              className={`currency-btn${currency === "INR" ? " active" : ""}`}
-              onClick={() => setCurrency("INR")}
-            >
-              INR
-            </button>
-          </div>
         </motion.div>
 
         <div className="pricing-grid">

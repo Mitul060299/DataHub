@@ -31,9 +31,9 @@ Before discussing the design, it is critical to acknowledge what already exists 
 
 - **Consolidate** the partial `full_auto_agent.py` / `FullAutoController` prototype and the manual-mode `agent/graph.py` into a single agent that supports a `mode` flag (`manual` vs `auto`). The `AgentEvent` dataclass and SSE format from `full_auto_agent.py` are reusable; the `ToolExecutor` is superseded by the existing `StepEngine`.
 - **Extend** the existing `AgentState` with auto-mode-only fields (backward compatible — Manual Mode ignores them).
-- **Add** six new graph nodes (goal_parser, auto_planner, step_validator, reflection_v2, interrupt_asker, goal_verifier) that branch off the existing graph when `auto_mode=True`.
-- **Reuse** the existing `automation_guardrails.py` policy engine, the existing `slowapi` rate limiter, the existing snapshot-replay machinery, and the existing `pipeline_recorder` node.
-- **One new DB table** (`agent_auto_runs`), **two new columns** on `pipeline_steps` (note: the actual table name is `pipeline_steps`, not `pipeline_steps_v2` as some docs claim).
+- **Add** eight new graph nodes (goal_parser, auto_planner, step_validator, reflection_v2, interrupt_asker, goal_verifier, **prior_pipeline_parser**, **drift_detector**) that branch off the existing graph when `auto_mode=True`.
+- **Reuse** the existing `automation_guardrails.py` policy engine, the existing `slowapi` rate limiter, the existing snapshot-replay machinery, the existing `pipeline_recorder` node, and the existing `profiler.py` for drift detection.
+- **Two new DB tables** (`agent_auto_runs`, `agent_recipes` for one-click reusable monthly pipelines), **two new columns** on `pipeline_steps` (note: the actual table name is `pipeline_steps`, not `pipeline_steps_v2` as some docs claim).
 
 ### 0.3 What this plan deliberately does **not** do
 
@@ -71,11 +71,14 @@ This is safe, auditable, and well-suited to exploratory analysis. For complex, r
 Modern LLM reasoning is now strong enough to:
 
 - Parse multi-constraint goals expressed in natural language or pasted business-rule documents.
+- **Ingest the team's existing transformation logic** (last month's SQL job, a Python notebook, a Confluence runbook) and use it as a strong prior, so the agent replicates established practice instead of reinventing it.
+- **Detect data drift upfront** — profile this month's file against the assumptions baked into the prior pipeline and the rules, and adjust step parameters automatically when the drift is small.
 - Plan multi-step transformation sequences to satisfy those constraints.
-- Detect when a step partially or fully fails, reason about why, and attempt an alternative strategy.
+- Detect when a step partially or fully fails, reason about why (drift vs ambiguity vs novel value), and attempt an alternative strategy.
 - Know when it is stuck and surface a precise, actionable question — rather than failing silently or looping indefinitely.
+- **Save the whole thing as a one-click reusable Recipe** so the next month's run takes 30 seconds, not 30 minutes.
 
-The goal of this document is to design **Auto Mode** — exploiting these capabilities while retaining the ability to pause and ask the user when the agent genuinely cannot proceed (similar to how GitHub Copilot surfaces inline suggestions and clarifying prompts inside VS Code).
+The goal of this document is to design **Auto Mode** — exploiting these capabilities while retaining the ability to pause and ask the user when the agent genuinely cannot proceed (similar to how GitHub Copilot surfaces inline suggestions and clarifying prompts inside VS Code). The user pastes once, the agent plans the entire DAG with drift adjustments, runs it end-to-end, and the user gets a finished pipeline + a cleaned dataset + a Recipe for next month.
 
 ---
 
@@ -101,15 +104,16 @@ Both modes share the same DuckDB session, the same operation registry, the same 
 
 ### 3.1 Goal Specification Interface
 
-The user describes **what the data should look like at the end**, not how to get there. Acceptable input formats (all consumed as a single string field — the parser figures out the shape):
+The user describes **what the data should look like at the end**, not how to get there. Acceptable input formats (all consumed as a single payload — the parser figures out the shape):
 
 - **Free-text natural language** — "Remove all nulls, standardise the date column to ISO 8601, deduplicate by `customer_id` keeping the most recent record."
 - **Pasted business rules document** — a numbered or bulleted list copied from a spec, Confluence page, or internal wiki.
 - **Acceptance criteria (DQ assertions)** — "all values in `revenue` must be positive; `email` must match RFC 5322; `country_code` must be in the ISO 3166-1 alpha-2 list."
+- **Prior pipeline (NEW — see §3.9)** — what the team has historically done to the previous version of this data: pasted SQL, pasted Python, plain-English steps copied from a runbook, or a reference to an existing DataHub `pipeline_run_id` / saved Recipe. The agent treats this as a strong prior — it will try to replicate the same logic and only deviate when the new data forces it.
 - **Reference dataset schema** (Phase 4 stretch) — "the output must conform to this schema" with an attached Parquet/CSV schema sample.
 - **Workspace glossary references** — the existing context loader already injects glossary terms into agent state; the goal parser should resolve glossary aliases (e.g. "active customer" → the workspace's saved definition).
 
-The agent parses this input in full before doing anything — it does not start executing until it has a coherent understanding of the goal.
+The agent parses **everything** in a single request before doing anything — it does not start executing until it has a coherent understanding of the goal, the rules, and the prior pipeline (if provided). The user pastes once; the agent plans the full DAG, runs the upfront **drift check** (§3.9), shows the adapted plan, and after a single optional approval executes end-to-end. There is no back-and-forth turn-by-turn approval loop in Auto Mode — that is the whole point.
 
 ### 3.2 High-Level Execution Loop
 
@@ -123,6 +127,14 @@ The agent parses this input in full before doing anything — it does not start 
           └──────────────────┬───────────────────┘
                              ▼
           ┌──────────────────────────────────────┐
+          │   prior_pipeline_parser  (NEW §3.9)  │  optional — only if prior steps/SQL/recipe pasted
+          │  - Normalises pasted SQL/Python/text │
+          │    into reference DataHub ops        │
+          │  - Extracts data assumptions per step│
+          │    (expected types, null %, key card)│
+          └──────────────────┬───────────────────┘
+                             ▼
+          ┌──────────────────────────────────────┐
           │          goal_parser  (NEW)          │
           │  - Splits goal into atomic rules     │
           │  - Resolves glossary aliases         │
@@ -131,17 +143,32 @@ The agent parses this input in full before doing anything — it does not start 
           └──────────────────┬───────────────────┘
                              ▼
           ┌──────────────────────────────────────┐
+          │     drift_detector  (NEW §3.9)       │  upfront, no LLM — pure profiling diff
+          │  - Compares new dataset profile vs   │
+          │    expectations from prior pipeline  │
+          │    + rule assumptions                │
+          │  - Flags drifted columns + magnitude │
+          │  - Auto-relaxes step params where    │
+          │    safe (e.g. tolerance bumps)       │
+          │  - Surfaces high-risk drift to       │
+          │    interrupt_asker pre-emptively     │
+          └──────────────────┬───────────────────┘
+                             ▼
+          ┌──────────────────────────────────────┐
           │         auto_planner  (NEW)          │
           │  - Generates DAG of pipeline steps   │
+          │    seeded by prior pipeline (if any) │
           │  - Each step references one rule_id  │
+          │    and a needs_validator flag        │
           │  - Independent rules → parallel      │
           └──────────────────┬───────────────────┘
                              ▼
                    ┌─────────▼──────────┐
                    │  Pre-run Review?   │  user setting (default: off)
-                   │  Show plan + DQ    │
-                   │  estimate, await   │
-                   │  approve / edit    │
+                   │  Show plan + drift │
+                   │  diff vs prior +   │
+                   │  DQ estimate;      │
+                   │  await approve     │
                    └─────────┬──────────┘
                              │  approved (or skipped)
                              ▼
@@ -152,10 +179,15 @@ The agent parses this input in full before doing anything — it does not start 
           │                                      │
           │   for each ready step in plan:       │
           │     1. execute_step    (reuse)       │
-          │     2. step_validator  (NEW)         │
+          │     2. step_validator  (skip if      │
+          │          needs_validator=false —     │
+          │          rename/cast/select-only ops)│
           │     3a. PASS → mark satisfied        │
           │     3b. PARTIAL/FAIL → reflection_v2 │
-          │            (3 escalation tiers)      │
+          │            tier 0: drift adjust      │
+          │            tier 1: param tweak       │
+          │            tier 2: op substitute     │
+          │            tier 3: decompose         │
           │     3c. tiers exhausted →            │
           │            interrupt_asker (NEW)     │
           └──────────────────┬───────────────────┘
@@ -177,6 +209,9 @@ The agent parses this input in full before doing anything — it does not start 
           │  - Goal completion report (SSE)      │
           │  - Offer Save as Dataset (existing   │
           │    /api/artifacts/save-checkpoint)   │
+          │  - Offer Save as Recipe (NEW §3.9)   │
+          │    so next month's data can be       │
+          │    cleaned in one click              │
           └──────────────────────────────────────┘
 ```
 
@@ -313,28 +348,30 @@ Built-in `kind` values:
 
 `tolerance > 0` means the assertion is satisfied as long as residual count is ≤ tolerance — useful for "remove >95% of nulls" semantics.
 
-### 3.6 Three-Tier Reflection Strategy
+### 3.6 Four-Tier Reflection Strategy
 
 Each failing rule goes through:
 
 | Tier | Trigger | Action |
 |---|---|---|
+| 0 — Drift Adjustment | `drift_detector` flagged the affected column AND the failure pattern matches the drift signature | Re-issue the same operation with parameters auto-adjusted from the drift report (e.g. expected null-rate 2% but actual is 18% → bump `tolerance` to 20%, or switch fill strategy from `mode` to `median` because cardinality changed). No LLM call — deterministic transform. |
 | 1 — Parameter Adjustment | Step ran, assertion failed but residual < 10% of rows | Tweak the same operation's parameters (different fill strategy, looser threshold, etc.) |
 | 2 — Operation Substitution | Tier 1 fails OR residual ≥ 10% | Replace the operation with an alternative from the same category (e.g. `fill_nulls` → `filter_nulls` + `add_calculated_column`) |
 | 3 — Decomposition | Tier 2 fails | Break the single op into multiple sub-steps; planner re-runs scoped to this rule only |
 
-After Tier 3 fails → `interrupt_asker`. The reflection prompt is given the full attempt history so it does not re-propose tried-and-failed strategies.
+After Tier 3 fails → `interrupt_asker`. The reflection prompt is given the full attempt history so it does not re-propose tried-and-failed strategies. Tier 0 is cheap and deterministic — it handles the 80% case where the new data is "the same shape, slightly different distribution" (the user's stated concern about month-over-month drift).
 
 ### 3.7 Interrupt Questions — Design Principles
 
 The interrupt mechanism is the most user-visible part of Auto Mode. Quality requirements:
 
-1. **One question at a time** — never a list. The agent picks the most blocking ambiguity.
+1. **One question at a time per dependency branch** — never a flat list of unrelated questions. The agent picks the most blocking ambiguity per DAG branch. **Independent ambiguities** (different rules with no shared dependencies) **may be batched into a single card** with each question rendered as its own section, so the user resolves them in one sitting instead of N round-trips.
 2. **Specific, not general** — reference actual column names, actual values, actual counts from the data.
 3. **Offer concrete options** — present 2–3 options, each with a brief implication; allow free-text alongside.
 4. **Context card** — alongside the question, ship a small data sample (5–10 rows) that illustrates the problem.
-5. **Non-blocking for independent rules** — if `blocks_other_rules=False` (no other rule depends on this one in the DAG), the executor continues running ready steps in parallel while waiting for the answer. The interrupt only blocks the affected branch.
+5. **Non-blocking for independent rules** — if `blocks_other_rules=False`, the executor continues running ready steps in parallel while waiting for the answer. The interrupt only blocks the affected branch.
 6. **Auto-resume timeout** — if no response after 30 minutes, the run is marked `interrupted`, persisted, and can be resumed later via the run history.
+7. **Drift-originated interrupts get a "use prior" shortcut** — when an interrupt is raised because of detected drift, one of the offered options is always "Use the prior pipeline's behaviour and accept the drift" (one-click), so users who trust the prior runbook don't have to read the full diff.
 
 ### 3.8 SSE Event Schema
 
@@ -356,6 +393,179 @@ Auto Mode follows the **existing dot-delimited convention** used by the manual g
 
 Event payloads are JSON-serialised through the existing `AgentEvent.to_sse()` helper from [backend/app/services/full_auto_agent.py](backend/app/services/full_auto_agent.py).
 
+Two additional events are emitted when a prior pipeline / Recipe is provided:
+
+| Event type | When emitted | Payload fields |
+|---|---|---|
+| `auto.prior.parsed` | After `prior_pipeline_parser` | `reference_steps: ReferenceStep[]`, `expectations: ColumnExpectation[]`, `source_format: 'sql' \| 'python' \| 'text' \| 'recipe_id'` |
+| `auto.drift.report` | After `drift_detector` | `drift_summary: DriftReport`, `auto_adjusted_steps: int`, `escalations: int` |
+
+---
+
+## 3.9 Prior-Pipeline Ingestion, Drift Detection, and Reusable Recipes
+
+This section is the heart of the "real-world workflow" improvement. The premise: companies do not start from a blank slate every month. They have:
+
+- A **previous transformation script** (SQL job, Python notebook, dbt model, runbook in Confluence) that ran on last month's file.
+- A set of **business rules** that the cleaned data must satisfy.
+- A **new file this month** that is *almost* the same as last month's — same columns, same semantics — but with subtle drift (a few new categorical values, slightly different null rates, an extra trailing-whitespace bug, a date-format change for one source system, etc.).
+
+Today the user has to redo the work. With this design, the user pastes the prior pipeline + rules **once**, the agent adapts it to the new file, surfaces only the genuine ambiguities, and saves the result as a one-click reusable Recipe for next month.
+
+### 3.9.1 Inputs
+
+The `goal` field on `POST /api/auto/run` is widened to accept a structured payload (still backward-compatible with the plain-string form):
+
+```json
+{
+  "goal_text": "Free-text or pasted business rules (existing field)",
+  "prior_pipeline": {
+    "format": "sql | python | text | dbt | recipe_id | pipeline_run_id",
+    "content": "string — pasted code/text, OR the id when format is recipe_id/pipeline_run_id",
+    "trust_level": "strict | guide | reference"
+  },
+  "expected_profile": {
+    "columns": [
+      { "name": "email",      "null_rate_pct": 2,   "cardinality_min": 1000 },
+      { "name": "country",    "value_set": ["IN", "US", "GB", "DE", "BR"] },
+      { "name": "created_at", "format": "ISO 8601", "tz": "UTC" }
+    ]
+  }
+}
+```
+
+`trust_level` controls how aggressively the agent diverges from the prior pipeline:
+
+- `strict` — replicate exactly; any drift requiring deviation triggers `interrupt_asker`.
+- `guide` — use as a strong prior; auto-adjust within Tier 0 / Tier 1 reflection bounds; escalate Tier 2+.
+- `reference` — informational only; the agent plans freshly but considers the prior steps for vocabulary/operation-name alignment.
+
+`expected_profile` is optional. If absent, expectations are inferred by `prior_pipeline_parser` from the prior code's implicit assumptions (e.g. a `WHERE email IS NOT NULL` filter implies an expectation that `email` should rarely be null).
+
+### 3.9.2 New Node — `prior_pipeline_parser`
+
+- **Trigger:** `prior_pipeline` field present in the request
+- **Model:** `llama-3.3-70b-versatile`, temperature `0`, JSON mode
+- **Two-pass:**
+  1. **Normalise** the pasted artefact (SQL / Python / dbt / runbook text) into an ordered list of `ReferenceStep` objects, each mapping to one or more DataHub registered operations. Unmappable steps are flagged as `kind: "custom_sql"` and preserved verbatim.
+  2. **Extract expectations** — read the prior code for implicit assumptions about each column (filter clauses → `not_null` / `in_set` / `range` expectations; window functions over a key → `unique` expectation on that key; cast to a type → `type` expectation; etc.). Merge with any user-provided `expected_profile`.
+- **Output:**
+  ```python
+  ReferenceStep = TypedDict('ReferenceStep', {
+      'order': int,
+      'operation': str,                    # registered op name, or "custom_sql"
+      'parameters': dict,
+      'source_quote': str,                 # snippet of the original artefact (audit)
+      'covers_rules': list[int],           # filled in after goal_parser by a join pass
+      'confidence': float,
+  })
+
+  ColumnExpectation = TypedDict('ColumnExpectation', {
+      'column': str,
+      'kind': str,                         # not_null | in_set | range | regex | unique | type | format
+      'params': dict,
+      'tolerance': float,                  # how far the new data may drift before it's "drift"
+      'source': Literal['user', 'inferred'],
+  })
+  ```
+- **Recipe shortcut:** when `format = "recipe_id"` or `pipeline_run_id`, the parser bypasses the LLM call and loads the stored `ReferenceStep[]` + `ColumnExpectation[]` directly from `agent_recipes` / `pipeline_steps`.
+- **No execution side-effects** — this node only reads; it never mutates the dataset.
+
+### 3.9.3 New Node — `drift_detector`
+
+- **Trigger:** runs after `goal_parser` and after `prior_pipeline_parser` (if any)
+- **No LLM call** — pure SQL profiling against the new dataset, using the existing `profiler.py` as the building block
+- **Algorithm:** for each `ColumnExpectation`, query the new dataset and compute the actual value, then bucket into:
+  - **`green`** — within tolerance, no action
+  - **`amber`** — drifted within "auto-adjustable" range; record adjustment to apply at Tier 0 reflection (e.g. expected null-rate 2%, actual 8%, tolerance 10% → store `{column, suggested_param: {fill_strategy: "median_then_drop"}}` as a hint)
+  - **`red`** — drifted beyond auto-adjustable range OR a categorical value appeared that has no matching rule (e.g. new `country = "ZZ"`, expected set was IN/US/GB) → mark for pre-emptive `interrupt_asker` BEFORE any step runs
+- **Output:**
+  ```python
+  DriftReport = TypedDict('DriftReport', {
+      'columns': list[ColumnDrift],     # one per analysed column
+      'green_count': int,
+      'amber_count': int,
+      'red_count': int,
+      'auto_adjustments': list[dict],   # passed to auto_planner as planner hints
+      'novel_values': list[NovelValue], # value, column, count, rules_affected
+      'schema_changes': list[dict],     # added cols, dropped cols, type changes
+  })
+  ```
+- **Schema-change handling:** if the new dataset has a column the prior pipeline references, but the type changed (e.g. `created_at` was `DATE`, now `VARCHAR`), an automatic `cast_column` step is inserted at position 0 of the plan with a `system_inserted: true` flag.
+- **Cost:** single SQL pass per column (most are aggregate `COUNT/MIN/MAX/COUNT DISTINCT/regexp_matches`) — typically <2s for a 10M-row dataset on DuckDB.
+
+### 3.9.4 Planner Integration
+
+`auto_planner` takes three new inputs alongside the existing `AutoGoal` and schema:
+- `reference_steps` from `prior_pipeline_parser` (if any)
+- `drift_adjustments` from `drift_detector`
+- `trust_level` from the request
+
+The planner prompt is updated with the rule: "When a `ReferenceStep` matches a rule's `operation_hint` and the relevant column is `green` in the drift report, copy the reference step's parameters verbatim. When the column is `amber`, copy the operation but apply the suggested adjustment. When `red`, plan around the rule and let `interrupt_asker` resolve it."
+
+This means: **for the steady-state monthly-rerun case (most columns are green, a few amber), the agent generates a plan that is byte-identical to the prior pipeline except for the amber-column parameters. No surprises, no "creative" deviations.** When the user runs the same Recipe next month, output is deterministic given the same data.
+
+### 3.9.5 Reusable Recipes — New Concept
+
+A **Recipe** is a saved `(rules, prior_pipeline, expectations)` bundle that can be re-applied to a fresh dataset in one click. After a successful auto-run, the user is offered:
+
+> ✅ Run completed in 47s. Save as Recipe so you can apply this to next month's file in one click?
+
+If accepted, the agent stores:
+- The original `goal_text` and parsed `AutoRule[]`
+- The final executed `ReferenceStep[]` (the prior pipeline for the next run)
+- The final `ColumnExpectation[]` (refined with what was actually observed)
+- A pointer to the dataset's column schema fingerprint
+
+A new lightweight table `agent_recipes` holds these; reuse counters and last-run-id are stored alongside for analytics ("this Recipe ran 47 times, success rate 96%").
+
+### 3.9.6 New Table — `agent_recipes`
+
+```sql
+CREATE TABLE IF NOT EXISTS agent_recipes (
+    id                 TEXT PRIMARY KEY,
+    workspace_id       TEXT NOT NULL,
+    created_by         TEXT NOT NULL,
+    name               TEXT NOT NULL,
+    description        TEXT,
+    schema_fingerprint TEXT NOT NULL,    -- hash of (column_name, column_type) tuples
+    goal_text          TEXT NOT NULL,
+    rules              JSONB NOT NULL,   -- AutoRule[]
+    reference_steps    JSONB NOT NULL,   -- ReferenceStep[]
+    expectations       JSONB NOT NULL,   -- ColumnExpectation[]
+    trust_level        TEXT NOT NULL DEFAULT 'guide',
+    run_count          INTEGER NOT NULL DEFAULT 0,
+    success_count      INTEGER NOT NULL DEFAULT 0,
+    last_run_id        TEXT REFERENCES agent_auto_runs(id) ON DELETE SET NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_recipes_workspace ON agent_recipes (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_agent_recipes_fingerprint ON agent_recipes (schema_fingerprint);
+```
+
+### 3.9.7 New Endpoints
+
+```
+POST   /api/auto/recipes                 # save the just-completed run as a recipe
+GET    /api/auto/recipes?workspace_id=…  # list workspace recipes
+GET    /api/auto/recipes/{id}            # full detail
+POST   /api/auto/recipes/{id}/apply      # body: {dataset_id, session_id, pre_run_review?}
+                                         # returns SSE stream (same as /auto/run)
+DELETE /api/auto/recipes/{id}
+```
+
+`apply` is implemented as a thin wrapper that constructs the `POST /api/auto/run` body with `prior_pipeline = {format: "recipe_id", content: id, trust_level: recipe.trust_level}`. No new agent code is needed — the existing nodes handle the rest.
+
+### 3.9.8 Efficiency Improvements (free with this design)
+
+- **Skip-validator flag:** `auto_planner` marks steps whose operation type cannot fail an assertion (`rename_column`, `cast_column` with explicit type, `select_columns`, `drop_columns`) with `needs_validator: false`. The executor skips `step_validator` for these, cutting validator-SQL load by ~40% on typical pipelines.
+- **Parallel validation:** `step_validator` is pure-SQL and idempotent. When multiple independent steps complete in the same DAG layer, their validators run concurrently against the DuckDB session (DuckDB supports concurrent reads).
+- **Single-pass planning:** when a Recipe is being applied (no prior_pipeline parsing needed because steps are already structured), `goal_parser` and `auto_planner` are merged into one LLM call. Saves ~1.5s per run.
+- **Tier 0 deterministic adjustments** (see §3.6) handle ~70% of failures without an LLM call.
+- **Snapshot-based reflection rerun:** when Tier 1+ fires, only the failing step is re-executed against the previous step's snapshot — not the whole pipeline. The existing `PipelineStepDB.snapshot_path` machinery already supports this.
+
 ---
 
 ## 4. API Changes
@@ -374,7 +584,7 @@ POST /api/auto/run
   "dataset_id": "string",
   "workspace_id": "string",
   "session_id": "string",
-  "goal": "string (free text or pasted business rules; max 32 KB)",
+  "goal": "string OR object — see §3.9.1 for the structured form (goal_text + prior_pipeline + expected_profile); the plain-string form is still accepted and treated as goal_text only",
   "pre_run_review": false,
   "secondary_dataset_ids": []
 }

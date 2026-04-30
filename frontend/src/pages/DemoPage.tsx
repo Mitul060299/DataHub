@@ -207,6 +207,17 @@ export function DemoPage() {
 
   const handleSignup = (source: string) => {
     capture("demo_signup_clicked", { source });
+    // Persist intent so the post-signup workspace landing can resume the
+    // demo: WorkspaceHomePage reads this to auto-open the welcome flow with
+    // the customers sample preselected.
+    try {
+      sessionStorage.setItem(
+        "datahub_signup_intent",
+        JSON.stringify({ source: "demo", sample: "/samples/customers.csv", at: Date.now() }),
+      );
+    } catch {
+      /* sessionStorage may be blocked (private mode) — non-fatal. */
+    }
     navigate("/signup");
   };
 

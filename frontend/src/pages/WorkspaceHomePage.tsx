@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
+import { WelcomeModal } from "../components/WelcomeModal";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
+import { useUser } from "../contexts/UserContext";
+import { capture } from "../lib/posthog";
 
 function Skeleton({ width, height = 14, style }: { width: string | number; height?: number; style?: React.CSSProperties }) {
   return (
@@ -42,7 +45,8 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects, createProject } = useWorkspaceContext();
+  const { hasCompletedOnboarding } = useUser();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -50,6 +54,9 @@ export function WorkspaceHomePage() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
   const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [demoIntent, setDemoIntent] = useState<{ sample?: string } | null>(null);
+  const [quickstarting, setQuickstarting] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,6 +66,44 @@ export function WorkspaceHomePage() {
       .catch(() => setRecent(null))
       .finally(() => setRecentLoading(false));
   }, []);
+
+  // Pick up a "came from /try and just signed up" hint so we can auto-open
+  // the welcome flow with their sample preselected. Read once on mount.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("datahub_signup_intent");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { source?: string; sample?: string };
+      if (parsed?.source === "demo") {
+        setDemoIntent({ sample: parsed.sample });
+        capture("workspace_home_demo_resume", { sample: parsed.sample });
+      }
+      sessionStorage.removeItem("datahub_signup_intent");
+    } catch {
+      /* ignore — non-fatal */
+    }
+  }, []);
+
+  // Auto-open the welcome modal when:
+  //   (a) the user just landed here from the public demo, OR
+  //   (b) they're a brand-new user (no projects + onboarding incomplete).
+  // Once-per-session guard via sessionStorage prevents re-popping on
+  // navigation back to /workspace.
+  useEffect(() => {
+    if (welcomeOpen) return;
+    if (projectsLoading) return;
+    const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
+    if (alreadyShown) return;
+
+    const fromDemo = demoIntent !== null;
+    const brandNew = projects.length === 0 && !hasCompletedOnboarding;
+
+    if (fromDemo || brandNew) {
+      setWelcomeOpen(true);
+      sessionStorage.setItem("datahub_welcome_home_shown", "1");
+      capture("onboarding_modal_shown", { surface: "workspace_home", from_demo: fromDemo });
+    }
+  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, welcomeOpen]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).
@@ -74,6 +119,37 @@ export function WorkspaceHomePage() {
   const handleProjectCreated = (project: Project) => {
     setActiveProject(project);
     navigate(`/workspace/project/${project.id}/pipeline/new`);
+  };
+
+  // Welcome-modal sample picker. Ensures a project exists, then jumps into
+  // its pipeline view with `?sample=<url>` so WorkspacePage auto-imports it.
+  const handleQuickstartSample = async (url: string) => {
+    if (quickstarting) return;
+    setQuickstarting(true);
+    capture("welcome_sample_picked", { url, surface: "workspace_home", from_demo: !!demoIntent });
+    try {
+      // Reuse the most recent project if one exists; otherwise create a
+      // dedicated Quickstart project so the user has a clean home for the
+      // sample.
+      let project = projects[0];
+      if (!project) {
+        project = await createProject({
+          name: "Quickstart",
+          description: "Started from a sample dataset",
+        });
+      }
+      setActiveProject(project);
+      const params = new URLSearchParams();
+      params.set("sample", url);
+      params.set("from", demoIntent ? "demo" : "welcome");
+      navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
+    } catch (err) {
+      console.error("Failed to start quickstart sample", err);
+      window.alert("Could not open the sample. Please try creating a project manually.");
+    } finally {
+      setQuickstarting(false);
+      setWelcomeOpen(false);
+    }
   };
 
   const handleDeleteProject = async (project: Project) => {
@@ -376,6 +452,16 @@ export function WorkspaceHomePage() {
         onClose={() => setNewProjectOpen(false)}
         onCreated={handleProjectCreated}
       />
+
+      {welcomeOpen && (
+        <WelcomeModal
+          onClose={() => {
+            setWelcomeOpen(false);
+            capture("onboarding_modal_dismissed", { surface: "workspace_home" });
+          }}
+          onUploadSample={(url) => { void handleQuickstartSample(url); }}
+        />
+      )}
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </div>

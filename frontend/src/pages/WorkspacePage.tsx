@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { api, fetchStepPreview } from "../api";
 import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
@@ -22,6 +22,7 @@ import { capture } from "../lib/posthog";
 
 export function WorkspacePage() {
   const { projectId, pipelineId } = useParams<{ projectId?: string; pipelineId?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects, activeWorkspaceId } = useWorkspaceContext();
   const workspaceId = activeWorkspaceId !== "default" ? activeWorkspaceId : "default";
 
@@ -164,6 +165,25 @@ export function WorkspacePage() {
       }
     }
   }, [hasCompletedOnboarding]);
+
+  // Auto-import a sample CSV when the user lands here with `?sample=<url>` in
+  // the URL. Used by the Welcome flow on WorkspaceHomePage and by the
+  // post-demo signup landing so visitors keep their context.
+  const sampleAutoImportRef = useRef(false);
+  useEffect(() => {
+    if (sampleAutoImportRef.current) return;
+    const sample = searchParams.get("sample");
+    if (!sample) return;
+    sampleAutoImportRef.current = true;
+    setSampleUrl(sample);
+    setImportOpen(true);
+    capture("sample_auto_import", { url: sample, source: searchParams.get("from") ?? "workspace_home" });
+    // Strip the query params so a refresh doesn't re-trigger the import.
+    const next = new URLSearchParams(searchParams);
+    next.delete("sample");
+    next.delete("from");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Auto-start tooltip tour for first-time visitors (1 s delay so layout settles)
   useEffect(() => {

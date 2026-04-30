@@ -164,8 +164,121 @@
   font-weight: 600;
 }
 
+/* Trust signals row under hero copy on signup */
+.auth-trust {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 12px;
+  color: var(--tx1);
+  opacity: 0.85;
+}
+.auth-trust li {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* "or sign up with email" divider between OAuth and email form */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 8px;
+  color: var(--tx1);
+  opacity: 0.6;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.auth-divider span {
+  white-space: nowrap;
+}
+
+/* Show / hide password toggle */
+.auth-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.auth-password-wrap .auth-input {
+  flex: 1;
+  padding-right: 60px;
+}
+.auth-password-toggle {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--auth-accent-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+
+/* Password-strength meter */
+.auth-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.auth-strength-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.auth-strength-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.auth-strength-label {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 56px;
+  text-align: right;
+}
+
 @media (max-width: 768px) {
   .auth-card {
     padding: 22px;
+  }
+  /* iOS Safari auto-zooms when input font-size < 16px on focus.
+     Force 16px on phones to keep the form stable. */
+  .auth-input,
+  .auth-select {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-shell {
+    padding: 16px 12px;
+  }
+  .auth-card {
+    padding: 18px;
+    border-radius: 14px;
+  }
+  .auth-title {
+    font-size: clamp(1.5rem, 6vw, 1.9rem);
+  }
+  .auth-sub {
+    font-size: 0.95rem;
+  }
+  .auth-trust {
+    gap: 6px 12px;
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSEO } from "../hooks/useSEO";
+import { capture } from "../lib/posthog";
 
 export function SignupPage() {
   const { signUpWithPassword, signInWithProvider, session } = useAuth();
@@ -12,7 +13,7 @@ export function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"analyst" | "engineer" | "manager" | "admin">("analyst");
+  const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useSEO({
@@ -25,10 +26,28 @@ export function SignupPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    capture("signup_viewed");
+  }, []);
+
+  useEffect(() => {
     if (session) {
       navigate("/workspace", { replace: true });
     }
   }, [session, navigate]);
+
+  // Lightweight password strength heuristic — purely visual; the real
+  // policy (>=8 chars) is enforced server-side by Supabase.
+  const passwordScore = (() => {
+    let s = 0;
+    if (password.length >= 8) s += 1;
+    if (password.length >= 12) s += 1;
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) s += 1;
+    if (/\d/.test(password)) s += 1;
+    if (/[^A-Za-z0-9]/.test(password)) s += 1;
+    return Math.min(s, 4);
+  })();
+  const strengthLabel = ["Too short", "Weak", "Fair", "Good", "Strong"][passwordScore];
+  const strengthColor = ["#ef4444", "#f97316", "#eab308", "#3b82f6", "#22c55e"][passwordScore];
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,12 +59,15 @@ export function SignupPage() {
       setLoading(false);
       return;
     }
-    const { error } = await signUpWithPassword(email, password, name, role);
+    capture("signup_form_submitted", { method: "email" });
+    const { error } = await signUpWithPassword(email, password, name);
     setLoading(false);
     if (error) {
+      capture("signup_error", { method: "email", message: error.message });
       setErrorMessage(error.message);
       return;
     }
+    capture("signup_success", { method: "email" });
     setSuccessMessage("Check your email to confirm your account.");
   };
 
@@ -54,10 +76,14 @@ export function SignupPage() {
       setErrorMessage("Please accept the Terms of Service and Privacy Policy to continue.");
       return;
     }
+    capture("signup_oauth_clicked", { provider });
     setLoading(true);
     const { error } = await signInWithProvider(provider);
     setLoading(false);
-    if (error) setErrorMessage(error.message);
+    if (error) {
+      capture("signup_error", { method: provider, message: error.message });
+      setErrorMessage(error.message);
+    }
   };
 
   return (
@@ -65,29 +91,64 @@ export function SignupPage() {
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1 className="auth-title">Create your datahub.org.in account</h1>
         <p className="auth-sub">Start importing, transforming, and scheduling data workflows.</p>
+        <ul className="auth-trust">
+          <li>✓ Free forever plan</li>
+          <li>✓ No credit card</li>
+          <li>✓ 2-minute setup</li>
+        </ul>
         {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
         {successMessage ? <p className="auth-success">{successMessage}</p> : null}
 
+        {/* OAuth first — one-click signup converts ~20–30% better than forms. */}
+        <div className="auth-actions">
+          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
+          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
+        </div>
+
+        <div className="auth-divider"><span>or sign up with email</span></div>
+
         <div className="auth-group">
           <label className="auth-label" htmlFor="name">Full name</label>
-          <input id="name" className="auth-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex Rivera" required />
+          <input id="name" className="auth-input" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex Rivera" required />
         </div>
         <div className="auth-group">
           <label className="auth-label" htmlFor="email">Email</label>
-          <input id="email" className="auth-input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required />
+          <input id="email" className="auth-input" type="email" autoComplete="email" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required />
         </div>
         <div className="auth-group">
           <label className="auth-label" htmlFor="password">Password</label>
-          <input id="password" className="auth-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" required />
-        </div>
-        <div className="auth-group">
-          <label className="auth-label" htmlFor="role">Primary role</label>
-          <select id="role" className="auth-select" value={role} onChange={(event) => setRole(event.target.value as "analyst" | "engineer" | "manager" | "admin") }>
-            <option value="analyst">Analyst</option>
-            <option value="engineer">Engineer</option>
-            <option value="manager">Manager</option>
-            <option value="admin">Admin</option>
-          </select>
+          <div className="auth-password-wrap">
+            <input
+              id="password"
+              className="auth-input"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="At least 8 characters"
+              minLength={8}
+              required
+            />
+            <button
+              type="button"
+              className="auth-password-toggle"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+          {password.length > 0 ? (
+            <div className="auth-strength">
+              <div className="auth-strength-bar">
+                <div
+                  className="auth-strength-fill"
+                  style={{ width: `${(passwordScore / 4) * 100}%`, background: strengthColor }}
+                />
+              </div>
+              <span className="auth-strength-label" style={{ color: strengthColor }}>{strengthLabel}</span>
+            </div>
+          ) : null}
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
@@ -112,8 +173,6 @@ export function SignupPage() {
 
         <div className="auth-actions">
           <button className="btn btn-primary" disabled={loading || !termsAccepted} type="submit">{loading ? "Creating account..." : "Create account"}</button>
-          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
-          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
         </div>
 
         <div className="auth-row" style={{ marginTop: 12 }}>

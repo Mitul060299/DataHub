@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSEO } from "../hooks/useSEO";
+import { capture } from "../lib/posthog";
 
 type LocationState = {
   from?: { pathname?: string };
@@ -13,6 +14,7 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
@@ -31,6 +33,10 @@ export function LoginPage() {
   const destination = typeof rawDest === "string" && /^\/[^/]/.test(rawDest) ? rawDest : "/workspace";
 
   useEffect(() => {
+    capture("login_viewed");
+  }, []);
+
+  useEffect(() => {
     if (session) {
       navigate(destination, { replace: true });
     }
@@ -40,20 +46,27 @@ export function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setErrorMessage(null);
+    capture("login_submitted", { method: "email" });
     const { error } = await signInWithPassword(email, password);
     setLoading(false);
     if (error) {
+      capture("login_error", { method: "email", message: error.message });
       setErrorMessage(error.message);
       return;
     }
+    capture("login_success", { method: "email" });
     navigate(destination, { replace: true });
   };
 
   const handleProvider = async (provider: "google" | "github") => {
+    capture("login_oauth_clicked", { provider });
     setLoading(true);
     const { error } = await signInWithProvider(provider);
     setLoading(false);
-    if (error) setErrorMessage(error.message);
+    if (error) {
+      capture("login_error", { method: provider, message: error.message });
+      setErrorMessage(error.message);
+    }
   };
 
   const handleResetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -85,7 +98,7 @@ export function LoginPage() {
             {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
             <div className="auth-group">
               <label className="auth-label" htmlFor="reset-email">Email</label>
-              <input id="reset-email" className="auth-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
+              <input id="reset-email" className="auth-input" type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
             </div>
             <div className="auth-actions">
               <button className="btn btn-primary" disabled={loading} type="submit">{loading ? "Sending…" : "Send reset link"}</button>
@@ -106,13 +119,40 @@ export function LoginPage() {
         <p className="auth-sub">Sign in to continue your workspace session.</p>
         {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
 
+        {/* OAuth first — one-click signin is faster and reduces password-reset traffic. */}
+        <div className="auth-actions">
+          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
+          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
+        </div>
+
+        <div className="auth-divider"><span>or sign in with email</span></div>
+
         <div className="auth-group">
           <label className="auth-label" htmlFor="email">Email</label>
-          <input id="email" className="auth-input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required />
+          <input id="email" className="auth-input" type="email" autoComplete="email" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required />
         </div>
         <div className="auth-group">
           <label className="auth-label" htmlFor="password">Password</label>
-          <input id="password" className="auth-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" required />
+          <div className="auth-password-wrap">
+            <input
+              id="password"
+              className="auth-input"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Your password"
+              required
+            />
+            <button
+              type="button"
+              className="auth-password-toggle"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => { setForgotMode(true); setErrorMessage(null); }}
@@ -124,8 +164,6 @@ export function LoginPage() {
 
         <div className="auth-actions">
           <button className="btn btn-primary" disabled={loading} type="submit">{loading ? "Signing in..." : "Sign in"}</button>
-          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("google")}>Continue with Google</button>
-          <button className="btn" disabled={loading} type="button" onClick={() => void handleProvider("github")}>Continue with GitHub</button>
         </div>
 
         <div className="auth-row" style={{ marginTop: 12 }}>

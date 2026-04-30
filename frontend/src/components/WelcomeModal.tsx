@@ -8,14 +8,20 @@ interface WelcomeModalProps {
 
 const SAMPLE_FILES = [
   {
-    label: "Journal Entries",
-    description: "500 rows · GL accounting data with debits, credits & accounts",
-    url: "/samples/journal_entry_sample.csv",
+    label: "Customers",
+    description: "30 rows · Customer signups, spend & region — great first dataset",
+    url: "/samples/customers.csv",
+    badge: "Quickstart",
   },
   {
     label: "Sales Data",
     description: "300 rows · Regional sales with product, revenue & deal stage",
     url: "/samples/sales_sample.csv",
+  },
+  {
+    label: "Journal Entries",
+    description: "500 rows · GL accounting data with debits, credits & accounts",
+    url: "/samples/journal_entry_sample.csv",
   },
   {
     label: "Employee Records",
@@ -47,21 +53,21 @@ export const WelcomeModal = ({ onClose, onUploadSample }: WelcomeModalProps) => 
         </button>
         <div className="welcome-modal__header">
           <h2>Welcome to datahub.org.in 👋</h2>
-          <p>Your AI-powered data analysis workspace. Upload your data or try a sample to get started.</p>
+          <p>From CSV to chart in under 60 seconds. Pick a sample to start, or upload your own file.</p>
         </div>
 
         <div className="welcome-modal__steps">
           <div className="welcome-modal__step">
             <span className="welcome-modal__step-number">1</span>
-            <span>Upload a CSV or Excel file</span>
+            <span>Pick a sample (or upload your own)</span>
           </div>
           <div className="welcome-modal__step">
             <span className="welcome-modal__step-number">2</span>
-            <span>Ask questions in plain English</span>
+            <span>Ask a question in plain English</span>
           </div>
           <div className="welcome-modal__step">
             <span className="welcome-modal__step-number">3</span>
-            <span>Get charts, insights & exports</span>
+            <span>Get a chart, insight & export</span>
           </div>
         </div>
 
@@ -75,7 +81,12 @@ export const WelcomeModal = ({ onClose, onUploadSample }: WelcomeModalProps) => 
                 onClick={() => handleUpload(f.url, f.label)}
                 disabled={loading !== null}
               >
-                <span className="welcome-modal__sample-label">{f.label}</span>
+                <span className="welcome-modal__sample-label">
+                  {f.label}
+                  {"badge" in f && f.badge ? (
+                    <span className="welcome-modal__sample-badge">{f.badge}</span>
+                  ) : null}
+                </span>
                 <span className="welcome-modal__sample-desc">{f.description}</span>
                 {loading === f.url && <span className="welcome-modal__sample-loading">Loading…</span>}
               </button>

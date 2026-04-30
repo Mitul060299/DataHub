@@ -16,6 +16,7 @@ import {
 } from "../components/Icons";
 import { useAuth } from "../contexts/AuthContext";
 import { submitFeedbackForm, submitReview, getApprovedReviews, type ReviewOut } from "../api";
+import { capture } from "../lib/posthog";
 import "./HomePage.css";
 
 /* ===========================================================================
@@ -876,6 +877,24 @@ export function HomePage() {
             >
               See how it works
             </motion.button>
+          </motion.div>
+
+          <motion.div
+            className="hero-secondary-cta"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.36, ease: "easeOut" }}
+          >
+            <button
+              type="button"
+              className="hero-try-link"
+              onClick={() => {
+                capture("homepage_try_demo_clicked");
+                navigate("/try");
+              }}
+            >
+              ▶ Try a live demo — no signup required
+            </button>
           </motion.div>
 
           <motion.div

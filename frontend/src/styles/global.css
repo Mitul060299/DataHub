@@ -357,7 +357,12 @@ svg { display: block; flex-shrink: 0; }
   display: flex; flex-direction: column; gap: 4px;
 }
 .welcome-modal__sample-card:hover { border-color: var(--ac); }
-.welcome-modal__sample-label { font-weight: 600; font-size: 13px; }
+.welcome-modal__sample-label { font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+.welcome-modal__sample-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  background: rgba(124, 58, 237, 0.18); border: 1px solid rgba(124, 58, 237, 0.4);
+  color: #c7b5ff; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
 .welcome-modal__sample-desc  { font-size: 11px; color: var(--tx1); }
 .welcome-modal__sample-loading { font-size: 11px; color: var(--ac); }
 .welcome-modal__skip {

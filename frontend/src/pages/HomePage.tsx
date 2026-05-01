@@ -453,7 +453,7 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "datahub.org.in – The Simple and Reliable Way to Prepare & Analyse Your Data",
+    title: "DataHub – The Simple and Reliable Way to Prepare & Analyse Your Data",
     description:
       "DataHub cleans, transforms, and analyses your CSV, Excel, and database data in plain English. Every step runs as readable SQL you can review, edit, and replay — so the result is always one you can trust.",
     canonical: "https://datahub.org.in/",
@@ -932,7 +932,7 @@ export function HomePage() {
                 <span className="dot red" />
                 <span className="dot yellow" />
                 <span className="dot green" />
-                <span className="window-title">datahub.org.in  /  Trial  /  Workspace</span>
+                <span className="window-title">DataHub  /  Trial  /  Workspace</span>
               </div>
               <div className="ws-preview">
                 {/* Icon rail */}
@@ -1424,7 +1424,7 @@ export function HomePage() {
       <footer className="home-footer">
         <div className="footer-grid">
           <div>
-            <p className="footer-brand">datahub.org.in</p>
+            <p className="footer-brand">DataHub</p>
             <p className="footer-tag">Ask in plain English. See every step. Ship trusted analysis.</p>
           </div>
           <div className="footer-links">
@@ -1436,7 +1436,7 @@ export function HomePage() {
           </div>
         </div>
         <p className="footer-copy">
-          (c) {new Date().getFullYear()} datahub.org.in. All rights reserved.
+          (c) {new Date().getFullYear()} DataHub. All rights reserved.
         </p>
       </footer>
 

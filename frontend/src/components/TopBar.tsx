@@ -93,7 +93,7 @@ export function TopBar() {
       <Link
         to="/"
         style={{ display: "inline-flex", alignItems: "center", gap: 10, width: "fit-content", textDecoration: "none" }}
-        aria-label="datahub.org.in home"
+        aria-label="DataHub home"
       >
         <img
           src="/logo.png"
@@ -111,7 +111,7 @@ export function TopBar() {
             letterSpacing: "-0.02em",
           }}
         >
-          data<span style={{ color: "#818cf8" }}>hub</span><span style={{ color: "#94A3B8", fontWeight: 600 }}>.org.in</span>
+          Data<span style={{ color: "#818cf8" }}>Hub</span>
         </span>
       </Link>
 

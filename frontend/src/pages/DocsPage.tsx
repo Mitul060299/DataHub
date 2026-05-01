@@ -1091,7 +1091,7 @@ function PlanLimits() {
               <th>Professional ($79/mo)</th>
               <th>Team ($179/mo)</th>
               <th>Business ($349/mo)</th>
-              <th>Enterprise (from $1,500/mo)</th>
+              <th>Enterprise (from $1,500/mo, 5+ seats)</th>
             </tr>
           </thead>
           <tbody>

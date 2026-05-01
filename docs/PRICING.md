@@ -11,7 +11,7 @@
 | Feature | Free | Starter | Professional | Team | Business | Enterprise |
 |---|---|---|---|---|---|---|
 | **Price (INR/mo)** | ₹0 | ₹999 | ₹3,999 | ₹8,999 | ₹17,999 | Custom |
-| **Price (USD/mo)** | $0 | $19 | $79 | $179 | $349 | Custom (typical from $1,500/mo) |
+| **Price (USD/mo)** | $0 | $19 | $79 | $179 | $349 | Custom (from $1,500/mo, 5+ seats) |
 | **Included seats** | 1 | 1 | 1 | 3 | 5 | Custom |
 | **Extra seat (INR)** | — | — | — | ₹1,499/seat/mo | ₹2,499/seat/mo | Negotiated |
 | **Extra seat (USD)** | — | — | — | $29/seat/mo | $49/seat/mo | Negotiated |
@@ -96,7 +96,20 @@ When extra seats are purchased, quotas scale linearly:
 | **DataHub Team** | **$179/mo** | **~$60/mo** | Prep + pipelines + AI agent |
 | **DataHub Business** | **$349/mo** | **~$70/mo** | Same + governance, webhooks |
 
-DataHub Business at 5 seats undercuts Alteryx by ~6× on a per-seat basis, while including AI agent and scheduled pipelines that Alteryx charges extra for (Alteryx Server starts at ~$58k/yr).
+### Alteryx vs DataHub at scale
+
+The Enterprise floor (`from $1,500/mo`) only kicks in at **5+ seats**. Below that, customers buy Business at $349/mo (~77% cheaper than even **one** Alteryx seat). Above 5 seats, DataHub stays 30–75% cheaper because we bill per **account + light per-seat add-on**, not a full per-seat license:
+
+| Seats | Alteryx Designer / yr | DataHub / yr | DataHub savings |
+|---|---|---|---|
+| 1 | $5,195 | $4,188 (Business $349/mo) | **19% cheaper** |
+| 3 | $15,585 | $4,188 (Business $349/mo) | **73% cheaper** |
+| 5 | $25,975 | $18,000 (Enterprise from $1,500/mo) | **31% cheaper** |
+| 10 | $51,950 | ~$24,000 (Enterprise + 5 add-on seats) | **~54% cheaper** |
+| 25 | $129,875 | ~$42,000 | **~68% cheaper** |
+| 50 | $259,750 | ~$66,000 | **~75% cheaper** |
+
+Alteryx also forces customers onto Server (+$58k/yr base) for any team collaboration; DataHub includes collaboration in the base price. The Intelligence Suite (Alteryx's AI add-on) is another $1,950/seat/yr — included free in every DataHub tier.
 
 ---
 
@@ -163,14 +176,14 @@ All limits are enforced server-side in `plan_guard.py` and `usage_service.py`.
 **Q: Is pricing per user or per account?**
 Starter and Professional are per account (1 seat). Team and Business include multiple seats with optional extra seats at a per-seat price.
 
-**Q: Can two Free users share a workspace?**
-No. Free, Starter and Professional users cannot create collaborative workspaces.
+**Q: Can two Free users share a project?**
+No. Free, Starter and Professional users cannot invite members to projects.
 
 **Q: Why did "unlimited" go away on Business?**
 Earlier "unlimited" tiers exposed DataHub to uncapped LLM and compute costs from a single power user. Business now includes high quotas with linear seat-based scaling and metered overage instead — most teams will never hit the cap, and those who do pay only for what they use.
 
 **Q: If I'm on Team and invite a Free user, do I pay for their usage?**
-Yes. All usage inside a collab workspace bills to the workspace owner. They also consume a seat.
+Yes. All usage inside a collaborative project bills to the project owner. They also consume a seat.
 
 **Q: Do limits reset monthly?**
 Yes. AI messages, pipeline runs, data scan reset monthly (UTC). Storage is cumulative.
@@ -185,4 +198,4 @@ On Team/Business with default soft caps, runs continue and overage is billed at 
 Not yet. Monthly billing only for launch. Annual billing (with ~2 months free) will be added later.
 
 **Q: How does Enterprise pricing actually work?**
-Enterprise has no public floor. We size to your seat count, region (data residency), SLA, and integration requirements. Typical deployments start around $1,500/mo and scale from there.
+Enterprise starts at **$1,500/mo for 5+ seats** and scales from there — we size to your seat count, region (data residency), SLA, and integration requirements. Below 5 seats, Business at $349/mo is the better fit and is already cheaper than a single Alteryx seat. A typical 10-seat Enterprise deal lands around $2,000/mo; a 50-seat deal around $5,500/mo.

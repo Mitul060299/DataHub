@@ -276,8 +276,8 @@ const plans: PricingPlan[] = [
     color: "#ef4444",
     priceUSD: "Custom",
     priceINR: "Custom",
-    periodUSD: "contact us · from $1,500/mo",
-    periodINR: "contact us · from $1,500/mo",
+    periodUSD: "contact us · from $1,500/mo (5+ seats)",
+    periodINR: "contact us · from $1,500/mo (5+ seats)",
     features: [
       "Unlimited members per project · unlimited collaborative projects",
       "Negotiated AI / pipeline / scan quotas (fair-use)",

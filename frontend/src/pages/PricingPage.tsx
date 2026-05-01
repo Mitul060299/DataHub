@@ -62,7 +62,7 @@ const planCards: PlanCard[] = [
     key: "Enterprise",
     priceINR: "Custom",
     priceUSD: "Custom",
-    description: "Fortune 500 and regulated environments — from $1,500/mo",
+    description: "Fortune 500 and regulated environments — from $1,500/mo (5+ seats)",
     highlightsINR: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Negotiated AI / pipeline / scan quotas", "24/7 dedicated support", "Custom compliance + integrations"],
     highlightsUSD: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Negotiated AI / pipeline / scan quotas", "24/7 dedicated support", "Custom compliance + integrations"],
   },

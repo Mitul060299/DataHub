@@ -19,7 +19,7 @@ from ..razorpay_plans import (
 from . import billing_repository
 
 
-_ALLOWED_PLANS = {"professional", "team", "business"}
+_ALLOWED_PLANS = {"starter", "professional", "team", "business"}
 _ALLOWED_BILLING_CYCLES = {"monthly"}
 _DEFAULT_CURRENCY = "INR"
 
@@ -49,7 +49,7 @@ def _parse_datetime(value: Any) -> datetime | None:
 def _normalize_plan_slug(plan: str) -> str:
     slug = billing_repository.to_plan_slug(plan)
     if slug not in _ALLOWED_PLANS:
-        raise ValueError("Invalid plan. Must be professional, team, or business.")
+        raise ValueError("Invalid plan. Must be starter, professional, team, or business.")
     return slug
 
 

@@ -18,16 +18,18 @@ import {
 } from "../services/billing";
 
 const TIER_COLOR: Record<BillingPlanSlug, string> = {
+  starter: "#06b6d4",
   professional: "#3b82f6",
   team: "#8b5cf6",
   business: "#eab308",
 };
 
-const PLAN_ORDER: BillingPlanSlug[] = ["professional", "team", "business"];
+const PLAN_ORDER: BillingPlanSlug[] = ["starter", "professional", "team", "business"];
 
 const canonicalToSlug = (value?: string | null): BillingPlanSlug | null => {
   if (!value) return null;
   const lowered = value.toLowerCase();
+  if (lowered === "starter") return "starter";
   if (lowered === "professional") return "professional";
   if (lowered === "team") return "team";
   if (lowered === "business") return "business";

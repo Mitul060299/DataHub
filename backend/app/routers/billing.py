@@ -48,8 +48,8 @@ def _ensure_billing_enabled() -> None:
 
 def _normalize_plan_slug(plan: str) -> str:
     slug = billing_repository.to_plan_slug(plan)
-    if slug not in {"professional", "team", "business"}:
-        raise HTTPException(status_code=400, detail="Invalid plan. Must be professional, team, or business.")
+    if slug not in {"starter", "professional", "team", "business"}:
+        raise HTTPException(status_code=400, detail="Invalid plan. Must be starter, professional, team, or business.")
     return slug
 
 

@@ -6,7 +6,7 @@ import { capture } from "../lib/posthog";
 import { useBillingRegion } from "../hooks/useIsIndian";
 import { useSEO } from "../hooks/useSEO";
 
-type PlanKey = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
+type PlanKey = "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
 
 type PlanCard = {
   key: PlanKey;
@@ -23,40 +23,48 @@ const planCards: PlanCard[] = [
     priceINR: "₹0",
     priceUSD: "$0",
     description: "Students, evaluation, and hobby workflows",
-    highlightsINR: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
-    highlightsUSD: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "100 AI messages/month", "CSV + Excel only"],
+    highlightsINR: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "50 AI messages/month", "CSV + Excel only"],
+    highlightsUSD: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "50 AI messages/month", "CSV + Excel only"],
+  },
+  {
+    key: "Starter",
+    priceINR: "₹999 / month",
+    priceUSD: "$19 / month",
+    description: "Indie analysts, students upgrading from Free",
+    highlightsINR: ["Solo projects · 1 seat", "Up to 5 projects", "5 GB storage · 25 GB scan/month", "500 AI messages/month", "CSV, Excel, JSON · SQLite connector", "Daily scheduled runs"],
+    highlightsUSD: ["Solo projects · 1 seat", "Up to 5 projects", "5 GB storage · 25 GB scan/month", "500 AI messages/month", "CSV, Excel, JSON · SQLite connector", "Daily scheduled runs"],
   },
   {
     key: "Professional",
-    priceINR: "₹6,999 / month",
-    priceUSD: "$149 / month",
+    priceINR: "₹3,999 / month",
+    priceUSD: "$79 / month",
     description: "Solo consultants and analysts",
-    highlightsINR: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
-    highlightsUSD: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 50 GB scan/month", "2,000 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
+    highlightsINR: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 100 GB scan/month", "1,500 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
+    highlightsUSD: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 100 GB scan/month", "1,500 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
   },
   {
     key: "Team",
-    priceINR: "₹14,999 / month",
-    priceUSD: "$299 / month",
+    priceINR: "₹8,999 / month",
+    priceUSD: "$179 / month",
     description: "Small analytics and consulting teams",
-    highlightsINR: ["Includes 3 seats · +₹2,499/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 200 GB+ scan/month", "5,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery"],
-    highlightsUSD: ["Includes 3 seats · +$49/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 200 GB+ scan/month", "5,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery"],
+    highlightsINR: ["Includes 3 seats · +₹1,499/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 500 GB+ scan/month", "4,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery", "Audit log"],
+    highlightsUSD: ["Includes 3 seats · +$29/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 500 GB+ scan/month", "4,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery", "Audit log"],
   },
   {
     key: "Business",
-    priceINR: "₹29,999 / month",
-    priceUSD: "$599 / month",
+    priceINR: "₹17,999 / month",
+    priceUSD: "$349 / month",
     description: "Governance-first mid-size enterprises",
-    highlightsINR: ["Includes 5 seats · +₹3,999/extra seat", "50 members per project · unlimited collaborative projects", "2 TB storage + unlimited scan", "Unlimited AI messages", "SSO/SAML · Custom connectors"],
-    highlightsUSD: ["Includes 5 seats · +$79/extra seat", "50 members per project · unlimited collaborative projects", "2 TB storage + unlimited scan", "Unlimited AI messages", "SSO/SAML · Custom connectors"],
+    highlightsINR: ["Includes 5 seats · +₹2,499/extra seat", "50 members per project · unlimited collaborative projects", "500 GB+ storage · 2 TB+ scan/month", "15,000+ AI messages (scales with seats)", "SSO/SAML · Webhooks · Custom connectors"],
+    highlightsUSD: ["Includes 5 seats · +$49/extra seat", "50 members per project · unlimited collaborative projects", "500 GB+ storage · 2 TB+ scan/month", "15,000+ AI messages (scales with seats)", "SSO/SAML · Webhooks · Custom connectors"],
   },
   {
     key: "Enterprise",
     priceINR: "Custom",
     priceUSD: "Custom",
-    description: "Fortune 500 and regulated environments",
-    highlightsINR: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Unlimited AI messages", "24/7 dedicated support", "Custom compliance + integrations"],
-    highlightsUSD: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Unlimited AI messages", "24/7 dedicated support", "Custom compliance + integrations"],
+    description: "Fortune 500 and regulated environments — from $1,500/mo",
+    highlightsINR: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Negotiated AI / pipeline / scan quotas", "24/7 dedicated support", "Custom compliance + integrations"],
+    highlightsUSD: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Negotiated AI / pipeline / scan quotas", "24/7 dedicated support", "Custom compliance + integrations"],
   },
 ];
 
@@ -74,8 +82,8 @@ const PRICING_LD = {
     "@type": "AggregateOffer",
     priceCurrency: "INR",
     lowPrice: "0",
-    highPrice: "29999",
-    offerCount: "5",
+    highPrice: "17999",
+    offerCount: "6",
     offers: [
       {
         "@type": "Offer",
@@ -84,21 +92,30 @@ const PRICING_LD = {
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
-        description: "100 AI messages/month, 500 MB storage, CSV + Excel uploads.",
+        description: "50 AI messages/month, 500 MB storage, CSV + Excel uploads.",
+      },
+      {
+        "@type": "Offer",
+        name: "Starter",
+        price: "999",
+        priceCurrency: "INR",
+        url: "https://datahub.org.in/pricing",
+        availability: "https://schema.org/InStock",
+        description: "5 projects, 5 GB storage, 500 AI messages, SQLite + JSON support.",
       },
       {
         "@type": "Offer",
         name: "Professional",
-        price: "6999",
+        price: "3999",
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
-        description: "20 projects, 20 GB storage, 2,000 AI messages, all SQL databases.",
+        description: "20 projects, 20 GB storage, 1,500 AI messages, all SQL databases.",
       },
       {
         "@type": "Offer",
         name: "Team",
-        price: "14999",
+        price: "8999",
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
@@ -107,11 +124,11 @@ const PRICING_LD = {
       {
         "@type": "Offer",
         name: "Business",
-        price: "29999",
+        price: "17999",
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
-        description: "5 seats included, SSO/SAML, custom connectors, 2 TB storage.",
+        description: "5 seats included, SSO/SAML, webhooks, custom connectors, 500 GB storage.",
       },
     ],
   },
@@ -125,9 +142,9 @@ export function PricingPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useSEO({
-    title: "datahub.org.in Pricing – Free, Pro & Team Plans | AI Data Analysis",
+    title: "datahub.org.in Pricing – Free, Starter, Pro & Team Plans | AI Data Analysis",
     description:
-      "Start free forever. Upgrade to Professional from ₹6,999/month. All plans include the AI agent, transparent SQL pipelines, and database connectors. No credit card to get started.",
+      "Start free forever. Starter from ₹999/month, Professional ₹3,999, Team ₹8,999, Business ₹17,999. All plans include the AI agent, transparent SQL pipelines, and database connectors.",
     canonical: "https://datahub.org.in/pricing",
     structuredData: PRICING_LD,
   });
@@ -172,11 +189,11 @@ export function PricingPage() {
           color: "var(--accent2)",
           backdropFilter: "blur(8px)",
         }}>
-          💳 Prices shown in USD. International payments accepted via Razorpay.
+          💳 Prices shown in USD. International (USD) billing is launching soon — contact <a href="mailto:sales@datahub.org.in" style={{ color: "inherit", textDecoration: "underline" }}>sales@datahub.org.in</a> in the meantime.
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 14, maxWidth: 1180, margin: "0 auto" }}>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 14, maxWidth: 1320, margin: "0 auto" }}>
         {planCards.map((card, index) => {
           const isCurrent = card.key === plan;
           const canUpgrade = index >= currentIndex && !isCurrent;

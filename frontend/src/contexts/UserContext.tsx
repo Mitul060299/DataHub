@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { fetchCurrentUser, updateOnboardingState } from "../api";
 import { useAuth } from "./AuthContext";
 
-type UserPlan = "Free" | "Professional" | "Team" | "Business" | "Enterprise";
+type UserPlan = "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
 
 type PlanLimits = {
   maxFileSize: number;
@@ -73,6 +73,28 @@ const planLimits: Record<UserPlan, PlanLimits> = {
       sso: false,
     },
   },
+  Starter: {
+    maxFileSize: 250 * 1024 * 1024,
+    maxDatasets: 25,
+    maxStorage: 5 * 1024 * 1024 * 1024,
+    maxWorkspaces: 1,
+    maxProjectsPerWorkspace: 5,
+    maxDatasetsPerProject: 25,
+    maxPipelines: 5,
+    aiMessagesPerMonth: 500,
+    features: {
+      allFileFormats: false,
+      databaseConnections: true,   // SQLite only
+      cloudStorage: false,
+      autoML: false,
+      apiAccess: false,
+      scheduledPipelines: true,    // daily-only
+      collaboration: false,
+      customML: false,
+      enterpriseConnectors: false,
+      sso: false,
+    },
+  },
   Professional: {
     maxFileSize: 1 * 1024 * 1024 * 1024,
     maxDatasets: 25,
@@ -81,7 +103,7 @@ const planLimits: Record<UserPlan, PlanLimits> = {
     maxProjectsPerWorkspace: 10,
     maxDatasetsPerProject: 25,
     maxPipelines: -1,
-    aiMessagesPerMonth: 500,
+    aiMessagesPerMonth: 1500,
     features: {
       allFileFormats: true,
       databaseConnections: true,
@@ -103,7 +125,7 @@ const planLimits: Record<UserPlan, PlanLimits> = {
     maxProjectsPerWorkspace: -1,
     maxDatasetsPerProject: -1,
     maxPipelines: -1,
-    aiMessagesPerMonth: -1,
+    aiMessagesPerMonth: 4000,
     features: {
       allFileFormats: true,
       databaseConnections: true,
@@ -120,12 +142,12 @@ const planLimits: Record<UserPlan, PlanLimits> = {
   Business: {
     maxFileSize: 10 * 1024 * 1024 * 1024,
     maxDatasets: -1,
-    maxStorage: 2 * 1024 * 1024 * 1024 * 1024,
+    maxStorage: 500 * 1024 * 1024 * 1024,
     maxWorkspaces: -1,
     maxProjectsPerWorkspace: -1,
     maxDatasetsPerProject: -1,
     maxPipelines: -1,
-    aiMessagesPerMonth: -1,
+    aiMessagesPerMonth: 15000,
     features: {
       allFileFormats: true,
       databaseConnections: true,

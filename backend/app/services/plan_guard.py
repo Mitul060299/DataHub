@@ -34,10 +34,11 @@ class PlanLimits:
 
 PLAN_ORDER = {
     "Free": 1,
-    "Professional": 2,
-    "Team": 3,
-    "Business": 4,
-    "Enterprise": 5,
+    "Starter": 2,
+    "Professional": 3,
+    "Team": 4,
+    "Business": 5,
+    "Enterprise": 6,
 }
 
 
@@ -56,6 +57,21 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         webhooks_enabled=False,
         scheduling_enabled=False,
         dashboard_sharing_enabled=False,
+    ),
+    "Starter": PlanLimits(
+        max_file_size_bytes=250 * 1024 * 1024,           # 250 MB
+        max_storage_bytes=5 * 1024 * 1024 * 1024,        # 5 GB
+        max_datasets=25,
+        max_collab_workspaces=0,                         # solo only
+        max_projects_per_workspace=5,
+        max_project_members=1,
+        max_collaborative_projects=0,
+        allowed_formats={"csv", "excel", "json"},
+        allowed_connectors={"csv", "excel", "json", "sqlite"},
+        sso_enabled=False,
+        webhooks_enabled=False,
+        scheduling_enabled=True,                         # daily-only enforced at scheduler layer
+        dashboard_sharing_enabled=True,                  # read-only link
     ),
     "Professional": PlanLimits(
         max_file_size_bytes=1024 * 1024 * 1024,          # 1 GB

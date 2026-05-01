@@ -39,14 +39,16 @@ def _get_client() -> razorpay.Client:
 # Razorpay merchant account. Enable it at https://dashboard.razorpay.com/app/payments/international
 # before running this script with USD plans.
 PLANS = [
-    # INR (domestic)
-    {"tier": "professional", "currency": "INR", "amount": 699900,  "name": "DataHub Professional Monthly"},
-    {"tier": "team",         "currency": "INR", "amount": 1499900, "name": "DataHub Team Monthly"},
-    {"tier": "business",     "currency": "INR", "amount": 2999900, "name": "DataHub Business Monthly"},
-    # USD (international)
-    {"tier": "professional", "currency": "USD", "amount": 14900,   "name": "DataHub Professional Monthly (USD)"},
-    {"tier": "team",         "currency": "USD", "amount": 29900,   "name": "DataHub Team Monthly (USD)"},
-    {"tier": "business",     "currency": "USD", "amount": 59900,   "name": "DataHub Business Monthly (USD)"},
+    # INR (domestic) — V3 pricing reset (May 2026)
+    {"tier": "starter",      "currency": "INR", "amount": 99900,   "name": "DataHub Starter Monthly"},
+    {"tier": "professional", "currency": "INR", "amount": 399900,  "name": "DataHub Professional Monthly"},
+    {"tier": "team",         "currency": "INR", "amount": 899900,  "name": "DataHub Team Monthly"},
+    {"tier": "business",     "currency": "INR", "amount": 1799900, "name": "DataHub Business Monthly"},
+    # USD (international) — pending Razorpay International KYC approval
+    {"tier": "starter",      "currency": "USD", "amount": 1900,    "name": "DataHub Starter Monthly (USD)"},
+    {"tier": "professional", "currency": "USD", "amount": 7900,    "name": "DataHub Professional Monthly (USD)"},
+    {"tier": "team",         "currency": "USD", "amount": 17900,   "name": "DataHub Team Monthly (USD)"},
+    {"tier": "business",     "currency": "USD", "amount": 34900,   "name": "DataHub Business Monthly (USD)"},
 ]
 
 

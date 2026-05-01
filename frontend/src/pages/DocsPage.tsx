@@ -1021,7 +1021,7 @@ function Faq() {
     },
     {
       q: "Can I use DataHub for free?",
-      a: "Yes. The Free plan lets you create 2 projects, upload files up to 50 MB, use 100 AI messages per month — with no credit card required.",
+      a: "Yes. The Free plan lets you create 2 projects, upload files up to 50 MB, use 50 AI messages per month — with no credit card required.",
     },
     {
       q: "Is there an API?",
@@ -1087,27 +1087,28 @@ function PlanLimits() {
             <tr>
               <th>Feature</th>
               <th>Free</th>
-              <th>Professional ($149/mo)</th>
-              <th>Team ($299/mo)</th>
-              <th>Business ($599/mo)</th>
-              <th>Enterprise (min $5k/mo)</th>
+              <th>Starter ($19/mo)</th>
+              <th>Professional ($79/mo)</th>
+              <th>Team ($179/mo)</th>
+              <th>Business ($349/mo)</th>
+              <th>Enterprise (from $1,500/mo)</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>Collaborative projects</td><td>0</td><td>0</td><td>5</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>Members per project</td><td>1</td><td>1</td><td>10</td><td>50</td><td>Unlimited</td></tr>
-            <tr><td>Projects (total)</td><td>2</td><td>20</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>AI messages / month</td><td>100</td><td>2,000</td><td>5,000</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>Max file size</td><td>50 MB</td><td>1 GB</td><td>5 GB</td><td>10 GB</td><td>Unlimited</td></tr>
-            <tr><td>Storage</td><td>500 MB</td><td>20 GB</td><td>100 GB</td><td>2 TB</td><td>Unlimited</td></tr>
-            <tr><td>Data scan / month</td><td>5 GB</td><td>50 GB</td><td>200 GB</td><td>Unlimited</td><td>Unlimited</td></tr>
-            <tr><td>DB connections</td><td>CSV, Excel</td><td>+ PG, MySQL, SQLite, MSSQL, Oracle</td><td>+ Snowflake, Redshift, BigQuery</td><td>+ Custom connectors</td><td>All</td></tr>
-            <tr><td>Scheduling</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-            <tr><td>Dashboard sharing</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
-            <tr><td>Audit log</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>✅</td></tr>
-            <tr><td>Webhooks</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
-            <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
-            <tr><td>Support</td><td>Community</td><td>Email</td><td>Priority email</td><td>24/7 dedicated</td><td>Custom SLA</td></tr>
+            <tr><td>Collaborative projects</td><td>0</td><td>0</td><td>0</td><td>5</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>Members per project</td><td>1</td><td>1</td><td>1</td><td>10</td><td>50</td><td>Unlimited</td></tr>
+            <tr><td>Projects (total)</td><td>2</td><td>5</td><td>20</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
+            <tr><td>AI messages / month</td><td>50</td><td>500</td><td>1,500</td><td>4,000+</td><td>15,000+</td><td>Negotiated</td></tr>
+            <tr><td>Max file size</td><td>50 MB</td><td>250 MB</td><td>1 GB</td><td>5 GB</td><td>10 GB</td><td>Unlimited</td></tr>
+            <tr><td>Storage</td><td>500 MB</td><td>5 GB</td><td>20 GB</td><td>100 GB+</td><td>500 GB+</td><td>Custom</td></tr>
+            <tr><td>Data scan / month</td><td>5 GB</td><td>25 GB</td><td>100 GB</td><td>500 GB+</td><td>2 TB+</td><td>Negotiated</td></tr>
+            <tr><td>DB connections</td><td>CSV, Excel</td><td>+ JSON, SQLite</td><td>+ PG, MySQL, MSSQL, Oracle, S3/GCS/Azure</td><td>+ Snowflake, Redshift, BigQuery</td><td>+ Custom connectors</td><td>All</td></tr>
+            <tr><td>Scheduling</td><td>—</td><td>✅ daily</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Dashboard sharing</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Audit log</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Webhooks</td><td>—</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>SSO / SAML</td><td>—</td><td>—</td><td>—</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Support</td><td>Community</td><td>Email</td><td>Email</td><td>Priority email</td><td>24/7 dedicated</td><td>Custom SLA</td></tr>
           </tbody>
         </table>
       </div>
@@ -1116,7 +1117,7 @@ function PlanLimits() {
       <p>Usage inside a <strong>collaborative project</strong> (AI calls, pipeline runs, data scanned) is charged to the <strong>project owner's</strong> account — not the calling member's. A Free-tier user invited into a Team project uses the Team owner's quota.</p>
 
       <div className="docs-callout docs-callout--info">
-        INR pricing: Professional ₹6,999/mo · Team ₹14,999/mo (3 seats incl, +₹2,499/extra) · Business ₹29,999/mo (5 seats incl, +₹3,999/extra) · Enterprise custom. Billing is processed via Razorpay.
+        INR pricing: Starter ₹999/mo · Professional ₹3,999/mo · Team ₹8,999/mo (3 seats incl, +₹1,499/extra) · Business ₹17,999/mo (5 seats incl, +₹2,499/extra) · Enterprise custom. Billing is processed via Razorpay.
       </div>
     </article>
   );

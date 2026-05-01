@@ -14,6 +14,7 @@ _ACTIVE_STATUSES = {"active", "authenticated"}
 _TERMINAL_STATUSES = {"halted", "cancelled", "completed", "expired"}
 
 _PLAN_SLUG_TO_CANONICAL = {
+    "starter": "Starter",
     "professional": "Professional",
     "team": "Team",
     "business": "Business",

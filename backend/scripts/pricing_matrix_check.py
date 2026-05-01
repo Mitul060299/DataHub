@@ -82,10 +82,11 @@ def _lineage_graph_allowed(plan: str) -> bool:
 
 
 def build_capability_checks() -> list[CapabilityCheck]:
-    plans = ["Free", "Professional", "Team", "Business", "Enterprise"]
+    plans = ["Free", "Starter", "Professional", "Team", "Business", "Enterprise"]
 
     expected_json_parquet = {
         "Free": False,
+        "Starter": False,
         "Professional": True,
         "Team": True,
         "Business": True,
@@ -98,6 +99,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_core_connector = {
         "Free": False,
+        "Starter": False,
         "Professional": True,
         "Team": True,
         "Business": True,
@@ -107,6 +109,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_enterprise_connector = {
         "Free": False,
+        "Starter": False,
         "Professional": False,
         "Team": True,
         "Business": True,
@@ -116,6 +119,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_scheduling = {
         "Free": False,
+        "Starter": True,
         "Professional": True,
         "Team": True,
         "Business": True,
@@ -125,6 +129,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_dashboard_sharing = {
         "Free": False,
+        "Starter": True,
         "Professional": True,
         "Team": True,
         "Business": True,
@@ -134,6 +139,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_workspace_sharing = {
         "Free": False,
+        "Starter": False,
         "Professional": False,
         "Team": True,
         "Business": True,
@@ -146,6 +152,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_sso = {
         "Free": False,
+        "Starter": False,
         "Professional": False,
         "Team": False,
         "Business": True,
@@ -155,6 +162,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_webhooks = {
         "Free": False,
+        "Starter": False,
         "Professional": False,
         "Team": False,
         "Business": True,
@@ -164,6 +172,7 @@ def build_capability_checks() -> list[CapabilityCheck]:
 
     expected_lineage = {
         "Free": False,
+        "Starter": False,
         "Professional": False,
         "Team": False,
         "Business": True,
@@ -264,7 +273,7 @@ def render_markdown(
     endpoint_checks: list[EndpointGuardCheck],
     hardcoded_findings: list[str],
 ) -> str:
-    plans = ["Free", "Professional", "Team", "Business", "Enterprise"]
+    plans = ["Free", "Starter", "Professional", "Team", "Business", "Enterprise"]
     lines: list[str] = []
 
     lines.append("# Pricing Matrix Execution Report")
@@ -277,8 +286,8 @@ def render_markdown(
 
     lines.append("## Plan Capability Matrix")
     lines.append("")
-    lines.append("| Capability | Free | Professional | Team | Business | Enterprise | Status |")
-    lines.append("|---|---|---|---|---|---|---|")
+    lines.append("| Capability | Free | Starter | Professional | Team | Business | Enterprise | Status |")
+    lines.append("|---|---|---|---|---|---|---|---|")
 
     for check in capability_checks:
         match = all(check.expected[plan] == check.actual[plan] for plan in plans)
@@ -339,7 +348,7 @@ def main() -> int:
     out_path.write_text(markdown, encoding="utf-8")
     print(f"Wrote report: {out_path}")
 
-    plans = ["Free", "Professional", "Team", "Business", "Enterprise"]
+    plans = ["Free", "Starter", "Professional", "Team", "Business", "Enterprise"]
     capability_pass = all(all(c.expected[p] == c.actual[p] for p in plans) for c in capability_checks)
     endpoint_pass = all(item.passed for item in endpoint_checks)
     hardcoded_pass = not hardcoded_findings

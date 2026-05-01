@@ -19,11 +19,12 @@ USD pricing
 Internal mapping is hand-tuned to round prices in each currency, not a
 naive INR/USD conversion (typical SaaS pricing pattern):
 
-    Professional $149/mo   (~₹6,999)
-    Team         $299/mo   (~₹14,999)
-    Business     $599/mo   (~₹29,999)
-    Extra seat (Team)     $49/mo
-    Extra seat (Business) $79/mo
+    Starter      $19/mo    (~₹999)
+    Professional $79/mo    (~₹3,999)
+    Team         $179/mo   (~₹8,999)
+    Business     $349/mo   (~₹17,999)
+    Extra seat (Team)     $29/mo  (~₹1,499)
+    Extra seat (Business) $49/mo  (~₹2,499)
 """
 
 from __future__ import annotations
@@ -37,14 +38,34 @@ _TEST_PLAN = "plan_SW9abXgqVnqDXQ"
 
 # ---------------------------------------------------------------------------
 # Razorpay plan IDs (created in the Razorpay dashboard).
-# Override the USD plan IDs via env var before the international launch:
-#     RAZORPAY_PRO_USD_PLAN, RAZORPAY_TEAM_USD_PLAN, RAZORPAY_BUSINESS_USD_PLAN
+#
+# Live INR plan IDs (created 2026-05-01 — "V3" pricing reset):
+#     starter      → plan_Sk9InffRzS4NjI   (₹999/mo)
+#     professional → plan_Sk9JPF6MjLmqLr   (₹3,999/mo)
+#     team         → plan_Sk9Jyri0JaFOqr   (₹8,999/mo)
+#     business     → plan_Sk9L0dcmaAgoiU   (₹17,999/mo)
+#
+# USD plans require Razorpay International KYC approval. Until they're
+# created, the USD plan IDs stay as REPLACE_ME placeholders and any
+# attempt to subscribe in USD is rejected by the billing router with a
+# friendly "USD billing coming soon" message (see ``USD_BILLING_ENABLED``
+# config flag). Once approved, override via env vars:
+#     RAZORPAY_STARTER_USD_PLAN, RAZORPAY_PRO_USD_PLAN,
+#     RAZORPAY_TEAM_USD_PLAN, RAZORPAY_BUSINESS_USD_PLAN
 # ---------------------------------------------------------------------------
 
 RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
+    "starter": {
+        "INR": {
+            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9InffRzS4NjI",
+        },
+        "USD": {
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_STARTER_USD_PLAN", "plan_USD_STARTER_REPLACE_ME"),
+        },
+    },
     "professional": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_SgY6POEnN2ZzRA",
+            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9JPF6MjLmqLr",
         },
         "USD": {
             "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_USD_PLAN", "plan_USD_PRO_REPLACE_ME"),
@@ -52,7 +73,7 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
     },
     "team": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_SgY7HxP1BqrRIH",
+            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9Jyri0JaFOqr",
         },
         "USD": {
             "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_TEAM_USD_PLAN", "plan_USD_TEAM_REPLACE_ME"),
@@ -60,7 +81,7 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
     },
     "business": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_SgY7ow2NuF1cwi",
+            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9L0dcmaAgoiU",
         },
         "USD": {
             "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_BUSINESS_USD_PLAN", "plan_USD_BUSINESS_REPLACE_ME"),
@@ -74,17 +95,21 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
 # ---------------------------------------------------------------------------
 
 PLAN_AMOUNTS: dict[str, dict[str, dict[str, int]]] = {
+    "starter": {
+        "INR": {"monthly": 99_900},    # ₹999/mo
+        "USD": {"monthly": 1_900},     # $19/mo
+    },
     "professional": {
-        "INR": {"monthly": 699_900},   # ₹6,999/mo
-        "USD": {"monthly": 14_900},    # $149/mo
+        "INR": {"monthly": 399_900},   # ₹3,999/mo
+        "USD": {"monthly": 7_900},     # $79/mo
     },
     "team": {
-        "INR": {"monthly": 1_499_900}, # ₹14,999/mo (3 seats)
-        "USD": {"monthly": 29_900},    # $299/mo  (3 seats)
+        "INR": {"monthly": 899_900},   # ₹8,999/mo (3 seats)
+        "USD": {"monthly": 17_900},    # $179/mo  (3 seats)
     },
     "business": {
-        "INR": {"monthly": 2_999_900}, # ₹29,999/mo (5 seats)
-        "USD": {"monthly": 59_900},    # $599/mo   (5 seats)
+        "INR": {"monthly": 1_799_900}, # ₹17,999/mo (5 seats)
+        "USD": {"monthly": 34_900},    # $349/mo   (5 seats)
     },
 }
 
@@ -95,17 +120,18 @@ PLAN_AMOUNTS: dict[str, dict[str, dict[str, int]]] = {
 
 PER_SEAT_AMOUNTS: dict[str, dict[str, int]] = {
     "team": {
-        "INR": 249_900,   # ₹2,499/seat/mo
-        "USD": 4_900,     # $49/seat/mo
+        "INR": 149_900,   # ₹1,499/seat/mo
+        "USD": 2_900,     # $29/seat/mo
     },
     "business": {
-        "INR": 399_900,   # ₹3,999/seat/mo
-        "USD": 7_900,     # $79/seat/mo
+        "INR": 249_900,   # ₹2,499/seat/mo
+        "USD": 4_900,     # $49/seat/mo
     },
 }
 
 
 INCLUDED_SEATS: dict[str, int] = {
+    "starter": 1,
     "professional": 1,
     "team": 3,
     "business": 5,

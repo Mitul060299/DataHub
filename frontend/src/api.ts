@@ -299,7 +299,7 @@ export async function fetchCurrentUser(workspaceId?: string) {
     id: string;
     username: string;
     role: string;
-    plan: "Free" | "Professional" | "Team" | "Business" | "Enterprise";
+    plan: "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
     has_completed_onboarding: boolean;
     has_uploaded_first_file: boolean;
     usage: {

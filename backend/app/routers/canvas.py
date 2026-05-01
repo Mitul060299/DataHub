@@ -26,6 +26,7 @@ router = APIRouter(prefix="/api/canvas", tags=["canvas"])
 
 _CANVAS_LIMITS: dict[str, int | None] = {
     "free": 2,
+    "starter": 5,
     "professional": 20,
     "team": None,        # unlimited
     "business": None,    # unlimited

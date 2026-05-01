@@ -6,23 +6,31 @@ import os
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_groq import ChatGroq
 
+from ..model_router import select_model
 from ..prompts import RESPONDER_CONVERSE_PROMPT, RESPONDER_TRANSFORM_PROMPT
 from ..state import AgentState
 
 logger = logging.getLogger(__name__)
 
-_llm: ChatGroq | None = None
+_llm_cache: dict[str, ChatGroq] = {}
 
 
-def _get_llm() -> ChatGroq:
-    global _llm
-    if _llm is None:
-        _llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+def _get_llm(kind: str = "transform") -> ChatGroq:
+    """Return a (cached) ChatGroq instance for the given call kind.
+
+    When LLM_ROUTER_ENABLED=true, ``kind="converse"`` resolves to the cheaper
+    fast model; everything else stays on the versatile default.
+    """
+    model = select_model(kind)  # type: ignore[arg-type]
+    cached = _llm_cache.get(model)
+    if cached is None:
+        cached = ChatGroq(
+            model=model,
             temperature=0.3,
             groq_api_key=os.getenv("GROQ_API_KEY"),
         )
-    return _llm
+        _llm_cache[model] = cached
+    return cached
 
 _LLM_TIMEOUT_MSG = (
     "I'm taking longer than usual — this sometimes happens with complex requests. "
@@ -30,10 +38,10 @@ _LLM_TIMEOUT_MSG = (
 )
 
 
-async def _invoke_llm(messages: list) -> str:
+async def _invoke_llm(messages: list, *, kind: str = "transform") -> str:
     """Invoke the LLM with a 30-second timeout and a friendly fallback."""
     try:
-        response = await asyncio.wait_for(_get_llm().ainvoke(messages), timeout=30)
+        response = await asyncio.wait_for(_get_llm(kind).ainvoke(messages), timeout=30)
         return str(response.content)
     except asyncio.TimeoutError:
         logger.warning("responder LLM timed out after 30s")
@@ -56,7 +64,7 @@ async def responder(state: AgentState) -> dict:
             schema=schema_str,
             dataset_name=dataset_name,
         )
-        final = await _invoke_llm([HumanMessage(content=prompt)])
+        final = await _invoke_llm([HumanMessage(content=prompt)], kind="converse")
 
     elif intent in ("transform", "sql_query", "join"):
         results = state.get("execution_results", [])
@@ -70,7 +78,7 @@ async def responder(state: AgentState) -> dict:
                 results=json.dumps(successful, indent=2),
                 goal=user_goal,
             )
-            final = await _invoke_llm([HumanMessage(content=prompt)])
+            final = await _invoke_llm([HumanMessage(content=prompt)], kind="transform")
             if failed:
                 final += f"\n\n⚠️ {len(failed)} step(s) could not be completed after retrying."
 
@@ -137,7 +145,7 @@ async def responder(state: AgentState) -> dict:
                 results=json.dumps(successful, indent=2),
                 goal=user_goal,
             )
-            final = await _invoke_llm([HumanMessage(content=prompt)])
+            final = await _invoke_llm([HumanMessage(content=prompt)], kind="transform")
         else:
             final = "Done."
 

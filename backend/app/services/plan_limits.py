@@ -2,12 +2,15 @@
 plan_limits.py
 ==============
 Monthly usage quotas per plan tier.
--1 means unlimited.
+-1 means unlimited (Enterprise only).
 
 Hybrid pricing model:
-  - Free / Professional: per-account (1 seat each, no extras).
-  - Team / Business: base quota + per-seat overage above included seats.
-  - Enterprise: unlimited everything.
+  - Free / Starter / Professional: per-account (1 seat each, no extras).
+  - Team / Business: base quota + per-seat scaling above included seats.
+  - Enterprise: unlimited everything (negotiated fair-use).
+
+Limits are intentionally bounded on every paid tier (no "unlimited"
+below Enterprise) to keep gross margin >=75% — see docs/PRICING.md.
 """
 from __future__ import annotations
 from typing import TypedDict
@@ -37,22 +40,22 @@ class PerSeatIncrement(TypedDict):
 PER_SEAT_INCREMENTS: dict[str, PerSeatIncrement] = {
     "Team": {
         "api_calls_per_month": 1_000,
-        "pipeline_runs_per_month": 200,
-        "storage_bytes": 5 * 1024 * 1024 * 1024,               # +5 GB / seat
-        "data_scan_bytes_per_month": 20 * 1024 * 1024 * 1024,   # +20 GB / seat
+        "pipeline_runs_per_month": 500,
+        "storage_bytes": 10 * 1024 * 1024 * 1024,               # +10 GB / seat
+        "data_scan_bytes_per_month": 50 * 1024 * 1024 * 1024,   # +50 GB / seat
     },
     "Business": {
-        "api_calls_per_month": 0,       # Business base is already unlimited
-        "pipeline_runs_per_month": 0,   # Business base is already unlimited
-        "storage_bytes": 20 * 1024 * 1024 * 1024,              # +20 GB / seat
-        "data_scan_bytes_per_month": 0,  # Business base is already unlimited
+        "api_calls_per_month": 2_500,
+        "pipeline_runs_per_month": 1_500,
+        "storage_bytes": 25 * 1024 * 1024 * 1024,               # +25 GB / seat
+        "data_scan_bytes_per_month": 200 * 1024 * 1024 * 1024,  # +200 GB / seat
     },
 }
 
 
 USAGE_LIMITS: dict[str, UsageLimits] = {
     "Free": {
-        "api_calls_per_month": 100,
+        "api_calls_per_month": 50,
         "pipeline_runs_per_month": 10,
         "datasets_per_month": 3,
         "storage_bytes": 500 * 1024 * 1024,                     # 500 MB
@@ -61,33 +64,43 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "included_seats": 1,
         "max_seats": 1,
     },
+    "Starter": {
+        "api_calls_per_month": 500,
+        "pipeline_runs_per_month": 100,
+        "datasets_per_month": 25,
+        "storage_bytes": 5 * 1024 * 1024 * 1024,                # 5 GB
+        "max_team_members": 1,
+        "data_scan_bytes_per_month": 25 * 1024 * 1024 * 1024,   # 25 GB
+        "included_seats": 1,
+        "max_seats": 1,
+    },
     "Professional": {
-        "api_calls_per_month": 2_000,
-        "pipeline_runs_per_month": 200,
-        "datasets_per_month": 50,
+        "api_calls_per_month": 1_500,
+        "pipeline_runs_per_month": 500,
+        "datasets_per_month": 100,
         "storage_bytes": 20 * 1024 * 1024 * 1024,               # 20 GB
         "max_team_members": 1,
-        "data_scan_bytes_per_month": 50 * 1024 * 1024 * 1024,   # 50 GB
+        "data_scan_bytes_per_month": 100 * 1024 * 1024 * 1024,  # 100 GB
         "included_seats": 1,
         "max_seats": 1,
     },
     "Team": {
-        "api_calls_per_month": 5_000,
-        "pipeline_runs_per_month": 1_000,
-        "datasets_per_month": -1,
+        "api_calls_per_month": 4_000,
+        "pipeline_runs_per_month": 2_000,
+        "datasets_per_month": 500,
         "storage_bytes": 100 * 1024 * 1024 * 1024,              # 100 GB
         "max_team_members": 25,                                  # hard cap on purchasable seats
-        "data_scan_bytes_per_month": 200 * 1024 * 1024 * 1024,  # 200 GB
+        "data_scan_bytes_per_month": 500 * 1024 * 1024 * 1024,  # 500 GB
         "included_seats": 3,
         "max_seats": 25,
     },
     "Business": {
-        "api_calls_per_month": -1,
-        "pipeline_runs_per_month": -1,
-        "datasets_per_month": -1,
-        "storage_bytes": 2 * 1024 * 1024 * 1024 * 1024,        # 2 TB
+        "api_calls_per_month": 15_000,
+        "pipeline_runs_per_month": 8_000,
+        "datasets_per_month": 2_000,
+        "storage_bytes": 500 * 1024 * 1024 * 1024,              # 500 GB
         "max_team_members": 100,                                 # hard cap on purchasable seats
-        "data_scan_bytes_per_month": -1,
+        "data_scan_bytes_per_month": 2 * 1024 * 1024 * 1024 * 1024,  # 2 TB
         "included_seats": 5,
         "max_seats": 100,
     },

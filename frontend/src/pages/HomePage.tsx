@@ -932,7 +932,7 @@ export function HomePage() {
                 <span className="dot red" />
                 <span className="dot yellow" />
                 <span className="dot green" />
-                <span className="window-title">DataHub  /  Trial  /  Workspace</span>
+                <span className="window-title">DataHub  /  Trial  /  Project</span>
               </div>
               <div className="ws-preview">
                 {/* Icon rail */}

@@ -144,7 +144,7 @@ function QuickStart() {
         <div className="docs-step__body">
           <h3>Create a project</h3>
           <p>
-            From your workspace, click <strong>New project</strong>. Give it a name — this is the container that holds your data sources, pipelines,
+            From the home page, click <strong>New project</strong>. Give it a name — this is the container that holds your data sources, pipelines,
             and dashboards.
           </p>
         </div>
@@ -198,15 +198,8 @@ function KeyConcepts() {
   return (
     <article className="docs-article">
       <h1>Key Concepts</h1>
-      <p className="docs-lead">Four building blocks underpin everything in DataHub. Learn these and you'll understand how every feature fits together.</p>
+      <p className="docs-lead">Three building blocks underpin everything in DataHub. Learn these and you'll understand how every feature fits together.</p>
       <dl className="docs-glossary">
-        <div className="docs-glossary__item">
-          <dt>Workspace</dt>
-          <dd>
-            Your top-level account. A workspace has a plan (Free, Pro, Team…), a set of members, and a billing subscription. All projects live inside one
-            workspace.
-          </dd>
-        </div>
         <div className="docs-glossary__item">
           <dt>Project</dt>
           <dd>
@@ -232,7 +225,7 @@ function KeyConcepts() {
           <dt>Dashboard</dt>
           <dd>
             A drag-and-drop canvas of chart, table, and KPI cards. Each card is backed by an artifact or a live SQL query. Dashboards can be shared publicly
-            (via link) or restricted to workspace members.
+            (via link) or restricted to project members.
           </dd>
         </div>
         <div className="docs-glossary__item">
@@ -551,15 +544,15 @@ function GuideStart() {
       <div className="docs-step">
         <div className="docs-step__number">1</div>
         <div className="docs-step__body">
-          <h3>Open the Workspace</h3>
-          <p>Click <strong>Workspace</strong> in the top navigation bar.</p>
+          <h3>Open the home page</h3>
+          <p>Click <strong>Home</strong> in the top navigation bar to see your projects.</p>
         </div>
       </div>
       <div className="docs-step">
         <div className="docs-step__number">2</div>
         <div className="docs-step__body">
           <h3>Click "New project"</h3>
-          <p>Hit the <strong>+ New project</strong> button in the top-right corner of the workspace view.</p>
+          <p>Hit the <strong>+ New project</strong> button in the top-right corner of the home page.</p>
         </div>
       </div>
       <div className="docs-step">
@@ -598,7 +591,7 @@ function GuideUpload() {
         <div className="docs-step__number">1</div>
         <div className="docs-step__body">
           <h3>Open a project</h3>
-          <p>Navigate to any project from the Workspace.</p>
+          <p>Navigate to any project from the home page.</p>
         </div>
       </div>
       <div className="docs-step">
@@ -634,7 +627,7 @@ function GuideUpload() {
         </div>
       </div>
       <div className="docs-callout docs-callout--warn">
-        Files are stored in your workspace's S3 bucket. Large files count toward your plan storage quota.
+        Files are stored in your account's S3 bucket. Large files count toward your plan storage quota.
       </div>
     </article>
   );
@@ -924,7 +917,7 @@ function GuideInvite() {
   return (
     <article className="docs-article">
       <h1>Invite team members</h1>
-      <p className="docs-lead">Collaborate with colleagues by inviting them to your workspace.</p>
+      <p className="docs-lead">Collaborate with colleagues by inviting them to your project.</p>
       <div className="docs-callout docs-callout--info">
         The Free plan supports 1 member (you). Upgrade to Professional (1 member) or Team (up to 10) to collaborate.
       </div>
@@ -948,7 +941,7 @@ function GuideInvite() {
         <div className="docs-step__body">
           <h3>They accept & join</h3>
           <p>
-            The invitee receives an email. Once they click <strong>Accept invitation</strong> and sign up, they appear in your workspace as a member with
+            The invitee receives an email. Once they click <strong>Accept invitation</strong> and sign up, they appear in your project as a member with
             access to all projects.
           </p>
         </div>
@@ -1017,7 +1010,7 @@ function Faq() {
     },
     {
       q: "Is my data secure?",
-      a: "All data is encrypted in transit (TLS) and at rest (AES-256 on S3). Each workspace is isolated at the database and storage level — your data is never shared with or accessible by other workspaces. We are GDPR-compliant.",
+      a: "All data is encrypted in transit (TLS) and at rest (AES-256 on S3). Each account is isolated at the database and storage level — your data is never shared with or accessible by other accounts. We are GDPR-compliant.",
     },
     {
       q: "Can I use DataHub for free?",
@@ -1167,7 +1160,6 @@ function Shortcuts() {
       label: "Navigation",
       items: [
         { keys: ["G", "H"], desc: "Go to Home" },
-        { keys: ["G", "W"], desc: "Go to Workspace" },
         { keys: ["G", "D"], desc: "Go to Docs" },
         { keys: ["?"], desc: "Open keyboard shortcuts" },
       ],

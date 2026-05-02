@@ -1,7 +1,7 @@
 """drop workspace tables and make workspace_id nullable
 
 Revision ID: 0067
-Revises: 0066
+Revises: 0066_dashboard_share_expiry
 Create Date: 2025-07-01
 """
 from alembic import op
@@ -14,7 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Make workspace_id nullable on resource tables (no longer required)
+    conn = op.get_bind()
+
+    # Make workspace_id nullable on resource tables.
+    # Use PostgreSQL DO blocks so a missing column doesn't abort the transaction.
     tables = [
         "datasets",
         "connector_credentials",
@@ -30,21 +33,16 @@ def upgrade() -> None:
         "projects",
     ]
     for table in tables:
-        try:
-            op.alter_column(table, "workspace_id", existing_type=sa.String(), nullable=True)
-        except Exception:
-            pass  # column may already be nullable or not exist
+        conn.execute(sa.text(f"""
+            DO $$ BEGIN
+                ALTER TABLE {table} ALTER COLUMN workspace_id DROP NOT NULL;
+            EXCEPTION WHEN others THEN NULL;
+            END $$;
+        """))
 
     # Drop workspace_members before workspaces (FK constraint)
-    try:
-        op.drop_table("workspace_members")
-    except Exception:
-        pass
-
-    try:
-        op.drop_table("workspaces")
-    except Exception:
-        pass
+    conn.execute(sa.text("DROP TABLE IF EXISTS workspace_members CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS workspaces CASCADE"))
 
 
 def downgrade() -> None:

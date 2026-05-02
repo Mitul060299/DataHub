@@ -8,8 +8,12 @@ consistent with every other router in the codebase (no Postgres RLS).
 """
 
 import uuid
+import logging
+import traceback
 from datetime import datetime, timezone
 from typing import List
+
+_log = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, text as _sql_text
@@ -98,26 +102,30 @@ def list_projects(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> List[ProjectOut]:
-    # Projects owned by the calling user
-    owned = (
-        db.query(ProjectDB)
-        .filter(ProjectDB.user_id == current_user.id)
-        .order_by(ProjectDB.updated_at.desc())
-        .all()
-    )
-    # Plus projects the user is a collaborator on (project_members)
-    member_project_ids = list_visible_project_ids(current_user.id, db)
-    already = {p.id for p in owned}
-    extra_ids = member_project_ids - already
-    extras = []
-    if extra_ids:
-        extras = (
+    try:
+        # Projects owned by the calling user
+        owned = (
             db.query(ProjectDB)
-            .filter(ProjectDB.id.in_(extra_ids))
+            .filter(ProjectDB.user_id == current_user.id)
             .order_by(ProjectDB.updated_at.desc())
             .all()
         )
-    return [_project_out(p, db) for p in owned + extras]
+        # Plus projects the user is a collaborator on (project_members)
+        member_project_ids = list_visible_project_ids(current_user.id, db)
+        already = {p.id for p in owned}
+        extra_ids = member_project_ids - already
+        extras = []
+        if extra_ids:
+            extras = (
+                db.query(ProjectDB)
+                .filter(ProjectDB.id.in_(extra_ids))
+                .order_by(ProjectDB.updated_at.desc())
+                .all()
+            )
+        return [_project_out(p, db) for p in owned + extras]
+    except Exception as exc:
+        _log.error("list_projects failed: %s\n%s", exc, traceback.format_exc())
+        raise
 
 
 @router.post("", response_model=ProjectOut, status_code=201)

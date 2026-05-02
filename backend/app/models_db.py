@@ -89,6 +89,49 @@ class ProjectMemberDB(Base):
     )
 
 
+class OrganizationDB(Base):
+    """Org account: one paying user (owner) + N invited members.
+
+    Created lazily on first need (when the user opens Settings → Team or
+    accepts an invite). The owner is identified by ``owner_user_id`` and is
+    *not* stored as a row in ``organization_members``.
+    """
+    __tablename__ = "organizations"
+
+    id = Column(String, primary_key=True)
+    owner_user_id = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_organizations_owner_user_id", "owner_user_id"),
+    )
+
+
+class OrganizationMemberDB(Base):
+    """Org member rows (active + pending invites). All members are equal at
+    the project layer; only the owner manages billing & invites."""
+    __tablename__ = "organization_members"
+
+    id = Column(String, primary_key=True)
+    org_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String, nullable=True)         # null until invite accepted
+    email = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending")  # pending|active
+    invite_token = Column(String, unique=True, nullable=True)
+    invited_by = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_om_org_id", "org_id"),
+        Index("idx_om_user_id", "user_id"),
+        Index("idx_om_invite_token", "invite_token", unique=True),
+        Index("idx_om_org_email", "org_id", "email", unique=True),
+    )
+
+
 class Workspace(Base):
     __tablename__ = "workspaces"
     id = Column(String, primary_key=True)

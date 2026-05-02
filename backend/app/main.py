@@ -67,6 +67,7 @@ from .routers import pipeline_refresh, cron, data_sources
 from .routers import waitlist
 from .routers import dashboard_access
 from .routers.project_members import router as project_members_router, project_invite_router as project_invite_router
+from .routers.organization_members import router as organization_members_router, org_invite_router as org_invite_router
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
 from .routers.saved_visualizations import router as saved_visualizations_router
@@ -632,3 +633,5 @@ app.include_router(canvas_router)
 app.include_router(waitlist.router)
 app.include_router(project_members_router)
 app.include_router(project_invite_router)
+app.include_router(organization_members_router)
+app.include_router(org_invite_router)

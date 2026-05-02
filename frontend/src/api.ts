@@ -1442,6 +1442,49 @@ export async function fetchProjectMemberUsage(projectId: string): Promise<Projec
   return response.data;
 }
 
+// ── Organization (team-tier) ────────────────────────────────────────────────
+
+export interface OrgMemberOut {
+  id: string;
+  org_id: string;
+  user_id: string | null;
+  email: string;
+  status: "pending" | "active";
+  invited_by: string;
+  is_owner: boolean;
+  created_at: string;
+  accepted_at: string | null;
+}
+
+export interface OrgOut {
+  id: string;
+  name: string;
+  owner_user_id: string;
+  plan: string;
+  seats_purchased: number;
+  seats_used: number;
+  is_owner: boolean;
+}
+
+export async function fetchOrganization(): Promise<OrgOut> {
+  const response = await api.get("/organization");
+  return response.data;
+}
+
+export async function fetchOrgMembers(): Promise<OrgMemberOut[]> {
+  const response = await api.get("/organization/members");
+  return response.data;
+}
+
+export async function inviteOrgMember(email: string): Promise<OrgMemberOut> {
+  const response = await api.post("/organization/invite", { email });
+  return response.data;
+}
+
+export async function removeOrgMember(memberId: string): Promise<void> {
+  await api.delete(`/organization/members/${memberId}`);
+}
+
 // ── Reviews ─────────────────────────────────────────────────────────────────
 
 export interface ReviewOut {

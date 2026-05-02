@@ -23,7 +23,8 @@ from ..models_db import ProjectDB, ProjectMemberDB
 
 
 def user_can_access_project(project_id: str, user_id: str, db: Session) -> bool:
-    """Return True if ``user_id`` owns the project or is an active member."""
+    """Return True if ``user_id`` owns the project, is an org sibling of the
+    owner, or is an active project-member."""
     if not project_id or not user_id:
         return False
 
@@ -34,7 +35,13 @@ def user_can_access_project(project_id: str, user_id: str, db: Session) -> bool:
     )
     if proj is None:
         return False
-    if proj[0] == user_id:
+    owner_id = proj[0]
+    if owner_id == user_id:
+        return True
+
+    # Same-org siblings have implicit access to each other's projects.
+    from .organization_service import list_org_sibling_user_ids
+    if owner_id in list_org_sibling_user_ids(user_id, db):
         return True
 
     is_member = (
@@ -50,13 +57,21 @@ def user_can_access_project(project_id: str, user_id: str, db: Session) -> bool:
 
 
 def list_visible_project_ids(user_id: str, db: Session) -> set[str]:
-    """Return the set of project_ids visible to ``user_id`` — owned ∪ member-of."""
+    """Return the set of project_ids visible to ``user_id``.
+
+    Visibility = owned ∪ project-member-of ∪ owned-by-org-sibling.
+    The org-sibling rule lets every member of a Team/Business org see every
+    project created by anyone in the org without per-project invites.
+    """
     if not user_id:
         return set()
 
+    from .organization_service import list_org_sibling_user_ids
+
+    sibling_ids = list_org_sibling_user_ids(user_id, db)
     owned = {
         pid for (pid,) in
-        db.query(ProjectDB.id).filter(ProjectDB.user_id == user_id).all()
+        db.query(ProjectDB.id).filter(ProjectDB.user_id.in_(sibling_ids)).all()
     }
     member_of = {
         pid for (pid,) in
@@ -85,9 +100,10 @@ def get_project_owner(project_id: str, db: Session) -> str | None:
 def list_visible_owner_user_ids(user_id: str, db: Session) -> list[str]:
     """Return the set of project-owner user_ids whose artifacts are visible to ``user_id``.
 
-    This is the union of:
-    - ``user_id`` itself (their own artifacts)
-    - the owner user_id of every project where ``user_id`` is an active member
+    Includes:
+    - ``user_id`` itself
+    - every active org sibling (so all team-members see each other's data)
+    - the owner of every project where ``user_id`` is an active project-member
 
     Use this for artifact list endpoints (dashboards, pipelines, canvas, datasets)
     that key off ``<artifact>.user_id``. The project-billing rule guarantees
@@ -95,7 +111,9 @@ def list_visible_owner_user_ids(user_id: str, db: Session) -> list[str]:
     """
     if not user_id:
         return []
-    owners = {user_id}
+    from .organization_service import list_org_sibling_user_ids
+    owners: set[str] = set(list_org_sibling_user_ids(user_id, db))
+    owners.add(user_id)
     rows = (
         db.query(ProjectDB.user_id)
         .join(ProjectMemberDB, ProjectMemberDB.project_id == ProjectDB.id)

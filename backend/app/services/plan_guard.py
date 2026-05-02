@@ -146,12 +146,21 @@ def normalize_plan(plan: str | None) -> str:
 
 
 def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
-    """Return the plan for a known user_id (no JWT needed)."""
-    if settings.billing_enabled and user_id:
-        effective_plan = billing_repository.get_effective_plan(user_id)
+    """Return the plan for a known user_id (no JWT needed).
+
+    Org-account aware: if ``user_id`` is an active member of someone else's
+    org (i.e. they were invited under a paid Team/Business seat), the org
+    owner's plan is returned instead. Lazy: never creates a personal org row.
+    """
+    # Resolve to org owner if this user is an org member
+    from .organization_service import resolve_org_owner_user_id  # avoid cycle
+    billing_user_id = resolve_org_owner_user_id(user_id, db) if user_id else user_id
+
+    if settings.billing_enabled and billing_user_id:
+        effective_plan = billing_repository.get_effective_plan(billing_user_id)
         if effective_plan:
             return normalize_plan(effective_plan)
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == billing_user_id).first()
     if not user:
         return "Free"
     return normalize_plan(user.plan)

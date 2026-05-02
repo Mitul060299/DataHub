@@ -172,3 +172,42 @@ def send_project_invite(
         subject=f"You've been invited to {project_name} on DataHub",
         html=html,
     )
+
+
+def send_org_invite(
+    to: str,
+    inviter_name: str,
+    org_name: str,
+    accept_url: str,
+) -> bool:
+    """Send an organization (Team-tier) invite email."""
+    html = f"""<!DOCTYPE html>
+<html>
+<body style="background:#0a0a0c;color:#e8e8f0;font-family:Inter,sans-serif;padding:32px;">
+  <div style="max-width:520px;margin:0 auto;">
+    <h2 style="color:#5B6AF0;margin-bottom:8px;">DataHub</h2>
+    <h3 style="margin-bottom:16px;">Join the <strong>{org_name}</strong> team on DataHub</h3>
+    <p style="color:#a0a0a8;margin-bottom:24px;">
+      <strong>{inviter_name}</strong> has invited you to join their team account
+      on DataHub. You'll get your own login and projects, and share the team's
+      paid plan and quota.
+    </p>
+    <a href="{accept_url}"
+       style="display:inline-block;background:#5B6AF0;color:#fff;text-decoration:none;
+              padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">
+      Accept Invitation
+    </a>
+    <p style="color:#55555f;font-size:12px;margin-top:24px;">
+      Or copy this link: {accept_url}
+    </p>
+    <p style="color:#55555f;font-size:12px;">
+      This invite expires when revoked by the team owner.
+    </p>
+  </div>
+</body>
+</html>"""
+    return send_email(
+        to=to,
+        subject=f"Join {org_name} on DataHub",
+        html=html,
+    )

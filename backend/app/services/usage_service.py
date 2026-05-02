@@ -52,17 +52,30 @@ def resolve_billing_user_for_project(
     members consume the owner's quota, not their own. Falls back to the
     caller's user_id when ``project_id`` is missing or the project doesn't
     resolve (legacy / single-user paths).
+
+    Org-account aware: the resolved owner is then funneled through
+    ``resolve_billing_user_for_user`` so that if the project owner is itself a
+    member of a parent org, that org's owner ultimately holds the bill.
     """
     if not project_id:
-        return calling_user_id
+        return resolve_billing_user_for_user(calling_user_id, db)
     row = (
         db.query(ProjectDB.user_id)
         .filter(ProjectDB.id == project_id)
         .first()
     )
-    if row and row[0]:
-        return row[0]
-    return calling_user_id
+    project_owner = row[0] if row and row[0] else calling_user_id
+    return resolve_billing_user_for_user(project_owner, db)
+
+
+def resolve_billing_user_for_user(user_id: str, db: Session) -> str:
+    """Return the user_id who owns the billing quota for ``user_id``.
+
+    If the user is in someone else's org as an active member → org owner.
+    Otherwise → the user themselves. Lazy / side-effect-free.
+    """
+    from .organization_service import resolve_org_owner_user_id  # avoid cycle
+    return resolve_org_owner_user_id(user_id, db)
 
 
 def get_usage(user_id: str, db: Session, period: str | None = None) -> dict:

@@ -511,6 +511,32 @@ class ProjectMemberOut(BaseModel):
     accepted_at: Optional[str] = None
 
 
+class OrgMemberInvite(BaseModel):
+    email: str
+
+
+class OrgMemberOut(BaseModel):
+    id: str
+    org_id: str
+    user_id: Optional[str] = None
+    email: str
+    status: str          # pending | active
+    invited_by: str
+    is_owner: bool = False
+    created_at: str
+    accepted_at: Optional[str] = None
+
+
+class OrgOut(BaseModel):
+    id: str
+    name: str
+    owner_user_id: str
+    plan: str
+    seats_purchased: int
+    seats_used: int
+    is_owner: bool
+
+
 class BusinessRule(BaseModel):
     key: str
     description: str

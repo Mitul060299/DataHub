@@ -31,8 +31,22 @@ export function InviteAcceptPage() {
     }
 
     const accept = async () => {
-      // Try project-level invite first (new collaboration model);
-      // fall back to workspace-level invite for legacy/in-flight tokens.
+      // Try organization invite first (org-account / Team-tier flow);
+      // fall back to project-level invite, then workspace-level for legacy tokens.
+      try {
+        await api.get(`/invites/organizations/${token}/accept`);
+        setStatus("success");
+        setMessage("You've joined the team!");
+        setTimeout(() => navigate("/settings/team?joined=1", { replace: true }), 1500);
+        return;
+      } catch (err) {
+        const e = err as { response?: { status?: number; data?: { detail?: string } } };
+        if (e.response?.status && e.response.status !== 404) {
+          setStatus("error");
+          setMessage(e.response?.data?.detail ?? "Invite could not be accepted.");
+          return;
+        }
+      }
       try {
         await api.get(`/invites/projects/${token}/accept`);
         setStatus("success");

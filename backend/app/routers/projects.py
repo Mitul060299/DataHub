@@ -61,22 +61,26 @@ def _fmt(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
 
 
+def _safe_count(db: Session, model, project_id: str) -> int:
+    """Best-effort count; return 0 if the table/column is missing or query fails."""
+    try:
+        return (
+            db.query(func.count(model.id))
+            .filter(model.project_id == project_id)
+            .scalar()
+        ) or 0
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return 0
+
+
 def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
-    pipeline_count = (
-        db.query(func.count(PipelineV2DB.id))
-        .filter(PipelineV2DB.project_id == project.id)
-        .scalar()
-    ) or 0
-    dashboard_count = (
-        db.query(func.count(DashboardV2DB.id))
-        .filter(DashboardV2DB.project_id == project.id)
-        .scalar()
-    ) or 0
-    source_count = (
-        db.query(func.count(DataSourceDB.id))
-        .filter(DataSourceDB.project_id == project.id)
-        .scalar()
-    ) or 0
+    pipeline_count = _safe_count(db, PipelineV2DB, project.id)
+    dashboard_count = _safe_count(db, DashboardV2DB, project.id)
+    source_count = _safe_count(db, DataSourceDB, project.id)
     return ProjectOut(
         id=project.id,
         name=project.name,
@@ -110,18 +114,33 @@ def list_projects(
             .order_by(ProjectDB.updated_at.desc())
             .all()
         )
-        # Plus projects the user is a collaborator on (project_members)
-        member_project_ids = list_visible_project_ids(current_user.id, db)
+        # Plus projects the user is a collaborator on (project_members) — best-effort
+        try:
+            member_project_ids = list_visible_project_ids(current_user.id, db)
+        except Exception as _exc:
+            _log.warning("list_visible_project_ids failed (continuing): %s", _exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            member_project_ids = set()
         already = {p.id for p in owned}
         extra_ids = member_project_ids - already
         extras = []
         if extra_ids:
-            extras = (
-                db.query(ProjectDB)
-                .filter(ProjectDB.id.in_(extra_ids))
-                .order_by(ProjectDB.updated_at.desc())
-                .all()
-            )
+            try:
+                extras = (
+                    db.query(ProjectDB)
+                    .filter(ProjectDB.id.in_(extra_ids))
+                    .order_by(ProjectDB.updated_at.desc())
+                    .all()
+                )
+            except Exception as _exc:
+                _log.warning("loading member projects failed (continuing): %s", _exc)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
         return [_project_out(p, db) for p in owned + extras]
     except Exception as exc:
         _log.error("list_projects failed: %s\n%s", exc, traceback.format_exc())

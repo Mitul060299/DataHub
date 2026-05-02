@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0067"
-down_revision = "0066"
+down_revision = "0066_dashboard_share_expiry"
 branch_labels = None
 depends_on = None
 

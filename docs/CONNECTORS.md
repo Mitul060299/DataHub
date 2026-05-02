@@ -465,11 +465,11 @@ mongodb://username:password@host:port/database
 
 **Connection Details:**
 - Uses SQL Server protocol (port 1433)
-- Server format: `<workspace-name>.sql.azuresynapse.net`
+- Server format: `<project-name>.sql.azuresynapse.net`
 - Can also connect to dedicated SQL pools
 
 **Firewall Configuration:**
-1. Azure Portal → Synapse workspace → Networking
+1. Azure Portal → Synapse project → Networking
 2. Add your IP address to firewall rules
 3. Or allow Azure services access
 
@@ -874,7 +874,7 @@ s: Increase compute resources temporarily
 **Azure Synapse:**
 - Add IP to firewall rules in Azure Portal
 - Ensure SQL pool is running (not paused)
-- Use correct database name (not workspace name)
+- Use correct database name (not project name)
 
 ### Getting Help
 

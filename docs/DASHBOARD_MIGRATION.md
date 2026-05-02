@@ -1,7 +1,7 @@
 # Dashboard Migration and Cleanup (Current)
 
 ## Summary
-The old dashboard frontend surface has been fully removed from active UI code. The product now follows the unified project workspace model and retains `/visualizations/*` as the canonical backend dashboard API namespace.
+The old dashboard frontend surface has been fully removed from active UI code. The product now follows the unified project project model and retains `/visualizations/*` as the canonical backend dashboard API namespace.
 
 ## What Was Cleaned Up
 ### Frontend (removed legacy, unreferenced files)

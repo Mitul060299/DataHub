@@ -251,13 +251,10 @@ export async function fetchProfile(datasetId: string) {
   });
 }
 
-export async function fetchInsights(datasetId: string, workspaceId?: string) {
-  const params = workspaceId ? { workspace_id: workspaceId } : undefined;
-  const key = analyticsKey("insights", datasetId, params);
+export async function fetchInsights(datasetId: string) {
+  const key = analyticsKey("insights", datasetId);
   return getCachedAnalytics(key, async () => {
-    const response = await api.get(`/insights/${datasetId}`, {
-      params
-    });
+    const response = await api.get(`/insights/${datasetId}`);
     return response.data;
   });
 }
@@ -270,13 +267,10 @@ export async function fetchInsightActions(datasetId: string) {
   });
 }
 
-export async function fetchAgentSuggestions(datasetId: string, workspaceId?: string) {
-  const params = workspaceId ? { workspace_id: workspaceId } : undefined;
-  const key = analyticsKey("agent-suggestions", datasetId, params);
+export async function fetchAgentSuggestions(datasetId: string) {
+  const key = analyticsKey("agent-suggestions", datasetId);
   return getCachedAnalytics(key, async () => {
-    const response = await api.get(`/agents/suggest/${datasetId}`, {
-      params
-    });
+    const response = await api.get(`/agents/suggest/${datasetId}`);
     return response.data;
   });
 }
@@ -291,10 +285,8 @@ export async function exchangeOidcCode(code: string) {
   return response.data as { access_token: string; token_type: string };
 }
 
-export async function fetchCurrentUser(workspaceId?: string) {
-  const response = await api.get("/users/me", {
-    headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
-  });
+export async function fetchCurrentUser() {
+  const response = await api.get("/users/me");
   return response.data as {
     id: string;
     username: string;
@@ -324,13 +316,10 @@ export async function chatWithAgent(
   datasetId: string,
   message: string,
   history: { role: "user" | "assistant"; content: string }[],
-  workspaceId?: string
 ) {
   const response = await api.post(`/agents/chat/${datasetId}`, {
     message,
     history
-  }, {
-    params: workspaceId ? { workspace_id: workspaceId } : undefined
   });
   return response.data;
 }
@@ -407,13 +396,13 @@ export async function streamChatSessionMessage(sessionId: string, content: strin
   return events;
 }
 
-export async function fetchContext(workspaceId: string) {
-  const response = await api.get(`/context/${workspaceId}`);
+export async function fetchContext(projectId: string) {
+  const response = await api.get(`/context/${projectId}`);
   return response.data;
 }
 
 export async function saveContext(payload: {
-  workspace_id: string;
+  project_id: string;
   glossary: Record<string, string>;
   rules: Array<{ key: string; description: string; applies_to?: string[]; severity?: string }>;
 }) {
@@ -421,13 +410,13 @@ export async function saveContext(payload: {
   return response.data;
 }
 
-export async function listContextVersions(workspaceId: string) {
-  const response = await api.get(`/context/${workspaceId}/versions`);
+export async function listContextVersions(projectId: string) {
+  const response = await api.get(`/context/${projectId}/versions`);
   return response.data;
 }
 
-export async function revertContext(workspaceId: string, versionId: string) {
-  const response = await api.post(`/context/${workspaceId}/revert/${versionId}`);
+export async function revertContext(projectId: string, versionId: string) {
+  const response = await api.post(`/context/${projectId}/revert/${versionId}`);
   return response.data;
 }
 
@@ -769,14 +758,11 @@ export async function deleteCalculatedColumn(datasetId: string, columnId: string
   return response.data as { success: boolean; column_id: string };
 }
 
-export async function listDashboardsV2(workspaceId?: string) {
-  const response = await api.get("/dashboards", {
-    params: workspaceId ? { workspace_id: workspaceId } : undefined,
-  });
+export async function listDashboardsV2() {
+  const response = await api.get("/dashboards");
   return response.data as Array<{
     id: string;
-    workspace_id: string;
-    dataset_id?: string | null;
+      dataset_id?: string | null;
     name: string;
     description?: string | null;
     layout: Record<string, unknown>;
@@ -795,17 +781,16 @@ export async function listDashboardsV2(workspaceId?: string) {
 }
 
 export async function createDashboardV2(payload: {
-  workspace_id: string;
   dataset_id?: string;
   name: string;
   description?: string;
   layout?: Record<string, unknown>;
 }) {
-  const response = await api.post("/dashboards", payload);
+  const normalized = { ...payload };
+  const response = await api.post("/dashboards", normalized);
   return response.data as {
     id: string;
-    workspace_id: string;
-    dataset_id?: string | null;
+      dataset_id?: string | null;
     name: string;
     description?: string | null;
     layout: Record<string, unknown>;
@@ -1134,15 +1119,7 @@ export interface WorkspaceOut {
   share_scope?: string | null;
 }
 
-export async function listWorkspaces(): Promise<WorkspaceOut[]> {
-  const response = await api.get("/workspaces");
-  return response.data;
-}
 
-export async function createWorkspace(name: string, workspace_type: "personal" | "collab" = "personal"): Promise<WorkspaceOut> {
-  const response = await api.post("/workspaces", { name, workspace_type });
-  return response.data;
-}
 
 export async function shareWorkspace(workspaceId: string, expiresInHours?: number, scope?: string) {
   const params: Record<string, unknown> = {};
@@ -1283,7 +1260,6 @@ export interface ProjectOut {
   description?: string | null;
   colour: string;
   icon: string;
-  workspace_id: string;
   user_id?: string | null;
   pipeline_count: number;
   dashboard_count: number;
@@ -1353,10 +1329,8 @@ export interface ProjectDetailOut {
   sources: ProjectSourceOut[];
 }
 
-export async function fetchProjects(workspaceId?: string): Promise<ProjectOut[]> {
-  const response = await api.get("/projects", {
-    params: workspaceId && workspaceId !== "default" ? { workspace_id: workspaceId } : undefined,
-  });
+export async function fetchProjects(): Promise<ProjectOut[]> {
+  const response = await api.get("/projects");
   return response.data;
 }
 
@@ -1365,7 +1339,6 @@ export async function createProject(payload: {
   description?: string;
   colour?: string;
   icon?: string;
-  workspace_id?: string;
 }): Promise<ProjectOut> {
   const response = await api.post("/projects", payload);
   return response.data;
@@ -1397,7 +1370,6 @@ export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
 
 export interface WorkspaceMemberOut {
   id: string;
-  workspace_id: string;
   user_id: string | null;
   email: string;
   role: "admin" | "editor" | "viewer";
@@ -1407,32 +1379,7 @@ export interface WorkspaceMemberOut {
   accepted_at: string | null;
 }
 
-export async function fetchWorkspaceMembers(workspaceId: string): Promise<WorkspaceMemberOut[]> {
-  const response = await api.get(`/workspaces/${workspaceId}/members`);
-  return response.data;
-}
 
-export async function inviteMember(
-  workspaceId: string,
-  email: string,
-  role: "admin" | "editor" | "viewer",
-): Promise<WorkspaceMemberOut> {
-  const response = await api.post(`/workspaces/${workspaceId}/members`, { email, role });
-  return response.data;
-}
-
-export async function updateMemberRole(
-  workspaceId: string,
-  memberId: string,
-  role: "admin" | "editor" | "viewer",
-): Promise<WorkspaceMemberOut> {
-  const response = await api.put(`/workspaces/${workspaceId}/members/${memberId}`, { role });
-  return response.data;
-}
-
-export async function removeMember(workspaceId: string, memberId: string): Promise<void> {
-  await api.delete(`/workspaces/${workspaceId}/members/${memberId}`);
-}
 
 // ── Project Members ─────────────────────────────────────────────────────────
 
@@ -1528,7 +1475,6 @@ export interface SavedVisualization {
   chart_type: string;
   echarts_config: Record<string, unknown>;
   project_id: string | null;
-  workspace_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -1545,7 +1491,6 @@ export async function saveVisualization(payload: {
   chart_type: string;
   echarts_config: Record<string, unknown>;
   project_id?: string;
-  workspace_id?: string;
 }): Promise<SavedVisualization> {
   const response = await api.post("/api/visualizations/saved", payload);
   return response.data;
@@ -1581,7 +1526,6 @@ export interface CanvasLayout {
   is_public: boolean;
   public_token: string | null;
   project_id: string | null;
-  workspace_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -1634,7 +1578,6 @@ export async function listCanvasLayouts(projectId?: string): Promise<CanvasLayou
 export async function createCanvasLayout(payload: {
   name?: string;
   project_id?: string;
-  workspace_id?: string;
 }): Promise<CanvasLayout> {
   const response = await api.post("/api/canvas", payload);
   return response.data;

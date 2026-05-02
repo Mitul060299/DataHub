@@ -384,7 +384,7 @@ def save_checkpoint(
             triggered_by="user_save",
             id=ds_id,
             user_id=current_user.id,
-            workspace_id=getattr(current_user, "workspace_id", None) or "default",
+            workspace_id="default",
             project_id=source_project_id,
             name=artifact_name,
             source_type="checkpoint",

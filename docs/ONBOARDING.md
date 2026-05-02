@@ -49,7 +49,7 @@ Use the sample CSV in samples/customers.csv to test uploads and profiling.
 - Widget titles are required; only Summary and Table types are allowed.
 
 ## Postgres Persistence
-- Users, workspaces, dashboards, contexts, and dataset metadata are stored in Postgres.
+- Users, projects, dashboards, contexts, and dataset metadata are stored in Postgres.
 - Run migrations with Alembic when you are ready to manage schema versions.
 
 ## AI Chat Agent

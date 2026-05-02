@@ -40,7 +40,6 @@ class EmitEventTests(unittest.TestCase):
             session,
             event_type="dataset_materialized",
             user_id="u-1",
-            workspace_id="default",
             payload={"dataset_id": "ds-1", "triggered_by": "user_upload"},
         )
         session.commit()
@@ -108,7 +107,6 @@ class PersistencePolicyEmitsEventsTests(unittest.TestCase):
 
         self.assertEqual(captured.get("event_type"), "dataset_materialized")
         self.assertEqual(captured.get("user_id"), "u-9")
-        self.assertEqual(captured.get("workspace_id"), "ws-1")
         payload = captured.get("payload") or {}
         self.assertEqual(payload.get("triggered_by"), "user_save")
         self.assertEqual(payload.get("dataset_id"), "ds-evt-9")

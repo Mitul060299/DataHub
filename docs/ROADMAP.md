@@ -56,7 +56,7 @@
 - **Rate-limited AI chat** — AI chat endpoint is rate-limited per user
 - **Cost-optimised intent classifier** — lightweight model for single-token intent classification; large model reserved for planning and execution
 - **Richer SQL reflection** — `reflect` node includes column statistics and failed operation name in the repair prompt for more targeted SQL rewrites
-- **Secondary dataset picker** — “＋ Join” button in AI panel header; workspace datasets loaded and rendered as chip toggle; `secondary_dataset_ids` sent to the agent
+- **Secondary dataset picker** — “＋ Join” button in AI panel header; project datasets loaded and rendered as chip toggle; `secondary_dataset_ids` sent to the agent
 - **Expand query results** — result tables default to 20 rows with “Show all / Show less” toggle
 - **Copy SQL** — copy button on each plan step’s SQL block with ✓ confirmation flash
 - **UX polish** — stop button (AbortController), auto-grow textarea, Markdown rendering, `/` shortcut to focus input, explorer width persistence, chart save error toast
@@ -167,12 +167,12 @@ no effect on local dev.
 
 ### D — Secondary schema lazy loading
 - **File**: `backend/app/services/agent/nodes/context_loader.py`
-- The "auto-discover all workspace datasets" block (DB query + up to 20 DuckDB
+- The "auto-discover all project datasets" block (DB query + up to 20 DuckDB
   view registrations) previously ran on **every** agent turn unconditionally.
 - Now gated behind an intent check: only runs for `join / union / merge /
   reconcile / compare / append` intents, and on the first turn (intent = `""`).
   Single-dataset turns (`converse`, `validate`, `transform`, `filter`, etc.) skip
-  the entire block. Saves ~20–200 ms per turn depending on workspace size.
+  the entire block. Saves ~20–200 ms per turn depending on project size.
 
 ### E — LLM call timeouts
 - **Files**: all five `agent/nodes/` files that call `_llm.ainvoke()`

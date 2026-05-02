@@ -31,7 +31,6 @@ export type PipelineWorkflowCreatePayload = {
   name: string;
   steps: PipelineWorkflowStep[];
   description?: string;
-  workspace_id?: string;
   is_public?: boolean;
   execution_config?: {
     default_parameters?: Record<string, unknown>;
@@ -125,7 +124,6 @@ export function usePipeline() {
       name: payload.name,
       steps: payload.steps,
       description: payload.description,
-      workspace_id: payload.workspace_id ?? "default",
       is_public: payload.is_public ?? false,
       execution_config: payload.execution_config ?? {},
     });
@@ -173,12 +171,11 @@ export function usePipeline() {
 
   const clonePipelineWorkflow = async (
     pipelineId: string,
-    payload?: { name?: string; description?: string; workspace_id?: string },
+    payload?: { name?: string; description?: string },
   ) => {
     const response = await api.post(`/api/pipelines/${pipelineId}/clone`, {
       name: payload?.name,
       description: payload?.description,
-      workspace_id: payload?.workspace_id,
     });
     return response.data as {
       success: boolean;

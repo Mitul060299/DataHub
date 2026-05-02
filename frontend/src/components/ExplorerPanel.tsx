@@ -13,14 +13,13 @@ import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
 
 interface ExplorerPanelProps {
-  workspaceId: string;
   refreshNonce?: number;
   searchFocusNonce?: number;
   width?: number;
 }
 
-export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
-  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, workspaceMembers, refreshMembers, projectsLoading } = useWorkspaceContext();
+export function ExplorerPanel({ refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
+  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, projectsLoading } = useWorkspaceContext();
   const { steps, liveArtifact } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -131,7 +130,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
   }, [datasets, datasetsById, operationByOutputDataset, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
-    const cacheKey = `dh_ds_${workspaceId}_${activeProject?.id ?? "all"}`;
+    const cacheKey = `dh_ds_${activeProject?.id ?? "all"}`;
     // Hydrate immediately from session cache so the list paints before the
     // network round-trip completes (especially useful on Render cold-starts).
     if (attempt === 0) {
@@ -146,7 +145,6 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     setDatasetsLoading(true);
     const requestConfig = {
       params: activeProject?.id ? { project_id: activeProject.id } : undefined,
-      headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
       // 90s covers Render cold-start (can take 50-60s on free tier)
       timeout: 90000,
     };
@@ -193,7 +191,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
     } finally {
       setDatasetsLoading(false);
     }
-  }, [activeProject?.id, workspaceId]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProject?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const removeDataset = async (dataset: Dataset) => {
     if (!dataset.id) return;
@@ -252,9 +250,9 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       <div className="members-strip" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "inline-flex", alignItems: "center" }}>
           {(() => {
-            const active = workspaceMembers.filter((m) => m.status === "active");
+            const active = members.map((m) => ({ id: m.id, label: m.name }));
             const normalized: Array<{ id: string; label: string }> = active.length > 0
-              ? active.map((m) => ({ id: m.id, label: m.email }))
+              ? active
               : members.map((m) => ({ id: m.id, label: m.name }));
             const shown = normalized.slice(0, 4);
             const overflow = normalized.length - shown.length;
@@ -278,7 +276,7 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
             );
           })()}
         </div>
-        <button className="btn" onClick={() => { setTeamPanelOpen(true); void refreshMembers(workspaceId); }} style={{ height: 24, fontSize: 11 }}>
+        <button className="btn" onClick={() => setTeamPanelOpen(true)} style={{ height: 24, fontSize: 11 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconTeam size={13} />+ Invite</span>
         </button>
       </div>
@@ -389,17 +387,15 @@ export function ExplorerPanel({ workspaceId, refreshNonce, searchFocusNonce, wid
       </div>
 
       {teamPanelOpen && (
-        <TeamPanel workspaceId={workspaceId} onClose={() => setTeamPanelOpen(false)} />
+        <TeamPanel projectId={activeProject?.id ?? ""} onClose={() => setTeamPanelOpen(false)} />
       )}
       <ProjectModal
         open={projectModalOpen}
-        workspaceId={workspaceId}
         onClose={() => setProjectModalOpen(false)}
         onSelect={setActiveProject}
       />
       <ImportModal
         open={importModalOpen}
-        workspaceId={workspaceId}
         projectId={activeProject?.id}
         onClose={() => setImportModalOpen(false)}
         onImported={() => {

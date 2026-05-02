@@ -85,7 +85,6 @@ export interface DashboardV2Tile {
 
 export interface DashboardV2 {
   id: string;
-  workspace_id: string;
   dataset_id?: string | null;
   name: string;
   description?: string | null;
@@ -106,14 +105,12 @@ export interface BusinessRule {
 }
 
 export interface ContextPayload {
-  workspace_id: string;
   glossary: Record<string, string>;
   rules: BusinessRule[];
 }
 
 export interface ContextVersion {
   version_id: string;
-  workspace_id: string;
   glossary: Record<string, string>;
   rules: BusinessRule[];
   created_at: string;

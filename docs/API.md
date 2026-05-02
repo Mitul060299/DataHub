@@ -25,7 +25,7 @@ All endpoints are protected by rate limiting keyed per authenticated user (JWT `
 - GET /profiling/{dataset_id}?columns=col1,col2
 - GET /profiling/{dataset_id}/summary?column=colName&bins=10&top_n=10
 - GET /profiling/{dataset_id}/correlations
-- GET /insights/{dataset_id}?workspace_id=...
+- GET /insights/{dataset_id}?project_id=...
 - GET /insights/{dataset_id}/actions
 
 ## AI Chat (Streaming)
@@ -36,7 +36,7 @@ Request body (`CommandRequest`):
 {
   "message": "Remove duplicate rows",
   "session_id": "uuid",
-  "workspace_id": "uuid",
+  "project_id": "uuid",
   "pipeline_steps": [],
   "plan_approved": false,
   "plan_pending_modification": false,
@@ -66,8 +66,8 @@ SSE event types emitted:
 - `agent.error` — unrecoverable error; contains `error` string
 
 ## AI Agents (legacy non-streaming)
-- GET /agents/suggest/{dataset_id}?workspace_id=...
-- POST /agents/chat/{dataset_id}?workspace_id=... *(non-streaming; prefer `/cleaning/datasets/{id}/chat`)*
+- GET /agents/suggest/{dataset_id}?project_id=...
+- POST /agents/chat/{dataset_id}?project_id=... *(non-streaming; prefer `/cleaning/datasets/{id}/chat`)*
 - POST /agents/feedback
 
 ## Transformations
@@ -78,10 +78,10 @@ SSE event types emitted:
 - POST /transformations/apply/{dataset_id}
 
 ## Context
-- GET /context/{workspace_id}
+- GET /context/{project_id}
 - POST /context
-- GET /context/{workspace_id}/versions
-- POST /context/{workspace_id}/revert/{version_id}
+- GET /context/{project_id}/versions
+- POST /context/{project_id}/revert/{version_id}
 
 ## Governance
 - GET /governance/audit?action=...&actor=...&target=...&since_minutes=...&limit=...
@@ -127,25 +127,25 @@ Hard limits enforced per plan on every upload, pipeline run, and AI call.
 Returns `429` with `{"error": "usage_limit_exceeded", "message": "..."}` when a limit is hit.
 An email warning is sent when any metric crosses 80% of its limit (requires `RESEND_API_KEY`; respects user's `usage_warning` preference).
 
-## Workspaces
-- POST /workspaces
-- GET /workspaces
-- POST /workspaces/{workspace_id}/share
-- POST /workspaces/{workspace_id}/unshare
-- POST /workspaces/unshare-all
-- POST /workspaces/purge-expired
-- GET /workspaces/shared/{share_token}
+## Projects
+- POST /projects
+- GET /projects
+- POST /projects/{project_id}/share
+- POST /projects/{project_id}/unshare
+- POST /projects/unshare-all
+- POST /projects/purge-expired
+- GET /projects/shared/{share_token}
 - 429 returned if shared rate limit exceeded
 - 403 returned if signature is invalid when SHARE_SIGNING_SECRET is set (sig query param)
 - 403 returned if share scope does not match (scope query param)
 
 ## Projects
-- POST /api/projects — create project (name, colour, icon, description, workspace_id)
+- POST /api/projects — create project (name, colour, icon, description, project_id)
 - GET /api/projects — list current user's projects
 - GET /api/projects/{project_id} — project detail with linked pipelines, dashboards, data sources
 - PUT /api/projects/{project_id} — update project name, colour, icon, description
 - DELETE /api/projects/{project_id} — delete project
-- GET /api/workspace/recent — recent pipelines and dashboards across all projects
+- GET /api/project/recent — recent pipelines and dashboards across all projects
 
 ## Project Members
 Project-level collaboration. Billing flows through the project owner's plan.
@@ -182,7 +182,7 @@ Supported NL-addressable operations (30+):
 ```json
 {
   "name": "Generic Multi-Dataset Workflow",
-  "workspace_id": "default",
+  "project_id": "default",
   "is_public": false,
   "execution_config": {
     "default_parameters": { "period": "2026-02", "variance_threshold": 0.01 }
@@ -213,7 +213,7 @@ Supported NL-addressable operations (30+):
 
 ### Clone Pipeline (Example)
 ```json
-{ "name": "My Workflow (copy)", "workspace_id": "default" }
+{ "name": "My Workflow (copy)", "project_id": "default" }
 ```
 
 ### Run Artifact Package
@@ -255,7 +255,7 @@ Supported NL-addressable operations (30+):
 - POST /templates/dashboards/{template_id}/instantiate
 
 ## Real-time
-- WS /realtime/presence?workspace_id=default&user=alice
+- WS /realtime/presence?project_id=default&user=alice
 
 ## Billing
 - GET /api/billing/plans — list available Razorpay subscription plans

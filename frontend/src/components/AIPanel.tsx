@@ -249,7 +249,6 @@ type Message = ConversationMessage & {
 
 interface AIPanelProps {
   dataset: Dataset | null;
-  workspaceId: string;
   projectId: string;
   width?: number;
   onStepApplied: () => void;
@@ -260,7 +259,7 @@ interface AIPanelProps {
   onUploadClick?: () => void;
 }
 
-export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -870,7 +869,7 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
         { id: crypto.randomUUID(), role: "user", content },
       ]);
       lastSentInputRef.current = content;
-      capture("ai_message_sent", { dataset_id: dataset.id, workspace_id: workspaceId });
+      capture("ai_message_sent", { dataset_id: dataset.id });
     }
     setInput("");
 
@@ -878,7 +877,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
       await sendMessage({
         message: content,
         dataset_id: dataset.id,
-        workspace_id: workspaceId,
         project_id: projectId,
         conversation_history: [...history, ...(content && !approvePlan ? [{ role: "user" as const, content }] : [])],
         pipeline_steps: steps.map((step) => ({
@@ -1274,7 +1272,6 @@ export function AIPanel({ dataset, workspaceId, projectId, width, onStepApplied,
                               name: message.tileCreated!.title || "AI Chart",
                               chart_type: message.tileCreated!.chart_type || "bar",
                               echarts_config: message.tileCreated!.echarts_config!,
-                              workspace_id: workspaceId,
                             });
                             setSavedVizIds((prev) => new Set([...prev, chartId]));
                             window.dispatchEvent(new CustomEvent("datahub:visualizations:refresh"));

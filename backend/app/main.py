@@ -58,7 +58,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
-from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, workspaces, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
+from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
 from .routers import full_auto_routes
 # ml_routes intentionally not imported — ML/AutoML services are not yet
 # production-ready. The endpoints have been removed for the GA launch and
@@ -66,7 +66,6 @@ from .routers import full_auto_routes
 from .routers import pipeline_refresh, cron, data_sources
 from .routers import waitlist
 from .routers import dashboard_access
-from .routers.workspace_members import router as workspace_members_router, invite_router as workspace_invite_router
 from .routers.project_members import router as project_members_router, project_invite_router as project_invite_router
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
@@ -604,7 +603,6 @@ app.include_router(webhooks.router)
 app.include_router(jobs.router)
 app.include_router(connectors.router)
 app.include_router(users.router)
-app.include_router(workspaces.router)
 app.include_router(approvals.router)
 app.include_router(realtime.router)
 app.include_router(templates.router)
@@ -632,7 +630,5 @@ app.include_router(artifacts_router)
 app.include_router(saved_visualizations_router)
 app.include_router(canvas_router)
 app.include_router(waitlist.router)
-app.include_router(workspace_members_router, prefix="/workspaces")
-app.include_router(workspace_invite_router)
 app.include_router(project_members_router)
 app.include_router(project_invite_router)

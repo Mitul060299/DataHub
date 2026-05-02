@@ -5,7 +5,6 @@ import { NewProjectModal } from "./NewProjectModal";
 
 interface ProjectModalProps {
   open: boolean;
-  workspaceId: string;
   onSelect: (project: Project) => void;
   onClose: () => void;
 }

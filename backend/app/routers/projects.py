@@ -39,12 +39,11 @@ from ..models_db import (
     PipelineV2DB,
     ProjectDB,
 )
-from ..services.workspace_access import get_visible_user_ids
 from ..services.project_access import (
     user_can_access_project,
     list_visible_project_ids,
 )
-from ..services.plan_guard import resolve_workspace_plan, enforce_project_limit
+from ..services.plan_guard import resolve_user_plan_by_id, enforce_project_limit
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 recent_router = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -96,38 +95,29 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
 
 @router.get("", response_model=List[ProjectOut])
 def list_projects(
-    workspace_id: str | None = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> List[ProjectOut]:
-    visible = get_visible_user_ids(db, current_user.id, workspace_id or "default")
-    q = db.query(ProjectDB).filter(ProjectDB.user_id.in_(visible))
-    if workspace_id and workspace_id != "default":
-        # Collab workspaces: strict — only their own projects.
-        # Personal DB workspace: also include legacy "default"-tagged projects.
-        q = q.filter(
-            (ProjectDB.workspace_id == workspace_id)
-            | (ProjectDB.workspace_id == "default")
+    # Projects owned by the calling user
+    owned = (
+        db.query(ProjectDB)
+        .filter(ProjectDB.user_id == current_user.id)
+        .order_by(ProjectDB.updated_at.desc())
+        .all()
+    )
+    # Plus projects the user is a collaborator on (project_members)
+    member_project_ids = list_visible_project_ids(current_user.id, db)
+    already = {p.id for p in owned}
+    extra_ids = member_project_ids - already
+    extras = []
+    if extra_ids:
+        extras = (
+            db.query(ProjectDB)
+            .filter(ProjectDB.id.in_(extra_ids))
+            .order_by(ProjectDB.updated_at.desc())
+            .all()
         )
-    owned_or_workspace = q.order_by(ProjectDB.updated_at.desc()).all()
-
-    # Project-level collaboration: also surface projects the user is an active
-    # member of (regardless of workspace), so invited collaborators see the
-    # shared project in their workspace tab.
-    if not workspace_id or workspace_id == "default":
-        member_project_ids = list_visible_project_ids(current_user.id, db)
-        already = {p.id for p in owned_or_workspace}
-        extra_ids = member_project_ids - already
-        if extra_ids:
-            extras = (
-                db.query(ProjectDB)
-                .filter(ProjectDB.id.in_(extra_ids))
-                .order_by(ProjectDB.updated_at.desc())
-                .all()
-            )
-            owned_or_workspace.extend(extras)
-
-    return [_project_out(p, db) for p in owned_or_workspace]
+    return [_project_out(p, db) for p in owned + extras]
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
@@ -147,11 +137,11 @@ def create_project(
     if duplicate:
         raise HTTPException(status_code=409, detail="A project with this name already exists.")
 
-    workspace_id = (payload.workspace_id or "default").strip()
-    _, billing_plan = resolve_workspace_plan(workspace_id, current_user.id, db)
-    # Advisory lock: serialise project creation per workspace to prevent TOCTOU races.
-    db.execute(_sql_text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"proj_create_{workspace_id}"})
-    existing_count = db.query(ProjectDB).filter(ProjectDB.workspace_id == workspace_id).count()
+    workspace_id = "default"
+    billing_plan = resolve_user_plan_by_id(current_user.id, db)
+    # Advisory lock: serialise project creation per user to prevent TOCTOU races.
+    db.execute(_sql_text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"proj_create_{current_user.id}"})
+    existing_count = db.query(ProjectDB).filter(ProjectDB.user_id == current_user.id).count()
     enforce_project_limit(billing_plan, existing_count)
 
     now = datetime.now(timezone.utc)

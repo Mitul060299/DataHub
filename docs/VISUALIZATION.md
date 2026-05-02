@@ -1,7 +1,7 @@
 # Visualization System (Current)
 
 ## Status (March 2026)
-The visualization system has been fully overhauled. Charts created by the AI agent are now **ephemeral** (not auto-saved) and can be explicitly saved to a per-user **Visualizations Library**. Saved visualizations can be dragged onto **Canvas** drag-drop dashboards. The old "Charts" tab in the workspace has been replaced by the new **Canvas** tab.
+The visualization system has been fully overhauled. Charts created by the AI agent are now **ephemeral** (not auto-saved) and can be explicitly saved to a per-user **Visualizations Library**. Saved visualizations can be dragged onto **Canvas** drag-drop dashboards. The old "Charts" tab in the project has been replaced by the new **Canvas** tab.
 
 ## Current Frontend Architecture
 

@@ -44,7 +44,6 @@ class WidgetUpdate(BaseModel):
 class DashboardCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    workspace_id: str
     dataset_id: Optional[int] = None
     theme_id: Optional[int] = None
     refresh_interval: Optional[int] = None
@@ -61,7 +60,6 @@ class DashboardUpdate(BaseModel):
 
 class ThemeCreate(BaseModel):
     name: str
-    workspace_id: Optional[str] = None
     is_global: bool = False
     colors: dict
     fonts: Optional[dict] = None
@@ -94,7 +92,7 @@ async def create_dashboard(
         name=dashboard.name,
         description=dashboard.description,
         user_id=subject,
-        workspace_id=dashboard.workspace_id,
+        workspace_id="default",
         dataset_id=dashboard.dataset_id,
         theme_id=dashboard.theme_id,
         refresh_interval=dashboard.refresh_interval,
@@ -108,7 +106,6 @@ async def create_dashboard(
         "id": db_dashboard.id,
         "name": db_dashboard.name,
         "description": db_dashboard.description,
-        "workspace_id": db_dashboard.workspace_id,
         "dataset_id": db_dashboard.dataset_id,
         "theme_id": db_dashboard.theme_id,
         "refresh_interval": db_dashboard.refresh_interval,
@@ -118,15 +115,11 @@ async def create_dashboard(
 
 @router.get("/dashboards")
 async def list_dashboards(
-    workspace_id: Optional[str] = None,
     db: Session = Depends(get_db),
     subject: str = Depends(get_current_subject)
 ):
     """List all dashboards for the user"""
     query = db.query(VizDashboardDB).filter(VizDashboardDB.user_id == subject)
-    
-    if workspace_id:
-        query = query.filter(VizDashboardDB.workspace_id == workspace_id)
     
     dashboards = query.all()
     
@@ -135,7 +128,6 @@ async def list_dashboards(
             "id": d.id,
             "name": d.name,
             "description": d.description,
-            "workspace_id": d.workspace_id,
             "dataset_id": d.dataset_id,
             "theme_id": d.theme_id,
             "refresh_interval": d.refresh_interval,
@@ -171,7 +163,6 @@ async def get_dashboard(
         "id": dashboard.id,
         "name": dashboard.name,
         "description": dashboard.description,
-        "workspace_id": dashboard.workspace_id,
         "dataset_id": dashboard.dataset_id,
         "theme_id": dashboard.theme_id,
         "layout": dashboard.layout,
@@ -400,7 +391,7 @@ async def create_theme(
     db_theme = VizDashboardThemeDB(
         name=theme.name,
         user_id=subject,
-        workspace_id=theme.workspace_id,
+        workspace_id="default",
         is_global=theme.is_global,
         colors=theme.colors,
         fonts=theme.fonts,
@@ -421,7 +412,6 @@ async def create_theme(
 
 @router.get("/themes")
 async def list_themes(
-    workspace_id: Optional[str] = None,
     db: Session = Depends(get_db),
     subject: str = Depends(get_current_subject)
 ):
@@ -429,12 +419,6 @@ async def list_themes(
     query = db.query(VizDashboardThemeDB).filter(
         (VizDashboardThemeDB.user_id == subject) | (VizDashboardThemeDB.is_global == True)
     )
-    
-    if workspace_id:
-        query = query.filter(
-            (VizDashboardThemeDB.workspace_id == workspace_id) | (VizDashboardThemeDB.is_global == True)
-        )
-    
     themes = query.all()
     
     return [

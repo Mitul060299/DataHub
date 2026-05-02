@@ -37,7 +37,7 @@ export function PinToDashboardModal({ tileCreated, workspaceId, onClose }: PinTo
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await listDashboardsV2(workspaceId);
+        const data = await listDashboardsV2();
         const opts = data.map((d) => ({ id: d.id, name: d.name }));
         setDashboards(opts);
         if (opts.length === 0) setCreateNew(true);
@@ -77,7 +77,7 @@ export function PinToDashboardModal({ tileCreated, workspaceId, onClose }: PinTo
           return;
         }
         const created = await createDashboardV2({
-          workspace_id: workspaceId,
+
           name: newName.trim(),
         });
         dashboardId = created.id;

@@ -179,10 +179,9 @@ class PurgeOneTests(unittest.TestCase):
 
         captured = {}
 
-        def _capture_emit(_db, *, event_type, user_id=None, workspace_id=None, payload=None, **kw):
+        def _capture_emit(_db, *, event_type, user_id=None, payload=None, **kw):
             captured["event_type"] = event_type
             captured["user_id"] = user_id
-            captured["workspace_id"] = workspace_id
             captured["payload"] = payload
             return None
 
@@ -193,7 +192,6 @@ class PurgeOneTests(unittest.TestCase):
         ssd.assert_called_once_with("s3://bucket/ds-1.parquet", source="dataset", db=session)
         self.assertEqual(captured["event_type"], "dataset_purged")
         self.assertEqual(captured["user_id"], "u-1")
-        self.assertEqual(captured["workspace_id"], "w-1")
         self.assertEqual(captured["payload"]["dataset_id"], "ds-1")
         self.assertEqual(captured["payload"]["reason"], "trash_retention_expired")
         self.assertEqual(captured["payload"]["retention_days"], 30)

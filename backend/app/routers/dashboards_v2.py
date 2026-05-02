@@ -16,7 +16,6 @@ from ..services.rate_limit import FixedWindowRateLimiter
 from ..db import get_db
 from ..models_db import DashboardViewDB, DashboardCommentDB
 from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
-from ..services.workspace_access import get_visible_user_ids
 from ..services.project_access import list_visible_owner_user_ids
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards-v2"])
@@ -26,7 +25,6 @@ _public_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
 
 @router.get("", response_model=list[DashboardV2Out])
 def list_dashboards(
-    workspace_id: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -34,10 +32,10 @@ def list_dashboards(
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_subject(authorization)
-    visible = set(get_visible_user_ids(db, user_id, workspace_id or "default"))
-    visible.update(list_visible_owner_user_ids(user_id, db))
+    visible = set(list_visible_owner_user_ids(user_id, db))
+    visible.add(user_id)
     return DashboardsV2Service.list_dashboards(
-        user_id=user_id, workspace_id=workspace_id, visible_user_ids=list(visible), project_id=project_id
+        user_id=user_id, visible_user_ids=list(visible), project_id=project_id
     )
 
 
@@ -51,7 +49,7 @@ def create_dashboard(
     user_id = get_current_subject(authorization)
     return DashboardsV2Service.create_dashboard(
         user_id=user_id,
-        workspace_id=payload.workspace_id,
+        workspace_id="default",
         dataset_id=payload.dataset_id,
         name=payload.name,
         description=payload.description,

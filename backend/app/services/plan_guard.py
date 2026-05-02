@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models_db import DatasetMetaDB, ProjectDB, ProjectMemberDB, User, Workspace, WorkspaceMemberDB
+from ..models_db import DatasetMetaDB, ProjectDB, ProjectMemberDB, User
 from ..security import get_current_subject, get_current_user_id
 from . import billing_repository
 from .plan_limits import get_limits as _get_usage_limits
@@ -155,35 +155,6 @@ def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
     if not user:
         return "Free"
     return normalize_plan(user.plan)
-
-
-def resolve_workspace_plan(
-    workspace_id: str,
-    calling_user_id: str,
-    db: Session,
-) -> Tuple[str, str]:
-    """Return (billing_user_id, plan) for a workspace.
-
-    Personal workspaces → calling user's own plan and quota pool.
-    Collab workspaces   → workspace owner's plan and quota pool.
-
-    This means an invited Free user working inside a Team collab workspace
-    draws from the Team owner's quota, not their own Free quota.
-    """
-    if not workspace_id or workspace_id == "default":
-        return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
-
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if ws is None:
-        return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
-
-    if ws.workspace_type == "collab" and ws.owner_id:
-        billing_user_id = ws.owner_id
-        plan = resolve_user_plan_by_id(billing_user_id, db)
-        return billing_user_id, plan
-
-    # personal workspace or unknown type → caller pays
-    return calling_user_id, resolve_user_plan_by_id(calling_user_id, db)
 
 
 def enforce_collab_workspace_limit(plan: str, existing_collab_count: int) -> None:
@@ -359,46 +330,26 @@ def enforce_member_seat_limit(
             purchased_seats = max(int(sub.get("quantity") or included_seats), included_seats)
 
     # Count active + pending members across all workspaces owned by this user
-    owned_ws_ids = [
-        ws.id for ws in
-        db.query(Workspace.id).filter(Workspace.owner_id == billing_user_id).all()
-    ]
     owned_project_ids = [
         p.id for p in
         db.query(ProjectDB.id).filter(ProjectDB.user_id == billing_user_id).all()
     ]
 
-    workspace_emails: set[str] = set()
-    if owned_ws_ids:
-        workspace_emails = {
-            (email or "").lower()
-            for (email,) in db.query(WorkspaceMemberDB.email)
-            .filter(
-                WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
-                WorkspaceMemberDB.status.in_(["active", "pending"]),
-            )
-            .all()
-        }
+    if not owned_project_ids:
+        return  # no projects → nothing to cap
 
-    project_emails: set[str] = set()
-    if owned_project_ids:
-        project_emails = {
-            (email or "").lower()
-            for (email,) in db.query(ProjectMemberDB.email)
-            .filter(
-                ProjectMemberDB.project_id.in_(owned_project_ids),
-                ProjectMemberDB.status.in_(["active", "pending"]),
-            )
-            .all()
-        }
+    project_emails: set[str] = {
+        (email or "").lower()
+        for (email,) in db.query(ProjectMemberDB.email)
+        .filter(
+            ProjectMemberDB.project_id.in_(owned_project_ids),
+            ProjectMemberDB.status.in_(["active", "pending"]),
+        )
+        .all()
+    }
 
-    if not (owned_ws_ids or owned_project_ids):
-        return  # no workspaces or projects → nothing to cap
-
-    # Owner counts as 1 seat (not stored in member tables). Members are
-    # de-duplicated by email across both surfaces during the workspace→project
-    # cutover so a migrated invite isn't double-counted.
-    current_seats = len(workspace_emails | project_emails) + 1
+    # Owner counts as 1 seat (not stored in project_members table).
+    current_seats = len(project_emails) + 1
 
     if max_seats != -1 and current_seats >= purchased_seats:
         extra_seat_price = "₹2,499" if plan.strip().title() == "Team" else "₹3,999"
@@ -487,7 +438,7 @@ def format_upgrade_message(feature: str, current_plan: str, required_plan: str) 
 def enforce_file_constraints(
     *,
     plan: str,
-    workspace_id: str,
+    billing_user_id: str,
     file_format: str,
     upload_size_bytes: int,
     db: Session,
@@ -524,7 +475,7 @@ def enforce_file_constraints(
 
     dataset_count = (
         db.query(DatasetMetaDB)
-        .filter(DatasetMetaDB.workspace_id == (workspace_id or "default"))
+        .filter(DatasetMetaDB.user_id == billing_user_id)
         .count()
     )
     if limits.max_datasets > 0 and dataset_count >= limits.max_datasets:
@@ -535,7 +486,7 @@ def enforce_file_constraints(
 
     storage_rows = (
         db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
-        .filter(DatasetMetaDB.workspace_id == (workspace_id or "default"))
+        .filter(DatasetMetaDB.user_id == billing_user_id)
         .all()
     )
     current_storage = sum((row[0] or row[1] or 0) for row in storage_rows)

@@ -29,7 +29,7 @@ import { CanvasToolbar } from "./CanvasToolbar";
 import { IconX } from "./Icons";
 
 interface CanvasViewProps {
-  workspaceId: string;
+  workspaceId?: string;
   projectId: string;
 }
 
@@ -95,7 +95,6 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
       const canvas = await createCanvasLayout({
         name: "Untitled Canvas",
         project_id: projectId || undefined,
-        workspace_id: workspaceId,
       });
       setCanvases((prev) => [canvas, ...prev]);
       openCanvas(canvas);

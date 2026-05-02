@@ -52,7 +52,7 @@ class AgentState(TypedDict):
     root_dataset_id: str
     dataset_id: str
     user_id: str
-    workspace_id: str
+    project_id: str
     schema: dict
     stats: dict
     sample_rows: list

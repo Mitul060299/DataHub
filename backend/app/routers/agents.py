@@ -16,7 +16,7 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 @router.get("/suggest/{dataset_id}", response_model=AgentSuggestion)
 def suggest(
     dataset_id: str,
-    workspace_id: str | None = None,
+    project_id: str | None = None,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> AgentSuggestion:
@@ -31,7 +31,7 @@ def suggest(
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
-    context_text = context_store.get_context_text(workspace_id or "default")
+    context_text = context_store.get_context_text(project_id or "default")
     steps, notes = suggest_steps_llm(df, context_text)
     notes.append("Suggested steps are auto-generated; review before applying.")
     return AgentSuggestion(dataset_id=dataset_id, recommended_steps=steps, notes=notes)
@@ -43,7 +43,7 @@ def chat(
     request: Request,
     dataset_id: str,
     payload: ChatRequest,
-    workspace_id: str | None = None,
+    project_id: str | None = None,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> ChatResponse:
@@ -58,7 +58,7 @@ def chat(
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
-    context_text = context_store.get_context_text(workspace_id or "default")
+    context_text = context_store.get_context_text(project_id or "default")
     reply, notes = chat_with_dataset(
         df,
         context_text,

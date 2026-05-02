@@ -12,24 +12,24 @@ class PresenceManager:
         self._users: Dict[str, Set[str]] = {}
         self._messages: Dict[str, list[dict]] = {}
 
-    async def connect(self, workspace_id: str, user: str, websocket: WebSocket) -> None:
+    async def connect(self, project_id: str, user: str, websocket: WebSocket) -> None:
         await websocket.accept()
-        self._connections.setdefault(workspace_id, set()).add(websocket)
-        self._users.setdefault(workspace_id, set()).add(user)
-        await self.broadcast_presence(workspace_id)
-        await self.send_history(workspace_id, websocket)
+        self._connections.setdefault(project_id, set()).add(websocket)
+        self._users.setdefault(project_id, set()).add(user)
+        await self.broadcast_presence(project_id)
+        await self.send_history(project_id, websocket)
 
-    async def disconnect(self, workspace_id: str, user: str, websocket: WebSocket) -> None:
-        if workspace_id in self._connections:
-            self._connections[workspace_id].discard(websocket)
-        if workspace_id in self._users:
-            self._users[workspace_id].discard(user)
-        await self.broadcast_presence(workspace_id)
+    async def disconnect(self, project_id: str, user: str, websocket: WebSocket) -> None:
+        if project_id in self._connections:
+            self._connections[project_id].discard(websocket)
+        if project_id in self._users:
+            self._users[project_id].discard(user)
+        await self.broadcast_presence(project_id)
 
-    async def broadcast_presence(self, workspace_id: str) -> None:
-        users = sorted(list(self._users.get(workspace_id, set())))
-        payload = json.dumps({"type": "presence", "workspace_id": workspace_id, "users": users})
-        for ws in list(self._connections.get(workspace_id, set())):
+    async def broadcast_presence(self, project_id: str) -> None:
+        users = sorted(list(self._users.get(project_id, set())))
+        payload = json.dumps({"type": "presence", "project_id": project_id, "users": users})
+        for ws in list(self._connections.get(project_id, set())):
             try:
                 await ws.send_text(payload)
             except Exception:
@@ -38,11 +38,11 @@ class PresenceManager:
                 except Exception:
                     pass
 
-    async def broadcast_message(self, workspace_id: str, message: dict) -> None:
-        self._messages.setdefault(workspace_id, []).append(message)
-        self._messages[workspace_id] = self._messages[workspace_id][-50:]
-        payload = json.dumps({"type": "message", "workspace_id": workspace_id, "message": message})
-        for ws in list(self._connections.get(workspace_id, set())):
+    async def broadcast_message(self, project_id: str, message: dict) -> None:
+        self._messages.setdefault(project_id, []).append(message)
+        self._messages[project_id] = self._messages[project_id][-50:]
+        payload = json.dumps({"type": "message", "project_id": project_id, "message": message})
+        for ws in list(self._connections.get(project_id, set())):
             try:
                 await ws.send_text(payload)
             except Exception:
@@ -51,9 +51,9 @@ class PresenceManager:
                 except Exception:
                     pass
 
-    async def send_history(self, workspace_id: str, websocket: WebSocket) -> None:
-        history = self._messages.get(workspace_id, [])
-        payload = json.dumps({"type": "history", "workspace_id": workspace_id, "messages": history})
+    async def send_history(self, project_id: str, websocket: WebSocket) -> None:
+        history = self._messages.get(project_id, [])
+        payload = json.dumps({"type": "history", "project_id": project_id, "messages": history})
         try:
             await websocket.send_text(payload)
         except Exception:
@@ -64,7 +64,7 @@ presence_manager = PresenceManager()
 
 
 @router.websocket("/presence")
-async def presence(websocket: WebSocket, workspace_id: str = "default", user: str = "anon"):
+async def presence(websocket: WebSocket, project_id: str = "default", user: str = "anon"):
     authorization = websocket.headers.get("authorization")
     token = websocket.query_params.get("token")
     if not authorization and token:
@@ -75,7 +75,7 @@ async def presence(websocket: WebSocket, workspace_id: str = "default", user: st
     except Exception:
         await websocket.close(code=4403)
         return
-    await presence_manager.connect(workspace_id, user, websocket)
+    await presence_manager.connect(project_id, user, websocket)
     try:
         while True:
             message = await websocket.receive_text()
@@ -85,12 +85,12 @@ async def presence(websocket: WebSocket, workspace_id: str = "default", user: st
                     text = str(payload.get("text", "")).strip()
                     if text:
                         await presence_manager.broadcast_message(
-                            workspace_id,
+                            project_id,
                             {"user": user, "text": text},
                         )
             except Exception:
                 continue
     except WebSocketDisconnect:
-        await presence_manager.disconnect(workspace_id, user, websocket)
+        await presence_manager.disconnect(project_id, user, websocket)
     except Exception:
-        await presence_manager.disconnect(workspace_id, user, websocket)
+        await presence_manager.disconnect(project_id, user, websocket)

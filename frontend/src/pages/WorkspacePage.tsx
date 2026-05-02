@@ -23,8 +23,7 @@ import { capture } from "../lib/posthog";
 export function WorkspacePage() {
   const { projectId, pipelineId } = useParams<{ projectId?: string; pipelineId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects, activeWorkspaceId } = useWorkspaceContext();
-  const workspaceId = activeWorkspaceId !== "default" ? activeWorkspaceId : "default";
+  const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects } = useWorkspaceContext();
 
   // Resolve project from URL param or fall back to activeProject
   const resolvedProject = projectId
@@ -436,7 +435,6 @@ export function WorkspacePage() {
       {explorerOpen ? (
         <>
           <ExplorerPanel
-            workspaceId={workspaceId}
             refreshNonce={datasetRefreshNonce}
             searchFocusNonce={explorerSearchFocusNonce}
             width={explorerWidth}
@@ -454,7 +452,6 @@ export function WorkspacePage() {
         </>
       ) : null}
       <CanvasPanel
-        workspaceId={workspaceId}
         projectId={resolvedProject?.id ?? ""}
         pipelineId={pipelineId}
         dataset={activeDataset}
@@ -522,7 +519,6 @@ export function WorkspacePage() {
       />
       <AIPanel
         dataset={activeDataset}
-        workspaceId={workspaceId}
         projectId={resolvedProject?.id ?? "default"}
         width={aiWidth}
         onStepApplied={() => {
@@ -538,7 +534,7 @@ export function WorkspacePage() {
         }}
         onUploadClick={() => setImportOpen(true)}
       />
-      <ImportModal workspaceId={workspaceId} projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); }} preloadUrl={sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); }} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}

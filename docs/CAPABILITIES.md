@@ -170,8 +170,8 @@ All operations available via NL pipeline editing and the visual step builder:
 - Real-time collaboration ✅ (presence/chat with auth token)
 - Dashboard sharing ✅
 - Shared dashboard view ✅
-- Workspace sharing ✅
-- Shared workspace view ✅
+- Project sharing ✅
+- Shared project view ✅
 - Share link expiry ✅
 - Shared link rate limiting ✅
 - Signed share links ✅

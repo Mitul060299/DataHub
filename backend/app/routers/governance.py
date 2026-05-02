@@ -135,14 +135,13 @@ def cache_stats(authorization: str | None = Header(default=None), db: Session = 
 
 @router.get("/tenant-isolation-report", response_model=TenantIsolationReport)
 def tenant_isolation_report(
-    workspace_id: str | None = None,
     limit: int = 200,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> TenantIsolationReport:
     role = get_current_role(authorization)
     require_role("admin", role)
-    return generate_tenant_isolation_report(db, scope_workspace_id=workspace_id, limit=limit)
+    return generate_tenant_isolation_report(db, scope_workspace_id=None, limit=limit)
 
 
 @router.get("/tenant-isolation-monitor/status")

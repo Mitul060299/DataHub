@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { createProject as apiCreateProject, createWorkspace as apiCreateWorkspace, fetchProjects, fetchWorkspaceMembers, listWorkspaces, type WorkspaceMemberOut, type WorkspaceOut } from "../api";
+import { createProject as apiCreateProject, fetchProjects } from "../api";
 import type { ProjectOut } from "../api";
 import { useAuth } from "./AuthContext";
 
@@ -13,7 +13,6 @@ export interface Project {
   /** convenience alias kept for legacy consumers */
   color: string;
   initial: string;
-  workspaceId: string;
   description?: string | null;
   pipelineCount: number;
   dashboardCount: number;
@@ -42,7 +41,7 @@ export interface WorkspaceContextValue {
   projects: Project[];
   projectsLoading: boolean;
   refreshProjects: () => Promise<void>;
-  createProject: (payload: { name: string; description?: string; colour?: string; icon?: string; workspace_id?: string }) => Promise<Project>;
+  createProject: (payload: { name: string; description?: string; colour?: string; icon?: string }) => Promise<Project>;
   activeProject: Project | null;
   setActiveProject: (project: Project) => void;
   activeDataset: Dataset | null;
@@ -53,13 +52,6 @@ export interface WorkspaceContextValue {
   removeLane: (datasetId: string) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
-  workspaceMembers: WorkspaceMemberOut[];
-  refreshMembers: (workspaceId: string) => Promise<void>;
-  // Workspace list + switcher
-  workspaces: WorkspaceOut[];
-  activeWorkspaceId: string;
-  setActiveWorkspaceId: (id: string) => void;
-  createWorkspace: (name: string, type: "personal" | "collab") => Promise<WorkspaceOut>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
@@ -72,7 +64,7 @@ function toProject(raw: ProjectOut): Project {
     color: raw.colour,
     icon: raw.icon,
     initial: raw.name.charAt(0).toUpperCase(),
-    workspaceId: raw.workspace_id,
+    
     description: raw.description,
     pipelineCount: raw.pipeline_count,
     dashboardCount: raw.dashboard_count,
@@ -117,49 +109,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setActiveDatasetState(dataset);
   }, []);
   const [members, setMembers] = useState<Member[]>([]);
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberOut[]>([]);
-  const [workspaces, setWorkspaces] = useState<WorkspaceOut[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string>(
-    () => localStorage.getItem("activeWorkspaceId") || "default"
-  );
-
-  const setActiveWorkspaceId = useCallback((id: string) => {
-    localStorage.setItem("activeWorkspaceId", id);
-    setActiveWorkspaceIdState(id);
-  }, []);
-
-  const refreshWorkspaces = useCallback(async () => {
-    if (!session) return;
-    try {
-      const data = await listWorkspaces();
-      setWorkspaces(data);
-    } catch {
-      // non-fatal
-    }
-  }, [session]);
-
-  const createWorkspace = useCallback(
-    async (name: string, type: "personal" | "collab") => {
-      const ws = await apiCreateWorkspace(name, type);
-      setWorkspaces((prev) => [...prev, ws]);
-      return ws;
-    },
-    []
-  );
-
-  useEffect(() => {
-    void refreshWorkspaces();
-  }, [refreshWorkspaces]);
-
-  const refreshMembers = useCallback(async (workspaceId: string) => {
-    if (!session || !workspaceId || workspaceId === "default") return;
-    try {
-      const data = await fetchWorkspaceMembers(workspaceId);
-      setWorkspaceMembers(data);
-    } catch {
-      // non-fatal
-    }
-  }, [session]);
 
   const refreshProjects = useCallback(async () => {
     if (!session) {
@@ -168,8 +117,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     setProjectsLoading(true);
     try {
-      const wsId = localStorage.getItem("activeWorkspaceId") || "default";
-      const data = await fetchProjects(wsId);
+        const data = await fetchProjects();
       const mapped = data.map(toProject);
       setProjects(mapped);
       // If activeProject not loaded yet, default to first
@@ -193,14 +141,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     void refreshProjects();
   }, [refreshProjects]);
 
-  // Re-fetch projects whenever the active workspace changes
-  useEffect(() => {
-    if (session) void refreshProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId]);
+
 
   const createProject = useCallback(
-    async (payload: { name: string; description?: string; colour?: string; icon?: string; workspace_id?: string }) => {
+    async (payload: { name: string; description?: string; colour?: string; icon?: string }) => {
       const raw = await apiCreateProject(payload);
       const project = toProject(raw);
       setProjects((prev) => [project, ...prev]);
@@ -239,14 +183,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       removeLane,
       members,
       setMembers,
-      workspaceMembers,
-      refreshMembers,
-      workspaces,
-      activeWorkspaceId,
-      setActiveWorkspaceId,
-      createWorkspace,
     }),
-    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, activeLanes, addLane, removeLane, members, workspaceMembers, refreshMembers, workspaces, activeWorkspaceId, setActiveWorkspaceId, createWorkspace],
+    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, activeLanes, addLane, removeLane, members],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

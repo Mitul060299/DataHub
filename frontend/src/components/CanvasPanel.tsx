@@ -12,7 +12,7 @@ import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetc
 type CanvasTab = "data" | "pipeline" | "canvas" | "schedule" | "history";
 
 interface CanvasPanelProps {
-  workspaceId: string;
+  workspaceId?: string;
   projectId: string;
   pipelineId?: string;
   dataset: Dataset | null;

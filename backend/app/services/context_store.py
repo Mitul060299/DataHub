@@ -47,28 +47,28 @@ class ContextStore:
             self._collection = None
 
     def upsert(self, payload: ContextPayload) -> None:
-        self._contexts[payload.workspace_id] = payload
+        self._contexts[payload.project_id] = payload
         write_json("contexts.json", {k: v.model_dump() for k, v in self._contexts.items()})
         if self._collection:
             doc = json.dumps(payload.model_dump())
             self._collection.upsert(
-                ids=[payload.workspace_id],
+                ids=[payload.project_id],
                 documents=[doc],
-                metadatas=[{"workspace_id": payload.workspace_id}],
+                metadatas=[{"project_id": payload.project_id}],
             )
 
-    def get(self, workspace_id: str) -> ContextPayload | None:
-        if workspace_id in self._contexts:
-            return self._contexts.get(workspace_id)
+    def get(self, project_id: str) -> ContextPayload | None:
+        if project_id in self._contexts:
+            return self._contexts.get(project_id)
         if self._collection:
-            result = self._collection.get(ids=[workspace_id])
+            result = self._collection.get(ids=[project_id])
             if result and result.get("documents"):
                 doc = result["documents"][0]
                 return ContextPayload(**json.loads(doc))
         return None
 
-    def get_context_text(self, workspace_id: str) -> str:
-        payload = self.get(workspace_id)
+    def get_context_text(self, project_id: str) -> str:
+        payload = self.get(project_id)
         if not payload:
             return ""
         glossary = "\n".join([f"{k}: {v}" for k, v in payload.glossary.items()])

@@ -13,7 +13,7 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 @router.get("/{dataset_id}", response_model=InsightSummary)
 def get_insights(
     dataset_id: str,
-    workspace_id: str | None = None,
+    project_id: str | None = None,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> InsightSummary:
@@ -28,7 +28,7 @@ def get_insights(
         except KeyError:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
-    context_text = context_store.get_context_text(workspace_id or "default")
+    context_text = context_store.get_context_text(project_id or "default")
     result = generate_insights(df, context_text=context_text)
     return InsightSummary(dataset_id=dataset_id, **result)
 

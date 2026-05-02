@@ -22,7 +22,6 @@ def emit_event(
     *,
     event_type: str,
     user_id: Optional[str] = None,
-    workspace_id: Optional[str] = None,
     session_id: Optional[str] = None,
     run_id: Optional[str] = None,
     step_id: Optional[str] = None,
@@ -39,7 +38,6 @@ def emit_event(
     row = PipelineEventDB(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        workspace_id=workspace_id,
         session_id=session_id,
         run_id=run_id,
         step_id=step_id,

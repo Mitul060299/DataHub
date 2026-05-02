@@ -100,7 +100,6 @@ def materialize_dataset(
             db,
             event_type="dataset_materialized",
             user_id=fields.get("user_id"),
-            workspace_id=fields.get("workspace_id"),
             payload={
                 "triggered_by": triggered_by,
                 "dataset_id": fields.get("id"),

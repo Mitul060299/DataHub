@@ -37,7 +37,6 @@ def list_connectors(authorization: str | None = Header(default=None)) -> dict:
 def import_from_connector(
     payload: ConnectorImportRequest,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> DatasetPreview:
     role = get_current_role(authorization)
@@ -73,7 +72,7 @@ def import_from_connector(
         cred_row = ConnectorCredentialDB(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            workspace_id=workspace_id or "default",
+            workspace_id="default",
             connector_type=payload.connector,
             label=payload.credential_label or payload.connector,
             encrypted_config=encrypt_connector_config(dict(payload.config)),
@@ -102,7 +101,7 @@ def import_from_connector(
 
     enforce_file_constraints(
         plan=user_plan,
-        workspace_id=workspace_id or "default",
+        billing_user_id=user_id or "",
         file_format="parquet",
         upload_size_bytes=max(estimated_original_size, 1),
         db=db,
@@ -113,7 +112,7 @@ def import_from_connector(
     dataset_id = save_dataset(
         save_df,
         db,
-        workspace_id=workspace_id,
+        workspace_id="default",
         user_id=user_id,
     )
 
@@ -148,7 +147,6 @@ def import_from_connector(
 def save_connector_credential(
     payload: ConnectorCredentialCreate,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> ConnectorCredentialOut:
     """Encrypt and persist a connector config as a reusable credential."""
@@ -161,7 +159,7 @@ def save_connector_credential(
     row = ConnectorCredentialDB(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        workspace_id=workspace_id or "default",
+        workspace_id="default",
         connector_type=payload.connector_type,
         label=payload.label or payload.connector_type,
         encrypted_config=encrypt_connector_config(dict(payload.config)),
@@ -180,20 +178,15 @@ def save_connector_credential(
 @router.get("/credentials", response_model=dict)
 def list_connector_credentials(
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
-    """List saved credentials for the current workspace (config is never returned)."""
+    """List saved credentials for the current user."""
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
-    ws = workspace_id or "default"
     rows = (
         db.query(ConnectorCredentialDB)
-        .filter(
-            ConnectorCredentialDB.user_id == user_id,
-            ConnectorCredentialDB.workspace_id == ws,
-        )
+        .filter(ConnectorCredentialDB.user_id == user_id)
         .order_by(ConnectorCredentialDB.created_at.desc())
         .all()
     )
@@ -239,7 +232,6 @@ def delete_connector_credential(
 def sync_connector(
     payload: dict,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     role = get_current_role(authorization)
@@ -263,12 +255,12 @@ def sync_connector(
         estimated_original_size = int(df.memory_usage(deep=True).sum()) if isinstance(df, pd.DataFrame) else 0
         enforce_file_constraints(
             plan=user_plan,
-            workspace_id=workspace_id or "default",
+            billing_user_id=user_id or "",
             file_format="parquet",
             upload_size_bytes=max(estimated_original_size, 1),
             db=db,
         )
-        new_id = save_dataset(df, db, parent_id=dataset_id, workspace_id=workspace_id, user_id=user_id)
+        new_id = save_dataset(df, db, parent_id=dataset_id, workspace_id="default", user_id=user_id)
         status = sync_store.update(key=key, mode=mode, dataset_id=new_id)
         return {
             "status": "synced",
@@ -341,7 +333,6 @@ def test_connector_connection(
 def save_connection(
     payload: dict,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     """Persist a named connection (credentials stored in config JSONB)."""
@@ -355,7 +346,7 @@ def save_connection(
         id=str(uuid.uuid4()),
         name=payload.get("name") or connector_name,
         type=connector_name,
-        workspace_id=workspace_id or "default",
+        workspace_id="default",
         host=cfg.get("host"),
         database=cfg.get("database"),
         status="connected",
@@ -378,15 +369,14 @@ def save_connection(
 @router.get("/connections")
 def list_connections(
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
-    """List saved connections for the current workspace."""
+    """List saved connections."""
     role = get_current_role(authorization)
     require_role("viewer", role)
     rows = (
         db.query(ImportConnectionDB)
-        .filter(ImportConnectionDB.workspace_id == (workspace_id or "default"))
+        .filter(ImportConnectionDB.workspace_id == "default")
         .order_by(ImportConnectionDB.created_at.desc())
         .all()
     )

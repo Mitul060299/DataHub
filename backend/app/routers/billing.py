@@ -201,34 +201,14 @@ async def seat_usage(user: CurrentUser = Depends(get_current_user)):
     purchased = max(int(sub.get("quantity") or included), included) if sub else included
     sub_currency = (sub or {}).get("currency") or "INR"
 
-    # Count distinct member emails across all workspaces AND projects owned by
-    # this user. During the workspace→project cutover, the union ensures a
-    # migrated invite isn't counted twice. Workspace counting is removed in
-    # the workspace tear-down phase.
     from app.db import SessionLocal
-    from app.models_db import ProjectDB, ProjectMemberDB, Workspace, WorkspaceMemberDB
+    from app.models_db import ProjectDB, ProjectMemberDB
     db = SessionLocal()
     try:
-        owned_ws_ids = [
-            ws.id for ws in
-            db.query(Workspace.id).filter(Workspace.owner_id == user.id).all()
-        ]
         owned_project_ids = [
             p.id for p in
             db.query(ProjectDB.id).filter(ProjectDB.user_id == user.id).all()
         ]
-
-        ws_emails: set[str] = set()
-        if owned_ws_ids:
-            ws_emails = {
-                (e or "").lower()
-                for (e,) in db.query(WorkspaceMemberDB.email)
-                .filter(
-                    WorkspaceMemberDB.workspace_id.in_(owned_ws_ids),
-                    WorkspaceMemberDB.status.in_(["active", "pending"]),
-                )
-                .all()
-            }
 
         proj_emails: set[str] = set()
         if owned_project_ids:
@@ -242,7 +222,7 @@ async def seat_usage(user: CurrentUser = Depends(get_current_user)):
                 .all()
             }
 
-        used = 1 + len(ws_emails | proj_emails)  # +1 for owner
+        used = 1 + len(proj_emails)  # +1 for owner
     finally:
         db.close()
 

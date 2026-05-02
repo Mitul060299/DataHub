@@ -40,7 +40,7 @@ from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.usage_service import enforce_usage_limit, increment_usage, update_storage_bytes
-from ..services.plan_guard import resolve_user_plan, resolve_workspace_plan
+from ..services.plan_guard import resolve_user_plan, resolve_user_plan_by_id
 from ..services.audit import audit_store
 from ..models import AuditEntry
 from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB, DatasetSessionDB
@@ -235,7 +235,6 @@ async def upload_dataset(
     dataset_name: str | None = Form(default=None),
     project_id: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     project_id_header: str | None = Header(default=None, alias="X-Project-Id"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
@@ -246,7 +245,8 @@ async def upload_dataset(
     _ensure_dataset_meta_schema(db)
     # Usage limit check — billing goes to workspace owner for collab workspaces
     user_plan = resolve_user_plan(db, authorization)
-    billing_user_id, billing_plan = resolve_workspace_plan(workspace_id or "default", user_id or "", db)
+    billing_user_id = user_id or ""
+    billing_plan = resolve_user_plan_by_id(billing_user_id, db)
     enforce_usage_limit(billing_user_id, billing_plan, "datasets_uploaded", db)
     # Hard cap before pandas ever touches the bytes — prevents OOM on 512 MB instances.
     # The per-plan size check below still fires for smaller plan limits.
@@ -334,7 +334,7 @@ async def upload_dataset(
         triggered_by="user_upload",
         id=dataset_id,
         user_id=user_id,
-        workspace_id=workspace_id or "default",
+        workspace_id="default",
         name=resolved_name,
         columns=list(df.columns),
         row_count=int(df.shape[0]),
@@ -500,16 +500,12 @@ def update_storage_tier_policy(
 @router.post("/storage-tier/rebalance")
 def rebalance_storage_tiers(
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     role = get_current_role(authorization)
     require_role("admin", role)
 
-    query = db.query(DatasetMetaDB)
-    if workspace_id:
-        query = query.filter(DatasetMetaDB.workspace_id == workspace_id)
-    datasets = query.all()
+    datasets = db.query(DatasetMetaDB).all()
 
     updated_count = 0
     for meta in datasets:
@@ -527,7 +523,6 @@ def rebalance_storage_tiers(
         "status": "ok",
         "updated": updated_count,
         "total": len(datasets),
-        "workspace_id": workspace_id,
     }
 
 
@@ -604,7 +599,6 @@ def get_dataset_from_db(
 @router.get("", response_model=list[DatasetMeta])
 def list_datasets(
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     project_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[DatasetMeta]:
@@ -612,26 +606,8 @@ def list_datasets(
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
     query = db.query(DatasetMetaDB).filter(DatasetMetaDB.user_id == user_id)
-    # Hide soft-deleted (trashed) datasets from the main list. Use /datasets/trash
-    # to see trashed items and POST /datasets/{id}/restore to recover them.
+    # Hide soft-deleted (trashed) datasets from the main list.
     query = query.filter(DatasetMetaDB.deleted_at.is_(None))
-    if workspace_id:
-        # Include exact matches, legacy NULL workspace_id rows, AND legacy
-        # "default"-tagged rows so datasets uploaded before workspaces existed
-        # are always visible regardless of which personal workspace is active.
-        query = query.filter(
-            (DatasetMetaDB.workspace_id == workspace_id)
-            | (DatasetMetaDB.workspace_id == "default")
-            | DatasetMetaDB.workspace_id.is_(None)
-        )
-    # Project scoping (migration 0057): when the caller asks for a specific
-    # project, return ONLY datasets bound to that project. We deliberately do
-    # NOT include legacy NULL-project rows here — if we did, deleting a
-    # project and recreating one with the same name (or any new project) would
-    # surface every workspace-level dataset the user ever uploaded, which is
-    # exactly the "ghost dataset" bug users have reported. Workspace-level
-    # datasets (project_id IS NULL) are visible only when no project_id
-    # filter is sent (the workspace-wide "All datasets" view).
     if project_id:
         query = query.filter(DatasetMetaDB.project_id == project_id)
     rows = query.all()
@@ -1098,7 +1074,6 @@ async def upload_new_version(
     file: UploadFile = File(...),
     version_note: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     """Upload a new version of an existing dataset. Returns the new dataset id."""
@@ -1137,7 +1112,7 @@ async def upload_new_version(
         triggered_by="user_upload",
         id=new_id,
         user_id=user_id,
-        workspace_id=workspace_id or parent.workspace_id or "default",
+        workspace_id=parent.workspace_id or "default",
         name=parent.name,
         columns=list(df.columns),
         row_count=int(df.shape[0]),
@@ -1562,10 +1537,9 @@ def delete_dataset(
 @router.get("/trash", response_model=list[DatasetMeta])
 def list_trashed_datasets(
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> list[DatasetMeta]:
-    """List soft-deleted (trashed) datasets for the current user/workspace."""
+    """List soft-deleted (trashed) datasets for the current user."""
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
@@ -1573,12 +1547,6 @@ def list_trashed_datasets(
         DatasetMetaDB.user_id == user_id,
         DatasetMetaDB.deleted_at.isnot(None),
     )
-    if workspace_id:
-        query = query.filter(
-            (DatasetMetaDB.workspace_id == workspace_id)
-            | (DatasetMetaDB.workspace_id == "default")
-            | DatasetMetaDB.workspace_id.is_(None)
-        )
     rows = query.all()
     out: list[DatasetMeta] = []
     for row in rows:
@@ -2359,7 +2327,6 @@ def cross_dataset_query(
 def get_joinable_datasets(
     dataset_id: str,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> JoinableResponse:
     """Return datasets that share at least one column name with the given dataset.
@@ -2388,10 +2355,6 @@ def get_joinable_datasets(
         DatasetMetaDB.id != dataset_id,
         DatasetMetaDB.user_id == user_id,
     )
-    if workspace_id:
-        query = query.filter(
-            (DatasetMetaDB.workspace_id == workspace_id) | DatasetMetaDB.workspace_id.is_(None)
-        )
 
     joinable: list[JoinableDataset] = []
     for meta in query.all():

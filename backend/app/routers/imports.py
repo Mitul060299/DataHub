@@ -79,11 +79,10 @@ async def upload_file(
     delimiter: str | None = Form(default=None),
     project_id: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     project_id_header: str | None = Header(default=None, alias="X-Project-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
-    logger.info(f"Upload started: file={file.filename}, size={file.size}, workspace={workspace_id}")
+    logger.info(f"Upload started: file={file.filename}, size={file.size}")
     current_user_id = get_current_user_id(authorization)
     
     try:
@@ -126,7 +125,7 @@ async def upload_file(
     user_plan = resolve_user_plan(db, authorization)
     enforce_file_constraints(
         plan=user_plan,
-        workspace_id=workspace_id or "default",
+        billing_user_id=current_user_id or "",
         file_format=source_format,
         upload_size_bytes=len(content),
         db=db,
@@ -159,7 +158,7 @@ async def upload_file(
         dataset_id = save_dataset(
             df,
             db,
-            workspace_id=workspace_id,
+            workspace_id="default",
             user_id=current_user_id,
             store_rows=store_rows,
             meta_extra={
@@ -187,7 +186,7 @@ async def upload_file(
         )
         logger.info(f"Uploading to storage: {parquet_name}")
         storage_path = StorageService.upload(
-            workspace_id,
+            "default",
             dataset_id,
             parquet_bytes,
             parquet_name,
@@ -217,7 +216,7 @@ async def upload_file(
                 id=table_id,
                 name=table_name,
                 dataset_id=dataset_id,
-                workspace_id=workspace_id or "default",
+                workspace_id="default",
                 source_type="file",
                 source_name=file.filename,
                 size_bytes=len(content),
@@ -332,7 +331,6 @@ async def test_connection(
 async def presign_upload(
     payload: dict,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     """Step 1 of the two-step large-file upload flow.
@@ -377,7 +375,7 @@ async def presign_upload(
     user_plan = resolve_user_plan(db, authorization)
     enforce_file_constraints(
         plan=user_plan,
-        workspace_id=workspace_id or "default",
+        billing_user_id=user_id or "",
         file_format=source_format,
         upload_size_bytes=file_size_bytes,
         db=db,
@@ -405,7 +403,7 @@ async def presign_upload(
         triggered_by="user_upload",
         id=dataset_id,
         user_id=user_id,
-        workspace_id=workspace_id or "default",
+        workspace_id="default",
         name=dataset_name,
         columns=[],
         row_count=0,
@@ -432,7 +430,6 @@ async def presign_upload(
 async def finalize_upload(
     payload: dict,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     """Step 2 of the two-step large-file upload flow.
@@ -505,7 +502,7 @@ async def finalize_upload(
         id=table_id,
         name=table_name,
         dataset_id=dataset_id,
-        workspace_id=workspace_id or "default",
+        workspace_id="default",
         source_type="file",
         source_name=display_name,
         size_bytes=meta.file_size_bytes or 0,
@@ -529,7 +526,6 @@ async def finalize_upload(
 async def connector_import(
     payload: dict,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     db_type = payload.get("type")
@@ -578,7 +574,7 @@ async def connector_import(
     estimated_original_size = int(df.memory_usage(deep=True).sum())
     enforce_file_constraints(
         plan=user_plan,
-        workspace_id=workspace_id or "default",
+        billing_user_id=current_user_id or "",
         file_format="parquet",
         upload_size_bytes=max(estimated_original_size, 1),
         db=db,
@@ -597,7 +593,7 @@ async def connector_import(
     dataset_id = save_dataset(
         df,
         db,
-        workspace_id=workspace_id,
+        workspace_id="default",
         user_id=current_user_id,
         store_rows=store_rows,
         meta_extra={"name": resolved_dataset_name},
@@ -608,7 +604,7 @@ async def connector_import(
         row_count=int(df.shape[0]),
     )
     storage_path = StorageService.upload(
-        workspace_id,
+        "default",
         dataset_id,
         parquet_bytes,
         storage_name,
@@ -637,7 +633,7 @@ async def connector_import(
             id=table_id,
             name=table_name,
             dataset_id=dataset_id,
-            workspace_id=workspace_id or "default",
+            workspace_id="default",
             source_type="connector",
             source_name=str(source_name),
             size_bytes=None,
@@ -662,7 +658,6 @@ async def connector_import(
 async def connect_database(
     payload: dict,
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     db_type = payload.get("type")
@@ -682,7 +677,7 @@ async def connect_database(
             id=connection_id,
             name=name,
             type=db_type,
-            workspace_id=workspace_id or "default",
+            workspace_id="default",
             host=host,
             database=database_name,
             status="connected",
@@ -711,12 +706,9 @@ async def disconnect_database(connection_id: str, db: Session = Depends(get_db))
 
 @router.get("/tables")
 async def list_tables(
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     query = db.query(ImportTableDB)
-    if workspace_id:
-        query = query.filter(ImportTableDB.workspace_id == workspace_id)
     tables = query.order_by(ImportTableDB.created_at.desc()).all()
     results = []
     for table in tables:
@@ -739,7 +731,6 @@ async def list_tables(
 @router.get("/tables/{table_name}/preview")
 async def table_preview(
     table_name: str,
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -747,8 +738,6 @@ async def table_preview(
     require_role("viewer", role)
     user_id = get_current_user_id(authorization) or "anonymous"
     query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
-    if workspace_id:
-        query = query.filter(ImportTableDB.workspace_id == workspace_id)
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -765,12 +754,9 @@ async def table_preview(
 @router.delete("/tables/{table_name}")
 async def delete_table(
     table_name: str,
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> dict:
     query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
-    if workspace_id:
-        query = query.filter(ImportTableDB.workspace_id == workspace_id)
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -794,7 +780,6 @@ async def delete_table(
 @router.post("/tables/{table_name}/export", response_class=StreamingResponse)
 async def export_table(
     table_name: str,
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
@@ -802,8 +787,6 @@ async def export_table(
     require_role("viewer", role)
     user_id = get_current_user_id(authorization) or "anonymous"
     query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
-    if workspace_id:
-        query = query.filter(ImportTableDB.workspace_id == workspace_id)
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")

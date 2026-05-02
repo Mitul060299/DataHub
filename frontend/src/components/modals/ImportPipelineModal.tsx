@@ -94,7 +94,6 @@ export function ImportPipelineModal({
     try {
       const res = await clonePipelineWorkflow(selectedId, {
         name: newName.trim() || `Copy of ${selectedPipeline?.name ?? "Pipeline"}`,
-        workspace_id: workspaceId ?? "default",
       });
       onCloned(res.data.id, res.data.name);
       onClose();

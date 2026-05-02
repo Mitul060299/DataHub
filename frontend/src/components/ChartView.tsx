@@ -26,7 +26,7 @@ export function ChartView({ workspaceId, datasetId }: ChartViewProps) {
     setLoading(true);
     setError(null);
     try {
-      const result = await listDashboardsV2(workspaceId);
+      const result = await listDashboardsV2();
       setDashboards(result);
       if (result.length && !result.some((dashboard) => dashboard.id === selectedDashboardId)) {
         setSelectedDashboardId(result[0].id);
@@ -58,7 +58,6 @@ export function ChartView({ workspaceId, datasetId }: ChartViewProps) {
     if (!name) return;
     try {
       await createDashboardV2({
-        workspace_id: workspaceId,
         dataset_id: datasetId,
         name,
       });

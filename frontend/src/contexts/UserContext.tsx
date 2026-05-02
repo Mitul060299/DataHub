@@ -37,8 +37,6 @@ type UserContextType = {
     storageUsed: number;
     aiMessagesUsed: number;
   };
-  workspaceId: string;
-  setWorkspaceId: (workspaceId: string) => void;
   user: {
     id: string;
     username: string;
@@ -194,7 +192,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     storageUsed: 0,
     aiMessagesUsed: 0,
   });
-  const [workspaceId, setWorkspaceId] = useState("default");
   const [user, setUser] = useState<UserContextType["user"]>(null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [hasUploadedFirstFile, setHasUploadedFirstFile] = useState(false);
@@ -214,7 +211,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
       try {
-        const profile = await fetchCurrentUser(workspaceId);
+        const profile = await fetchCurrentUser();
         if (!mounted) return;
         setPlan(profile.plan);
         setUsage(profile.usage);
@@ -234,7 +231,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       mounted = false;
     };
-  }, [workspaceId, session, loading]);
+  }, [session, loading]);
 
   const markOnboardingComplete = useCallback(() => {
     setHasCompletedOnboarding(true);
@@ -255,8 +252,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setPlan,
         limits,
         usage,
-        workspaceId,
-        setWorkspaceId,
         user,
         hasCompletedOnboarding,
         hasUploadedFirstFile,

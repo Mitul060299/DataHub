@@ -47,7 +47,6 @@ def list_users(
 @router.get("/me", response_model=UserProfileOut)
 def get_me(
     authorization: str | None = Header(default=None),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
     db: Session = Depends(get_db),
 ) -> UserProfileOut:
     subject = get_current_subject(authorization)
@@ -82,18 +81,16 @@ def get_me(
             db.commit()
         except Exception:
             db.rollback()
-    workspace_filter = workspace_id or "default"
     datasets_used = db.execute(
-        text("SELECT COUNT(*) FROM dataset_meta WHERE workspace_id = :wid"),
-        {"wid": workspace_filter},
+        text("SELECT COUNT(*) FROM dataset_meta WHERE user_id = :uid"),
+        {"uid": user_id or ""},
     ).scalar() or 0
-    storage_used = (
-        db.query(ImportTableDB)
-        .filter(ImportTableDB.workspace_id == workspace_filter)
-        .with_entities(ImportTableDB.size_bytes)
+    storage_rows = (
+        db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
+        .filter(DatasetMetaDB.user_id == (user_id or ""), DatasetMetaDB.deleted_at.is_(None))
         .all()
     )
-    storage_total = sum(row[0] or 0 for row in storage_used)
+    storage_total = sum((r[0] or r[1] or 0) for r in storage_rows)
     usage = UserUsage(
         datasetsUsed=datasets_used,
         storageUsed=storage_total,

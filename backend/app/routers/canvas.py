@@ -17,7 +17,6 @@ from ..dependencies import get_current_user
 from ..models_db import CanvasLayoutDB, DatasetMetaDB, User
 from ..services.duckdb_service import DuckDBService
 from ..services.plan_guard import normalize_plan
-from ..services.workspace_access import get_visible_user_ids
 from ..services.project_access import list_visible_owner_user_ids
 
 router = APIRouter(prefix="/api/canvas", tags=["canvas"])
@@ -43,7 +42,6 @@ def _canvas_limit_for_plan(plan: str) -> int | None:
 class CreateCanvasRequest(BaseModel):
     name: str = "Untitled Dashboard"
     project_id: str | None = None
-    workspace_id: str | None = None
 
 
 class SaveCanvasRequest(BaseModel):
@@ -57,7 +55,6 @@ def _canvas_out(c: CanvasLayoutDB) -> dict:
         "id": c.id,
         "name": c.name,
         "project_id": c.project_id,
-        "workspace_id": c.workspace_id,
         "layout": c.layout or [],
         "is_public": c.is_public,
         "public_token": c.public_token,
@@ -96,10 +93,8 @@ def list_canvas_layouts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    workspace_id = getattr(current_user, "workspace_id", "default") or "default"
-    visible = set(get_visible_user_ids(db, current_user.id, workspace_id))
-    # Project-level: also include owners of projects the user is an active member of.
-    visible.update(list_visible_owner_user_ids(current_user.id, db))
+    visible = set(list_visible_owner_user_ids(current_user.id, db))
+    visible.add(current_user.id)
     q = db.query(CanvasLayoutDB).filter(CanvasLayoutDB.user_id.in_(list(visible)))
     if project_id:
         q = q.filter(CanvasLayoutDB.project_id == project_id)
@@ -137,7 +132,7 @@ def create_canvas_layout(
     canvas = CanvasLayoutDB(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
-        workspace_id=body.workspace_id or "default",
+        workspace_id="default",
         project_id=body.project_id or None,
         name=body.name.strip() or "Untitled Dashboard",
         layout=[],

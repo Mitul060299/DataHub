@@ -21,9 +21,9 @@ Current production stack:
 ## Core Services
 
 ### Frontend (Vercel)
-- Handles auth UX, dataset/workspace UI, dashboards, pipeline builder, settings, and API orchestration.
+- Handles auth UX, dataset/project UI, dashboards, pipeline builder, settings, and API orchestration.
 - Uses Supabase client SDK for session lifecycle and token refresh.
-- Key pages: workspace explorer, pipeline editor (with AI edit panel), dashboard builder, settings (notification prefs, audit log, usage meter, billing).
+- Key pages: project explorer, pipeline editor (with AI edit panel), dashboard builder, settings (notification prefs, audit log, usage meter, billing).
 
 ### Backend (Render)
 - FastAPI service for ingestion, profiling, transformations, dashboards, sharing, governance, billing, and email.
@@ -32,10 +32,10 @@ Current production stack:
 
 ### Supabase
 - Auth provider (email/password + OIDC).
-- Postgres for all transactional data: users, workspaces, projects, project_members, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback.
+- Postgres for all transactional data: users, projects, projects, project_members, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback.
 
 ### Collaboration Model
-DataHub is migrating from workspace-level to **project-level** collaboration:
+DataHub is migrating from project-level to **project-level** collaboration:
 - `project_members` (added in alembic 0063) carries email, role (`editor`/`viewer`), status, invite_token. Owner is implicit via `projects.user_id`.
 - Billing flows through the **project owner's** plan — invitees do not consume their own seats; the project owner does.
 - Plan caps: `max_project_members` (members per project) and `max_collaborative_projects` (projects with ≥1 member).
@@ -71,7 +71,7 @@ The agent is a 9-node state machine pipeline.
 
 | Node | Role |
 |---|---|
-| `context_loader` | Entry point — loads dataset schema, glossary, and workspace context into state |
+| `context_loader` | Entry point — loads dataset schema, glossary, and project context into state |
 | `intent_classifier` | Classifies the user turn into one of 15 intents (including `clarify`) |
 | `clarify_step` | Asks exactly one focused clarifying question with concrete examples; sets `needs_clarification: True` and streams the question via SSE; graph ends at `__end__` waiting for the user's reply |
 | `planner` | Generates an ordered plan of execution steps from the intent + context; if `plan_pending_modification=True`, incorporates the existing plan JSON and user modification instruction |
@@ -101,7 +101,7 @@ The agent is a 9-node state machine pipeline.
 ## Data Storage Model
 | Layer | Technology | What's stored |
 |---|---|---|
-| Transactional/metadata | Supabase Postgres | Users, workspaces, projects, dataset metadata, recipes, pipelines, dashboards, comments, reviews, audit logs, billing, feedback |
+| Transactional/metadata | Supabase Postgres | Users, projects, projects, dataset metadata, recipes, pipelines, dashboards, comments, reviews, audit logs, billing, feedback |
 | File/object | S3 | Uploaded datasets (Parquet) + user-saved checkpoints |
 | Compute/query | DuckDB | In-process session tables for pipeline step outputs; previews against S3 Parquet |
 | Cache | Redis | Hot query responses; rate limit counters |

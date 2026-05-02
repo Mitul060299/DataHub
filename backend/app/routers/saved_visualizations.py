@@ -26,7 +26,6 @@ class SaveVizRequest(BaseModel):
     chart_type: str = "bar"
     echarts_config: dict[str, Any]
     project_id: str | None = None
-    workspace_id: str | None = None
 
 
 class RenameVizRequest(BaseModel):
@@ -39,7 +38,6 @@ class VizOut(BaseModel):
     chart_type: str
     echarts_config: dict[str, Any]
     project_id: str | None
-    workspace_id: str
     created_at: str
 
     class Config:
@@ -53,7 +51,6 @@ def _viz_out(v: VisualizationDB) -> dict:
         "chart_type": v.chart_type,
         "echarts_config": v.echarts_config or {},
         "project_id": v.project_id,
-        "workspace_id": v.workspace_id,
         "created_at": v.created_at.isoformat() if v.created_at else "",
         "updated_at": v.updated_at.isoformat() if v.updated_at else "",
     }
@@ -89,7 +86,7 @@ def save_visualization(
     viz = VisualizationDB(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
-        workspace_id=body.workspace_id or "default",
+        workspace_id="default",
         project_id=body.project_id or None,
         name=body.name.strip() or "Untitled Chart",
         chart_type=body.chart_type,

@@ -111,7 +111,7 @@ The user describes **what the data should look like at the end**, not how to get
 - **Acceptance criteria (DQ assertions)** — "all values in `revenue` must be positive; `email` must match RFC 5322; `country_code` must be in the ISO 3166-1 alpha-2 list."
 - **Prior pipeline (NEW — see §3.9)** — what the team has historically done to the previous version of this data: pasted SQL, pasted Python, plain-English steps copied from a runbook, or a reference to an existing DataHub `pipeline_run_id` / saved Recipe. The agent treats this as a strong prior — it will try to replicate the same logic and only deviate when the new data forces it.
 - **Reference dataset schema** (Phase 4 stretch) — "the output must conform to this schema" with an attached Parquet/CSV schema sample.
-- **Workspace glossary references** — the existing context loader already injects glossary terms into agent state; the goal parser should resolve glossary aliases (e.g. "active customer" → the workspace's saved definition).
+- **Project glossary references** — the existing context loader already injects glossary terms into agent state; the goal parser should resolve glossary aliases (e.g. "active customer" → the project's saved definition).
 
 The agent parses **everything** in a single request before doing anything — it does not start executing until it has a coherent understanding of the goal, the rules, and the prior pipeline (if provided). The user pastes once; the agent plans the full DAG, runs the upfront **drift check** (§3.9), shows the adapted plan, and after a single optional approval executes end-to-end. There is no back-and-forth turn-by-turn approval loop in Auto Mode — that is the whole point.
 
@@ -524,7 +524,7 @@ A new lightweight table `agent_recipes` holds these; reuse counters and last-run
 ```sql
 CREATE TABLE IF NOT EXISTS agent_recipes (
     id                 TEXT PRIMARY KEY,
-    workspace_id       TEXT NOT NULL,
+    project_id       TEXT NOT NULL,
     created_by         TEXT NOT NULL,
     name               TEXT NOT NULL,
     description        TEXT,
@@ -541,7 +541,7 @@ CREATE TABLE IF NOT EXISTS agent_recipes (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_agent_recipes_workspace ON agent_recipes (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_agent_recipes_workspace ON agent_recipes (project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_recipes_fingerprint ON agent_recipes (schema_fingerprint);
 ```
 
@@ -549,7 +549,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_recipes_fingerprint ON agent_recipes (schem
 
 ```
 POST   /api/auto/recipes                 # save the just-completed run as a recipe
-GET    /api/auto/recipes?workspace_id=…  # list workspace recipes
+GET    /api/auto/recipes?project_id=…  # list project recipes
 GET    /api/auto/recipes/{id}            # full detail
 POST   /api/auto/recipes/{id}/apply      # body: {dataset_id, session_id, pre_run_review?}
                                          # returns SSE stream (same as /auto/run)
@@ -582,7 +582,7 @@ POST /api/auto/run
 ```json
 {
   "dataset_id": "string",
-  "workspace_id": "string",
+  "project_id": "string",
   "session_id": "string",
   "goal": "string OR object — see §3.9.1 for the structured form (goal_text + prior_pipeline + expected_profile); the plain-string form is still accepted and treated as goal_text only",
   "pre_run_review": false,
@@ -615,7 +615,7 @@ POST /api/auto/run/resume
 ### 4.3 Run History
 
 ```
-GET  /api/auto/runs?dataset_id=&workspace_id=&limit=20&cursor=...
+GET  /api/auto/runs?dataset_id=&project_id=&limit=20&cursor=...
 GET  /api/auto/runs/{auto_run_id}
 GET  /api/auto/runs/{auto_run_id}/report   → downloadable JSON or markdown
 ```
@@ -688,7 +688,7 @@ When `auto.goal.report` arrives:
 
 ### 5.6 Run History (Settings)
 
-Add a new tab to workspace settings: `Auto Runs`. Shows the last N runs with status, duration, rules satisfied, and a button to view the full report.
+Add a new tab to project settings: `Auto Runs`. Shows the last N runs with status, duration, rules satisfied, and a button to view the full report.
 
 ---
 
@@ -702,7 +702,7 @@ Created via the existing idempotent DDL guard in [backend/app/main.py](backend/a
 CREATE TABLE IF NOT EXISTS agent_auto_runs (
     id                 TEXT PRIMARY KEY,
     user_id            TEXT NOT NULL,
-    workspace_id       TEXT NOT NULL,
+    project_id       TEXT NOT NULL,
     dataset_id         TEXT NOT NULL,
     session_id         TEXT NOT NULL,                 -- f"{user_id}:{chat_session_id}"
     goal_raw           TEXT NOT NULL,
@@ -730,7 +730,7 @@ CREATE TABLE IF NOT EXISTS agent_auto_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_user      ON agent_auto_runs (user_id);
-CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_workspace ON agent_auto_runs (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_workspace ON agent_auto_runs (project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_session   ON agent_auto_runs (session_id);
 CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_dataset   ON agent_auto_runs (dataset_id);
 CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_status    ON agent_auto_runs (status);
@@ -788,7 +788,7 @@ All prompts use `langchain_groq.ChatGroq` with `response_format={"type": "json_o
 
 ### 8.1 Scope Constraints
 
-- Auto Mode operates **only on the dataset the user explicitly selects** (plus declared `secondary_dataset_ids`). It cannot touch other datasets, other workspaces, or external connectors.
+- Auto Mode operates **only on the dataset the user explicitly selects** (plus declared `secondary_dataset_ids`). It cannot touch other datasets, other projects, or external connectors.
 - RBAC: `editor` or higher required (matches existing chat endpoint); `viewer` is rejected at the router.
 - All generated SQL is logged to `audit_logs` and to `pipeline_steps.sql` before execution.
 - The existing `_BLOCKED_DML` regex applies — Auto Mode cannot issue `DROP/DELETE/INSERT/UPDATE/TRUNCATE` against the session.
@@ -879,7 +879,7 @@ Auto Mode runs are LLM-heavy. Apply a stricter `slowapi` limit at the router usi
 - [ ] `AutoRunFeed.tsx` (progress bar, step timeline, collapsible rule rows).
 - [ ] `AutoInterruptCard.tsx` (question + options + sample table; Skip and Submit actions).
 - [ ] `AutoGoalReport.tsx` (rules satisfied, Save as Dataset, Open Pipeline, Download Report).
-- [ ] `GET /api/auto/runs` history view in workspace settings.
+- [ ] `GET /api/auto/runs` history view in project settings.
 - [ ] e2e test (Playwright): goal → execution → interrupt → resume → report → save.
 
 ### Phase 4 — Polish, Observability, Billing (~1 week)

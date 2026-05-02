@@ -738,7 +738,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
 
       <TemplatePickerModal
         open={templatePickerOpen}
-        workspaceId={activeProject?.workspaceId ?? "default"}
+        workspaceId="default"
         onClose={() => setTemplatePickerOpen(false)}
         onCreated={(_pipelineId, _pipelineName) => {
           setTemplatePickerOpen(false);

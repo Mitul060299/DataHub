@@ -18,7 +18,7 @@ from app.security import get_current_subject
 from app.models_db import ChatSessionDB, TransformationStepDB, PipelineV2DB, ChatSessionSnapshotDB
 from app.services.chat_engine import ChatEngine, EventType, ChatEvent
 from app.services.ai_operating_controls import get_ai_operating_controls
-from app.services.plan_guard import resolve_user_plan, resolve_workspace_plan
+from app.services.plan_guard import resolve_user_plan, resolve_user_plan_by_id
 from app.services.usage_service import enforce_usage_limit, increment_usage
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -39,7 +39,7 @@ async def create_chat_session(
     """Initialize a new chat session for a dataset"""
     
     user_plan = _resolve_chat_plan(db, authorization)
-    engine = ChatEngine(db=db, user_id=current_user_id, workspace_id="default", user_plan=user_plan)
+    engine = ChatEngine(db=db, user_id=current_user_id, user_plan=user_plan)
     
     try:
         session = await engine.create_session(
@@ -63,7 +63,6 @@ async def create_chat_session(
 
 @router.get("/sessions")
 async def list_chat_sessions(
-    workspace_id: Optional[str] = Query(None),
     dataset_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
@@ -77,8 +76,6 @@ async def list_chat_sessions(
         ChatSessionDB.user_id == current_user_id
     )
     
-    if workspace_id:
-        query = query.filter(ChatSessionDB.workspace_id == workspace_id)
     if dataset_id:
         query = query.filter(ChatSessionDB.dataset_id == dataset_id)
     if status:
@@ -239,17 +236,10 @@ async def upsert_session_history(
         ChatSessionDB.user_id == current_user_id,
     ).first()
     if not session:
-        # Look up the dataset's actual workspace_id instead of hard-coding "default",
-        # which would violate a FK constraint if no workspace with that id exists.
-        from app.models_db import DatasetMetaDB as _DatasetMetaDB
-        ds_meta = db.query(_DatasetMetaDB).filter(
-            _DatasetMetaDB.id == payload.dataset_id
-        ).first()
-        workspace_id = (ds_meta.workspace_id if ds_meta and ds_meta.workspace_id else None) or "default"
         session = ChatSessionDB(
             id=session_id,
             user_id=current_user_id,
-            workspace_id=workspace_id,
+            workspace_id="default",
             dataset_id=payload.dataset_id,
             title="AI Chat",
             status="active",
@@ -286,8 +276,8 @@ async def send_message_to_session(
     
     user_plan = _resolve_chat_plan(db, authorization)
 
-    # Resolve billing to the collab workspace owner if applicable
-    billing_user_id, billing_plan = resolve_workspace_plan(session.workspace_id, current_user_id, db)
+    billing_user_id = current_user_id
+    billing_plan = resolve_user_plan_by_id(current_user_id, db)
 
     # Enforce and count the AI chat call
     enforce_usage_limit(billing_user_id, billing_plan, "api_calls", db)
@@ -296,7 +286,6 @@ async def send_message_to_session(
     engine = ChatEngine(
         db=db,
         user_id=current_user_id,
-        workspace_id=session.workspace_id,
         user_plan=user_plan
     )
     ai_controls = get_ai_operating_controls()
@@ -371,7 +360,7 @@ async def save_session_as_pipeline(
     pipeline = PipelineV2DB(
         id=str(uuid.uuid4()),
         user_id=current_user_id,
-        workspace_id=session.workspace_id,
+        workspace_id="default",
         name=name,
         description=description,
         type='manual',
@@ -501,7 +490,7 @@ async def update_session_data(
         raise HTTPException(status_code=404, detail="Session not found")
     
     user_plan = _resolve_chat_plan(db, authorization)
-    engine = ChatEngine(db=db, user_id=current_user_id, workspace_id="default", user_plan=user_plan)
+    engine = ChatEngine(db=db, user_id=current_user_id, user_plan=user_plan)
     
     try:
         result = engine.handle_data_update(

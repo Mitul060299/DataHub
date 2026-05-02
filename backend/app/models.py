@@ -157,7 +157,6 @@ class DashboardTileOut(BaseModel):
 
 
 class DashboardV2Create(BaseModel):
-    workspace_id: str = "default"
     dataset_id: str | None = None
     name: str
     description: str | None = None
@@ -175,7 +174,6 @@ class DashboardV2Update(BaseModel):
 
 class DashboardV2Out(BaseModel):
     id: str
-    workspace_id: str
     dataset_id: str | None = None
     name: str
     description: str | None = None
@@ -492,47 +490,6 @@ class UserProfileOut(BaseModel):
     has_uploaded_first_file: bool = False
 
 
-class WorkspaceCreate(BaseModel):
-    name: str
-    workspace_type: Literal["personal", "collab"] = "personal"
-
-
-class WorkspaceOut(BaseModel):
-    id: str
-    name: str
-    workspace_type: str = "personal"
-    owner_id: Optional[str] = None
-    is_shared: bool = False
-    share_token: Optional[str] = None
-    share_expires_at: Optional[str] = None
-    share_scope: Optional[str] = None
-
-
-# ── Workspace membership models ───────────────────────────────────────────────
-
-class WorkspaceMemberInvite(BaseModel):
-    email: str
-    role: Literal["admin", "editor", "viewer"] = "viewer"
-
-
-class WorkspaceMemberUpdate(BaseModel):
-    role: Literal["admin", "editor", "viewer"]
-
-
-class WorkspaceMemberOut(BaseModel):
-    id: str
-    workspace_id: str
-    user_id: Optional[str] = None
-    email: str
-    role: str
-    status: str          # pending | active
-    invited_by: str
-    created_at: str
-    accepted_at: Optional[str] = None
-
-
-# ── Project membership models ────────────────────────────────────────────────
-
 class ProjectMemberInvite(BaseModel):
     email: str
     role: Literal["editor", "viewer"] = "editor"
@@ -562,14 +519,14 @@ class BusinessRule(BaseModel):
 
 
 class ContextPayload(BaseModel):
-    workspace_id: str
+    project_id: str
     glossary: Dict[str, str] = Field(default_factory=dict)
     rules: List[BusinessRule] = Field(default_factory=list)
 
 
 class ContextVersionOut(BaseModel):
     version_id: str
-    workspace_id: str
+    project_id: str
     glossary: Dict[str, str] = Field(default_factory=dict)
     rules: List[BusinessRule] = Field(default_factory=list)
     created_at: str
@@ -658,13 +615,12 @@ class TenantIsolationViolation(BaseModel):
     severity: Literal["high", "medium", "low"] = "medium"
     table: str
     record_id: str
-    workspace_id: Optional[str] = None
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TenantIsolationReport(BaseModel):
     checked_at: str
-    scope_workspace_id: Optional[str] = None
+    scope_workspace_id: Optional[str] = None  # kept for compat, always None
     total_records_scanned: int = 0
     total_violations: int = 0
     violations_by_category: Dict[str, int] = Field(default_factory=dict)
@@ -853,6 +809,7 @@ class RecentDashboardRow(BaseModel):
     updated_at: Optional[str] = None
 
 
+# Used by the workspace home page /recent endpoint (route name intentionally kept)
 class WorkspaceRecentOut(BaseModel):
     recent_projects: List[ProjectOut] = Field(default_factory=list)
     recent_pipelines: List[RecentPipelineRow] = Field(default_factory=list)

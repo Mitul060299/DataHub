@@ -114,7 +114,6 @@ def _purge_one(session: Session, meta: DatasetMetaDB, *, retention_days: int) ->
     """Hard-delete a single trashed dataset (mirrors ``?hard=true`` flow)."""
     dataset_id = meta.id
     user_id = getattr(meta, "user_id", None)
-    workspace_id = getattr(meta, "workspace_id", None)
     name = getattr(meta, "name", None)
 
     storage_paths: list[tuple[str, str]] = []
@@ -180,7 +179,6 @@ def _purge_one(session: Session, meta: DatasetMetaDB, *, retention_days: int) ->
             session,
             event_type="dataset_purged",
             user_id=user_id,
-            workspace_id=workspace_id,
             payload={
                 "dataset_id": dataset_id,
                 "name": name,

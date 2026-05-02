@@ -19,7 +19,6 @@ class CommandRequest(BaseModel):
     message: str
     session_id: str
     dataset_id: str | None = None
-    workspace_id: str | None = None
     project_id: str | None = None
     pipeline_steps: list[dict[str, Any]] = Field(default_factory=list)
     plan_approved: bool = False
@@ -83,7 +82,7 @@ async def process_command(
                 pipeline_steps=payload.pipeline_steps,
                 plan_approved=payload.plan_approved,
                 pending_plan=payload.pending_plan,
-                workspace_id=payload.workspace_id,
+                project_id=payload.project_id,
                 authorization=authorization,
                 secondary_dataset_ids=payload.secondary_dataset_ids or [],
                 conversation_history=payload.conversation_history or [],

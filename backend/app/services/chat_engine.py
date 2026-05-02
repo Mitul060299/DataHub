@@ -90,10 +90,10 @@ class ChatEvent:
 class ChatEngine:
     """Core chat orchestration engine"""
     
-    def __init__(self, db: DBSession, user_id: str, workspace_id: str, user_plan: str):
+    def __init__(self, db: DBSession, user_id: str, user_plan: str):
         self.db = db
         self.user_id = user_id
-        self.workspace_id = workspace_id
+        self.workspace_id = "default"
         self.user_plan = user_plan
         self.rate_limiter = self._init_rate_limiter()
     

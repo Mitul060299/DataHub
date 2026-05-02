@@ -1,21 +1,20 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
-  fetchWorkspaceMembers,
-  inviteMember,
-  updateMemberRole,
-  removeMember,
-  type WorkspaceMemberOut,
+  fetchProjectMembers,
+  inviteProjectMember,
+  updateProjectMemberRole,
+  removeProjectMember,
+  type ProjectMemberOut,
 } from "../api";
-import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import "./TeamPanel.css";
 
 interface TeamPanelProps {
-  workspaceId: string;
+  projectId: string;
   onClose: () => void;
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin",
+  owner: "Owner",
   editor: "Editor",
   viewer: "Viewer",
 };
@@ -36,11 +35,10 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
-  const { workspaceMembers, refreshMembers } = useWorkspaceContext();
-  const [members, setMembers] = useState<WorkspaceMemberOut[]>(workspaceMembers);
+export function TeamPanel({ projectId, onClose }: TeamPanelProps) {
+  const [members, setMembers] = useState<ProjectMemberOut[]>([]);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "editor" | "viewer">("viewer");
+  const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -51,12 +49,17 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
     setTimeout(() => setToast(null), 2500);
   };
 
-  useEffect(() => {
-    if (!workspaceId || workspaceId === "default") return;
-    fetchWorkspaceMembers(workspaceId)
+  const refresh = () => {
+    if (!projectId) return;
+    fetchProjectMembers(projectId)
       .then(setMembers)
       .catch(() => { /* non-fatal */ });
-  }, [workspaceId]);
+  };
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   const handleInvite = async () => {
     setError(null);
@@ -65,9 +68,8 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
     if (!/\S+@\S+\.\S+/.test(trimmed)) { setError("Enter a valid email address."); return; }
     setInviting(true);
     try {
-      const newMember = await inviteMember(workspaceId, trimmed, role);
-      setMembers((prev) => [...prev.filter((m) => m.email !== trimmed), newMember]);
-      await refreshMembers(workspaceId);
+      await inviteProjectMember(projectId, trimmed, role);
+      refresh();
       setEmail("");
       showToast(`Invite sent to ${trimmed}`);
     } catch (err) {
@@ -83,12 +85,11 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
     }
   };
 
-  const handleRoleChange = async (member: WorkspaceMemberOut, newRole: "admin" | "editor" | "viewer") => {
+  const handleRoleChange = async (member: ProjectMemberOut, newRole: "editor" | "viewer") => {
     setUpdatingId(member.id);
     try {
-      const updated = await updateMemberRole(workspaceId, member.id, newRole);
-      setMembers((prev) => prev.map((m) => (m.id === member.id ? updated : m)));
-      await refreshMembers(workspaceId);
+      await updateProjectMemberRole(projectId, member.id, newRole);
+      refresh();
     } catch (err) {
       const e = err as { response?: { data?: { detail?: string } }; message?: string };
       showToast(e.response?.data?.detail ?? "Could not update role");
@@ -97,12 +98,11 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
     }
   };
 
-  const handleRemove = async (member: WorkspaceMemberOut) => {
-    if (!window.confirm(`Remove ${member.email} from workspace?`)) return;
+  const handleRemove = async (member: ProjectMemberOut) => {
+    if (!window.confirm(`Remove ${member.email} from project?`)) return;
     try {
-      await removeMember(workspaceId, member.id);
+      await removeProjectMember(projectId, member.id);
       setMembers((prev) => prev.filter((m) => m.id !== member.id));
-      await refreshMembers(workspaceId);
       showToast("Member removed");
     } catch (err) {
       const e = err as { response?: { data?: { detail?: string } }; message?: string };
@@ -119,7 +119,6 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <aside className="team-panel">
-        {/* Header */}
         <div className="team-panel-header">
           <span className="team-panel-title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: "middle", marginRight: 6 }}>
@@ -133,11 +132,10 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
           <span className="team-panel-meta">
             {activeCount} active{pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
           </span>
-          <button className="team-close-btn" onClick={onClose} aria-label="Close">×</button>
+          <button className="team-close-btn" onClick={onClose} aria-label="Close">x</button>
         </div>
 
         <div className="team-panel-body">
-          {/* Invite form */}
           <section className="team-invite-section">
             <div className="team-invite-row">
               <input
@@ -151,9 +149,8 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
               <select
                 className="team-role-select"
                 value={role}
-                onChange={(e) => setRole(e.target.value as "admin" | "editor" | "viewer")}
+                onChange={(e) => setRole(e.target.value as "editor" | "viewer")}
               >
-                <option value="admin">Admin</option>
                 <option value="editor">Editor</option>
                 <option value="viewer">Viewer</option>
               </select>
@@ -164,20 +161,17 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
               onClick={() => void handleInvite()}
               disabled={inviting}
             >
-              {inviting ? "Sending…" : "Send invite"}
+              {inviting ? "Sending..." : "Send invite"}
             </button>
           </section>
 
           <div className="team-divider" />
 
-          {/* Role legend */}
           <div className="team-legend">
-            <span><RoleBadge role="admin" /> can invite, manage members, run everything</span>
-            <span><RoleBadge role="editor" /> create &amp; edit data, pipelines, dashboards</span>
+            <span><RoleBadge role="editor" /> create and edit data, pipelines, dashboards</span>
             <span><RoleBadge role="viewer" /> read-only access</span>
           </div>
 
-          {/* Member list */}
           <div className="team-member-list">
             {members.length === 0 && (
               <div className="team-empty">No members yet. Invite your team above.</div>
@@ -192,37 +186,36 @@ export function TeamPanel({ workspaceId, onClose }: TeamPanelProps) {
                   <div className="team-member-email">{m.email}</div>
                   <div className="team-member-sub">
                     <StatusBadge status={m.status} />
-                    {m.status === "pending" && (
-                      <span className="team-invited-by">invited by {m.invited_by}</span>
-                    )}
                   </div>
                 </div>
                 <div className="team-member-actions">
-                  <select
-                    className="team-role-select team-role-select-sm"
-                    value={m.role}
-                    onChange={(e) => void handleRoleChange(m, e.target.value as "admin" | "editor" | "viewer")}
-                    disabled={updatingId === m.id}
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="editor">Editor</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
-                  <button
-                    className="team-remove-btn"
-                    onClick={() => void handleRemove(m)}
-                    title="Remove member"
-                    aria-label={`Remove ${m.email}`}
-                  >
-                    ×
-                  </button>
+                  {m.role !== "owner" && (
+                    <select
+                      className="team-role-select team-role-select-sm"
+                      value={m.role}
+                      onChange={(e) => void handleRoleChange(m, e.target.value as "editor" | "viewer")}
+                      disabled={updatingId === m.id}
+                    >
+                      <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                  )}
+                  {m.role !== "owner" && (
+                    <button
+                      className="team-remove-btn"
+                      onClick={() => void handleRemove(m)}
+                      title="Remove member"
+                      aria-label={`Remove ${m.email}`}
+                    >
+                      x
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Toast */}
         {toast && <div className="team-toast">{toast}</div>}
       </aside>
     </div>

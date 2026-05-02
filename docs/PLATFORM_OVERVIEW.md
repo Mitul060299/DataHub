@@ -45,7 +45,7 @@ All operations are addressable by name in the NL pipeline editor and visual step
 
 ### Business Context Memory
 - Context API with optional Chroma-backed persistence.
-- Default workspace context used for agent prompts.
+- Default project context used for agent prompts.
 - Context persisted in Supabase Postgres with optional local JSON fallback.
 
 ### Deep Transformation Recipes
@@ -69,7 +69,7 @@ All operations are addressable by name in the NL pipeline editor and visual step
 - Supabase JWT auth is used for session identity.
 - OIDC is configurable for enterprise SSO requirements.
 - Compliance scaffolds are available in docs/COMPLIANCE.md.
-- User/workspace records and audit logs are stored in Supabase Postgres.
+- User/project records and audit logs are stored in Supabase Postgres.
 
 ## 2. Architecture Snapshot
 

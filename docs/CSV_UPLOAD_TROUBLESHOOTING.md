@@ -22,7 +22,7 @@ python -m alembic upgrade head
 
 This migration (0021_dataset_meta_user_id) will:
 - Add the missing `user_id` column (nullable) to `dataset_meta`
-- Create an index on `(user_id, workspace_id)` for faster queries
+- Create an index on `(user_id, project_id)` for faster queries
 - Check for existing columns first (safe to run multiple times)
 
 ### Step 2: Verify the Migration Applied

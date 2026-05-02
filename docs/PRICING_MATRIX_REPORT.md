@@ -14,7 +14,7 @@
 | Enterprise Connectors | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | PASS |
 | Scheduling | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | PASS |
 | Dashboard Sharing | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | PASS |
-| Workspace Sharing | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | PASS |
+| Project Sharing | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | PASS |
 | SSO | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | PASS |
 | Webhooks | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | PASS |
 | Lineage Graph | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | PASS |
@@ -34,8 +34,8 @@
 | `update_pipeline` | `backend/app/routers/pipelines.py` | `enforce_scheduling` | PASS (OK) |
 | `run_pipeline` | `backend/app/routers/pipelines.py` | `enforce_scheduling` | PASS (OK) |
 | `publish_dashboard` | `backend/app/routers/dashboards_v2.py` | `enforce_dashboard_sharing` | PASS (OK) |
-| `create_workspace` | `backend/app/routers/workspaces.py` | `enforce_workspace_limit` | FAIL (Missing tokens: enforce_workspace_limit) |
-| `share_workspace` | `backend/app/routers/workspaces.py` | `enforce_min_plan`, `"Team"` | PASS (OK) |
+| `create_workspace` | `backend/app/routers/projects.py` | `enforce_workspace_limit` | FAIL (Missing tokens: enforce_workspace_limit) |
+| `share_workspace` | `backend/app/routers/projects.py` | `enforce_min_plan`, `"Team"` | PASS (OK) |
 | `oidc_login` | `backend/app/routers/auth.py` | `enforce_sso` | PASS (OK) |
 | `register_hook` | `backend/app/routers/webhooks.py` | `enforce_webhooks` | PASS (OK) |
 | `list_hooks` | `backend/app/routers/webhooks.py` | `enforce_webhooks` | PASS (OK) |

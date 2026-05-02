@@ -40,28 +40,28 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 | `users` | id, username, role, plan, has_completed_onboarding, has_uploaded_first_file, notification_prefs | `notification_prefs` is JSONB: `{pipeline_complete, usage_warning, weekly_digest}` |
 | `user_usage` | user_id, period (YYYY-MM), api_calls, pipeline_runs, datasets_uploaded, storage_bytes_used | Monthly bucket; UNIQUE(user_id, period) |
 
-### Workspaces & Projects
+### Projects & Projects
 | Table | Key Columns | Notes |
 |---|---|---|
-| `workspaces` | id, owner_id, share_token, scope, expires_at | Share link state |
-| `workspace_members` | id, workspace_id, user_id, email, role, status, invite_token | **Legacy** — retained alongside `project_members` during the workspace → project migration. Will be dropped once Phase 6 dual-read window closes. |
-| `projects` | id, user_id, workspace_id, name, description, colour, icon | User-scoped grouping for pipelines + dashboards |
+| `projects` | id, owner_id, share_token, scope, expires_at | Share link state |
+| `workspace_members` | id, project_id, user_id, email, role, status, invite_token | **Legacy** — retained alongside `project_members` during the project → project migration. Will be dropped once Phase 6 dual-read window closes. |
+| `projects` | id, user_id, project_id, name, description, colour, icon | User-scoped grouping for pipelines + dashboards |
 | `project_members` | id, project_id, user_id, email, role (`editor`/`viewer`), status (`active`/`pending`), invite_token, invited_by, accepted_at | Project-level collaboration. Owner is implicit via `projects.user_id` and is *not* stored here. Unique on (project_id, email). Billing flows through project owner's plan. |
 
 ### Datasets
 | Table | Key Columns | Notes |
 |---|---|---|
-| `dataset_meta` | id, workspace_id, user_id, filename, row_count, col_count, parent_id, version_number, version_note | `parent_id` links version chain; `version_number` starts at 1 |
+| `dataset_meta` | id, project_id, user_id, filename, row_count, col_count, parent_id, version_number, version_note | `parent_id` links version chain; `version_number` starts at 1 |
 | `dataset_data` | id, dataset_id, data (JSONB) | Raw row storage (small datasets) |
 | `dataset_chunks` | id, dataset_id, chunk_index, data | Chunked storage for larger datasets |
-| `import_tables` | id, workspace_id, table_name, source_type | Imported external tables |
-| `import_connections` | id, workspace_id, connector, config (JSONB) | Saved connector configs |
+| `import_tables` | id, project_id, table_name, source_type | Imported external tables |
+| `import_connections` | id, project_id, connector, config (JSONB) | Saved connector configs |
 | `calculated_columns` | id, dataset_id, name, formula, result_type | Formula-derived columns |
 
 ### Pipelines
 | Table | Key Columns | Notes |
 |---|---|---|
-| `pipelines_v2` | id, user_id, workspace_id, project_id, name, steps (JSONB), version_number, is_public | `project_id` nullable FK |
+| `pipelines_v2` | id, user_id, project_id, project_id, name, steps (JSONB), version_number, is_public | `project_id` nullable FK |
 | `pipeline_runs` | id, pipeline_id, user_id, status, triggered_by, started_at, finished_at, runtime_params (JSONB) | |
 | `pipeline_steps` | id, run_id, step_id, status, output_preview (JSONB) | Per-step execution state |
 | `artifacts` | id, run_id, step_id, storage_path, row_count | Parquet artifact references |
@@ -69,8 +69,8 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 ### Dashboards
 | Table | Key Columns | Notes |
 |---|---|---|
-| `dashboards_v2` | id, user_id, workspace_id, project_id, name, layout (JSONB), share_token | |
-| `viz_dashboards` | id, name, workspace_id, widgets (JSONB) | Legacy widget-based dashboards |
+| `dashboards_v2` | id, user_id, project_id, project_id, name, layout (JSONB), share_token | |
+| `viz_dashboards` | id, name, project_id, widgets (JSONB) | Legacy widget-based dashboards |
 | `viz_widgets` | id, dashboard_id, type, config (JSONB) | Legacy widgets |
 | `viz_themes` | id, name, config (JSONB) | Colour themes |
 | `dashboard_comments` | id, dashboard_id, user_id, author_name, body, created_at, updated_at | Threaded comments on v2 dashboards |
@@ -84,13 +84,13 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 ### Webhooks & Jobs
 | Table | Key Columns | Notes |
 |---|---|---|
-| `webhooks` | id, workspace_id, target_url, event, created_at | |
-| `scheduled_jobs` | id, workspace_id, name, cron, action, created_at | Store only; no built-in runner |
+| `webhooks` | id, project_id, target_url, event, created_at | |
+| `scheduled_jobs` | id, project_id, name, cron, action, created_at | Store only; no built-in runner |
 
 ### Pipelines (legacy)
 | Table | Key Columns | Notes |
 |---|---|---|
-| `pipelines` | id, workspace_id, name, steps (JSONB) | Superseded by pipelines_v2 |
+| `pipelines` | id, project_id, name, steps (JSONB) | Superseded by pipelines_v2 |
 | `pipeline_runs` (legacy) | id, pipeline_id, status | |
 
 ### Transformation History

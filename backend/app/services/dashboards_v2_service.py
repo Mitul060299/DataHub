@@ -39,7 +39,6 @@ class DashboardsV2Service:
     def _dashboard_out(cls, dashboard: DashboardV2DB, tiles: list[DashboardTileDB]) -> DashboardV2Out:
         return DashboardV2Out(
             id=str(dashboard.id),
-            workspace_id=dashboard.workspace_id,
             dataset_id=dashboard.dataset_id,
             name=dashboard.name,
             description=dashboard.description,
@@ -56,7 +55,6 @@ class DashboardsV2Service:
     def list_dashboards(
         cls,
         user_id: str,
-        workspace_id: str | None = None,
         visible_user_ids: list[str] | None = None,
         project_id: str | None = None,
     ) -> list[DashboardV2Out]:
@@ -64,8 +62,6 @@ class DashboardsV2Service:
         try:
             ids_to_query = visible_user_ids if visible_user_ids else [user_id]
             query = db.query(DashboardV2DB).filter(DashboardV2DB.user_id.in_(ids_to_query))
-            if workspace_id:
-                query = query.filter(DashboardV2DB.workspace_id == workspace_id)
             if project_id:
                 # Strict filter — do NOT include NULL-project rows (orphans from
                 # deleted projects) when a specific project context is requested.

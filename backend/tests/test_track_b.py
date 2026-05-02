@@ -70,7 +70,7 @@ class TestEnforceFileConstraints(unittest.TestCase):
         db.query.return_value.filter.return_value.all.return_value = []
         enforce_file_constraints(
             plan=plan,
-            workspace_id="ws-1",
+            billing_user_id="u",
             file_format=format_,
             upload_size_bytes=size_bytes,
             db=db,
@@ -207,7 +207,6 @@ class TestPresignEndpointFormatGate(unittest.TestCase):
             return asyncio.run(presign_upload(
                 payload=payload,
                 authorization="Bearer fake",
-                workspace_id="ws1",
                 db=db,
             ))
 
@@ -247,7 +246,6 @@ class TestPresignEndpointFormatGate(unittest.TestCase):
                 asyncio.run(presign_upload(
                     payload={"filename": "", "file_size_bytes": 100},
                     authorization="Bearer fake",
-                    workspace_id="ws1",
                     db=db,
                 ))
         self.assertEqual(ctx.exception.status_code, 400)
@@ -264,7 +262,6 @@ class TestPresignEndpointFormatGate(unittest.TestCase):
                 asyncio.run(presign_upload(
                     payload={"filename": "data.parquet", "file_size_bytes": 0},
                     authorization="Bearer fake",
-                    workspace_id="ws1",
                     db=db,
                 ))
         self.assertEqual(ctx.exception.status_code, 400)
@@ -286,7 +283,6 @@ class TestPresignEndpointFormatGate(unittest.TestCase):
                 asyncio.run(presign_upload(
                     payload={"filename": "data.parquet", "file_size_bytes": 100 * 1024 * 1024},
                     authorization="Bearer fake",
-                    workspace_id="ws1",
                     db=db,
                 ))
         self.assertEqual(ctx.exception.status_code, 501)
@@ -341,7 +337,6 @@ class TestFinalizeEndpoint(unittest.TestCase):
             return asyncio.run(finalize_upload(
                 payload={"dataset_id": dataset_id, "filename": filename},
                 authorization="Bearer fake",
-                workspace_id="ws1",
                 db=db,
             ))
 
@@ -387,7 +382,6 @@ class TestFinalizeEndpoint(unittest.TestCase):
                 asyncio.run(finalize_upload(
                     payload={"dataset_id": "nonexistent", "filename": "x.parquet"},
                     authorization="Bearer fake",
-                    workspace_id="ws1",
                     db=db,
                 ))
         self.assertEqual(ctx.exception.status_code, 404)
@@ -418,7 +412,6 @@ class TestFinalizeEndpoint(unittest.TestCase):
                 asyncio.run(finalize_upload(
                     payload={"dataset_id": "ds1", "filename": "data.parquet"},
                     authorization="Bearer fake",
-                    workspace_id="ws1",
                     db=db,
                 ))
         self.assertEqual(ctx.exception.status_code, 422)
@@ -448,7 +441,6 @@ class TestFinalizeEndpoint(unittest.TestCase):
             asyncio.run(finalize_upload(
                 payload={"dataset_id": "ds1", "filename": "data.parquet"},
                 authorization="Bearer fake",
-                workspace_id="ws1",
                 db=db,
             ))
         mock_inc.assert_called_once_with("user1", "datasets_uploaded", db)
@@ -527,7 +519,7 @@ class TestFileTooLargeErrorShape(unittest.TestCase):
         try:
             enforce_file_constraints(
                 plan=plan,
-                workspace_id="ws",
+                billing_user_id="u",
                 file_format="parquet",
                 upload_size_bytes=over,
                 db=db,
@@ -557,3 +549,4 @@ class TestFileTooLargeErrorShape(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

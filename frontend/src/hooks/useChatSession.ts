@@ -54,7 +54,6 @@ export function useChatSession() {
   const sendMessage = async (payload: {
     message: string;
     dataset_id: string;
-    workspace_id: string;
     project_id: string;
     conversation_history: ConversationMessage[];
     pipeline_steps?: Array<Record<string, unknown>>;
@@ -94,14 +93,12 @@ export function useChatSession() {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(payload.workspace_id ? { "X-Workspace-Id": payload.workspace_id } : {}),
         },
         signal: controller.signal,
         body: JSON.stringify({
           message: payload.message,
           session_id: sid,
           dataset_id: payload.dataset_id,
-          workspace_id: payload.workspace_id,
           project_id: payload.project_id,
           pipeline_steps: payload.pipeline_steps ?? [],
           plan_approved: payload.plan_approved ?? false,

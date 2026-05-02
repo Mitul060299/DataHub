@@ -123,7 +123,7 @@ class CleaningController:
         session_id: str,
         pipeline_steps: list[dict[str, Any]],
         plan_approved: bool,
-        workspace_id: str | None,
+        project_id: str | None,
         authorization: str | None,
         secondary_dataset_ids: list[str] | None = None,
         pending_plan: list[dict[str, Any]] | None = None,
@@ -139,7 +139,7 @@ class CleaningController:
             if not dataset:
                 raise HTTPException(status_code=404, detail="Dataset not found")
             request_user_id = get_current_user_id(authorization) or get_current_subject(authorization) or "agent"
-            effective_workspace_id = workspace_id or dataset.workspace_id or "default"
+            effective_project_id = project_id or getattr(dataset, "project_id", None)
         finally:
             _db.close()
 
@@ -152,7 +152,7 @@ class CleaningController:
             plan_approved=plan_approved,
             pending_plan=pending_plan or [],
             user_id=request_user_id,
-            workspace_id=effective_workspace_id,
+            project_id=effective_project_id or "",
             secondary_dataset_ids=secondary_dataset_ids or [],
             conversation_history=conversation_history or [],
             plan_pending_modification=plan_pending_modification,

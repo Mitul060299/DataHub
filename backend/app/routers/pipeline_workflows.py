@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.db import get_db
 from app.security import get_current_subject
-from app.services.plan_guard import resolve_user_plan, resolve_workspace_plan
+from app.services.plan_guard import resolve_user_plan, resolve_user_plan_by_id
 from app.services.pipeline_engine import PipelineEngine
 from app.services.rate_limiter import limiter
 from app.services.audit import audit_store
@@ -35,7 +35,6 @@ class CreatePipelineRequest(BaseModel):
     name: str
     steps: List[dict]
     description: Optional[str] = None
-    workspace_id: str = "default"
     is_public: bool = False
     execution_config: Dict[str, Any] = Field(default_factory=dict)
 
@@ -59,13 +58,11 @@ class RunPipelineRequest(BaseModel):
 class ClonePipelineRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    workspace_id: Optional[str] = None
 
 
 class CreateFromTemplateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    workspace_id: str = "default"
 
 
 class SharePipelineRequest(BaseModel):
@@ -134,7 +131,7 @@ async def instantiate_pipeline_template(
         name=payload.name or template["name"],
         steps=template["steps"],
         description=payload.description or template["description"],
-        workspace_id=payload.workspace_id,
+        workspace_id="default",
         execution_config={},
         is_public=False,
     )
@@ -166,7 +163,7 @@ async def create_pipeline(
         name=payload.name,
         steps=payload.steps,
         description=payload.description,
-        workspace_id=payload.workspace_id,
+        workspace_id="default",
         execution_config=payload.execution_config,
         is_public=payload.is_public,
     )
@@ -185,7 +182,6 @@ async def create_pipeline(
 
 @router.get("")
 async def list_pipelines(
-    workspace_id: Optional[str] = "default",
     status: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
     offset: int = Query(0, ge=0),
@@ -197,13 +193,11 @@ async def list_pipelines(
 
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
-    from ..services.workspace_access import get_visible_user_ids
-    from ..services.project_access import list_visible_owner_user_ids
-    visible = set(get_visible_user_ids(db, current_user_id, workspace_id or "default"))
+        from ..services.project_access import list_visible_owner_user_ids
+    visible = {current_user_id}
     visible.update(list_visible_owner_user_ids(current_user_id, db))
     visible = list(visible)
     pipelines, total = engine.list_pipelines(
-        workspace_id=workspace_id,
         status=status,
         limit=limit,
         offset=offset,
@@ -486,7 +480,7 @@ async def clone_pipeline(
             pipeline_id=pipeline_id,
             name=payload.name,
             description=payload.description,
-            workspace_id=payload.workspace_id,
+            workspace_id="default",
         )
         return {
             "success": True,
@@ -515,10 +509,8 @@ async def execute_pipeline(
     """Execute a pipeline with SSE streaming"""
     from app.services.usage_service import enforce_usage_limit, increment_usage as _inc_usage
     user_plan = resolve_user_plan(db, authorization)
-    # Resolve billing to workspace owner for collab workspaces
-    _pipeline = db.query(PipelineV2DB).filter(PipelineV2DB.id == pipeline_id).first()
-    _ws_id = (_pipeline.workspace_id if _pipeline and getattr(_pipeline, "workspace_id", None) else None) or "default"
-    billing_user_id, billing_plan = resolve_workspace_plan(_ws_id, current_user_id, db)
+    billing_user_id = current_user_id
+    billing_plan = resolve_user_plan_by_id(current_user_id, db)
     enforce_usage_limit(billing_user_id, billing_plan, "pipeline_runs", db)
     _inc_usage(billing_user_id, "pipeline_runs", db)
     # Audit trail

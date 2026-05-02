@@ -551,7 +551,6 @@ class PipelineEngine:
         name: str,
         steps: List[Dict[str, Any]],
         description: Optional[str] = None,
-        workspace_id: str = "default",
         execution_config: Optional[Dict[str, Any]] = None,
         is_public: bool = False,
     ) -> PipelineV2DB:
@@ -561,7 +560,7 @@ class PipelineEngine:
         pipeline = PipelineV2DB(
             id=str(uuid.uuid4()),
             user_id=self.user_id,
-            workspace_id=workspace_id,
+            workspace_id="default",
             name=name,
             description=description,
             type='manual',
@@ -623,7 +622,6 @@ class PipelineEngine:
     
     def list_pipelines(
         self,
-        workspace_id: str = "default",
         status: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
@@ -632,7 +630,6 @@ class PipelineEngine:
         """List user's pipelines"""
         user_ids = visible_user_ids if visible_user_ids else [self.user_id]
         query = self.db.query(PipelineV2DB).filter(
-            PipelineV2DB.workspace_id == workspace_id,
             PipelineV2DB.user_id.in_(user_ids)
         )
         
@@ -704,7 +701,6 @@ class PipelineEngine:
         pipeline_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        workspace_id: Optional[str] = None,
     ) -> PipelineV2DB:
         """Clone an existing pipeline into a new draft pipeline."""
 
@@ -720,7 +716,7 @@ class PipelineEngine:
         clone = PipelineV2DB(
             id=str(uuid.uuid4()),
             user_id=self.user_id,
-            workspace_id=workspace_id or source.workspace_id or "default",
+            workspace_id="default",
             name=name or f"{source.name} (copy)",
             description=description if description is not None else source.description,
             type=source.type or "manual",

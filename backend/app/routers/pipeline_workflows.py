@@ -18,6 +18,7 @@ from app.services.rate_limiter import limiter
 from app.services.audit import audit_store
 from app.models import AuditEntry
 from app.models_db import PipelineV2DB
+from app.services.project_access import list_visible_owner_user_ids
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipeline-workflows"])
 
@@ -193,7 +194,6 @@ async def list_pipelines(
 
     engine = _resolve_pipeline_engine(db, current_user_id, authorization)
 
-        from ..services.project_access import list_visible_owner_user_ids
     visible = {current_user_id}
     visible.update(list_visible_owner_user_ids(current_user_id, db))
     visible = list(visible)

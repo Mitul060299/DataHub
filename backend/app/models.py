@@ -779,9 +779,9 @@ class ProjectOut(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
-    colour: str
-    icon: str
-    workspace_id: str
+    colour: str = "#5b6af0"
+    icon: str = "folder"
+    workspace_id: Optional[str] = None
     user_id: Optional[str] = None
     pipeline_count: int = 0
     dashboard_count: int = 0

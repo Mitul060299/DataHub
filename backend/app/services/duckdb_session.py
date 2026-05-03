@@ -18,6 +18,8 @@ import concurrent.futures
 from pathlib import Path
 from typing import Optional
 
+from .duckdb.path_guard import guard_duckdb_sql_paths
+
 # ── Disk persistence ─────────────────────────────────────────────────────────
 # Each session gets a `.duckdb` file on disk so VIEWs survive process restarts
 # and brief Render free-tier suspensions.  Set DUCKDB_SESSION_DIR=":memory:" to
@@ -283,16 +285,18 @@ def register_table_from_sql(session_id: str, table_name: str, sql: str) -> int:
     Materialise a derived table from *sql* into the session connection and
     return the resulting row count.
     """
+    guarded_sql = guard_duckdb_sql_paths(sql)
     conn = get_connection(session_id)
-    conn.execute(f"CREATE OR REPLACE TABLE {table_name} AS {sql}")
+    conn.execute(f"CREATE OR REPLACE TABLE {table_name} AS {guarded_sql}")
     result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
     return int(result[0]) if result else 0
 
 
 def register_view_from_sql(session_id: str, view_name: str, sql: str) -> None:
     """Create a lazy VIEW from a SQL expression — zero RAM, deferred execution."""
+    guarded_sql = guard_duckdb_sql_paths(sql)
     conn = get_connection(session_id)
-    conn.execute(f"CREATE OR REPLACE VIEW {view_name} AS {sql}")
+    conn.execute(f"CREATE OR REPLACE VIEW {view_name} AS {guarded_sql}")
 
 
 def drop_table_or_view(session_id: str, name: str) -> None:
@@ -347,6 +351,9 @@ def execute_in_session(session_id: str, sql: str) -> list[dict]:
             f"Blocked SQL operation: write DML is not permitted in agent steps. "
             f"Starts with: {_stripped[:80]!r}"
         )
+
+    # ── 1b. Path guard — block COPY/ATTACH/read_* file access ───────────────
+    guard_duckdb_sql_paths(sql)
 
     # ── 2. Execute with timeout ─────────────────────────────────────────────
     conn = get_connection(session_id)

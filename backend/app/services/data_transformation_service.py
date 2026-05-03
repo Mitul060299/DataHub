@@ -291,7 +291,12 @@ def _transform_via_parquet(
             normalized_sql = "SELECT * FROM dataset"
 
         # Materialise the full transform result inside DuckDB.
-        conn.execute(f"CREATE TABLE result AS {normalized_sql}")
+        # Use _execute_statement so guard_duckdb_sql_paths is enforced on user SQL.
+        DuckDBService._execute_statement(
+            conn,
+            f"CREATE TABLE result AS {normalized_sql}",
+            allowed_paths=[source_path],
+        )
 
         total_rows: int = conn.execute("SELECT COUNT(*) FROM result").fetchone()[0]  # type: ignore[index]
 

@@ -431,6 +431,7 @@ class ApprovalRequestDB(Base):
 class WebhookDB(Base):
     __tablename__ = "webhooks"
     id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=True, index=True)
     target_url = Column(Text, nullable=False)
     event = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -311,9 +311,9 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
                 claims = _verify_app_token(token)
             if claims:
                 return _map_supabase_role(claims)
-        decoded = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")
-        parts = decoded.split("|")
-        return parts[1] if len(parts) > 2 else "viewer"
+        # Legacy base64 token format removed — it allowed forging arbitrary roles.
+        # All tokens must now be valid JWTs signed by Supabase or app_secret_key.
+        return "viewer"
     except Exception:
         return "viewer"
 
@@ -335,9 +335,9 @@ def get_current_subject(authorization: str | None = Header(default=None)) -> Opt
                     or claims.get("preferred_username")
                     or claims.get("sub")
                 )
-        decoded = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")
-        parts = decoded.split("|")
-        return parts[0] if parts else None
+        # Legacy base64 token format removed — it allowed identity forgery.
+        # All tokens must now be valid JWTs signed by Supabase or app_secret_key.
+        return None
     except Exception:
         return None
 

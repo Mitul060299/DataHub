@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..models import WebhookRegistration
 from ..models_db import WebhookDB
 from ..db import get_db
-from ..security import get_current_role, require_role
+from ..security import get_current_role, get_current_user_id, require_role
 from ..services.plan_guard import resolve_user_plan, enforce_webhooks
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -62,8 +62,9 @@ def register_hook(
         _validate_webhook_url(target_url)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    user_id = get_current_user_id(authorization)
     hook_id = str(uuid.uuid4())
-    db.add(WebhookDB(id=hook_id, target_url=target_url, event=event))
+    db.add(WebhookDB(id=hook_id, user_id=user_id, target_url=target_url, event=event))
     db.commit()
     return WebhookRegistration(hook_id=hook_id, target_url=target_url, event=event)
 
@@ -77,7 +78,11 @@ def list_hooks(
     require_role("viewer", role)
     user_plan = resolve_user_plan(db, authorization)
     enforce_webhooks(user_plan)
-    rows = db.query(WebhookDB).order_by(WebhookDB.created_at.desc()).all()
+    user_id = get_current_user_id(authorization)
+    q = db.query(WebhookDB)
+    if user_id:
+        q = q.filter(WebhookDB.user_id == user_id)
+    rows = q.order_by(WebhookDB.created_at.desc()).all()
     return [WebhookRegistration(hook_id=row.id, target_url=row.target_url, event=row.event) for row in rows]
 
 
@@ -91,9 +96,11 @@ def delete_hook(
     require_role("editor", role)
     user_plan = resolve_user_plan(db, authorization)
     enforce_webhooks(user_plan)
+    current_user_id = get_current_user_id(authorization)
     hook = db.query(WebhookDB).filter(WebhookDB.id == hook_id).first()
     if not hook:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Webhook not found")
+    if hook.user_id and hook.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this webhook")
     db.delete(hook)
     db.commit()

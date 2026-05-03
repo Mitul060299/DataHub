@@ -10,6 +10,29 @@ from ..config import settings
 _CACHE: Dict[str, Any] = {}
 _CACHE_EXPIRES: Dict[str, float] = {}
 
+# Server-side OIDC state store — prevents CSRF on the OIDC callback.
+# States expire after 10 minutes (more than enough for any real OIDC flow).
+_PENDING_STATES: Dict[str, float] = {}
+_STATE_TTL_SECONDS = 600  # 10 minutes
+
+
+def register_state(state: str) -> None:
+    """Record a state token before redirecting to the IdP."""
+    # Prune expired entries to avoid unbounded growth
+    now = time.time()
+    expired = [k for k, v in _PENDING_STATES.items() if v < now]
+    for k in expired:
+        del _PENDING_STATES[k]
+    _PENDING_STATES[state] = now + _STATE_TTL_SECONDS
+
+
+def consume_state(state: str) -> bool:
+    """Return True and remove the state if it is valid and unexpired, else False."""
+    expiry = _PENDING_STATES.pop(state, None)
+    if expiry is None:
+        return False
+    return time.time() < expiry
+
 
 def _cache_get(key: str) -> Optional[Any]:
     expires = _CACHE_EXPIRES.get(key)

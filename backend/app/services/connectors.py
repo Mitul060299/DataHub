@@ -1010,6 +1010,7 @@ class SnowflakeConnector:
         )
 
         if mode == "replace":
+            _validate_identifier(table, "table")
             cursor = conn.cursor()
             cursor.execute(f"TRUNCATE TABLE IF EXISTS {table}")
             cursor.close()

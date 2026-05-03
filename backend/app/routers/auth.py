@@ -4,7 +4,7 @@ from ..security import create_access_token
 from ..db import get_db
 from sqlalchemy.orm import Session
 from ..services.plan_guard import resolve_user_plan, enforce_sso
-from ..services.oidc import build_auth_url, exchange_code, fetch_userinfo, verify_id_token
+from ..services.oidc import build_auth_url, exchange_code, fetch_userinfo, verify_id_token, register_state, consume_state
 from ..config import settings
 from ..models import AuthToken, AuditEntry
 from ..services.audit import audit_store
@@ -16,6 +16,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login", response_model=AuthToken)
 @limiter.limit("10/minute")
 def login(request: Request, username: str) -> AuthToken:
+    # This endpoint is only available in non-production environments.
+    # In production, authentication is handled exclusively by Supabase.
+    if settings.app_env == "production":
+        raise HTTPException(
+            status_code=404,
+            detail="Not found",
+        )
     token_data = create_access_token(username, role="viewer")
     try:
         audit_store.add(AuditEntry(
@@ -42,6 +49,7 @@ def oidc_login(
     url = build_auth_url(state)
     if not url:
         raise HTTPException(status_code=400, detail="OIDC discovery failed")
+    register_state(state)
     return {"auth_url": url, "state": state}
 
 
@@ -59,9 +67,13 @@ def sso_status(
 
 
 @router.get("/oidc/callback", response_model=AuthToken)
-def oidc_callback(code: str) -> AuthToken:
+@limiter.limit("20/minute")
+def oidc_callback(request: Request, code: str, state: str | None = None) -> AuthToken:
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code")
+    # Validate state to prevent CSRF attacks on the OIDC flow.
+    if state is None or not consume_state(state):
+        raise HTTPException(status_code=400, detail="Invalid or expired OIDC state parameter")
     token_data = exchange_code(code)
     id_token = token_data.get("id_token")
     access_token = token_data.get("access_token")

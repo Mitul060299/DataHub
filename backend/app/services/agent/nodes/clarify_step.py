@@ -5,23 +5,26 @@ import os
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
+from ..model_router import select_model
 from ..state import AgentState
 from .planner import _dumps
 
 _log = logging.getLogger(__name__)
 
-_llm: ChatGroq | None = None
+_llm_cache: dict[str, ChatGroq] = {}
 
 
 def _get_llm() -> ChatGroq:
-    global _llm
-    if _llm is None:
-        _llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model = select_model("converse")
+    cached = _llm_cache.get(model)
+    if cached is None:
+        cached = ChatGroq(
+            model=model,
             temperature=0.3,
             groq_api_key=os.getenv("GROQ_API_KEY"),
         )
-    return _llm
+        _llm_cache[model] = cached
+    return cached
 
 CLARIFY_PROMPT = """You are a helpful data analyst assistant. The user's request needs one clarifying question before you can proceed.
 

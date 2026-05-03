@@ -6,24 +6,27 @@ import os
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
+from ..model_router import select_model
 from ..prompts import INTENT_CLASSIFIER_PROMPT
 from ..state import AgentState
 from .planner import _dumps
 
 _logger = logging.getLogger(__name__)
 
-_llm: ChatGroq | None = None
+_llm_cache: dict[str, ChatGroq] = {}
 
 
 def _get_llm() -> ChatGroq:
-    global _llm
-    if _llm is None:
-        _llm = ChatGroq(
-            model=os.getenv("GROQ_INTENT_MODEL", "llama-3.1-8b-instant"),
+    model = select_model("classify")
+    cached = _llm_cache.get(model)
+    if cached is None:
+        cached = ChatGroq(
+            model=model,
             temperature=0,
             groq_api_key=os.getenv("GROQ_API_KEY"),
         )
-    return _llm
+        _llm_cache[model] = cached
+    return cached
 
 VALID_INTENTS = {
     "clean", "validate", "filter", "transform", "add_column",

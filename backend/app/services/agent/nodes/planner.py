@@ -81,18 +81,21 @@ def _sanitize_depends_on(plan: list[dict], logger=None) -> list[dict]:
         step["depends_on"] = cleaned
     return plan
 
-_llm: ChatGroq | None = None
+_llm_cache: dict[str, ChatGroq] = {}
 
 
 def _get_llm() -> ChatGroq:
-    global _llm
-    if _llm is None:
-        _llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    from ..model_router import select_model
+    model = select_model("plan")
+    cached = _llm_cache.get(model)
+    if cached is None:
+        cached = ChatGroq(
+            model=model,
             temperature=0.1,
             groq_api_key=os.getenv("GROQ_API_KEY"),
         )
-    return _llm
+        _llm_cache[model] = cached
+    return cached
 
 
 async def planner(state: AgentState) -> dict:

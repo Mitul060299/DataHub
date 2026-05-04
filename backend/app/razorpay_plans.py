@@ -45,12 +45,14 @@ _TEST_PLAN = "plan_SW9abXgqVnqDXQ"
 #     team         → plan_Sk9Jyri0JaFOqr   (₹8,999/mo)
 #     business     → plan_Sk9L0dcmaAgoiU   (₹17,999/mo)
 #
-# USD plans require Razorpay International KYC approval. Until they're
-# created, the USD plan IDs stay as REPLACE_ME placeholders and any
-# attempt to subscribe in USD is rejected by the billing router with a
-# friendly "USD billing coming soon" message (see ``USD_BILLING_ENABLED``
-# config flag). Once approved, override via env vars:
-#     RAZORPAY_STARTER_USD_PLAN, RAZORPAY_PRO_USD_PLAN,
+# Live USD plan IDs (created 2026-05-04 — International KYC approved):
+#     starter      → plan_SlAVA70nI1Jf9c   ($19/mo)
+#     professional → plan_SlAVAJtYi6MlQH   ($79/mo)
+#     team         → plan_SlAVAejGisc8gs   ($179/mo)
+#     business     → plan_SlAVAuwTe4F2Nm   ($349/mo)
+#
+# USD plans use the hardcoded IDs above as defaults; override via env vars
+# if needed: RAZORPAY_STARTER_USD_PLAN, RAZORPAY_PRO_USD_PLAN,
 #     RAZORPAY_TEAM_USD_PLAN, RAZORPAY_BUSINESS_USD_PLAN
 # ---------------------------------------------------------------------------
 
@@ -60,7 +62,7 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
             "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9InffRzS4NjI",
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_STARTER_USD_PLAN", "plan_USD_STARTER_REPLACE_ME"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_STARTER_USD_PLAN", "plan_SlAVA70nI1Jf9c"),
         },
     },
     "professional": {
@@ -68,7 +70,7 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
             "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9JPF6MjLmqLr",
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_USD_PLAN", "plan_USD_PRO_REPLACE_ME"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_USD_PLAN", "plan_SlAVAJtYi6MlQH"),
         },
     },
     "team": {
@@ -76,7 +78,7 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
             "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9Jyri0JaFOqr",
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_TEAM_USD_PLAN", "plan_USD_TEAM_REPLACE_ME"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_TEAM_USD_PLAN", "plan_SlAVAejGisc8gs"),
         },
     },
     "business": {
@@ -84,7 +86,7 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
             "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9L0dcmaAgoiU",
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_BUSINESS_USD_PLAN", "plan_USD_BUSINESS_REPLACE_ME"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_BUSINESS_USD_PLAN", "plan_SlAVAuwTe4F2Nm"),
         },
     },
 }

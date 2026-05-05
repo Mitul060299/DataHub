@@ -185,6 +185,20 @@ class AgentGraphService:
                 "final_response": "",
                 "chart_config": None,
                 "query_results": None,
+                # Auto mode resume — carry forward so route_intent_auto fast-paths
+                # to execute_step_auto instead of re-running goal_parser/auto_planner.
+                "auto_mode": snapshot.get("auto_mode", False),
+                "auto_plan": snapshot.get("auto_plan", []),
+                "auto_goal": snapshot.get("auto_goal"),
+                "auto_goal_raw": snapshot.get("auto_goal_raw", ""),
+                "dry_run": snapshot.get("dry_run", False),
+                "prior_pipeline": snapshot.get("prior_pipeline"),
+                "total_tokens_used": snapshot.get("total_tokens_used", 0),
+                "reflection_attempts": snapshot.get("reflection_attempts", {}),
+                "reflection_history": snapshot.get("reflection_history", {}),
+                "goal_verifier_recursions": snapshot.get("goal_verifier_recursions", 0),
+                "interrupt_pending": False,
+                "current_rule_index": snapshot.get("current_rule_index", 0),
             }
         else:
             initial_state = cls._build_initial_state(
@@ -381,16 +395,8 @@ class AgentGraphService:
                             "total_rules": total_rules,
                         }
 
-                elif node_name == "auto_planner":
-                    output = data.get("output", {})
-                    plan = output.get("auto_plan", [])
-                    if plan:
-                        yield {
-                            "type": "agent.plan",
-                            "plan": plan,
-                            "plan_type": "auto",
-                            "message": f"Auto plan ready — {len(plan)} step{'s' if len(plan) != 1 else ''}",
-                        }
+                # auto_planner feeds plan_presenter; plan is emitted there
+                # (same handler as manual planner — no separate event needed)
 
                 elif node_name == "step_validator":
                     output = data.get("output", {})

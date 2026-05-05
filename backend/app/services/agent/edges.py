@@ -51,6 +51,20 @@ def route_after_present(state: AgentState) -> str:
     return "__end__"
 
 
+def route_after_present_unified(state: AgentState) -> str:
+    """Unified post-plan_presenter routing used by both manual and auto paths.
+
+    Manual path: plan_approved → execute_step
+    Auto path:   plan_approved → execute_step_auto
+    Waiting for approval in both cases: __end__ (graph suspends at checkpoint)
+    """
+    if not state.get("plan_approved"):
+        return "__end__"
+    if state.get("auto_mode"):
+        return "execute_step_auto"
+    return "execute_step"
+
+
 def route_after_execute(state: AgentState) -> str:
     last_results = state.get("execution_results", [])
     last_result = last_results[-1] if last_results else {}
@@ -87,6 +101,10 @@ def route_intent_auto(state: AgentState) -> str:
     if state.get("auto_mode") or intent == "goal":
         # Inject auto_mode flag so downstream auto nodes behave correctly
         state["auto_mode"] = True  # type: ignore[index]
+        # Resume path: plan was already built and approved — jump straight to
+        # execution without re-running goal_parser / auto_planner.
+        if state.get("plan_approved") and state.get("auto_plan"):
+            return "execute_step_auto"
         if state.get("prior_pipeline"):
             return "prior_pipeline_parser"
         return "goal_parser"

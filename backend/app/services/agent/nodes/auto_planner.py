@@ -144,4 +144,24 @@ async def auto_planner(state: AgentState) -> dict:
         steps.append(step)
 
     _logger.info("auto_planner: generated %d steps", len(steps))
-    return {"auto_plan": steps, "current_rule_index": 0, "reflection_attempts": {}}
+
+    # Also write into the shared `plan` field so plan_presenter can display
+    # auto steps identically to manual mode (same plan card, same approve button).
+    plan_compat = [
+        {
+            "step_number": s["step_number"],
+            "operation": s["operation"],
+            "description": s["description"],
+            "estimated_rows": "—",
+            "sql": s.get("sql", ""),
+            "depends_on": s.get("depends_on", []),
+        }
+        for s in steps
+    ]
+
+    return {
+        "auto_plan": steps,
+        "plan": plan_compat,
+        "current_rule_index": 0,
+        "reflection_attempts": {},
+    }

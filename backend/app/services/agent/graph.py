@@ -13,6 +13,7 @@ from .edges import (
     route_after_goal_parser,
     route_after_goal_verifier,
     route_after_present,
+    route_after_present_unified,
     route_after_prior_pipeline_parser,
     route_after_reflect,
     route_after_reflection_v2,
@@ -100,8 +101,8 @@ def build_agent_graph():
     )
     graph.add_conditional_edges(
         "plan_presenter",
-        route_after_present,
-        {"execute_step": "execute_step", "__end__": END},
+        route_after_present_unified,
+        {"execute_step": "execute_step", "execute_step_auto": "execute_step_auto", "__end__": END},
     )
     graph.add_conditional_edges(
         "execute_step",
@@ -139,7 +140,7 @@ def build_agent_graph():
         route_after_drift_detector,
         {"auto_planner": "auto_planner"},
     )
-    graph.add_edge("auto_planner", "execute_step_auto")
+    graph.add_edge("auto_planner", "plan_presenter")
 
     graph.add_conditional_edges(
         "execute_step_auto",

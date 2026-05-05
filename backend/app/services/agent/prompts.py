@@ -13,6 +13,7 @@ INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the use
 - sql_query  : run a read-only SQL query or ad-hoc aggregation
 - visualise  : create a chart, graph, or visual summary
 - export     : save a table as an artifact (CSV / Excel / Parquet) and get a download link
+- goal       : the user states multiple data rules, business objectives, or quality targets to achieve in one go (e.g. "remove duplicates, fill nulls, standardise country codes and flag negatives"). Use this when the message contains TWO OR MORE distinct rules/objectives that should all be satisfied together.
 - clarify    : the user's request is too ambiguous to act on — needs one clarifying question
 - converse   : greeting, question about the tool, or anything not data-related
 

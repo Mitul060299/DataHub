@@ -33,6 +33,7 @@ VALID_INTENTS = {
     "clean", "validate", "filter", "transform", "add_column",
     "summarise", "pivot", "union", "join", "reconcile",
     "sql_query", "visualise", "export", "converse", "clarify",
+    "goal",
 }
 
 

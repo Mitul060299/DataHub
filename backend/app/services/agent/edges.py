@@ -77,9 +77,16 @@ def route_after_reflect(state: AgentState) -> str:
 # ---------------------------------------------------------------------------
 
 def route_intent_auto(state: AgentState) -> str:
-    """Branch after intent_classifier: auto mode vs manual mode."""
-    if state.get("auto_mode"):
-        # If a prior pipeline was supplied, parse it first
+    """Branch after intent_classifier: route to auto pipeline when needed.
+
+    The auto (goal) path is taken when:
+    - The endpoint explicitly set auto_mode=True (legacy /api/auto/run), OR
+    - The intent classifier returned "goal" (multi-rule request via chat)
+    """
+    intent = state.get("intent", "converse")
+    if state.get("auto_mode") or intent == "goal":
+        # Inject auto_mode flag so downstream auto nodes behave correctly
+        state["auto_mode"] = True  # type: ignore[index]
         if state.get("prior_pipeline"):
             return "prior_pipeline_parser"
         return "goal_parser"

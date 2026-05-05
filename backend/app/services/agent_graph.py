@@ -209,6 +209,19 @@ class AgentGraphService:
                 initial_state["table_registry"] = dict(prior_snapshot["table_registry"])
             if not initial_state.get("pipeline_steps") and prior_snapshot.get("pipeline_steps"):
                 initial_state["pipeline_steps"] = list(prior_snapshot["pipeline_steps"])
+            # Populate auto_goal_raw from the user message so goal_parser has
+            # its input when intent=="goal" routes the request to the auto path.
+            initial_state["auto_goal_raw"] = user_message
+            # Auto mode fields — will be ignored for non-goal intents
+            initial_state.setdefault("auto_mode", False)
+            initial_state.setdefault("dry_run", False)
+            initial_state.setdefault("prior_pipeline", None)
+            initial_state.setdefault("total_tokens_used", 0)
+            initial_state.setdefault("reflection_attempts", {})
+            initial_state.setdefault("reflection_history", {})
+            initial_state.setdefault("goal_verifier_recursions", 0)
+            initial_state.setdefault("interrupt_pending", False)
+                initial_state["pipeline_steps"] = list(prior_snapshot["pipeline_steps"])
 
         try:
             async for event in agent_graph.astream_events(initial_state, config=config, version="v2"):
@@ -354,6 +367,54 @@ class AgentGraphService:
 
                 elif node_name == "pipeline_recorder":
                     yield {"type": "agent.thinking", "message": "Saving pipeline steps..."}
+
+                # ── Auto Mode node events ──────────────────────────────────
+                elif node_name == "goal_parser":
+                    output = data.get("output", {})
+                    ag = output.get("auto_goal") or {}
+                    goal_summary = ag.get("goal_summary", "")
+                    total_rules = ag.get("total_rules", 0)
+                    if goal_summary:
+                        yield {
+                            "type": "agent.goal.parsed",
+                            "goal_summary": goal_summary,
+                            "total_rules": total_rules,
+                        }
+
+                elif node_name == "auto_planner":
+                    output = data.get("output", {})
+                    plan = output.get("auto_plan", [])
+                    if plan:
+                        yield {
+                            "type": "agent.plan",
+                            "plan": plan,
+                            "plan_type": "auto",
+                            "message": f"Auto plan ready — {len(plan)} step{'s' if len(plan) != 1 else ''}",
+                        }
+
+                elif node_name == "step_validator":
+                    output = data.get("output", {})
+                    lv = output.get("last_validation") or {}
+                    if lv:
+                        yield {
+                            "type": "agent.rule.validated",
+                            "rule_id": lv.get("rule_id"),
+                            "passed": lv.get("passed"),
+                            "step_number": lv.get("step_number"),
+                        }
+
+                elif node_name == "goal_verifier":
+                    output = data.get("output", {})
+                    gr = output.get("goal_report") or {}
+                    if gr:
+                        yield {
+                            "type": "agent.goal.report",
+                            "rules_satisfied": gr.get("rules_satisfied", 0),
+                            "rules_failed": gr.get("rules_failed", 0),
+                            "rules_skipped": gr.get("rules_skipped", 0),
+                            "total_rules": gr.get("total_rules", 0),
+                            "duration_seconds": gr.get("duration_seconds", 0),
+                        }
 
                 elif node_name == "responder":
                     input_state = data.get("input", {})

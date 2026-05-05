@@ -4,8 +4,10 @@
  * Drop-in replacement for the Manual chat panel when mode === "auto".
  * Uses inline styles consistent with the app's CSS-variable dark theme.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAutoRunSession } from "../hooks/useAutoRunSession";
+import { exportDatasetCsv, fetchDatasetPipelineSteps } from "../api";
+import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { AutoRunFeed } from "./AutoRunFeed";
 import { AutoInterruptCard } from "./AutoInterruptCard";
 import { AutoGoalReport } from "./AutoGoalReport";
@@ -18,8 +20,57 @@ interface Props {
 
 export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
   const { state, start, resume, cancel, approvePlan, reset } = useAutoRunSession();
+  const { replaceSteps } = usePipelineContext();
   const [goal, setGoal] = useState("");
   const [dryRun, setDryRun] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  // When the run completes, load the executed steps from the DB into
+  // PipelineContext so the Pipeline panel reflects the auto run's output.
+  useEffect(() => {
+    if (state.status !== "complete" || !datasetId) return;
+    fetchDatasetPipelineSteps(datasetId)
+      .then((rawSteps) => {
+        const mapped: PipelineStep[] = (rawSteps as Record<string, unknown>[]).map((s) => ({
+          id: (s.id as string) || crypto.randomUUID(),
+          stepNumber: (s.stepNumber as number) ?? 0,
+          operation: (s.operation as string) ?? "transform",
+          description: (s.description as string) ?? "",
+          sql: (s.sql as string | undefined),
+          affectedRows: (s.affectedRows as string | undefined),
+          appliedAt: s.appliedAt ? new Date(s.appliedAt as string) : new Date(),
+          output_table: (s.output_table as string | undefined),
+          input_tables: (s.input_tables as string[] | undefined),
+          row_count_before: (s.row_count_before as number | null | undefined) ?? null,
+          row_count_after: (s.row_count_after as number | null | undefined) ?? null,
+          execution_time_ms: (s.execution_time_ms as number | null | undefined) ?? null,
+          snapshot_path: (s.snapshot_path as string | null | undefined) ?? null,
+          status: (s.status as "completed" | "failed" | "pending" | undefined) ?? "completed",
+        }));
+        if (mapped.length > 0) replaceSteps(mapped);
+      })
+      .catch(() => { /* best-effort */ });
+  }, [state.status, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const blob = await exportDatasetCsv(datasetId) as Blob;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dataset-${datasetId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently ignore; user can retry
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const isIdle        = state.status === "idle";
   const isRunning     = state.status === "running";
@@ -207,7 +258,7 @@ export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
           )}
 
           {/* Action row */}
-          <div style={{ display: "flex", gap: 6, paddingTop: 2 }}>
+          <div style={{ display: "flex", gap: 6, paddingTop: 2, flexWrap: "wrap" }}>
             {isRunning && (
               <button
                 onClick={cancel}
@@ -240,7 +291,39 @@ export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
                 New Goal
               </button>
             )}
+            {isComplete && (
+              <button
+                onClick={() => { void handleDownload(); }}
+                disabled={downloading}
+                style={{
+                  fontSize: 11,
+                  padding: "4px 12px",
+                  borderRadius: 7,
+                  border: "1px solid var(--bd2)",
+                  background: "transparent",
+                  color: downloading ? "var(--tx2)" : "var(--gr)",
+                  cursor: downloading ? "not-allowed" : "pointer",
+                }}
+              >
+                {downloading ? "Downloading…" : "↓ Download CSV"}
+              </button>
+            )}
           </div>
+
+          {/* Pipeline panel hint — shown after completion */}
+          {isComplete && state.planSteps.length > 0 && (
+            <div style={{
+              fontSize: 11,
+              color: "var(--tx2)",
+              padding: "6px 10px",
+              borderRadius: 7,
+              background: "var(--bg3)",
+              border: "1px solid var(--bd)",
+              lineHeight: 1.5,
+            }}>
+              Steps loaded into the <strong style={{ color: "var(--tx1)" }}>Pipeline</strong> panel — open it to rename, reorder, delete or re-run individual steps.
+            </div>
+          )}
         </div>
       )}
     </div>

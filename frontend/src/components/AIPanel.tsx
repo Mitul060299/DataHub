@@ -18,7 +18,6 @@ import { capture } from "../lib/posthog";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
 import { getAuthToken } from "../utils/auth";
-import { AutoGoalPanel } from "./AutoGoalPanel";
 
 interface TileCreatedData {
   chart_id: string;
@@ -268,7 +267,6 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [agentMode, setAgentMode] = useState<"manual" | "auto">("manual");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [editHoverId, setEditHoverId] = useState<string | null>(null);
@@ -680,6 +678,54 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       }
       case "ping": {
         // Server-sent keep-alive — silently ignore.
+        break;
+      }
+      case "agent.goal.parsed": {
+        // Emitted when a multi-rule goal is detected and parsed
+        const summary = typeof event.goal_summary === "string" ? event.goal_summary : "";
+        const total = typeof event.total_rules === "number" ? event.total_rules : 0;
+        if (summary) {
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant" as const,
+              content: `⚒ Identified ${total} rule${total !== 1 ? "s" : ""}: “${summary}”`,
+            },
+          ]);
+        }
+        break;
+      }
+      case "agent.goal.report": {
+        // Emitted when goal_verifier finishes checking all rules
+        const satisfied = typeof event.rules_satisfied === "number" ? event.rules_satisfied : 0;
+        const failed = typeof event.rules_failed === "number" ? event.rules_failed : 0;
+        const total = typeof event.total_rules === "number" ? event.total_rules : 0;
+        const secs = typeof event.duration_seconds === "number" ? event.duration_seconds : 0;
+        const pct = total > 0 ? Math.round((satisfied / total) * 100) : 0;
+        const emoji = pct === 100 ? "✅" : pct >= 80 ? "⚠️" : "❌";
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: `${emoji} Goal report: ${satisfied}/${total} rules satisfied (${pct}%) in ${secs.toFixed(1)}s${failed > 0 ? ` — ${failed} failed` : ""}.`,
+          },
+        ]);
+        break;
+      }
+      case "agent.rule.validated": {
+        // Per-rule validation tick — show compact inline progress
+        const ruleId = event.rule_id != null ? `Rule ${event.rule_id as number}` : "Rule";
+        const passed = event.passed === true;
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: `${passed ? "✔" : "✘"} ${ruleId} ${passed ? "satisfied" : "failed"}`,
+          },
+        ]);
         break;
       }
       case "column_added": {
@@ -1125,39 +1171,14 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           <span style={{ color: "var(--tx0)" }}>AI Agent</span>
         </span>
         <span style={{ display: "inline-flex", gap: 4, alignItems: "center", minWidth: 0 }}>
-          {/* Mode switcher — segmented control */}
-          <span style={{ display: "inline-flex", borderRadius: 6, border: "1px solid var(--bd2)", overflow: "hidden", fontSize: 11, flexShrink: 0 }}>
-            {(["manual", "auto"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setAgentMode(m)}
-                style={{
-                  padding: "3px 10px",
-                  background: agentMode === m ? "var(--ac)" : "transparent",
-                  color: agentMode === m ? "#fff" : "var(--tx1)",
-                  border: "none",
-                  borderRight: m === "manual" ? "1px solid var(--bd2)" : "none",
-                  cursor: "pointer",
-                  fontWeight: agentMode === m ? 600 : 400,
-                  fontSize: 11,
-                  letterSpacing: "0.02em",
-                  transition: "background 0.15s, color 0.15s",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {m === "auto" ? "⚡ Auto" : "Chat"}
-              </button>
-            ))}
-          </span>
-
-          {/* Quality button — shown for both modes when dataset loaded */}
+          {/* Quality report button */}
           {dataset ? (
             <button
               className="btn"
-              style={{ fontSize: 10, padding: "3px 7px", opacity: (analyzingDataset || agentMode === "auto") ? 0.45 : 1, flexShrink: 0 }}
-              onClick={() => { if (agentMode === "manual") void runDataQualityReport(); }}
-              disabled={analyzingDataset || agentMode === "auto"}
-              title={agentMode === "auto" ? "Quality report available in Chat mode" : "Run data quality report"}
+              style={{ fontSize: 10, padding: "3px 7px", opacity: analyzingDataset ? 0.45 : 1, flexShrink: 0 }}
+              onClick={() => { void runDataQualityReport(); }}
+              disabled={analyzingDataset}
+              title="Run data quality report"
             >
               {analyzingDataset ? "…" : <><span style={{ marginRight: 3, verticalAlign: "middle", display: "inline-flex" }}><IconBarChart size={12} /></span>Quality</>}
             </button>
@@ -1169,17 +1190,8 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         </span>
       </header>
 
-      {agentMode === "auto" && (
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-          <AutoGoalPanel
-            datasetId={dataset?.id ?? ""}
-            projectId={projectId}
-            sessionId={sessionId ?? undefined}
-          />
-        </div>
-      )}
-      {agentMode === "manual" && (
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
+      {/* Chat UI — always shown */}
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
         {!dataset ? (
           <EmptyStateChatPanel
             hasDataset={false}
@@ -1484,9 +1496,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           </div>
         ) : null}
       </div>
-      )}
 
-      {agentMode === "manual" && (
       <div style={{ borderTop: "1px solid var(--bd)", padding: 10 }}>
         <textarea
           ref={textareaRef}
@@ -1513,7 +1523,6 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           }}
         />
       </div>
-      )}
     </aside>
   );
 }

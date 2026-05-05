@@ -66,12 +66,14 @@ def route_after_execute(state: AgentState) -> str:
         if last_result.get("error"):
             return "reflection_v2"
         auto_plan = state.get("auto_plan", [])
+        # current_rule_index holds the JUST-EXECUTED step index (set by _step_counter).
+        # Decide validator based on the step that was just run, not the next one.
         current_idx = state.get("current_rule_index", 0)
+        current_step = auto_plan[current_idx] if current_idx < len(auto_plan) else {}
         next_idx = current_idx + 1
+        if current_step.get("needs_validator", True):
+            return "step_validator"
         if next_idx < len(auto_plan):
-            step = auto_plan[next_idx]
-            if step.get("needs_validator", True):
-                return "step_validator"
             return "execute_step"
         return "goal_verifier"
 
@@ -106,10 +108,9 @@ def route_intent_auto(state: AgentState) -> str:
     """
     intent = state.get("intent", "converse")
     if state.get("auto_mode") or intent == "goal":
-        # Inject auto_mode flag so downstream auto nodes behave correctly
-        state["auto_mode"] = True  # type: ignore[index]
-        # Resume path: plan was already built and approved — jump straight to
-        # execution without re-running goal_parser / auto_planner.
+        # NOTE: do NOT mutate state here — routing functions must be side-effect-free.
+        # auto_mode=True is written by auto_planner in its return dict (checkpointed).
+        # Resume path: plan was already built and approved — jump straight to execution.
         if state.get("plan_approved") and state.get("auto_plan"):
             return "execute_step"
         if state.get("prior_pipeline"):

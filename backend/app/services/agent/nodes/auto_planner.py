@@ -162,6 +162,7 @@ async def auto_planner(state: AgentState) -> dict:
     return {
         "auto_plan": steps,
         "plan": plan_compat,
+        "auto_mode": True,           # persisted via node return — not set in routing fn
         "current_rule_index": 0,
         "reflection_attempts": {},
     }

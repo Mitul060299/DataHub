@@ -4,6 +4,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+from ..edges import _next_ready_step
 from ..state import AgentState, ExecutionResult, TableRegistryEntry
 from ....db import SessionLocal
 from ....models_db import DatasetMetaDB, User
@@ -150,7 +151,6 @@ async def execute_step(state: AgentState) -> dict:
     if auto_mode:
         # Find next step ready to run from completed_step_numbers (handles
         # branching plans correctly via depends_on).
-        from ..edges import _next_ready_step
         completed = state.get("completed_step_numbers", [])
         idx = _next_ready_step(plan, completed)
         if idx < 0:

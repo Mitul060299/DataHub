@@ -105,7 +105,7 @@ def build_agent_graph():
             "reflect": "reflect",
             "execute_step": "execute_step",
             "pipeline_recorder": "pipeline_recorder",
-            # Auto path destinations (route_after_execute_auto is called when auto_mode is set)
+            # Auto path destinations
             "step_validator": "step_validator",
             "reflection_v2": "reflection_v2",
             "goal_verifier": "goal_verifier",

@@ -139,23 +139,39 @@ def _resolve_input_table(step: dict, state: AgentState) -> str:
 
 
 async def execute_step(state: AgentState) -> dict:
-    # Auto mode uses current_rule_index; manual mode uses current_step_index.
-    # Both point into state["plan"] (auto_planner writes plan_compat there).
+    # Auto mode and manual mode share state["plan"] (auto_planner writes a
+    # plan_compat into the same field) but use different counter semantics:
+    #   - manual: current_step_index = NEXT step to execute (incremented on exit)
+    #   - auto:   current_rule_index = step JUST executed (per step_validator's
+    #     contract; downstream routers compute next as current_rule_index + 1)
     auto_mode = bool(state.get("auto_mode"))
-    if auto_mode:
-        idx = state.get("current_rule_index", 0)
-    else:
-        idx = state["current_step_index"]
     plan = state["plan"]
 
+    if auto_mode:
+        # Find next step ready to run from completed_step_numbers (handles
+        # branching plans correctly via depends_on).
+        from ..edges import _next_ready_step
+        completed = state.get("completed_step_numbers", [])
+        idx = _next_ready_step(plan, completed)
+        if idx < 0:
+            idx = len(plan)
+    else:
+        idx = state["current_step_index"]
+
     def _step_counter(next_idx: int) -> dict:
-        """Return the correct counter key for the current mode."""
+        """Return the correct counter key for the current mode.
+
+        Manual: writes the NEXT step index (next_idx, i.e. idx+1 from caller).
+        Auto:   writes the JUST-EXECUTED step index (next_idx - 1, i.e. idx)
+                because step_validator + route_after_execute expect that.
+        """
         if auto_mode:
-            return {"current_rule_index": next_idx}
+            return {"current_rule_index": next_idx - 1}
         return {"current_step_index": next_idx}
 
     if idx >= len(plan):
-        return _step_counter(idx)
+        # Plan exhausted — leave counters untouched so routers can finalize.
+        return {}
 
     step = plan[idx]
 

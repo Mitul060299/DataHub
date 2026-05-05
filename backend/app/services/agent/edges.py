@@ -111,7 +111,7 @@ def route_intent_auto(state: AgentState) -> str:
         # Resume path: plan was already built and approved — jump straight to
         # execution without re-running goal_parser / auto_planner.
         if state.get("plan_approved") and state.get("auto_plan"):
-            return "execute_step_auto"
+            return "execute_step"
         if state.get("prior_pipeline"):
             return "prior_pipeline_parser"
         return "goal_parser"

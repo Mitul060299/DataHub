@@ -27,12 +27,16 @@ def upgrade() -> None:
 
     existing_indexes = {idx["name"] for idx in inspector.get_indexes("dataset_meta")}
     if "idx_datasets_user_workspace" not in existing_indexes:
-        op.create_index(
-            "idx_datasets_user_workspace",
-            "dataset_meta",
-            ["user_id", "workspace_id"],
-            unique=False,
-        )
+        # Skip if workspace_id column was already dropped by a later migration
+        # / startup DDL; the user_id-only index is created by a later migration.
+        cols_now = {col["name"] for col in inspector.get_columns("dataset_meta")}
+        if "workspace_id" in cols_now:
+            op.create_index(
+                "idx_datasets_user_workspace",
+                "dataset_meta",
+                ["user_id", "workspace_id"],
+                unique=False,
+            )
 
 
 def downgrade() -> None:

@@ -101,6 +101,16 @@ def upgrade() -> None:
         )
 
     # ── 3. Data migration: create "Default Project" per user and assign rows ──
+    # Skip the whole backfill if workspace_id has already been removed from any
+    # source table (post-workspace removal in migration 0067 / startup DDL).
+    _backfill_tables = ("projects", "pipelines_v2", "dashboards_v2", "data_sources")
+    _backfill_safe = all(
+        _has_column(bind, t, "workspace_id") if t != "data_sources" else True
+        for t in _backfill_tables
+    )
+    if not _backfill_safe:
+        return
+
     op.execute(sa.text("""
         INSERT INTO projects (id, user_id, workspace_id, name, colour, icon, created_at, updated_at)
         SELECT

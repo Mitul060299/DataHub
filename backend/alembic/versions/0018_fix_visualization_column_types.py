@@ -145,6 +145,16 @@ def _alter_with_policy_handling(
     if not inspector.has_table(table_name):
         return
 
+    # Skip alterations targeting columns that no longer exist
+    # (e.g. workspace_id was dropped by a later migration / startup DDL).
+    existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+    alterations = [
+        a for a in alterations
+        if str(a.get("column_name") or "").strip() in existing_cols
+    ]
+    if not alterations:
+        return
+
     column_names: list[str] = []
     for alter in alterations:
         column_name = str(alter.get("column_name") or "").strip()

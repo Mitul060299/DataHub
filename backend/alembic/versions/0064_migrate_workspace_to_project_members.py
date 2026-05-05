@@ -41,6 +41,11 @@ def upgrade() -> None:
             return
         if "projects" not in table_names:
             return
+        # Skip if projects.workspace_id was already dropped (post-workspace removal).
+        projects_cols = {c["name"] for c in inspector.get_columns("projects")}
+        wm_cols = {c["name"] for c in inspector.get_columns("workspace_members")}
+        if "workspace_id" not in projects_cols or "workspace_id" not in wm_cols:
+            return
     except Exception:
         pass
 

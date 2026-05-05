@@ -1124,41 +1124,46 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           <IconZap size={14} color="var(--ac)" />
           <span style={{ color: "var(--tx0)" }}>AI Agent</span>
         </span>
-        <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-          {/* Mode switcher */}
-          <span style={{ display: "inline-flex", borderRadius: 6, border: "1px solid var(--bd)", overflow: "hidden", fontSize: 11 }}>
+        <span style={{ display: "inline-flex", gap: 4, alignItems: "center", minWidth: 0 }}>
+          {/* Mode switcher — segmented control */}
+          <span style={{ display: "inline-flex", borderRadius: 6, border: "1px solid var(--bd2)", overflow: "hidden", fontSize: 11, flexShrink: 0 }}>
             {(["manual", "auto"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setAgentMode(m)}
                 style={{
-                  padding: "2px 9px",
+                  padding: "3px 10px",
                   background: agentMode === m ? "var(--ac)" : "transparent",
                   color: agentMode === m ? "#fff" : "var(--tx1)",
                   border: "none",
+                  borderRight: m === "manual" ? "1px solid var(--bd2)" : "none",
                   cursor: "pointer",
                   fontWeight: agentMode === m ? 600 : 400,
-                  textTransform: "capitalize",
+                  fontSize: 11,
+                  letterSpacing: "0.02em",
+                  transition: "background 0.15s, color 0.15s",
+                  whiteSpace: "nowrap",
                 }}
               >
-                {m}
+                {m === "auto" ? "⚡ Auto" : "Chat"}
               </button>
             ))}
           </span>
 
-          {agentMode === "manual" && dataset ? (
+          {/* Quality button — shown for both modes when dataset loaded */}
+          {dataset ? (
             <button
               className="btn"
-              style={{ fontSize: 10, padding: "2px 7px", opacity: analyzingDataset ? 0.6 : 1 }}
-              onClick={() => void runDataQualityReport()}
-              disabled={analyzingDataset}
-              title="Run data quality report"
+              style={{ fontSize: 10, padding: "3px 7px", opacity: (analyzingDataset || agentMode === "auto") ? 0.45 : 1, flexShrink: 0 }}
+              onClick={() => { if (agentMode === "manual") void runDataQualityReport(); }}
+              disabled={analyzingDataset || agentMode === "auto"}
+              title={agentMode === "auto" ? "Quality report available in Chat mode" : "Run data quality report"}
             >
-              {analyzingDataset ? "Analyzing…" : <><span style={{ marginRight: 3, verticalAlign: "middle", display: "inline-flex" }}><IconBarChart size={12} /></span>Quality</>}
+              {analyzingDataset ? "…" : <><span style={{ marginRight: 3, verticalAlign: "middle", display: "inline-flex" }}><IconBarChart size={12} /></span>Quality</>}
             </button>
           ) : null}
 
-          <button className="btn" style={{ width: 28, padding: 0 }} onClick={() => { if (dataset?.id) localStorage.removeItem(`datahub_chat_session_${dataset.id}`); setMessages([]); resetSession(); }}>
+          <button className="btn" style={{ width: 28, padding: 0, flexShrink: 0 }} onClick={() => { if (dataset?.id) localStorage.removeItem(`datahub_chat_session_${dataset.id}`); setMessages([]); resetSession(); }} title="Clear conversation">
             <IconRefresh size={14} />
           </button>
         </span>

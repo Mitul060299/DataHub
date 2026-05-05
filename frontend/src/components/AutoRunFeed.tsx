@@ -1,6 +1,7 @@
 /**
  * AutoRunFeed.tsx
  * Live feed of auto run events + step list.
+ * Uses inline styles consistent with the app's CSS-variable dark theme.
  */
 import type { AutoRunEvent, AutoRunStep } from "../hooks/useAutoRunSession";
 
@@ -14,86 +15,173 @@ interface Props {
   onApprovePlan: () => void;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  running: "Running",
-  interrupted: "Waiting for your input",
-  complete: "Complete",
-  error: "Error",
-  idle: "Ready",
+const STATUS_META: Record<string, { label: string; bg: string; color: string; dot?: string }> = {
+  running:     { label: "Running",              bg: "rgba(99,102,241,0.12)",   color: "var(--ac)",  dot: "var(--ac)" },
+  interrupted: { label: "Waiting for input",    bg: "rgba(234,179,8,0.12)",    color: "#eab308",    dot: "#eab308" },
+  complete:    { label: "Complete",             bg: "rgba(16,185,129,0.12)",   color: "var(--gr)" },
+  error:       { label: "Error",               bg: "rgba(239,68,68,0.12)",    color: "#f87171" },
+  idle:        { label: "Ready",               bg: "var(--bg3)",              color: "var(--tx2)" },
+};
+
+const EVENT_ICON: Record<string, string> = {
+  "auto.started":          "▶",
+  "auto.rules_parsed":     "📋",
+  "auto.plan_ready":       "🗺",
+  "auto.plan_approved":    "✓",
+  "auto.step_started":     "⟳",
+  "auto.step_done":        "✓",
+  "auto.rule_checked":     "☑",
+  "auto.interrupt":        "⚠",
+  "auto.drift_detected":   "⚡",
+  "auto.complete":         "✅",
+  "auto.error":            "✗",
 };
 
 export function AutoRunFeed({ status, planSteps, planApproved, driftAmber, driftRed, events, onApprovePlan }: Props) {
-  const lastEvents = events.slice(-10);
+  const meta   = STATUS_META[status] ?? STATUS_META.idle;
+  const lastEvents = events.slice(-12);
 
   return (
-    <div className="space-y-3">
-      {/* Status badge */}
-      <div className="flex items-center gap-2">
-        <span
-          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium ${
-            status === "complete"    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-            status === "error"      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-            status === "interrupted"? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
-            "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-          }`}
-        >
-          {status === "running" && (
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+      {/* ── Status row ──────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "3px 10px",
+          borderRadius: 99,
+          background: meta.bg,
+          color: meta.color,
+        }}>
+          {meta.dot && (
+            <span style={{
+              width: 6, height: 6, borderRadius: "50%",
+              background: meta.dot,
+              animation: status === "running" ? "dotBounce 1s infinite ease-in-out" : undefined,
+            }} />
           )}
-          {STATUS_LABELS[status] ?? status}
+          {meta.label}
         </span>
 
         {(driftAmber > 0 || driftRed > 0) && (
-          <span className="text-xs text-gray-500">
-            Drift: {driftAmber > 0 && <span className="text-yellow-600">{driftAmber} amber</span>}
-            {driftAmber > 0 && driftRed > 0 && " · "}
-            {driftRed > 0 && <span className="text-red-600">{driftRed} red</span>}
+          <span style={{ fontSize: 11, color: "var(--tx2)", display: "inline-flex", gap: 6 }}>
+            {driftAmber > 0 && (
+              <span style={{ color: "#eab308" }}>⚡ {driftAmber} amber</span>
+            )}
+            {driftRed > 0 && (
+              <span style={{ color: "#f87171" }}>⚡ {driftRed} red</span>
+            )}
           </span>
         )}
       </div>
 
-      {/* Plan review */}
+      {/* ── Plan review ─────────────────────────────────────────────── */}
       {planSteps.length > 0 && !planApproved && (
-        <div className="rounded-xl border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-2">
-          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-            Review Plan ({planSteps.length} steps)
+        <div style={{
+          border: "1px solid rgba(99,102,241,0.35)",
+          borderRadius: 10,
+          background: "rgba(99,102,241,0.07)",
+          padding: "10px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}>
+          <p style={{ margin: 0, fontSize: 11.5, fontWeight: 700, color: "var(--ac)" }}>
+            Review Plan — {planSteps.length} step{planSteps.length !== 1 ? "s" : ""}
           </p>
-          <ol className="space-y-1.5">
+          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
             {planSteps.map((step) => (
-              <li key={step.step_number} className="text-xs flex gap-2">
-                <span className="text-gray-400 font-mono w-4 shrink-0">{step.step_number}.</span>
+              <li key={step.step_number} style={{ display: "flex", gap: 8, fontSize: 11.5 }}>
+                <span style={{ color: "var(--tx2)", fontFamily: "monospace", minWidth: 16, paddingTop: 1 }}>
+                  {step.step_number}.
+                </span>
                 <div>
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{step.operation}</span>
-                  <span className="text-gray-500 ml-1">— {step.description}</span>
+                  <span style={{ fontWeight: 600, color: "var(--tx0)" }}>{step.operation}</span>
+                  <span style={{ color: "var(--tx2)", marginLeft: 4 }}>— {step.description}</span>
                 </div>
               </li>
             ))}
           </ol>
           <button
             onClick={onApprovePlan}
-            className="w-full mt-1 text-xs font-medium rounded-lg px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            style={{
+              background: "var(--ac)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 7,
+              padding: "6px 0",
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              width: "100%",
+              marginTop: 2,
+            }}
           >
-            Approve & Execute
+            Approve &amp; Execute
           </button>
         </div>
       )}
 
-      {/* Event log */}
+      {/* Plan approved badge */}
+      {planSteps.length > 0 && planApproved && (
+        <div style={{
+          fontSize: 11,
+          color: "var(--gr)",
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          padding: "4px 8px",
+          borderRadius: 7,
+          background: "rgba(16,185,129,0.08)",
+          border: "1px solid rgba(16,185,129,0.2)",
+        }}>
+          ✓ Plan approved — {planSteps.length} step{planSteps.length !== 1 ? "s" : ""}
+        </div>
+      )}
+
+      {/* ── Event log ───────────────────────────────────────────────── */}
       {lastEvents.length > 0 && (
-        <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 text-xs">
-          {lastEvents.map((ev, i) => (
-            <div key={i} className="px-3 py-1.5 flex gap-2 items-start">
-              <span className="text-gray-400 font-mono shrink-0">{ev.type.replace("auto.", "")}</span>
-              {ev.data.goal_summary && (
-                <span className="text-gray-600 dark:text-gray-300 truncate">{ev.data.goal_summary as string}</span>
-              )}
-              {ev.data.passed !== undefined && (
-                <span className={ev.data.passed ? "text-green-600" : "text-red-600"}>
-                  {ev.data.passed ? "✓" : "✗"} rule {ev.data.rule_id as string}
-                </span>
-              )}
-            </div>
-          ))}
+        <div style={{
+          border: "1px solid var(--bd)",
+          borderRadius: 8,
+          overflow: "hidden",
+          fontSize: 11,
+        }}>
+          {lastEvents.map((ev, i) => {
+            const icon = EVENT_ICON[ev.type] ?? "·";
+            const label = ev.type.replace("auto.", "");
+            const snippet =
+              (ev.data.goal_summary as string | undefined) ||
+              (ev.data.passed !== undefined
+                ? `rule ${ev.data.rule_id as string} — ${ev.data.passed ? "✓ pass" : "✗ fail"}`
+                : undefined);
+
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                  padding: "5px 10px",
+                  borderTop: i > 0 ? "1px solid var(--bd)" : undefined,
+                  background: i === lastEvents.length - 1 && status === "running" ? "var(--acl)" : undefined,
+                }}
+              >
+                <span style={{ color: "var(--tx2)", width: 14, flexShrink: 0, textAlign: "center" }}>{icon}</span>
+                <span style={{ color: "var(--tx2)", fontFamily: "monospace", fontSize: 10.5, flexShrink: 0 }}>{label}</span>
+                {snippet && (
+                  <span style={{ color: "var(--tx1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                    {snippet}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

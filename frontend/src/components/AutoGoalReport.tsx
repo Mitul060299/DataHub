@@ -1,6 +1,7 @@
 /**
  * AutoGoalReport.tsx
  * Renders the final GoalReport summary card after an auto run completes.
+ * Uses inline styles consistent with the app's CSS-variable dark theme.
  */
 import type { GoalReport } from "../hooks/useAutoRunSession";
 
@@ -13,42 +14,69 @@ export function AutoGoalReport({ report }: Props) {
     ? Math.round((report.rules_satisfied / report.total_rules) * 100)
     : 0;
 
-  const color =
-    pct === 100 ? "text-green-600 dark:text-green-400" :
-    pct >= 80  ? "text-yellow-600 dark:text-yellow-400" :
-    "text-red-600 dark:text-red-400";
+  const barColor =
+    pct === 100 ? "var(--gr)" :
+    pct >= 80   ? "#eab308"   :
+    "#f87171";
+
+  const textColor =
+    pct === 100 ? "var(--gr)" :
+    pct >= 80   ? "#eab308"   :
+    "#f87171";
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3 bg-white dark:bg-gray-800">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-sm">Goal Report</span>
-        <span className={`text-lg font-bold ${color}`}>{pct}%</span>
+    <div style={{
+      border: "1px solid var(--bd2)",
+      borderRadius: 12,
+      background: "var(--bg2)",
+      padding: "14px 14px 12px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: "var(--tx0)" }}>Goal Report</span>
+        <span style={{ fontSize: 20, fontWeight: 800, color: textColor }}>{pct}%</span>
       </div>
 
       {/* Progress bar */}
-      <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${pct === 100 ? "bg-green-500" : pct >= 80 ? "bg-yellow-500" : "bg-red-500"}`}
-          style={{ width: `${pct}%` }}
-        />
+      <div style={{
+        height: 6,
+        borderRadius: 99,
+        background: "var(--bg4)",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          height: "100%",
+          borderRadius: 99,
+          background: barColor,
+          width: `${pct}%`,
+          transition: "width 0.6s ease",
+        }} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-        <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-2">
-          <div className="font-semibold text-green-700 dark:text-green-400 text-base">{report.rules_satisfied}</div>
-          <div className="text-gray-500">Satisfied</div>
-        </div>
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-2">
-          <div className="font-semibold text-red-700 dark:text-red-400 text-base">{report.rules_failed}</div>
-          <div className="text-gray-500">Failed</div>
-        </div>
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-700/40 p-2">
-          <div className="font-semibold text-gray-600 dark:text-gray-300 text-base">{report.rules_skipped}</div>
-          <div className="text-gray-500">Skipped</div>
-        </div>
+      {/* Stats grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+        {[
+          { label: "Satisfied", value: report.rules_satisfied, bg: "rgba(16,185,129,0.1)",  color: "var(--gr)" },
+          { label: "Failed",    value: report.rules_failed,    bg: "rgba(239,68,68,0.1)",   color: "#f87171" },
+          { label: "Skipped",   value: report.rules_skipped,   bg: "var(--bg3)",             color: "var(--tx1)" },
+        ].map(({ label, value, bg, color }) => (
+          <div key={label} style={{
+            borderRadius: 8,
+            background: bg,
+            padding: "8px 6px",
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
+            <div style={{ fontSize: 10, color: "var(--tx2)", marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="text-xs text-gray-500 text-right">
+      {/* Duration */}
+      <div style={{ fontSize: 10.5, color: "var(--tx2)", textAlign: "right" }}>
         Completed in {report.duration_seconds.toFixed(1)}s
       </div>
     </div>

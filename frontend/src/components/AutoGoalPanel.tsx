@@ -2,6 +2,7 @@
  * AutoGoalPanel.tsx
  * Full Auto Mode panel — goal input, run feed, interrupt card, goal report.
  * Drop-in replacement for the Manual chat panel when mode === "auto".
+ * Uses inline styles consistent with the app's CSS-variable dark theme.
  */
 import { useState } from "react";
 import { useAutoRunSession } from "../hooks/useAutoRunSession";
@@ -20,16 +21,15 @@ export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
   const [goal, setGoal] = useState("");
   const [dryRun, setDryRun] = useState(false);
 
-  const isIdle = state.status === "idle";
-  const isRunning = state.status === "running";
+  const isIdle        = state.status === "idle";
+  const isRunning     = state.status === "running";
   const isInterrupted = state.status === "interrupted";
-  const isComplete = state.status === "complete";
-  const isError = state.status === "error";
+  const isComplete    = state.status === "complete";
+  const isError       = state.status === "error";
+  const hasActivity   = isRunning || isInterrupted || isComplete || isError;
 
   const handleStart = () => {
     if (!goal.trim()) return;
-    // Backend rejects empty dataset_id; surface a clear UX error rather
-    // than firing a doomed POST.
     if (!datasetId || !datasetId.trim()) {
       // eslint-disable-next-line no-alert
       window.alert("Please select a dataset before starting Auto Mode.");
@@ -44,47 +44,131 @@ export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full gap-3 px-3 pt-3 pb-4">
-      {/* Goal input */}
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      overflow: "hidden",
+    }}>
+
+      {/* ── Goal input (idle state) ─────────────────────────────────────── */}
       {isIdle && (
-        <div className="space-y-2">
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Describe your data goal or business rules. The agent will parse them into testable rules,
-            generate a pipeline plan, and execute it autonomously.
+        <div style={{ padding: "14px 14px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Description */}
+          <p style={{ margin: 0, fontSize: 11.5, color: "var(--tx1)", lineHeight: 1.55 }}>
+            Describe your data goal or business rules. The agent will parse them into testable
+            rules, build a pipeline plan, and execute it autonomously.
           </p>
+
+          {/* Textarea */}
           <textarea
-            className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400"
-            rows={6}
-            placeholder="e.g. Remove duplicate orders by order_id (keep latest), ensure no null values in customer_email, standardise country codes to ISO alpha-2…"
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleStart();
+              }
+            }}
+            placeholder={
+              "e.g. Remove duplicate orders by order_id (keep latest), " +
+              "fill null customer_email with 'unknown@example.com', " +
+              "standardise country codes to ISO alpha-2…"
+            }
+            rows={6}
+            style={{
+              resize: "none",
+              border: "1px solid var(--bd2)",
+              borderRadius: 10,
+              background: "var(--bg3)",
+              color: "var(--tx0)",
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              padding: "10px 12px",
+              width: "100%",
+              boxSizing: "border-box",
+              outline: "none",
+              fontFamily: "inherit",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--ac)"; }}
+            onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--bd2)"; }}
           />
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+
+          {/* Controls row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            {/* Dry run toggle */}
+            <label style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              color: "var(--tx2)",
+              cursor: "pointer",
+              userSelect: "none",
+            }}>
               <input
                 type="checkbox"
                 checked={dryRun}
                 onChange={(e) => setDryRun(e.target.checked)}
-                className="rounded"
+                style={{ accentColor: "var(--ac)", cursor: "pointer" }}
               />
-              Dry run (sample 5 000 rows)
+              Dry run <span style={{ color: "var(--tx2)", fontSize: 10 }}>(sample 5 000 rows)</span>
             </label>
+
+            {/* Run button */}
             <button
               onClick={handleStart}
               disabled={!goal.trim()}
-              className="text-sm font-medium rounded-xl px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white transition-colors"
+              style={{
+                background: goal.trim() ? "var(--ac)" : "var(--bg4)",
+                color: goal.trim() ? "#fff" : "var(--tx2)",
+                border: "none",
+                borderRadius: 8,
+                padding: "6px 16px",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: goal.trim() ? "pointer" : "not-allowed",
+                transition: "background 0.15s, color 0.15s",
+                whiteSpace: "nowrap",
+              }}
             >
-              Run Auto Mode
+              ⚡ Run Auto Mode
             </button>
           </div>
+
+          {/* Hint */}
+          <p style={{ margin: 0, fontSize: 10.5, color: "var(--tx2)" }}>
+            Tip: ⌘ + Enter to start
+          </p>
         </div>
       )}
 
-      {/* Active run: feed */}
-      {(isRunning || isInterrupted || isComplete || isError) && (
-        <div className="space-y-3 flex-1 overflow-y-auto">
+      {/* ── Active / complete / error ───────────────────────────────────── */}
+      {hasActivity && (
+        <div style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          padding: "12px 14px",
+        }}>
+          {/* Goal summary pill */}
           {state.goalSummary && (
-            <div className="text-xs text-gray-500 italic">"{state.goalSummary}"</div>
+            <div style={{
+              fontSize: 11,
+              color: "var(--tx1)",
+              fontStyle: "italic",
+              padding: "6px 10px",
+              background: "var(--acl)",
+              border: "1px solid var(--bd2)",
+              borderRadius: 8,
+              lineHeight: 1.4,
+            }}>
+              "{state.goalSummary}"
+            </div>
           )}
 
           <AutoRunFeed
@@ -109,16 +193,33 @@ export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
           )}
 
           {isError && state.error && (
-            <div className="rounded-xl border border-red-300 bg-red-50 dark:bg-red-900/20 p-3 text-xs text-red-700 dark:text-red-400">
+            <div style={{
+              border: "1px solid rgba(239,68,68,0.4)",
+              borderRadius: 10,
+              background: "rgba(239,68,68,0.08)",
+              padding: "10px 12px",
+              fontSize: 12,
+              color: "#f87171",
+              lineHeight: 1.5,
+            }}>
               {state.error}
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
+          {/* Action row */}
+          <div style={{ display: "flex", gap: 6, paddingTop: 2 }}>
             {isRunning && (
               <button
                 onClick={cancel}
-                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                style={{
+                  fontSize: 11,
+                  padding: "4px 12px",
+                  borderRadius: 7,
+                  border: "1px solid var(--bd2)",
+                  background: "transparent",
+                  color: "var(--tx1)",
+                  cursor: "pointer",
+                }}
               >
                 Cancel
               </button>
@@ -126,7 +227,15 @@ export function AutoGoalPanel({ datasetId, projectId, sessionId }: Props) {
             {(isComplete || isError) && (
               <button
                 onClick={reset}
-                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                style={{
+                  fontSize: 11,
+                  padding: "4px 12px",
+                  borderRadius: 7,
+                  border: "1px solid var(--bd2)",
+                  background: "transparent",
+                  color: "var(--tx1)",
+                  cursor: "pointer",
+                }}
               >
                 New Goal
               </button>

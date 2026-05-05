@@ -404,11 +404,32 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   const removeStep = (stepId: string) => {
     let resolved: PipelineStep[] = [];
+    let removedOutputTable: string | null = null;
     setSteps((current) => {
+      const removed = current.find((s) => s.id === stepId);
+      removedOutputTable = removed?.output_table ?? null;
       resolved = current.filter((step) => step.id !== stepId);
       return resolved;
     });
     structuralChangeRef.current += 1;
+    // If the removed step was the one driving the live artifact preview,
+    // or if no steps remain, clear the live artifact so the UI no longer
+    // points at a derived table that the backend has just dropped.
+    if (resolved.length === 0) {
+      setLiveArtifact(null);
+    } else if (removedOutputTable && liveArtifact?.tableName === removedOutputTable) {
+      const lastStep = resolved[resolved.length - 1];
+      if (lastStep?.output_table && liveArtifact) {
+        setLiveArtifact({
+          ...liveArtifact,
+          tableName: lastStep.output_table,
+          stepLabel: lastStep.description,
+          rowCount: Number(lastStep.affectedRows) || liveArtifact.rowCount,
+        });
+      } else {
+        setLiveArtifact(null);
+      }
+    }
     if (datasetId) flushStepsToDb(datasetId, resolved);
   };
 
@@ -431,6 +452,20 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       return resolved;
     });
     structuralChangeRef.current += 1;
+    // Re-point live artifact at the (new) last step.
+    if (resolved.length === 0) {
+      setLiveArtifact(null);
+    } else {
+      const lastStep = resolved[resolved.length - 1];
+      if (lastStep?.output_table && liveArtifact) {
+        setLiveArtifact({
+          ...liveArtifact,
+          tableName: lastStep.output_table,
+          stepLabel: lastStep.description,
+          rowCount: Number(lastStep.affectedRows) || liveArtifact.rowCount,
+        });
+      }
+    }
     if (datasetId) flushStepsToDb(datasetId, resolved);
   };
 

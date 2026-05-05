@@ -803,16 +803,21 @@ def save_pipeline_steps(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Persist client-side cosmetic edits to the steps list.
+    """Persist client-side edits and **reconcile authoritative state**.
 
-    DEPRECATED for source-of-truth: ``pipeline_steps`` rows are authoritative
-    (written by the agent recorder).  This endpoint persists the JSON payload
-    only as a side cache for client-side mutations the recorder doesn't see
-    (rename, reorder, remove).  After the next agent run, ``pipeline_steps``
-    rows take precedence in ``GET`` and the JSON is ignored.
+    Behaviour (post-2026-05 reconciliation):
+    - The client sends the canonical list of steps it wants to keep
+      (after rename/reorder/remove/clear).
+    - We update ``dataset_meta.pipeline_steps_json`` (legacy cache).
+    - We **delete** every ``pipeline_steps`` row for this user+session whose
+      ``step_number`` is not present in the payload's ``stepNumber`` set.
+    - For each deleted row we also drop the corresponding DuckDB view from
+      the live session (so the table_registry won't replay it on the next
+      agent turn) and best-effort delete the S3 Parquet snapshot.
 
-    Plan: replace this with a proper diff endpoint (DELETE/REORDER on
-    ``pipeline_steps`` rows) once we add ``client_step_id`` to that table.
+    This means a client-side delete (or a "clear all") truly wipes the
+    derived state — preventing stale ``clean_<n>_<hex>`` views from
+    contaminating subsequent planner output / step numbering.
     """
     role = get_current_role(authorization)
     require_role("editor", role)
@@ -823,6 +828,75 @@ def save_pipeline_steps(
         raise HTTPException(status_code=422, detail="steps must be a list")
     # Safety cap: don't persist more than 100 steps per dataset
     steps = steps[:100]
+
+    # Set of step_numbers the client wants to keep (anything else is removed).
+    keep_step_numbers: set[int] = set()
+    for s in steps:
+        if not isinstance(s, dict):
+            continue
+        sn = s.get("stepNumber") or s.get("step_number")
+        try:
+            sn_int = int(sn or 0)
+        except Exception:
+            sn_int = 0
+        if sn_int > 0:
+            keep_step_numbers.add(sn_int)
+
+    # Resolve the live DuckDB session for this dataset+user (may be None).
+    from ..models_db import (
+        PipelineStepDB as _PSdb,
+        DatasetSessionDB as _DSess,
+    )
+    sess_row = (
+        db.query(_DSess)
+        .filter(_DSess.dataset_id == dataset_id, _DSess.user_id == user_id)
+        .first()
+    )
+    sess_id = sess_row.chat_session_id if sess_row else None
+
+    deleted_step_numbers: list[int] = []
+    deleted_tables: list[str] = []
+    if sess_id:
+        # Find PipelineStepDB rows that should be deleted (everything for this
+        # session that the client did NOT include in its kept-list).
+        existing_rows = (
+            db.query(_PSdb)
+            .filter(
+                _PSdb.user_id == user_id,
+                _PSdb.session_id == sess_id,
+            )
+            .all()
+        )
+        rows_to_delete = [
+            r for r in existing_rows if int(r.step_number or 0) not in keep_step_numbers
+        ]
+
+        if rows_to_delete:
+            from ..services.duckdb_session import drop_table_or_view
+            from ..services.object_storage import StorageService as _SS
+
+            for r in rows_to_delete:
+                deleted_step_numbers.append(int(r.step_number or 0))
+                # 1. Drop the DuckDB view so the next agent turn won't see it
+                #    in the table_registry replay.
+                if r.output_table:
+                    try:
+                        drop_table_or_view(sess_id, r.output_table)
+                        deleted_tables.append(r.output_table)
+                    except Exception:
+                        pass
+                # 2. Best-effort delete the Parquet snapshot from object storage.
+                if r.snapshot_path:
+                    try:
+                        _SS.delete(r.snapshot_path)
+                    except Exception:
+                        pass
+                # 3. Delete the row.
+                try:
+                    db.delete(r)
+                except Exception:
+                    pass
+
     try:
         db.execute(
             text(
@@ -833,8 +907,18 @@ def save_pipeline_steps(
         db.commit()
     except Exception:
         db.rollback()
-        return {"dataset_id": dataset_id, "saved": 0}
-    return {"dataset_id": dataset_id, "saved": len(steps)}
+        return {
+            "dataset_id": dataset_id,
+            "saved": 0,
+            "deleted_step_numbers": deleted_step_numbers,
+            "deleted_tables": deleted_tables,
+        }
+    return {
+        "dataset_id": dataset_id,
+        "saved": len(steps),
+        "deleted_step_numbers": deleted_step_numbers,
+        "deleted_tables": deleted_tables,
+    }
 
 
 # ── Step Preview / Materialize (Power Query pattern) ──────────────────────────

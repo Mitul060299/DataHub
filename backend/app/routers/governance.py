@@ -141,7 +141,7 @@ def tenant_isolation_report(
 ) -> TenantIsolationReport:
     role = get_current_role(authorization)
     require_role("admin", role)
-    return generate_tenant_isolation_report(db, scope_workspace_id=None, limit=limit)
+    return generate_tenant_isolation_report(db, limit=limit)
 
 
 @router.get("/tenant-isolation-monitor/status")

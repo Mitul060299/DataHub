@@ -21,7 +21,7 @@ def _sanitize_alias(name: str) -> str:
     return s or "dataset_extra"
 
 
-def _load_available_templates(dataset_id: str, fallback_workspace_id: str | None = None) -> list[dict]:
+def _load_available_templates(dataset_id: str) -> list[dict]:
     db = SessionLocal()
     try:
         dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
@@ -65,7 +65,7 @@ async def context_loader(state: AgentState) -> dict:
         {
             "id": dashboard.id,
             "name": dashboard.name,
-            "project_id": dashboard.workspace_id,
+            "project_id": getattr(dashboard, "project_id", None),
             "tile_count": len(dashboard.tiles),
         }
         for dashboard in DashboardsV2Service.list_dashboards(user_id=user_id, project_id=project_id)

@@ -239,7 +239,6 @@ async def upsert_session_history(
         session = ChatSessionDB(
             id=session_id,
             user_id=current_user_id,
-            workspace_id="default",
             dataset_id=payload.dataset_id,
             title="AI Chat",
             status="active",
@@ -360,7 +359,6 @@ async def save_session_as_pipeline(
     pipeline = PipelineV2DB(
         id=str(uuid.uuid4()),
         user_id=current_user_id,
-        workspace_id="default",
         name=name,
         description=description,
         type='manual',

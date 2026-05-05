@@ -49,7 +49,6 @@ def create_dashboard(
     user_id = get_current_subject(authorization)
     return DashboardsV2Service.create_dashboard(
         user_id=user_id,
-        workspace_id="default",
         dataset_id=payload.dataset_id,
         name=payload.name,
         description=payload.description,

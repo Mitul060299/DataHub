@@ -132,7 +132,6 @@ def create_canvas_layout(
     canvas = CanvasLayoutDB(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
-        workspace_id="default",
         project_id=body.project_id or None,
         name=body.name.strip() or "Untitled Dashboard",
         layout=[],

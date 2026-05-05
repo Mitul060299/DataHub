@@ -258,7 +258,6 @@ async def execute_step(state: AgentState) -> dict:
                 }
 
             user_id = state.get("user_id") or dataset.user_id or "agent"
-            workspace_id = state.get("workspace_id") or dataset.workspace_id or "default"
 
             # ── Pull rows from session DuckDB ──────────────────────────────
             session_id = state.get("session_id") or ""
@@ -667,7 +666,7 @@ async def execute_step(state: AgentState) -> dict:
                             _scan_db_session = SessionLocal()
                             try:
                                 from ...usage_service import increment_scan_bytes, enforce_scan_limit
-                                from ...plan_guard import resolve_workspace_plan as _resolve_ws_plan
+                                from ...plan_guard import resolve_project_plan as _resolve_proj_plan
                                 _ds_meta = _scan_db_session.query(DatasetMetaDB).filter(
                                     DatasetMetaDB.id == _scan_ds_id
                                 ).first()
@@ -681,8 +680,8 @@ async def execute_step(state: AgentState) -> dict:
                                     _scan_bytes = 0
                                 if _scan_bytes > 0:
                                     _calling_uid = state.get("user_id") or (dataset.user_id if dataset else None) or ""
-                                    _ws = state.get("workspace_id") or (dataset.workspace_id if dataset else None) or "default"
-                                    _billing_uid, _billing_plan = _resolve_ws_plan(_ws, _calling_uid, _scan_db_session)
+                                    _project_id = state.get("project_id") or (dataset.project_id if dataset else None) or ""
+                                    _billing_uid, _billing_plan = _resolve_proj_plan(_project_id, _calling_uid, _scan_db_session)
                                     enforce_scan_limit(_billing_uid, _billing_plan, _scan_db_session)
                                     increment_scan_bytes(_billing_uid, _scan_bytes, _scan_db_session)
                             finally:
@@ -791,7 +790,6 @@ async def execute_step(state: AgentState) -> dict:
                     "sql": step_sql,
                 }
             ],
-            workspace_id=dataset.workspace_id or "default",
             execution_config={"default_parameters": parameters},
             is_public=False,
         )

@@ -50,7 +50,7 @@ def run_tenant_isolation_verification_job() -> dict[str, Any]:
     db = SessionLocal()
     try:
         sample_limit = max(1, min(500, int(settings.tenant_isolation_monitor_violation_sample_limit)))
-        report = generate_tenant_isolation_report(db, scope_workspace_id=None, limit=sample_limit)
+        report = generate_tenant_isolation_report(db, limit=sample_limit)
 
         deliveries: list[str] = []
         if report.total_violations > 0:

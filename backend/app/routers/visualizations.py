@@ -92,7 +92,6 @@ async def create_dashboard(
         name=dashboard.name,
         description=dashboard.description,
         user_id=subject,
-        workspace_id="default",
         dataset_id=dashboard.dataset_id,
         theme_id=dashboard.theme_id,
         refresh_interval=dashboard.refresh_interval,
@@ -391,7 +390,6 @@ async def create_theme(
     db_theme = VizDashboardThemeDB(
         name=theme.name,
         user_id=subject,
-        workspace_id="default",
         is_global=theme.is_global,
         colors=theme.colors,
         fonts=theme.fonts,

@@ -91,7 +91,6 @@ class DashboardsV2Service:
     def create_dashboard(
         cls,
         user_id: str,
-        workspace_id: str,
         dataset_id: str | None,
         name: str,
         description: str | None,
@@ -103,7 +102,6 @@ class DashboardsV2Service:
             row = DashboardV2DB(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
-                workspace_id=workspace_id,
                 dataset_id=dataset_id,
                 name=name.strip(),
                 description=description,

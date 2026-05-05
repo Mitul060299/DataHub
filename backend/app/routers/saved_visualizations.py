@@ -86,7 +86,6 @@ def save_visualization(
     viz = VisualizationDB(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
-        workspace_id="default",
         project_id=body.project_id or None,
         name=body.name.strip() or "Untitled Chart",
         chart_type=body.chart_type,

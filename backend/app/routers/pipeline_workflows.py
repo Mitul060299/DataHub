@@ -132,7 +132,6 @@ async def instantiate_pipeline_template(
         name=payload.name or template["name"],
         steps=template["steps"],
         description=payload.description or template["description"],
-        workspace_id="default",
         execution_config={},
         is_public=False,
     )
@@ -164,7 +163,6 @@ async def create_pipeline(
         name=payload.name,
         steps=payload.steps,
         description=payload.description,
-        workspace_id="default",
         execution_config=payload.execution_config,
         is_public=payload.is_public,
     )
@@ -480,7 +478,6 @@ async def clone_pipeline(
             pipeline_id=pipeline_id,
             name=payload.name,
             description=payload.description,
-            workspace_id="default",
         )
         return {
             "success": True,

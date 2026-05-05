@@ -87,7 +87,6 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
         description=project.description,
         colour=project.colour or "#5b6af0",
         icon=project.icon or "folder",
-        workspace_id=project.workspace_id or "default",
         user_id=project.user_id,
         pipeline_count=pipeline_count,
         dashboard_count=dashboard_count,
@@ -164,7 +163,6 @@ def create_project(
     if duplicate:
         raise HTTPException(status_code=409, detail="A project with this name already exists.")
 
-    workspace_id = "default"
     billing_plan = resolve_user_plan_by_id(current_user.id, db)
     # Advisory lock: serialise project creation per user to prevent TOCTOU races.
     db.execute(_sql_text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"proj_create_{current_user.id}"})
@@ -175,7 +173,6 @@ def create_project(
     project = ProjectDB(
         id=uuid.uuid4().hex,
         user_id=current_user.id,
-        workspace_id=workspace_id,
         name=payload.name.strip(),
         description=payload.description,
         colour=payload.colour,

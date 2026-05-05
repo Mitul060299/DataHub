@@ -72,7 +72,6 @@ def import_from_connector(
         cred_row = ConnectorCredentialDB(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            workspace_id="default",
             connector_type=payload.connector,
             label=payload.credential_label or payload.connector,
             encrypted_config=encrypt_connector_config(dict(payload.config)),
@@ -112,7 +111,6 @@ def import_from_connector(
     dataset_id = save_dataset(
         save_df,
         db,
-        workspace_id="default",
         user_id=user_id,
     )
 
@@ -159,7 +157,6 @@ def save_connector_credential(
     row = ConnectorCredentialDB(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        workspace_id="default",
         connector_type=payload.connector_type,
         label=payload.label or payload.connector_type,
         encrypted_config=encrypt_connector_config(dict(payload.config)),
@@ -260,7 +257,7 @@ def sync_connector(
             upload_size_bytes=max(estimated_original_size, 1),
             db=db,
         )
-        new_id = save_dataset(df, db, parent_id=dataset_id, workspace_id="default", user_id=user_id)
+        new_id = save_dataset(df, db, parent_id=dataset_id, user_id=user_id)
         status = sync_store.update(key=key, mode=mode, dataset_id=new_id)
         return {
             "status": "synced",
@@ -346,7 +343,6 @@ def save_connection(
         id=str(uuid.uuid4()),
         name=payload.get("name") or connector_name,
         type=connector_name,
-        workspace_id="default",
         host=cfg.get("host"),
         database=cfg.get("database"),
         status="connected",
@@ -376,7 +372,6 @@ def list_connections(
     require_role("viewer", role)
     rows = (
         db.query(ImportConnectionDB)
-        .filter(ImportConnectionDB.workspace_id == "default")
         .order_by(ImportConnectionDB.created_at.desc())
         .all()
     )

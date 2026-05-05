@@ -646,7 +646,6 @@ class TenantIsolationViolation(BaseModel):
 
 class TenantIsolationReport(BaseModel):
     checked_at: str
-    scope_workspace_id: Optional[str] = None  # kept for compat, always None
     total_records_scanned: int = 0
     total_violations: int = 0
     violations_by_category: Dict[str, int] = Field(default_factory=dict)

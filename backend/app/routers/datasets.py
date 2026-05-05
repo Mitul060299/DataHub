@@ -185,8 +185,8 @@ def _ensure_dataset_meta_schema(db: Session) -> None:
     if "idx_datasets_user_workspace" not in existing_indexes:
         db.execute(
             text(
-                "CREATE INDEX IF NOT EXISTS idx_datasets_user_workspace "
-                "ON dataset_meta (user_id, workspace_id)"
+                "CREATE INDEX IF NOT EXISTS idx_datasets_user "
+                "ON dataset_meta (user_id)"
             )
         )
 
@@ -362,7 +362,6 @@ async def upload_dataset(
         triggered_by="user_upload",
         id=dataset_id,
         user_id=user_id,
-        workspace_id="default",
         name=resolved_name,
         columns=list(df.columns),
         row_count=int(df.shape[0]),
@@ -451,7 +450,6 @@ def save_dataset(
     df: pd.DataFrame,
     db: Session,
     parent_id: str | None = None,
-    workspace_id: str | None = None,
     user_id: str | None = None,
     store_rows: bool = True,
     meta_extra: dict | None = None,
@@ -462,7 +460,6 @@ def save_dataset(
     meta_kwargs = {
         "id": dataset_id,
         "user_id": user_id,
-        "workspace_id": workspace_id or "default",
         "columns": list(df.columns),
         "row_count": int(df.shape[0]),
         "parent_id": parent_id,
@@ -1140,7 +1137,6 @@ async def upload_new_version(
         triggered_by="user_upload",
         id=new_id,
         user_id=user_id,
-        workspace_id=parent.workspace_id or "default",
         name=parent.name,
         columns=list(df.columns),
         row_count=int(df.shape[0]),
@@ -1449,7 +1445,6 @@ def delete_dataset(
                 db,
                 event_type="dataset_soft_deleted",
                 user_id=user_id,
-                workspace_id=getattr(meta, "workspace_id", None),
                 payload={
                     "dataset_id": dataset_id,
                     "name": getattr(meta, "name", None),
@@ -1537,7 +1532,6 @@ def delete_dataset(
             db,
             event_type="dataset_deleted",
             user_id=user_id,
-            workspace_id=getattr(meta, "workspace_id", None) if meta else None,
             payload={
                 "dataset_id": dataset_id,
                 "name": getattr(meta, "name", None) if meta else None,
@@ -1624,7 +1618,6 @@ def restore_dataset(
             db,
             event_type="dataset_restored",
             user_id=user_id,
-            workspace_id=getattr(meta, "workspace_id", None),
             payload={
                 "dataset_id": dataset_id,
                 "name": getattr(meta, "name", None),

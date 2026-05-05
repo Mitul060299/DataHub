@@ -53,7 +53,6 @@ class ProjectDB(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     colour = Column(String, nullable=False, default="#5B6AF0")
@@ -63,7 +62,6 @@ class ProjectDB(Base):
 
     __table_args__ = (
         Index("idx_projects_user_id", "user_id"),
-        Index("idx_projects_workspace_id", "workspace_id"),
     )
 
 
@@ -197,7 +195,6 @@ class DatasetMetaDB(Base):
     __tablename__ = "dataset_meta"
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=True)
-    workspace_id = Column(String, nullable=False, default="default")
     name = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     source_type = Column(String, nullable=True)
@@ -240,7 +237,7 @@ class DatasetMetaDB(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     __table_args__ = (
-        Index("idx_datasets_user_workspace", "user_id", "workspace_id"),
+        Index("idx_datasets_user", "user_id"),
         Index("idx_datasets_status", "status"),
         Index("idx_datasets_access_tier", "access_tier"),
         Index("idx_datasets_last_queried", "last_queried_at"),
@@ -305,7 +302,6 @@ class ConnectorCredentialDB(Base):
     __tablename__ = "connector_credentials"
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     connector_type = Column(String, nullable=False)  # e.g. 'postgresql', 'mysql'
     label = Column(String, nullable=True)            # human-readable name
     encrypted_config = Column(Text, nullable=False)  # Fernet-encrypted JSON
@@ -313,7 +309,7 @@ class ConnectorCredentialDB(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
-        Index("idx_connector_credentials_user_workspace", "user_id", "workspace_id"),
+        Index("idx_connector_credentials_user", "user_id"),
     )
 
 
@@ -353,7 +349,6 @@ class ImportTableDB(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     dataset_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     source_type = Column(String, nullable=False)
     source_name = Column(String, nullable=True)
     size_bytes = Column(Integer, nullable=True)
@@ -365,7 +360,6 @@ class ImportConnectionDB(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     type = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     host = Column(String, nullable=True)
     database = Column(String, nullable=True)
     status = Column(String, nullable=False, default="connected")
@@ -557,7 +551,6 @@ class VizDashboardThemeDB(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=True)
     is_global = Column(Boolean, default=False)
     colors = Column(JSONB, nullable=False)
     fonts = Column(JSONB, nullable=True)
@@ -572,7 +565,6 @@ class VizDashboardDB(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False)
     dataset_id = Column(Integer, nullable=True)
     theme_id = Column(Integer, nullable=True)
     layout = Column(JSONB, nullable=True)
@@ -615,7 +607,6 @@ class DashboardV2DB(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     dataset_id = Column(String, nullable=True)
     project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     name = Column(String, nullable=False)
@@ -630,7 +621,6 @@ class DashboardV2DB(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
-        Index("idx_dashboards_v2_workspace", "workspace_id"),
         Index("idx_dashboards_v2_user", "user_id"),
     )
 
@@ -788,7 +778,6 @@ class ChatSessionDB(Base):
     
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False)
     dataset_id = Column(String, nullable=False)
     
     title = Column(String(500), nullable=True)
@@ -813,7 +802,6 @@ class ChatSessionDB(Base):
     
     __table_args__ = (
         Index("idx_chat_sessions_user", "user_id"),
-        Index("idx_chat_sessions_workspace", "workspace_id"),
         Index("idx_chat_sessions_dataset", "dataset_id"),
         Index("idx_chat_sessions_status", "status"),
         Index("idx_chat_sessions_created", "created_at"),
@@ -826,7 +814,6 @@ class PipelineV2DB(Base):
     
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False)
     project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
 
     name = Column(String(500), nullable=False)
@@ -849,7 +836,6 @@ class PipelineV2DB(Base):
     
     __table_args__ = (
         Index("idx_pipelines_v2_user", "user_id"),
-        Index("idx_pipelines_v2_workspace", "workspace_id"),
         Index("idx_pipelines_v2_status", "status"),
     )
 
@@ -996,7 +982,6 @@ class PipelineEventDB(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=True, index=True)
-    workspace_id = Column(String, nullable=True)
     session_id = Column(String, nullable=True, index=True)
     run_id = Column(String, nullable=True)
     step_id = Column(String, nullable=True)
@@ -1048,7 +1033,6 @@ class ChatTemplateDB(Base):
     
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False)
     
     name = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
@@ -1064,7 +1048,6 @@ class ChatTemplateDB(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     __table_args__ = (
-        Index("idx_chat_templates_workspace", "workspace_id"),
         Index("idx_chat_templates_category", "category"),
     )
 
@@ -1103,7 +1086,6 @@ class VisualizationDB(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False)
     chart_type = Column(String, nullable=False, default="bar")
@@ -1114,7 +1096,6 @@ class VisualizationDB(Base):
 
     __table_args__ = (
         Index("idx_visualizations_user", "user_id"),
-        Index("idx_visualizations_workspace", "workspace_id"),
     )
 
 
@@ -1124,7 +1105,6 @@ class CanvasLayoutDB(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False)
-    workspace_id = Column(String, nullable=False, default="default")
     project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False, default="Untitled Dashboard")
     # Array of layout items: {id, viz_id, x, y, w, h, z, type, text_content, echarts_config, chart_type, title}
@@ -1136,7 +1116,6 @@ class CanvasLayoutDB(Base):
 
     __table_args__ = (
         Index("idx_canvas_layouts_user", "user_id"),
-        Index("idx_canvas_layouts_workspace", "workspace_id"),
         Index("idx_canvas_layouts_project", "project_id"),
     )
 

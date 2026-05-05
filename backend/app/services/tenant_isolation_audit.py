@@ -98,7 +98,6 @@ def generate_tenant_isolation_report(
 
     return TenantIsolationReport(
         checked_at=datetime.now(timezone.utc).isoformat(),
-        scope_workspace_id=None,
         total_records_scanned=total_records_scanned,
         total_violations=sum(category_counts.values()),
         violations_by_category=category_counts,

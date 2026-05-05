@@ -560,7 +560,6 @@ class PipelineEngine:
         pipeline = PipelineV2DB(
             id=str(uuid.uuid4()),
             user_id=self.user_id,
-            workspace_id="default",
             name=name,
             description=description,
             type='manual',
@@ -716,7 +715,6 @@ class PipelineEngine:
         clone = PipelineV2DB(
             id=str(uuid.uuid4()),
             user_id=self.user_id,
-            workspace_id="default",
             name=name or f"{source.name} (copy)",
             description=description if description is not None else source.description,
             type=source.type or "manual",
@@ -1238,7 +1236,6 @@ class PipelineEngine:
             triggered_by="pipeline_step",
             id=output_dataset_id,
             user_id=source_dataset.user_id,
-            workspace_id=source_dataset.workspace_id or "default",
             name=output_name,
             description=source_dataset.description,
             source_type="pipeline_v2",

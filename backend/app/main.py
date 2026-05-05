@@ -214,16 +214,14 @@ def _apply_startup_ddl() -> None:
         """CREATE TABLE IF NOT EXISTS projects (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
-            workspace_id TEXT NOT NULL DEFAULT 'default',
             name TEXT NOT NULL,
             description TEXT,
             colour TEXT NOT NULL DEFAULT '#5B6AF0',
-            icon TEXT NOT NULL DEFAULT '📁',
+            icon TEXT NOT NULL DEFAULT '\ud83d\udcc1',
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects (user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_projects_workspace_id ON projects (workspace_id)",
         # 0029 — project_id FK columns on existing tables
         "ALTER TABLE pipelines_v2 ADD COLUMN IF NOT EXISTS project_id TEXT",
         "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS project_id TEXT",
@@ -274,7 +272,6 @@ def _apply_startup_ddl() -> None:
         """CREATE TABLE IF NOT EXISTS visualizations (
             id              TEXT PRIMARY KEY,
             user_id         TEXT NOT NULL,
-            workspace_id    TEXT NOT NULL DEFAULT 'default',
             project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
             name            TEXT NOT NULL,
             chart_type      TEXT NOT NULL DEFAULT 'bar',
@@ -284,12 +281,10 @@ def _apply_startup_ddl() -> None:
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_visualizations_user ON visualizations (user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_visualizations_workspace ON visualizations (workspace_id)",
         # 0037 — canvas layouts (drag-drop dashboards per project)
         """CREATE TABLE IF NOT EXISTS canvas_layouts (
             id              TEXT PRIMARY KEY,
             user_id         TEXT NOT NULL,
-            workspace_id    TEXT NOT NULL DEFAULT 'default',
             project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
             name            TEXT NOT NULL DEFAULT 'Untitled Dashboard',
             layout          JSONB NOT NULL DEFAULT '[]',
@@ -299,20 +294,18 @@ def _apply_startup_ddl() -> None:
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_user ON canvas_layouts (user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_workspace ON canvas_layouts (workspace_id)",
         "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_project ON canvas_layouts (project_id)",
         # 0040 — connector_credentials table (encrypted config store for fold/write-back/live)
         """CREATE TABLE IF NOT EXISTS connector_credentials (
             id              TEXT PRIMARY KEY,
             user_id         TEXT NOT NULL,
-            workspace_id    TEXT NOT NULL DEFAULT 'default',
             connector_type  TEXT NOT NULL,
             label           TEXT,
             encrypted_config TEXT NOT NULL,
             created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
-        "CREATE INDEX IF NOT EXISTS idx_connector_credentials_user_workspace ON connector_credentials (user_id, workspace_id)",
+        "CREATE INDEX IF NOT EXISTS idx_connector_credentials_user ON connector_credentials (user_id)",
         # 0040 — dataset_meta new columns for live-mode / query-folding / write-back
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS connector_credential_id TEXT",
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS import_mode TEXT NOT NULL DEFAULT 'cached'",
@@ -392,7 +385,6 @@ def _apply_startup_ddl() -> None:
             id              TEXT PRIMARY KEY,
             event_type      TEXT NOT NULL,
             user_id         TEXT,
-            workspace_id    TEXT,
             session_id      TEXT,
             run_id          TEXT,
             step_id         TEXT,
@@ -401,7 +393,6 @@ def _apply_startup_ddl() -> None:
         )""",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_events_event_type ON pipeline_events (event_type)",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_events_user_id ON pipeline_events (user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_pipeline_events_workspace_id ON pipeline_events (workspace_id)",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_events_session_id ON pipeline_events (session_id)",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_events_created_at ON pipeline_events (created_at)",
         # 0054 — soft-delete (Trash) on dataset_meta
@@ -505,6 +496,23 @@ def _apply_startup_ddl() -> None:
         # add_webhook_user_id — user-scoped webhook access
         "ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS user_id TEXT",
         "CREATE INDEX IF NOT EXISTS idx_webhooks_user_id ON webhooks (user_id)",
+        # 0071 — remove workspace_id from all tables (replaced by user_id + project_id)
+        "ALTER TABLE projects             DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE dataset_meta         DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE connector_credentials DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE import_tables        DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE import_connections   DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE viz_dashboard_themes DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE viz_dashboards       DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE dashboards_v2        DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE chat_sessions        DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE pipelines_v2         DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE pipeline_events      DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE chat_templates       DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE visualizations       DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE canvas_layouts       DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE data_sources         DROP COLUMN IF EXISTS workspace_id",
+        "ALTER TABLE artifacts            DROP COLUMN IF EXISTS workspace_id",
         # 0070 — support chat widget: session + message tables
         """CREATE TABLE IF NOT EXISTS support_chat_sessions (
             id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

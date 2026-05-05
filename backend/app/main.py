@@ -502,6 +502,9 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS auto_run_id        TEXT",
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS rule_justification TEXT",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_steps_auto_run ON pipeline_steps (auto_run_id)",
+        # add_webhook_user_id — user-scoped webhook access
+        "ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS user_id TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_webhooks_user_id ON webhooks (user_id)",
         # 0070 — support chat widget: session + message tables
         """CREATE TABLE IF NOT EXISTS support_chat_sessions (
             id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

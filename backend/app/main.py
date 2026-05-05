@@ -320,24 +320,9 @@ def _apply_startup_ddl() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_email_unique ON waitlist_entries (email)",
-        # 0041 — workspace_members for team collaboration
-        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS owner_id TEXT",
-        """CREATE TABLE IF NOT EXISTS workspace_members (
-            id              TEXT PRIMARY KEY,
-            workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            user_id         TEXT,
-            email           TEXT NOT NULL,
-            role            TEXT NOT NULL DEFAULT 'viewer',
-            status          TEXT NOT NULL DEFAULT 'pending',
-            invite_token    TEXT UNIQUE,
-            invited_by      TEXT NOT NULL,
-            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-            accepted_at     TIMESTAMPTZ
-        )""",
-        "CREATE INDEX IF NOT EXISTS idx_wm_workspace_id ON workspace_members (workspace_id)",
-        "CREATE INDEX IF NOT EXISTS idx_wm_user_id ON workspace_members (user_id)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_wm_invite_token ON workspace_members (invite_token) WHERE invite_token IS NOT NULL",
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_wm_workspace_email ON workspace_members (workspace_id, email)",
+        # 0041 — workspace_members (LEGACY: tables dropped by 0067; DDL kept removed
+        # to avoid log spam from "relation workspaces does not exist" errors on
+        # every startup. Members are now in project_members + organization_members.)
         # 0042 — agent artifacts table (persisted Parquet snapshots from pipeline write-ops)
         """CREATE TABLE IF NOT EXISTS artifacts (
             id              TEXT PRIMARY KEY,
@@ -364,8 +349,8 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS pipeline_run_id TEXT REFERENCES pipeline_runs_v2(id) ON DELETE SET NULL",
         # 0042/0043 — uploaded_by attribution on dataset versions
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS uploaded_by TEXT",
-        # 0046 — workspace_type ('personal' | 'collab') on workspaces table
-        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS workspace_type TEXT NOT NULL DEFAULT 'personal'",
+        # 0046 — workspace_type column (LEGACY: workspaces table dropped in 0067)
+        # "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS workspace_type ..." — removed
         # 0047/0051 — per-user monthly bytes-scanned counter (used by usage_service.increment_scan_bytes)
         "ALTER TABLE user_usage ADD COLUMN IF NOT EXISTS data_scanned_bytes BIGINT NOT NULL DEFAULT 0",
         # 0050 — pipeline_steps_json on dataset_meta (live workspace persistence)
@@ -514,6 +499,54 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE canvas_layouts       DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE data_sources         DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE artifacts            DROP COLUMN IF EXISTS workspace_id",
+        # 0068 — organizations + organization_members (org-account tier).
+        # Re-applied idempotently here because the original Alembic 0068
+        # wrapped CREATE TABLE in a DO/EXCEPTION block that silently swallowed
+        # failures, leaving some DBs with the migration recorded as applied
+        # but the tables missing. Symptom: UndefinedTable on
+        # ``organization_members`` during project create/delete.
+        """CREATE TABLE IF NOT EXISTS organizations (
+            id            VARCHAR PRIMARY KEY,
+            owner_user_id VARCHAR NOT NULL,
+            name          VARCHAR NOT NULL,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_organizations_owner_user_id ON organizations(owner_user_id)",
+        """CREATE TABLE IF NOT EXISTS organization_members (
+            id           VARCHAR PRIMARY KEY,
+            org_id       VARCHAR NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            user_id      VARCHAR NULL,
+            email        VARCHAR NOT NULL,
+            status       VARCHAR NOT NULL DEFAULT 'pending',
+            invite_token VARCHAR NULL,
+            invited_by   VARCHAR NOT NULL,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+            accepted_at  TIMESTAMPTZ NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_om_org_id ON organization_members(org_id)",
+        "CREATE INDEX IF NOT EXISTS idx_om_user_id ON organization_members(user_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_om_invite_token ON organization_members(invite_token) WHERE invite_token IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_om_org_email ON organization_members(org_id, email)",
+        # 0063 — project_members (replaces workspace_members).
+        # Same defensive re-apply as above so deploys after the workspace
+        # removal don't depend on Alembic having reached 0063 cleanly.
+        """CREATE TABLE IF NOT EXISTS project_members (
+            id           VARCHAR PRIMARY KEY,
+            project_id   VARCHAR NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            user_id      VARCHAR NULL,
+            email        VARCHAR NOT NULL,
+            role         VARCHAR NOT NULL DEFAULT 'editor',
+            status       VARCHAR NOT NULL DEFAULT 'pending',
+            invite_token VARCHAR NULL,
+            invited_by   VARCHAR NOT NULL,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+            accepted_at  TIMESTAMPTZ NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_pm_project_id ON project_members(project_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pm_user_id ON project_members(user_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pm_invite_token ON project_members(invite_token) WHERE invite_token IS NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pm_project_email ON project_members(project_id, email)",
         # 0070 — support chat widget: session + message tables
         """CREATE TABLE IF NOT EXISTS support_chat_sessions (
             id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

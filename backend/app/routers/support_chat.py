@@ -13,8 +13,6 @@ Security:
   - The admin endpoint returns 404 to non-admin callers so the route is
     not discoverable by unauthorised users.
 """
-from __future__ import annotations
-
 import logging
 import uuid
 from datetime import datetime, timezone

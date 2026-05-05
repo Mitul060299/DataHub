@@ -45,30 +45,37 @@ def route_intent(state: AgentState) -> str:
     return "responder"
 
 
-def route_after_present(state: AgentState) -> str:
-    if state.get("plan_approved"):
-        return "execute_step"
-    return "__end__"
-
-
 def route_after_present_unified(state: AgentState) -> str:
     """Unified post-plan_presenter routing used by both manual and auto paths.
 
-    Manual path: plan_approved → execute_step
-    Auto path:   plan_approved → execute_step_auto
     Waiting for approval in both cases: __end__ (graph suspends at checkpoint)
+    Both paths resume to the same execute_step node.
     """
     if not state.get("plan_approved"):
         return "__end__"
-    if state.get("auto_mode"):
-        return "execute_step_auto"
     return "execute_step"
 
 
 def route_after_execute(state: AgentState) -> str:
+    """Unified post-execute routing for both manual and auto paths."""
     last_results = state.get("execution_results", [])
     last_result = last_results[-1] if last_results else {}
 
+    if state.get("auto_mode"):
+        # Auto path: use current_rule_index + auto_plan
+        if last_result.get("error"):
+            return "reflection_v2"
+        auto_plan = state.get("auto_plan", [])
+        current_idx = state.get("current_rule_index", 0)
+        next_idx = current_idx + 1
+        if next_idx < len(auto_plan):
+            step = auto_plan[next_idx]
+            if step.get("needs_validator", True):
+                return "step_validator"
+            return "execute_step"
+        return "goal_verifier"
+
+    # Manual path: use current_step_index + plan
     if last_result.get("error"):
         return "reflect"
 
@@ -128,32 +135,13 @@ def route_after_drift_detector(state: AgentState) -> str:
 
 
 def route_after_auto_plan_presenter(state: AgentState) -> str:
-    """After showing the plan to the user (pre_run_review mode)."""
-    if state.get("plan_approved"):
-        return "execute_step_auto"
-    return "__end__"
+    """Kept for import compatibility — superseded by route_after_present_unified."""
+    return route_after_present_unified(state)
 
 
 def route_after_execute_auto(state: AgentState) -> str:
-    """Route after executing one auto step."""
-    last_results = state.get("execution_results", [])
-    last_result = last_results[-1] if last_results else {}
-
-    if last_result.get("error"):
-        return "reflection_v2"
-
-    auto_plan = state.get("auto_plan", [])
-    current_idx = state.get("current_rule_index", 0)
-
-    # Advance index
-    next_idx = current_idx + 1
-    if next_idx < len(auto_plan):
-        step = auto_plan[next_idx]
-        if step.get("needs_validator", True):
-            return "step_validator"
-        return "execute_step_auto"
-    # All steps done — verify goal
-    return "goal_verifier"
+    """Kept for import compatibility — superseded by route_after_execute."""
+    return route_after_execute(state)
 
 
 def route_after_step_validator(state: AgentState) -> str:
@@ -163,7 +151,7 @@ def route_after_step_validator(state: AgentState) -> str:
         auto_plan = state.get("auto_plan", [])
         current_idx = state.get("current_rule_index", 0) + 1
         if current_idx < len(auto_plan):
-            return "execute_step_auto"
+            return "execute_step"
         return "goal_verifier"
     return "reflection_v2"
 
@@ -172,7 +160,7 @@ def route_after_reflection_v2(state: AgentState) -> str:
     """After reflection attempt: retry step or escalate to interrupt_asker."""
     if state.get("interrupt_pending"):
         return "interrupt_asker"
-    return "execute_step_auto"
+    return "execute_step"
 
 
 def route_after_goal_verifier(state: AgentState) -> str:

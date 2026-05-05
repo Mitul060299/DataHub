@@ -139,11 +139,23 @@ def _resolve_input_table(step: dict, state: AgentState) -> str:
 
 
 async def execute_step(state: AgentState) -> dict:
-    idx = state["current_step_index"]
+    # Auto mode uses current_rule_index; manual mode uses current_step_index.
+    # Both point into state["plan"] (auto_planner writes plan_compat there).
+    auto_mode = bool(state.get("auto_mode"))
+    if auto_mode:
+        idx = state.get("current_rule_index", 0)
+    else:
+        idx = state["current_step_index"]
     plan = state["plan"]
 
+    def _step_counter(next_idx: int) -> dict:
+        """Return the correct counter key for the current mode."""
+        if auto_mode:
+            return {"current_rule_index": next_idx}
+        return {"current_step_index": next_idx}
+
     if idx >= len(plan):
-        return {"current_step_index": idx}
+        return _step_counter(idx)
 
     step = plan[idx]
 
@@ -200,7 +212,7 @@ async def execute_step(state: AgentState) -> dict:
             return {
                 "execution_results": [*state.get("execution_results", []), execution_result],
                 "dataset_id": state.get("dataset_id"),
-                "current_step_index": idx + 1,
+                **_step_counter(idx + 1),
                 "retry_count": 0,
                 "error": None,
                 "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
@@ -339,7 +351,7 @@ async def execute_step(state: AgentState) -> dict:
             return {
                 "execution_results": [*state.get("execution_results", []), execution_result],
                 "dataset_id": state.get("dataset_id"),
-                "current_step_index": idx + 1,
+                **_step_counter(idx + 1),
                 "retry_count": 0,
                 "error": None,
                 "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],
@@ -385,7 +397,7 @@ async def execute_step(state: AgentState) -> dict:
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
                         "dataset_id": state.get("dataset_id"),
-                        "current_step_index": idx + 1,
+                        **_step_counter(idx + 1),
                         "retry_count": 0,
                         "error": None,
                         "table_registry": table_registry,
@@ -483,7 +495,7 @@ async def execute_step(state: AgentState) -> dict:
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
                         "dataset_id": _sv_out_ds,
-                        "current_step_index": idx + 1,
+                        **_step_counter(idx + 1),
                         "retry_count": 0,
                         "error": None,
                         "query_results": rows,
@@ -694,7 +706,7 @@ async def execute_step(state: AgentState) -> dict:
                     return {
                         "execution_results": [*state.get("execution_results", []), execution_result],
                         "dataset_id": state.get("dataset_id"),
-                        "current_step_index": idx + 1,
+                        **_step_counter(idx + 1),
                         "retry_count": 0,
                         "error": None,
                         "query_results": preview_rows,
@@ -836,7 +848,7 @@ async def execute_step(state: AgentState) -> dict:
         return {
             "execution_results": [*state.get("execution_results", []), execution_result],
             "dataset_id": output_dataset_id or state.get("dataset_id"),
-            "current_step_index": idx + 1,
+            **_step_counter(idx + 1),
             "retry_count": 0,
             "error": None,
             "completed_step_numbers": [*state.get("completed_step_numbers", []), step["step_number"]],

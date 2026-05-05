@@ -6,19 +6,15 @@ from .groq_compat import apply_groq_compat_patches
 apply_groq_compat_patches()
 
 from .edges import (
-    route_after_auto_plan_presenter,
     route_after_drift_detector,
     route_after_execute,
-    route_after_execute_auto,
     route_after_goal_parser,
     route_after_goal_verifier,
-    route_after_present,
     route_after_present_unified,
     route_after_prior_pipeline_parser,
     route_after_reflect,
     route_after_reflection_v2,
     route_after_step_validator,
-    route_intent,
     route_intent_auto,
 )
 from .nodes.auto_planner import auto_planner
@@ -64,8 +60,6 @@ def build_agent_graph():
     graph.add_node("goal_parser", goal_parser)
     graph.add_node("drift_detector", drift_detector)
     graph.add_node("auto_planner", auto_planner)
-    # Reuse execute_step for auto execution (same underlying engine)
-    graph.add_node("execute_step_auto", execute_step)
     graph.add_node("step_validator", step_validator)
     graph.add_node("reflection_v2", reflection_v2)
     graph.add_node("interrupt_asker", interrupt_asker)
@@ -102,7 +96,7 @@ def build_agent_graph():
     graph.add_conditional_edges(
         "plan_presenter",
         route_after_present_unified,
-        {"execute_step": "execute_step", "execute_step_auto": "execute_step_auto", "__end__": END},
+        {"execute_step": "execute_step", "__end__": END},
     )
     graph.add_conditional_edges(
         "execute_step",
@@ -111,6 +105,10 @@ def build_agent_graph():
             "reflect": "reflect",
             "execute_step": "execute_step",
             "pipeline_recorder": "pipeline_recorder",
+            # Auto path destinations (route_after_execute_auto is called when auto_mode is set)
+            "step_validator": "step_validator",
+            "reflection_v2": "reflection_v2",
+            "goal_verifier": "goal_verifier",
         },
     )
     graph.add_conditional_edges(
@@ -143,20 +141,10 @@ def build_agent_graph():
     graph.add_edge("auto_planner", "plan_presenter")
 
     graph.add_conditional_edges(
-        "execute_step_auto",
-        route_after_execute_auto,
-        {
-            "step_validator": "step_validator",
-            "execute_step_auto": "execute_step_auto",
-            "reflection_v2": "reflection_v2",
-            "goal_verifier": "goal_verifier",
-        },
-    )
-    graph.add_conditional_edges(
         "step_validator",
         route_after_step_validator,
         {
-            "execute_step_auto": "execute_step_auto",
+            "execute_step": "execute_step",
             "goal_verifier": "goal_verifier",
             "reflection_v2": "reflection_v2",
         },
@@ -164,7 +152,7 @@ def build_agent_graph():
     graph.add_conditional_edges(
         "reflection_v2",
         route_after_reflection_v2,
-        {"execute_step_auto": "execute_step_auto", "interrupt_asker": "interrupt_asker"},
+        {"execute_step": "execute_step", "interrupt_asker": "interrupt_asker"},
     )
     graph.add_edge("interrupt_asker", END)  # suspend; resume via /auto/run/resume
 

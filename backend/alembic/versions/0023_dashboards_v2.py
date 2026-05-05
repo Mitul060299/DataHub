@@ -71,7 +71,9 @@ def upgrade() -> None:
         if table_name in inspector.get_table_names():
             existing_indexes = {idx["name"] for idx in inspector.get_indexes(table_name)}
             if index_name not in existing_indexes:
-                op.create_index(index_name, table_name, columns, unique=False)
+                existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+                if all(c in existing_cols for c in columns):
+                    op.create_index(index_name, table_name, columns, unique=False)
 
 
 def downgrade() -> None:

@@ -70,7 +70,7 @@ def upgrade() -> None:
 
     if not _has_index(bind, "projects", "idx_projects_user_id"):
         op.create_index("idx_projects_user_id", "projects", ["user_id"])
-    if not _has_index(bind, "projects", "idx_projects_workspace_id"):
+    if _has_column(bind, "projects", "workspace_id") and not _has_index(bind, "projects", "idx_projects_workspace_id"):
         op.create_index("idx_projects_workspace_id", "projects", ["workspace_id"])
 
     # ── 2. Add project_id FK columns (nullable, SET NULL on delete) ───────────

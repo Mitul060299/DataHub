@@ -60,7 +60,7 @@ def upgrade() -> None:
             "CREATE INDEX idx_visualizations_user ON visualizations (user_id)"
         ))
 
-    if not _idx(bind, "idx_visualizations_workspace"):
+    if not _idx(bind, "idx_visualizations_workspace") and _col(inspector, "visualizations", "workspace_id"):
         op.execute(text(
             "CREATE INDEX idx_visualizations_workspace ON visualizations (workspace_id)"
         ))
@@ -89,7 +89,7 @@ def upgrade() -> None:
             "CREATE INDEX idx_canvas_layouts_user ON canvas_layouts (user_id)"
         ))
 
-    if not _idx(bind, "idx_canvas_layouts_workspace"):
+    if not _idx(bind, "idx_canvas_layouts_workspace") and _col(inspector, "canvas_layouts", "workspace_id"):
         op.execute(text(
             "CREATE INDEX idx_canvas_layouts_workspace ON canvas_layouts (workspace_id)"
         ))

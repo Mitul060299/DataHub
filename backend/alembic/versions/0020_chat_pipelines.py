@@ -26,6 +26,10 @@ def upgrade():
             if idx.get('name')
         }
         if index_name not in existing_indexes:
+            # Skip if any referenced column no longer exists (e.g. workspace_id was dropped)
+            existing_cols = {c['name'] for c in sa.inspect(bind).get_columns(table_name)}
+            if not all(c in existing_cols for c in columns):
+                return
             op.create_index(index_name, table_name, columns)
 
     # ==================== CHAT SESSIONS TABLE ====================

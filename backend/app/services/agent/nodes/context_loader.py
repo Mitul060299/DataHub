@@ -59,7 +59,7 @@ async def context_loader(state: AgentState) -> dict:
     user_id = state.get("user_id") or (dataset.user_id if dataset and dataset.user_id else "agent")
     project_id = state.get("project_id") or (dataset.project_id if dataset and getattr(dataset, "project_id", None) else None)
 
-    available_templates = _load_available_templates(dataset_id, workspace_id)
+    available_templates = _load_available_templates(dataset_id)
     calculated_columns = [column.model_dump() for column in CalculatedColumnsService.get_columns_for_dataset(dataset_id)]
     dashboards = [
         {
@@ -339,7 +339,7 @@ async def context_loader(state: AgentState) -> dict:
             workspace_datasets_list = (
                 _sec_db2.query(DatasetMetaDB)
                 .filter(
-                    DatasetMetaDB.workspace_id == workspace_id,
+                    DatasetMetaDB.user_id == user_id,
                     DatasetMetaDB.id != dataset_id,
                 )
                 .limit(20)

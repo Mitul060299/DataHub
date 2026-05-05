@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DemoPage } from "./pages/DemoPage";
@@ -25,6 +25,13 @@ import { SupportChatWidget } from "./components/SupportChatWidget";
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+  const location = useLocation();
+
+  // Hide the support chat bubble on workspace and project pages — the AI
+  // panel there serves a different purpose and the widget clutters the UI.
+  const hideSupportChat =
+    location.pathname.startsWith("/workspace") ||
+    location.pathname.startsWith("/projects");
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -73,7 +80,7 @@ export function App() {
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
-      <SupportChatWidget />
+      {!hideSupportChat && <SupportChatWidget />}
       {rateLimitMsg && (
         <div
           style={{

@@ -172,18 +172,8 @@ export function useSupportChat(): UseSupportChatReturn {
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || state.isLoading) return;
 
-    let sessionId: string;
-    try {
-      sessionId = await ensureSession();
-    } catch {
-      setState(prev => ({
-        ...prev,
-        error: "Could not connect. Please try again.",
-      }));
-      return;
-    }
-
-    // Append user message immediately
+    // ── Step 1: Append the user message immediately so the UI never flickers.
+    // The message is visible even if the subsequent network calls fail.
     const userMsgId = crypto.randomUUID();
     setState(prev => ({
       ...prev,
@@ -197,6 +187,27 @@ export function useSupportChat(): UseSupportChatReturn {
       page: window.location.pathname,
       message_number: userMessageCountRef.current,
     });
+
+    // ── Step 2: Ensure we have a session ID (creates one if needed).
+    let sessionId: string;
+    try {
+      sessionId = await ensureSession();
+    } catch {
+      // Session creation failed — show an error reply so the user knows.
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        messages: [
+          ...prev.messages,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            text: "Sorry, I couldn't connect right now. Please try again in a moment.",
+          },
+        ],
+      }));
+      return;
+    }
 
     // Placeholder assistant message that we'll stream into
     const assistantMsgId = crypto.randomUUID();
@@ -224,8 +235,9 @@ export function useSupportChat(): UseSupportChatReturn {
       const decoder = new TextDecoder();
       let buffer = "";
       let accumulated = "";
+      let streamDone = false;
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -236,7 +248,7 @@ export function useSupportChat(): UseSupportChatReturn {
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
-          if (raw === "[DONE]") break;
+          if (raw === "[DONE]") { streamDone = true; break; }
           try {
             const chunk = JSON.parse(raw) as { text?: string };
             if (chunk.text) {

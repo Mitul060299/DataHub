@@ -8,6 +8,7 @@ import pandas as pd
 from ..config import settings
 from ..models import TransformationStep
 from .agent_heuristics import suggest_steps
+from .token_tracking_service import log_call as _log_call
 
 
 SYSTEM_PROMPT = """
@@ -97,12 +98,20 @@ def suggest_steps_llm(df: pd.DataFrame, context_text: str) -> Tuple[List[Transfo
             timeout=15.0,
         )
         response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
+        _d = response.json()
+        content = _d["choices"][0]["message"]["content"]
+        _u = _d.get("usage") or {}
+        _log_call(user_id="", model_used=model, query_type="suggest",
+                  input_tokens=_u.get("prompt_tokens", 0),
+                  output_tokens=_u.get("completion_tokens", 0),
+                  dataset_rows=int(df.shape[0]))
         steps = _parse_steps(content)
         if not steps:
             return suggest_steps(df), ["LLM response was invalid; used fallback suggestions."]
         return steps, ["LLM-generated suggestions."]
     except Exception:
+        _log_call(user_id="", model_used=model, query_type="suggest",
+                  input_tokens=0, output_tokens=0)
         return suggest_steps(df), ["LLM call failed; used fallback suggestions."]
 
 
@@ -179,9 +188,17 @@ def chat_with_dataset(
             timeout=20.0,
         )
         response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
+        _d2 = response.json()
+        content = _d2["choices"][0]["message"]["content"]
+        _u2 = _d2.get("usage") or {}
+        _log_call(user_id="", model_used=model, query_type="chat",
+                  input_tokens=_u2.get("prompt_tokens", 0),
+                  output_tokens=_u2.get("completion_tokens", 0),
+                  dataset_rows=int(df.shape[0]))
         return content, ["LLM-generated response."]
     except Exception:
+        _log_call(user_id="", model_used=model, query_type="chat",
+                  input_tokens=0, output_tokens=0)
         return _fallback_chat_response(df, message), ["LLM call failed; used fallback responses."]
 
 
@@ -215,6 +232,11 @@ def generate_insight_narrative(
             timeout=15.0,
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        _d3 = response.json()
+        _u3 = _d3.get("usage") or {}
+        _log_call(user_id="", model_used=model, query_type="insights",
+                  input_tokens=_u3.get("prompt_tokens", 0),
+                  output_tokens=_u3.get("completion_tokens", 0))
+        return _d3["choices"][0]["message"]["content"]
     except Exception:
         return None

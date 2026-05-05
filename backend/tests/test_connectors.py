@@ -237,7 +237,9 @@ class TestPostgreSQLConnector(unittest.TestCase):
         mock_ce.side_effect = Exception("connection refused")
         result = self.c.test_connection(_PG_CREDS)
         self.assertFalse(result["success"])
-        self.assertIn("connection refused", result["error"])
+        # Credential-leak guard: redacted to a generic prefix + exception class.
+        self.assertIn("PostgreSQL connection failed", result["error"])
+        self.assertNotIn("connection refused", result["error"])
 
     @patch("app.services.connectors.create_engine")
     def test_list_tables_success(self, mock_ce):
@@ -302,7 +304,8 @@ class TestMySQLConnector(unittest.TestCase):
         mock_ce.side_effect = Exception("access denied")
         result = self.c.test_connection(_MYSQL_CREDS)
         self.assertFalse(result["success"])
-        self.assertIn("access denied", result["error"])
+        self.assertIn("MySQL connection failed", result["error"])
+        self.assertNotIn("access denied", result["error"])
 
     @patch("app.services.connectors.create_engine")
     def test_list_tables_success(self, mock_ce):
@@ -366,7 +369,8 @@ class TestSQLServerConnector(unittest.TestCase):
         mock_ce.side_effect = Exception("login failed")
         result = self.c.test_connection(_MSSQL_CREDS)
         self.assertFalse(result["success"])
-        self.assertIn("login failed", result["error"])
+        self.assertIn("SQL Server connection failed", result["error"])
+        self.assertNotIn("login failed", result["error"])
 
     @patch("app.services.connectors.create_engine")
     def test_list_tables_returns_schema_and_table(self, mock_ce):
@@ -454,7 +458,8 @@ class TestOracleConnector(unittest.TestCase):
         mock_ce.side_effect = Exception("ORA-12541: no listener")
         result = self.c.test_connection(_ORA_CREDS)
         self.assertFalse(result["success"])
-        self.assertIn("ORA-12541", result["error"])
+        self.assertIn("Oracle connection failed", result["error"])
+        self.assertNotIn("ORA-12541", result["error"])
 
     @patch("app.services.connectors.create_engine")
     def test_list_tables_success(self, mock_ce):

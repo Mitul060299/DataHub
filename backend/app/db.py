@@ -47,7 +47,9 @@ _DB_URL, _IS_TRANSACTION_MODE = _resolve_db_url(settings.database_url)
 # statements — each transaction may land on a different backend, causing:
 #   "DuplicatePreparedStatement: prepared statement _pg3_0 already exists"
 # Setting prepare_threshold=None disables auto-prepare globally.
-_CONNECT_ARGS: dict = {"prepare_threshold": None}
+# connect_timeout=10 prevents the engine from blocking forever when the DB
+# host is unreachable (e.g. local dev without Docker running).
+_CONNECT_ARGS: dict = {"prepare_threshold": None, "connect_timeout": 10}
 
 if _IS_TRANSACTION_MODE:
     engine = create_engine(

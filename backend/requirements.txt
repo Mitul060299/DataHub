@@ -36,12 +36,12 @@ rapidfuzz>=3.5.0
 
 # Relational Database Drivers (Professional tier)
 pymysql==1.1.1  # MySQL connector
-pymssql==2.3.1  # SQL Server connector
-oracledb==2.1.0  # Oracle Database connector (thin mode, no client required)
+pymssql>=2.3.1  # SQL Server connector
+oracledb>=2.4.0  # Oracle Database connector (thin mode, no client required)
 pymongo==4.6.2  # MongoDB connector
 
 # Cloud Data Warehouse Drivers (Team/Enterprise tier)
-snowflake-connector-python==3.7.1  # Snowflake connector
+snowflake-connector-python>=3.12.0  # Snowflake connector
 google-cloud-bigquery==3.17.2  # Google BigQuery connector
 db-dtypes==1.2.0  # BigQuery data types support
 

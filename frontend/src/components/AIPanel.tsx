@@ -18,6 +18,7 @@ import { capture } from "../lib/posthog";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
 import { getAuthToken } from "../utils/auth";
+import { AutoGoalPanel } from "./AutoGoalPanel";
 
 interface TileCreatedData {
   chart_id: string;
@@ -267,6 +268,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [agentMode, setAgentMode] = useState<"manual" | "auto">("manual");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [editHoverId, setEditHoverId] = useState<string | null>(null);
@@ -1123,7 +1125,28 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           <span style={{ color: "var(--tx0)" }}>AI Agent</span>
         </span>
         <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-          {dataset ? (
+          {/* Mode switcher */}
+          <span style={{ display: "inline-flex", borderRadius: 6, border: "1px solid var(--bd)", overflow: "hidden", fontSize: 11 }}>
+            {(["manual", "auto"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setAgentMode(m)}
+                style={{
+                  padding: "2px 9px",
+                  background: agentMode === m ? "var(--ac)" : "transparent",
+                  color: agentMode === m ? "#fff" : "var(--tx1)",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: agentMode === m ? 600 : 400,
+                  textTransform: "capitalize",
+                }}
+              >
+                {m}
+              </button>
+            ))}
+          </span>
+
+          {agentMode === "manual" && dataset ? (
             <button
               className="btn"
               style={{ fontSize: 10, padding: "2px 7px", opacity: analyzingDataset ? 0.6 : 1 }}
@@ -1141,8 +1164,17 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         </span>
       </header>
 
-
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
+      {agentMode === "auto" && (
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          <AutoGoalPanel
+            datasetId={dataset?.id ?? ""}
+            projectId={projectId}
+            sessionId={sessionId ?? undefined}
+          />
+        </div>
+      )}
+      {agentMode === "manual" && (
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
         {!dataset ? (
           <EmptyStateChatPanel
             hasDataset={false}
@@ -1447,7 +1479,10 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           </div>
         ) : null}
       </div>
+      </div>
+      )}
 
+      {agentMode === "manual" && (
       <div style={{ borderTop: "1px solid var(--bd)", padding: 10 }}>
         <textarea
           ref={textareaRef}
@@ -1474,6 +1509,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           }}
         />
       </div>
+      )}
     </aside>
   );
 }

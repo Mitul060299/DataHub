@@ -17,6 +17,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { submitFeedbackForm, submitReview, getApprovedReviews, type ReviewOut } from "../api";
 import { capture } from "../lib/posthog";
+import { startTrial as startTrialApi, type BillingPlanSlug } from "../services/billing";
 import "./HomePage.css";
 
 /* ===========================================================================
@@ -125,6 +126,7 @@ type PricingPlan = {
   priceINR: string;
   periodUSD: string;
   periodINR: string;
+  trialBadge?: string; // e.g. "15 days free"
   features: string[];
   featuresUSD?: string[];
   buttonLabel: string;
@@ -163,6 +165,7 @@ const plans: PricingPlan[] = [
     priceINR: "\u20b9999",
     periodUSD: "/month (USD launching soon)",
     periodINR: "/month",
+    trialBadge: "15 days free",
     features: [
       "Solo projects · 1 seat",
       "Up to 5 projects",
@@ -175,7 +178,7 @@ const plans: PricingPlan[] = [
       "Daily scheduled runs",
       "Email support",
     ],
-    buttonLabel: "Subscribe",
+    buttonLabel: "Start free trial",
     buttonStyle: "blue",
     action: "checkout",
   },
@@ -186,6 +189,7 @@ const plans: PricingPlan[] = [
     priceINR: "\u20b93,999",
     periodUSD: "/month (USD launching soon)",
     periodINR: "/month",
+    trialBadge: "15 days free",
     features: [
       "Solo projects · 1 seat",
       "Up to 20 projects",
@@ -197,7 +201,7 @@ const plans: PricingPlan[] = [
       "S3, GCS, Azure Blob storage",
       "Email support",
     ],
-    buttonLabel: "Subscribe",
+    buttonLabel: "Start free trial",
     buttonStyle: "blue",
     action: "checkout",
   },
@@ -208,6 +212,7 @@ const plans: PricingPlan[] = [
     priceINR: "\u20b98,999",
     periodUSD: "/month (USD launching soon)",
     periodINR: "/month",
+    trialBadge: "15 days free",
     features: [
       "Includes 3 seats. +\u20b91,499/extra seat",
       "10 members per project · 5 collaborative projects",
@@ -232,7 +237,7 @@ const plans: PricingPlan[] = [
       "Audit log",
       "Priority email support",
     ],
-    buttonLabel: "Subscribe",
+    buttonLabel: "Start free trial",
     buttonStyle: "primary",
     action: "checkout",
   },
@@ -243,6 +248,7 @@ const plans: PricingPlan[] = [
     priceINR: "\u20b917,999",
     periodUSD: "/month (USD launching soon)",
     periodINR: "/month",
+    trialBadge: "15 days free",
     features: [
       "Includes 5 seats. +\u20b92,499/extra seat",
       "50 members per project · unlimited collaborative projects",
@@ -267,7 +273,7 @@ const plans: PricingPlan[] = [
       "SSO / SAML · Webhooks",
       "24/7 dedicated support",
     ],
-    buttonLabel: "Subscribe",
+    buttonLabel: "Start free trial",
     buttonStyle: "amber",
     action: "checkout",
   },
@@ -513,6 +519,12 @@ export function HomePage() {
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Exit-intent modal — fires once per session for non-authenticated visitors
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [exitEmail, setExitEmail] = useState("");
+  const [exitEmailDone, setExitEmailDone] = useState(false);
+  const [exitEmailSubmitting, setExitEmailSubmitting] = useState(false);
+
   useEffect(() => {
     demoTimerRef.current = setInterval(() => {
       setDemoQueryFade(false);
@@ -542,6 +554,24 @@ export function HomePage() {
       })
       .catch(() => {});
   }, []);
+
+  // Exit-intent: detect mouse leaving the top of the viewport toward browser chrome.
+  // Only fires once per session and never for already-authenticated users.
+  useEffect(() => {
+    if (session) return;
+    if (sessionStorage.getItem("dh_exit_modal_shown")) return;
+
+    let fired = false;
+    const onMouseLeave = (e: MouseEvent) => {
+      if (fired || e.clientY > 10) return;
+      fired = true;
+      sessionStorage.setItem("dh_exit_modal_shown", "1");
+      capture("exit_intent_triggered");
+      setShowExitModal(true);
+    };
+    document.addEventListener("mouseleave", onMouseLeave);
+    return () => document.removeEventListener("mouseleave", onMouseLeave);
+  }, [session]);
 
   const handleWaitlist = (planName: string) => {
     setWaitlistEmail("");
@@ -575,8 +605,54 @@ export function HomePage() {
     navigate(session ? "/settings/billing" : "/signup");
   };
 
+  // 15-day trial: if signed in, start the trial directly; otherwise route to
+  // signup with an intent param so onboarding can resume the flow.
+  const handleStartTrial = async (tierName: string) => {
+    const slug = tierName.toLowerCase() as BillingPlanSlug;
+    if (!session) {
+      navigate(`/signup?trial=${slug}`);
+      return;
+    }
+    try {
+      const res = await startTrialApi(slug);
+      capture("trial_started", { plan: slug, ends_at: res.ends_at });
+      // eslint-disable-next-line no-alert
+      window.alert(`Your 15-day ${tierName} trial is active. Enjoy!`);
+      navigate("/workspace");
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string };
+      if (e?.code === "trial_already_used" || e?.code === "subscription_exists") {
+        navigate("/settings/billing");
+        return;
+      }
+      // eslint-disable-next-line no-alert
+      window.alert(e?.message || "Could not start free trial. Please try again.");
+    }
+  };
+
   const handleGetStarted = () => {
     navigate(session ? "/workspace" : "/signup");
+  };
+
+  const handleExitEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = exitEmail.trim();
+    if (!trimmed) return;
+    setExitEmailSubmitting(true);
+    try {
+      await submitFeedbackForm({
+        name: "Exit-intent lead",
+        email: trimmed,
+        subject: "Exit-intent email capture",
+        message: "Visitor provided email via exit-intent modal on homepage.",
+      });
+      capture("exit_intent_email_captured", { $set: { email: trimmed, $email: trimmed } });
+    } catch {
+      // Non-blocking — still mark as done
+    } finally {
+      setExitEmailSubmitting(false);
+      setExitEmailDone(true);
+    }
   };
 
   const handleScrollHow = () => {
@@ -612,6 +688,8 @@ export function HomePage() {
         message: trimmedMessage,
       });
       setSuccessName(trimmedName);
+      // Identify the visitor in PostHog so session recordings show their name/email
+      capture("contact_form_submitted", { $set: { email: trimmedEmail, $email: trimmedEmail, name: trimmedName, $name: trimmedName } });
       setName("");
       setEmail("");
       setSubject("");
@@ -772,6 +850,9 @@ export function HomePage() {
         onMouseMove={handleMagneticMove}
       >
         <div className="card-glow" />
+        {plan.trialBadge && (
+          <span className="pricing-trial-badge">{plan.trialBadge}</span>
+        )}
         <p className="pricing-tier">{plan.tier}</p>
         <p className="pricing-price">{currency === "INR" ? plan.priceINR : plan.priceUSD}</p>
         <p className="pricing-period">{currency === "INR" ? plan.periodINR : plan.periodUSD}</p>
@@ -785,7 +866,7 @@ export function HomePage() {
             {effectiveLabel}
           </a>
         ) : effectiveAction === "checkout" ? (
-          <button type="button" className={buttonClass} onClick={handleCheckout}>
+          <button type="button" className={buttonClass} onClick={() => handleStartTrial(plan.tier)}>
             {effectiveLabel}
           </button>
         ) : effectiveAction === "waitlist" ? (
@@ -1165,7 +1246,7 @@ export function HomePage() {
             <span className="hero-gradient-text">transparent</span> pricing
           </h2>
           <p className="section-subtitle">
-            Start free. Upgrade when your team is ready. No surprises.
+            Every paid plan includes a <strong>15-day free trial</strong> — no credit card required. Upgrade when your team is ready.
           </p>
         </motion.div>
 
@@ -1480,6 +1561,73 @@ export function HomePage() {
       {showWaitlistToast && (
         <div className="toast">
           You are on the waitlist. We will be in touch.
+        </div>
+      )}
+
+      {/* EXIT-INTENT MODAL */}
+      {showExitModal && (
+        <div className="modal-backdrop" onClick={() => setShowExitModal(false)}>
+          <div className="modal-card exit-intent-card" onClick={(e) => e.stopPropagation()}>
+            <div className="exit-intent-emoji">👋</div>
+            <h3 className="modal-title">Before you go…</h3>
+            <p className="modal-sub">
+              See DataHub in action — no sign-up needed. Try a live demo with real data and AI
+              insights in under 60 seconds.
+            </p>
+            <div className="exit-intent-actions">
+              <button
+                type="button"
+                className="btn-primary-lg"
+                onClick={() => {
+                  capture("exit_intent_try_demo_clicked");
+                  setShowExitModal(false);
+                  navigate("/try");
+                }}
+              >
+                <span className="btn-shine" />
+                Try live demo
+              </button>
+              <button
+                type="button"
+                className="btn-ghost-lg"
+                onClick={() => {
+                  capture("exit_intent_signup_clicked");
+                  setShowExitModal(false);
+                  navigate("/signup");
+                }}
+              >
+                Get started free
+              </button>
+            </div>
+            {!exitEmailDone ? (
+              <form className="exit-intent-email-form" onSubmit={handleExitEmailSubmit}>
+                <p className="exit-intent-email-label">Or drop your email — we will follow up:</p>
+                <div className="exit-intent-email-row">
+                  <input
+                    className="form-input"
+                    type="email"
+                    placeholder="you@company.com"
+                    value={exitEmail}
+                    onChange={(e) => setExitEmail(e.target.value)}
+                    required
+                  />
+                  <button type="submit" className="exit-intent-send-btn" disabled={exitEmailSubmitting}>
+                    {exitEmailSubmitting ? "..." : "Send"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="exit-intent-email-thanks">Got it — we will be in touch soon.</p>
+            )}
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setShowExitModal(false)}
+              aria-label="Close"
+            >
+              x
+            </button>
+          </div>
         </div>
       )}
     </main>

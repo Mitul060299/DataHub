@@ -25,6 +25,7 @@ class UsageLimits(TypedDict):
     data_scan_bytes_per_month: int  # Bytes scanned by DuckDB per month (-1 = unlimited)
     included_seats: int           # Seats included in the base plan price
     max_seats: int                # Hard cap on purchasable seats (-1 = unlimited)
+    token_budget_per_month: int   # Internal token budget (-1 = unlimited)
 
 
 # Per-seat increments for Team and Business plans.
@@ -63,6 +64,7 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "data_scan_bytes_per_month": 5 * 1024 * 1024 * 1024,    # 5 GB
         "included_seats": 1,
         "max_seats": 1,
+        "token_budget_per_month": 500_000,
     },
     "Starter": {
         "api_calls_per_month": 500,
@@ -73,6 +75,7 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "data_scan_bytes_per_month": 25 * 1024 * 1024 * 1024,   # 25 GB
         "included_seats": 1,
         "max_seats": 1,
+        "token_budget_per_month": 1_500_000,
     },
     "Professional": {
         "api_calls_per_month": 1_500,
@@ -83,6 +86,7 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "data_scan_bytes_per_month": 100 * 1024 * 1024 * 1024,  # 100 GB
         "included_seats": 1,
         "max_seats": 1,
+        "token_budget_per_month": 3_000_000,
     },
     "Team": {
         "api_calls_per_month": 4_000,
@@ -93,6 +97,7 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "data_scan_bytes_per_month": 500 * 1024 * 1024 * 1024,  # 500 GB
         "included_seats": 3,
         "max_seats": 25,
+        "token_budget_per_month": 8_000_000,
     },
     "Business": {
         "api_calls_per_month": 15_000,
@@ -103,6 +108,7 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "data_scan_bytes_per_month": 2 * 1024 * 1024 * 1024 * 1024,  # 2 TB
         "included_seats": 5,
         "max_seats": 100,
+        "token_budget_per_month": 20_000_000,
     },
     "Enterprise": {
         "api_calls_per_month": -1,
@@ -113,6 +119,7 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "data_scan_bytes_per_month": -1,
         "included_seats": -1,
         "max_seats": -1,
+        "token_budget_per_month": -1,
     },
 }
 

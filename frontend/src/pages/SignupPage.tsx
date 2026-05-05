@@ -59,7 +59,9 @@ export function SignupPage() {
       setLoading(false);
       return;
     }
-    capture("signup_form_submitted", { method: "email" });
+    // Pass $set so PostHog links this anonymous session to the user's email
+    // immediately — even if they abandon before confirming their account.
+    capture("signup_form_submitted", { method: "email", $set: { email, $email: email, name, $name: name } });
     const { error } = await signUpWithPassword(email, password, name);
     setLoading(false);
     if (error) {
@@ -90,9 +92,9 @@ export function SignupPage() {
     <div className="auth-shell">
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1 className="auth-title">Create your datahub.org.in account</h1>
-        <p className="auth-sub">Start importing, transforming, and scheduling data workflows.</p>
+        <p className="auth-sub">1 month free on all paid plans — no credit card needed to get started.</p>
         <ul className="auth-trust">
-          <li>✓ Free forever plan</li>
+          <li>✓ 15-day free trial on any paid plan</li>
           <li>✓ No credit card</li>
           <li>✓ 2-minute setup</li>
         </ul>

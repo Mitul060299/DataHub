@@ -95,3 +95,34 @@ class AgentState(TypedDict):
     # Tracks which dataset_ids have already been charged for data scan this run,
     # so we don't count the same source dataset multiple times across pipeline steps.
     scan_charged_dataset_ids: NotRequired[list[str]]
+
+    # -----------------------------------------------------------------------
+    # Auto Mode fields  (all NotRequired — absent in Manual Mode)
+    # -----------------------------------------------------------------------
+    auto_mode: NotRequired[bool]
+    auto_run_id: NotRequired[str]           # agent_auto_runs.id
+    auto_goal_raw: NotRequired[str]         # user's raw goal text
+    auto_goal: NotRequired[dict]            # AutoGoal (parsed rules)
+    auto_plan: NotRequired[list[dict]]      # list[AutoPlanStep]
+    current_rule_index: NotRequired[int]    # index into auto_plan
+    reflection_attempts: NotRequired[dict]  # {step_number: tier_reached}
+    reflection_history: NotRequired[dict]   # {step_number: [rationale strings]}
+    last_validation: NotRequired[dict]      # StepValidationResult
+    interrupt_pending: NotRequired[bool]
+    interrupt_question: NotRequired[dict]   # InterruptQuestion | None
+    interrupt_response: NotRequired[str]    # user's answer, set by /resume endpoint
+    goal_report: NotRequired[dict]          # GoalReport
+    goal_verifier_recursions: NotRequired[int]
+    auto_pre_run_review: NotRequired[bool]  # show plan before executing
+    prior_pipeline: NotRequired[dict]       # PriorPipeline | None
+    reference_steps: NotRequired[list[dict]]    # list[ReferenceStep]
+    inferred_expectations: NotRequired[list[dict]]  # list[ColumnExpectation]
+    expected_profile: NotRequired[dict]     # ExpectedProfile | None
+    drift_report: NotRequired[dict]         # DriftReport | None
+    prior_trust_level: NotRequired[str]     # "strict"|"guide"|"reference"
+    active_table_name: NotRequired[str]     # current output DuckDB table name
+    duckdb_conn_path: NotRequired[str]      # DuckDB file path (for validators)
+    total_tokens_used: NotRequired[int]     # running token total for this auto run
+    dry_run: NotRequired[bool]              # SAMPLE 5000 ROWS mode
+    # Internal signals (not persisted)
+    _verifier_trigger_replan: NotRequired[list[int]]  # rule_ids to re-plan

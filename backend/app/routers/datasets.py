@@ -39,7 +39,13 @@ from ..services.object_storage import StorageService
 from ..services.rate_limiter import limiter
 from ..services.storage_tiering import storage_tier_service
 from ..services.plan_guard import resolve_user_plan, enforce_sso
-from ..services.usage_service import enforce_usage_limit, increment_usage, update_storage_bytes
+from ..services.usage_service import (
+    enforce_usage_limit,
+    increment_usage,
+    update_storage_bytes,
+    resolve_billing_user_for_user,
+)
+from ..services import billing_repository
 from ..services.plan_guard import resolve_user_plan, resolve_user_plan_by_id
 from ..services.audit import audit_store
 from ..models import AuditEntry
@@ -47,6 +53,28 @@ from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB
 from ..services.pipeline_runner import run_pipeline as _run_pipeline
 
 logger = logging.getLogger(__name__)
+
+
+def _enforce_api_call(user_id: str | None, db: Session) -> tuple[str, str]:
+    """Enforce monthly api_calls quota for ``user_id`` (org-aware).
+
+    Returns the (billing_user_id, billing_plan) pair so callers can also
+    pass them to ``increment_usage`` against the right account.
+    """
+    uid = user_id or "anonymous"
+    bill_uid = resolve_billing_user_for_user(uid, db) if uid != "anonymous" else uid
+    plan = billing_repository.get_effective_plan(bill_uid, db=db) or "Free"
+    enforce_usage_limit(bill_uid, plan, "api_calls", db)
+    return bill_uid, plan
+
+
+def _enforce_dataset_upload(user_id: str | None, db: Session) -> tuple[str, str]:
+    """Enforce monthly datasets_uploaded quota."""
+    uid = user_id or "anonymous"
+    bill_uid = resolve_billing_user_for_user(uid, db) if uid != "anonymous" else uid
+    plan = billing_repository.get_effective_plan(bill_uid, db=db) or "Free"
+    enforce_usage_limit(bill_uid, plan, "datasets_uploaded", db)
+    return bill_uid, plan
 
 
 def _load_user_dataset(
@@ -1126,6 +1154,7 @@ async def upload_new_version(
     if rows:
         db.add(DatasetDataDB(id=new_id, rows=rows))
     db.commit()
+    _enforce_dataset_upload(user_id, db)
     increment_usage(user_id, "datasets_uploaded", db)
     update_storage_bytes(user_id, db)
 
@@ -1329,6 +1358,7 @@ def query_dataset(
     )
 
     user_id = get_current_user_id(authorization) or "anonymous"
+    _enforce_api_call(user_id, db)
     increment_usage(user_id, "api_calls", db)
     audit_store.add(AuditEntry(
         action="dataset.query",
@@ -1898,6 +1928,7 @@ def export_dataset(
         target=f"dataset:{dataset_id}",
         metadata={"format": "csv"},
     ))
+    _enforce_api_call(user_id, db)
     increment_usage(user_id, "api_calls", db)
     display_name = (meta.name or dataset_id).replace('"', "")
     headers = {"Content-Disposition": f'attachment; filename="{display_name}.csv"'}
@@ -1939,6 +1970,7 @@ def export_dataset_powerbi(
         target=f"dataset:{dataset_id}",
         metadata={"format": "powerbi_xlsx"},
     ))
+    _enforce_api_call(user_id, db)
     increment_usage(user_id, "api_calls", db)
     safe_name = (meta.name or dataset_id).replace('"', "")
     headers = {
@@ -1986,6 +2018,7 @@ def export_dataset_tableau(
         target=f"dataset:{dataset_id}",
         metadata={"format": "tableau_hyper"},
     ))
+    _enforce_api_call(user_id, db)
     increment_usage(user_id, "api_calls", db)
     safe_name = (meta.name or dataset_id).replace('"', "")
     ext = "csv" if mime_type == "text/csv" else "hyper"
@@ -2050,6 +2083,7 @@ def export_dataset_to_sheets(
         target=f"dataset:{dataset_id}",
         metadata={"format": "google_sheets"},
     ))
+    _enforce_api_call(user_id, db)
     increment_usage(user_id, "api_calls", db)
     return result
 

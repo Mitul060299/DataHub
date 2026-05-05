@@ -142,9 +142,23 @@ def get_active_subscription(user_id: str) -> dict[str, Any] | None:
         return None
 
 
-def get_effective_plan(user_id: str) -> str | None:
+def get_effective_plan(user_id: str, db: Any | None = None) -> str | None:
     if not settings.billing_enabled:
         return None
+
+    # 15-day opt-in trial overrides any subscription state while active. If a
+    # trial expires we fall through to the normal subscription resolution so a
+    # user who paid mid-trial keeps their plan.
+    if db is not None and user_id:
+        try:
+            from . import trial_service
+            trial_plan = trial_service.active_trial_plan(user_id, db)
+            if trial_plan:
+                return trial_plan
+        except Exception:
+            # Trial system is best-effort; never block plan resolution.
+            pass
+
     latest = get_latest_subscription(user_id)
     if not latest:
         return None

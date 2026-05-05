@@ -15,6 +15,12 @@ class User(Base):
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_uploaded_first_file = Column(Boolean, nullable=False, default=False)
     notification_prefs = Column(JSONB, nullable=True, default=dict)
+    # 0064 — 15-day opt-in trial state
+    trial_plan = Column(String, nullable=True)
+    trial_started_at = Column(DateTime(timezone=True), nullable=True)
+    trial_ends_at = Column(DateTime(timezone=True), nullable=True)
+    trial_used = Column(Boolean, nullable=False, default=False)
+    payment_method_on_file = Column(Boolean, nullable=False, default=False)
     # Billing columns — added to DB by migration 0025; also accessed via Supabase client in billing_repository
     razorpay_customer_id = Column(String, nullable=True)
     # subscription_id is a UUID FK to subscriptions.id (see migration 0025)
@@ -1118,3 +1124,29 @@ class WaitlistEntryDB(Base):
     plan = Column(String, nullable=False)
     region = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class UsageLogDB(Base):
+    """Per-call AI token log for fair-usage instrumentation.
+
+    Populated by token_tracking_service.log_call() after every Groq API call.
+    The cost_score formula is:  input_tokens + (output_tokens * 2) + (dataset_rows / 1000 * 10).
+    This table is append-only; rows are never updated or deleted.
+    """
+    __tablename__ = "usage_logs"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, index=True)
+    session_id = Column(String, nullable=False, default="", index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    model_used = Column(String, nullable=False, default="")
+    # One of: classify / plan / execute / fix / insights / chat / suggest
+    query_type = Column(String, nullable=False, default="unknown")
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    cost_score = Column(Integer, nullable=False, default=0)
+    dataset_rows = Column(BigInteger, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("idx_usage_logs_user_ts", "user_id", "timestamp"),
+    )

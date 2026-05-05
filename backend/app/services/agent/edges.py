@@ -70,3 +70,92 @@ def route_after_reflect(state: AgentState) -> str:
     if state.get("retry_count", 0) >= 3:
         return "pipeline_recorder"
     return "execute_step"
+
+
+# ---------------------------------------------------------------------------
+# Auto Mode routing helpers
+# ---------------------------------------------------------------------------
+
+def route_intent_auto(state: AgentState) -> str:
+    """Branch after intent_classifier: auto mode vs manual mode."""
+    if state.get("auto_mode"):
+        # If a prior pipeline was supplied, parse it first
+        if state.get("prior_pipeline"):
+            return "prior_pipeline_parser"
+        return "goal_parser"
+    return route_intent(state)
+
+
+def route_after_goal_parser(state: AgentState) -> str:
+    """After goal_parser: run drift detector if expectations exist, else plan."""
+    if state.get("inferred_expectations") or state.get("expected_profile"):
+        return "drift_detector"
+    return "auto_planner"
+
+
+def route_after_prior_pipeline_parser(state: AgentState) -> str:
+    """After parsing prior pipeline: run drift detector before planning."""
+    return "drift_detector"
+
+
+def route_after_drift_detector(state: AgentState) -> str:
+    return "auto_planner"
+
+
+def route_after_auto_plan_presenter(state: AgentState) -> str:
+    """After showing the plan to the user (pre_run_review mode)."""
+    if state.get("plan_approved"):
+        return "execute_step_auto"
+    return "__end__"
+
+
+def route_after_execute_auto(state: AgentState) -> str:
+    """Route after executing one auto step."""
+    last_results = state.get("execution_results", [])
+    last_result = last_results[-1] if last_results else {}
+
+    if last_result.get("error"):
+        return "reflection_v2"
+
+    auto_plan = state.get("auto_plan", [])
+    current_idx = state.get("current_rule_index", 0)
+
+    # Advance index
+    next_idx = current_idx + 1
+    if next_idx < len(auto_plan):
+        step = auto_plan[next_idx]
+        if step.get("needs_validator", True):
+            return "step_validator"
+        return "execute_step_auto"
+    # All steps done — verify goal
+    return "goal_verifier"
+
+
+def route_after_step_validator(state: AgentState) -> str:
+    """After DQ assertion: passed → next step / advance; failed → reflect."""
+    last_val = state.get("last_validation") or {}
+    if last_val.get("passed", True):
+        auto_plan = state.get("auto_plan", [])
+        current_idx = state.get("current_rule_index", 0) + 1
+        if current_idx < len(auto_plan):
+            return "execute_step_auto"
+        return "goal_verifier"
+    return "reflection_v2"
+
+
+def route_after_reflection_v2(state: AgentState) -> str:
+    """After reflection attempt: retry step or escalate to interrupt_asker."""
+    if state.get("interrupt_pending"):
+        return "interrupt_asker"
+    return "execute_step_auto"
+
+
+def route_after_goal_verifier(state: AgentState) -> str:
+    """After final goal check: done (pipeline_recorder) or re-plan (auto_planner) or interrupt."""
+    replan_rules = state.get("_verifier_trigger_replan") or []
+    if replan_rules:
+        return "auto_planner"
+    if state.get("interrupt_pending"):
+        return "interrupt_asker"
+    return "pipeline_recorder"
+

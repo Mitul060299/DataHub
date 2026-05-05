@@ -10,6 +10,7 @@ from langchain_groq import ChatGroq
 from ..prompts import PLANNER_SYSTEM_PROMPT
 from ..state import AgentState, PlanStep
 from ...echarts_builder import infer_chart_type
+from ...token_tracking_service import log_call as _log_call
 
 _logger = logging.getLogger(__name__)
 
@@ -143,6 +144,11 @@ async def planner(state: AgentState) -> dict:
         human_content = f"Generate the execution plan for: {user_goal}"
 
     try:
+        _planner_input_tok = _planner_output_tok = 0
+        _planner_user_id: str = state.get("user_id", "")
+        _planner_session_id: str = state.get("session_id", "")
+        from ..model_router import select_model as _sel
+        _planner_model: str = _sel("plan")
         response = await asyncio.wait_for(
             _get_llm().ainvoke(
                 [
@@ -153,12 +159,26 @@ async def planner(state: AgentState) -> dict:
             timeout=30,
         )
         raw = str(response.content).strip()
+        _um = getattr(response, "usage_metadata", None) or {}
+        _planner_input_tok = _um.get("input_tokens", 0)
+        _planner_output_tok = _um.get("output_tokens", 0)
     except asyncio.TimeoutError:
+        _log_call(user_id=_planner_user_id, session_id=_planner_session_id,
+                  model_used=_planner_model, query_type="plan",
+                  input_tokens=0, output_tokens=0)
         _logger.error("planner LLM timed out after 30s")
         raise RuntimeError("AI service timed out while building plan. Please try again.")
     except Exception as exc:
+        _log_call(user_id=_planner_user_id, session_id=_planner_session_id,
+                  model_used=_planner_model, query_type="plan",
+                  input_tokens=0, output_tokens=0)
         _logger.error("planner LLM error: %s", exc)
         raise RuntimeError(f"AI service error while building plan: {exc}") from exc
+    _log_call(
+        user_id=_planner_user_id, session_id=_planner_session_id,
+        model_used=_planner_model, query_type="plan",
+        input_tokens=_planner_input_tok, output_tokens=_planner_output_tok,
+    )
 
     _logger.info("PLANNER_RAW_RESPONSE: len=%d first200=%s", len(raw), raw[:200])
 

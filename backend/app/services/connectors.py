@@ -124,6 +124,41 @@ def _validate_db_connection_url(connection_url: str) -> None:
 
 _ALLOWED_SQLITE_EXTENSIONS = {".db", ".sqlite", ".sqlite3"}
 
+# Hard upper bound for client-supplied row limits on document/object stores
+# (MongoDB, Salesforce, etc.) to stop a malicious or buggy caller from
+# requesting an unbounded scan that would OOM the worker.
+_MAX_DOCSTORE_ROWS = 50_000
+
+
+def _safe_error(exc: Exception, default: str = "Operation failed") -> str:
+    """Return a generic error message safe to send to API clients.
+
+    Many third-party drivers embed the full connection URL (with username
+    and password) in their exception messages. Returning ``str(exc)`` to the
+    HTTP layer therefore leaks credentials to the caller and into request
+    logs. Always log the full exception server-side and surface only the
+    exception class name to the client.
+    """
+    return f"{default}: {type(exc).__name__}"
+
+
+def _validate_snowflake_account(account: str) -> None:
+    """Block obviously private/loopback Snowflake account identifiers.
+
+    Snowflake accounts are normally short identifiers like ``xy12345.us-east-1``
+    that resolve to ``<acct>.snowflakecomputing.com``. Refuse anything that
+    contains a scheme, a slash, or that resolves locally so the connector
+    can't be tricked into hitting an internal service.
+    """
+    if not account or not isinstance(account, str):
+        raise ValueError("Snowflake account is required")
+    if any(ch in account for ch in ("/", "\\", " ", "@", ":")):
+        raise ValueError("Snowflake account contains forbidden characters")
+    # Resolve the canonical hostname through the SSRF guard.
+    _validate_http_url_no_ssrf(
+        f"https://{account}.snowflakecomputing.com", label="Snowflake account"
+    )
+
 
 def _validate_sqlite_path(file_path: str) -> None:
     """Reject SQLite file_paths that could read arbitrary server files."""
@@ -214,7 +249,7 @@ class SqlQueryConnector:
             if clauses:
                 query = f"{query} WHERE " + " AND ".join(clauses)
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool)
         params = {}
         if updated_at_column and updated_at_since:
             params["updated_at_since"] = updated_at_since
@@ -227,14 +262,14 @@ class SqlQueryConnector:
             if not connection_url:
                 return {"success": False, "error": "connection_url is required"}
 
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 5})
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             
             return {"success": True, "message": "Successfully connected to database"}
         except Exception as e:
             logger.error(f"Database connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Database connection failed")}
 
 
 class PostgreSQLConnector:
@@ -251,7 +286,7 @@ class PostgreSQLConnector:
         if not all([host, database, username, password]):
             raise ValueError("host, database, username, and password are required")
         url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-        return create_engine(url, pool_pre_ping=True)
+        return create_engine(url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
 
     def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
         """Push an arbitrary SQL query to the source PostgreSQL database and return results."""
@@ -285,7 +320,7 @@ class PostgreSQLConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -301,7 +336,7 @@ class PostgreSQLConnector:
             raise ValueError("host, database, username, and password are required")
 
         connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
         
         if_exists = "append" if mode == "append" else "replace"
         df.to_sql(table, engine, schema=schema, if_exists=if_exists, index=False)
@@ -319,7 +354,7 @@ class PostgreSQLConnector:
                 return {"success": False, "error": "Missing required credentials"}
 
             connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 5})
             
             with engine.connect() as conn:
                 result = conn.execute(text("SELECT version()"))
@@ -328,7 +363,7 @@ class PostgreSQLConnector:
             return {"success": True, "message": f"Successfully connected to PostgreSQL"}
         except Exception as e:
             logger.error(f"PostgreSQL connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "PostgreSQL connection failed")}
 
     def list_tables(self, config: Dict[str, Any]) -> list:
         try:
@@ -340,7 +375,7 @@ class PostgreSQLConnector:
             if not all([host, database, username, password]):
                 return []
             connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 5})
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT t.table_schema, t.table_name,
@@ -406,7 +441,7 @@ class MySQLConnector:
         if not all([host, database, username, password]):
             raise ValueError("host, database, username, and password are required")
         url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
-        return create_engine(url, pool_pre_ping=True)
+        return create_engine(url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
 
     def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
         """Push an arbitrary SQL query to the source MySQL database and return results."""
@@ -438,7 +473,7 @@ class MySQLConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -453,7 +488,7 @@ class MySQLConnector:
             raise ValueError("host, database, username, and password are required")
 
         connection_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
         
         if_exists = "append" if mode == "append" else "replace"
         df.to_sql(table, engine, if_exists=if_exists, index=False)
@@ -471,7 +506,7 @@ class MySQLConnector:
                 return {"success": False, "error": "Missing required credentials"}
 
             connection_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 5})
             
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -479,7 +514,7 @@ class MySQLConnector:
             return {"success": True, "message": f"Successfully connected to MySQL database '{database}'"}
         except Exception as e:
             logger.error(f"MySQL connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "MySQL connection failed")}
 
     def list_tables(self, config: Dict[str, Any]) -> list:
         try:
@@ -491,7 +526,7 @@ class MySQLConnector:
             if not all([host, database, username, password]):
                 return []
             connection_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 5})
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT TABLE_SCHEMA, TABLE_NAME, COALESCE(TABLE_ROWS, 0)
@@ -519,7 +554,7 @@ class SQLServerConnector:
         if not all([host, database, username, password]):
             raise ValueError("host, database, username, and password are required")
         url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
-        return create_engine(url, pool_pre_ping=True)
+        return create_engine(url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 10})
 
     def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
         """Push an arbitrary SQL query to the source SQL Server database and return results."""
@@ -551,7 +586,7 @@ class SQLServerConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 10})
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -566,7 +601,7 @@ class SQLServerConnector:
             raise ValueError("host, database, username, and password are required")
 
         connection_url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 10})
         
         if_exists = "append" if mode == "append" else "replace"
         df.to_sql(table, engine, if_exists=if_exists, index=False)
@@ -584,7 +619,7 @@ class SQLServerConnector:
                 return {"success": False, "error": "Missing required credentials"}
 
             connection_url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 5})
             
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -592,7 +627,7 @@ class SQLServerConnector:
             return {"success": True, "message": f"Successfully connected to SQL Server database '{database}'"}
         except Exception as e:
             logger.error(f"SQL Server connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "SQL Server connection failed")}
 
     def list_tables(self, config: Dict[str, Any]) -> list:
         try:
@@ -604,7 +639,7 @@ class SQLServerConnector:
             if not all([host, database, username, password]):
                 return []
             connection_url = f"mssql+pymssql://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 5})
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT TABLE_SCHEMA, TABLE_NAME, 0
@@ -636,7 +671,7 @@ class OracleConnector:
             raise ValueError("service_name or sid is required")
         dsn = f"{host}:{port}/{service_name or sid}"
         url = f"oracle+oracledb://{username}:{password}@{dsn}"
-        return create_engine(url, pool_pre_ping=True, thick_mode=False)
+        return create_engine(url, pool_pre_ping=True, poolclass=NullPool, thick_mode=False, connect_args={"tcp_connect_timeout": 10})
 
     def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
         """Push an arbitrary SQL query to the source Oracle database and return results."""
@@ -676,7 +711,7 @@ class OracleConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
-        engine = create_engine(connection_url, pool_pre_ping=True, thick_mode=False)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, thick_mode=False, connect_args={"tcp_connect_timeout": 10})
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -699,7 +734,7 @@ class OracleConnector:
             dsn = f"{host}:{port}/{sid}"
         
         connection_url = f"oracle+oracledb://{username}:{password}@{dsn}"
-        engine = create_engine(connection_url, pool_pre_ping=True, thick_mode=False)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, thick_mode=False, connect_args={"tcp_connect_timeout": 10})
         
         if_exists = "append" if mode == "append" else "replace"
         df.to_sql(table, engine, if_exists=if_exists, index=False)
@@ -725,7 +760,7 @@ class OracleConnector:
                 dsn = f"{host}:{port}/{sid}"
             
             connection_url = f"oracle+oracledb://{username}:{password}@{dsn}"
-            engine = create_engine(connection_url, pool_pre_ping=True, thick_mode=False)
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, thick_mode=False)
             
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1 FROM DUAL"))
@@ -733,7 +768,7 @@ class OracleConnector:
             return {"success": True, "message": f"Successfully connected to Oracle database at {host}"}
         except Exception as e:
             logger.error(f"Oracle connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Oracle connection failed")}
 
     def list_tables(self, config: Dict[str, Any]) -> list:
         try:
@@ -747,7 +782,7 @@ class OracleConnector:
                 return []
             dsn = f"{host}:{port}/{service_name or sid}"
             connection_url = f"oracle+oracledb://{username}:{password}@{dsn}"
-            engine = create_engine(connection_url, pool_pre_ping=True, thick_mode=False)
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, thick_mode=False)
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     SELECT owner, table_name, COALESCE(num_rows, 0)
@@ -818,7 +853,7 @@ class SQLiteConnector:
             return {"success": True, "message": f"Successfully connected to SQLite database '{file_path}'"}
         except Exception as e:
             logger.error(f"SQLite connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "SQLite connection failed")}
 
     def list_tables(self, config: Dict[str, Any]) -> list:
         try:
@@ -831,7 +866,13 @@ class SQLiteConnector:
                 result = conn.execute(text(
                     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
                 ))
-                return [{"schema": "main", "table": r[0], "row_count": 0} for r in result.fetchall()]
+                tables = [r[0] for r in result.fetchall()]
+                out = []
+                for tbl in tables:
+                    _validate_identifier(tbl, "table")
+                    count_row = conn.execute(text(f'SELECT COUNT(*) FROM "{tbl}"')).fetchone()
+                    out.append({"schema": "main", "table": tbl, "row_count": count_row[0]})
+                return out
         except Exception as e:
             logger.error(f"SQLite list_tables failed: {e}")
             return []
@@ -854,7 +895,12 @@ class MongoDBConnector:
         username = config.get("username")
         password = config.get("password")
         query = config.get("query", {})
-        limit = config.get("limit", 1000)
+        # SECURITY: clamp caller-supplied row count to a hard upper bound so a
+        # malicious or buggy client can't request an unbounded scan.
+        try:
+            limit = max(1, min(int(config.get("limit", 1000)), _MAX_DOCSTORE_ROWS))
+        except (TypeError, ValueError):
+            limit = 1000
 
         if not all([database, collection]):
             raise ValueError("database and collection are required")
@@ -864,6 +910,9 @@ class MongoDBConnector:
             connection_url = f"mongodb://{username}:{password}@{host}:{port}/{database}"
         else:
             connection_url = f"mongodb://{host}:{port}/{database}"
+
+        # SECURITY: SSRF guard on the (possibly user-supplied) host.
+        _validate_db_connection_url(connection_url)
 
         client = MongoClient(connection_url, serverSelectionTimeoutMS=5000)
         db = client[database]
@@ -897,6 +946,9 @@ class MongoDBConnector:
         else:
             connection_url = f"mongodb://{host}:{port}/{database}"
 
+        # SECURITY: SSRF guard on the (possibly user-supplied) host.
+        _validate_db_connection_url(connection_url)
+
         client = MongoClient(connection_url, serverSelectionTimeoutMS=5000)
         db = client[database]
         coll = db[collection]
@@ -927,6 +979,9 @@ class MongoDBConnector:
             else:
                 connection_url = f"mongodb://{host}:{port}/{database}"
 
+            # SECURITY: SSRF guard on the (possibly user-supplied) host.
+            _validate_db_connection_url(connection_url)
+
             client = MongoClient(connection_url, serverSelectionTimeoutMS=5000)
             client.server_info()  # Force connection
             client.close()
@@ -934,7 +989,7 @@ class MongoDBConnector:
             return {"success": True, "message": f"Successfully connected to MongoDB database '{database}'"}
         except Exception as e:
             logger.error(f"MongoDB connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "MongoDB connection failed")}
 
 
 # ===========================================
@@ -964,6 +1019,9 @@ class SnowflakeConnector:
             raise ValueError("account, username, password, warehouse, and database are required")
         if not query and not table:
             raise ValueError("query or table is required")
+
+        # SECURITY: SSRF guard on the user-supplied account identifier.
+        _validate_snowflake_account(account)
 
         conn = snowflake.connector.connect(
             account=account,
@@ -1000,6 +1058,9 @@ class SnowflakeConnector:
         if not all([account, username, password, warehouse, database]):
             raise ValueError("account, username, password, warehouse, and database are required")
 
+        # SECURITY: SSRF guard on the user-supplied account identifier.
+        _validate_snowflake_account(account)
+
         conn = snowflake.connector.connect(
             account=account,
             user=username,
@@ -1012,7 +1073,11 @@ class SnowflakeConnector:
         if mode == "replace":
             _validate_identifier(table, "table")
             cursor = conn.cursor()
-            cursor.execute(f"TRUNCATE TABLE IF EXISTS {table}")
+            # SECURITY: quote the identifier so a `_validate_identifier`-clean
+            # but case-sensitive name (e.g. `MyTable`) still resolves correctly
+            # in Snowflake, where unquoted identifiers are folded to upper-case.
+            safe_table = table.replace('"', '""')
+            cursor.execute(f'TRUNCATE TABLE IF EXISTS "{safe_table}"')
             cursor.close()
 
         success, nchunks, nrows, _ = write_pandas(conn, df, table)
@@ -1036,6 +1101,9 @@ class SnowflakeConnector:
             if not all([account, username, password, warehouse, database]):
                 return {"success": False, "error": "Missing required credentials"}
 
+            # SECURITY: SSRF guard on the user-supplied account identifier.
+            _validate_snowflake_account(account)
+
             conn = snowflake.connector.connect(
                 account=account,
                 user=username,
@@ -1054,7 +1122,7 @@ class SnowflakeConnector:
             return {"success": True, "message": f"Successfully connected to Snowflake (version {version})"}
         except Exception as e:
             logger.error(f"Snowflake connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Snowflake connection failed")}
 
 
 class BigQueryConnector:
@@ -1161,7 +1229,7 @@ class BigQueryConnector:
             return {"success": True, "message": f"Successfully connected to BigQuery project '{project_id}'"}
         except Exception as e:
             logger.error(f"BigQuery connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "BigQuery connection failed")}
 
 
 class RedshiftConnector:
@@ -1190,7 +1258,7 @@ class RedshiftConnector:
             _validate_identifier(schema, "schema")
             query = f'SELECT * FROM "{schema}"."{table}"'
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -1206,7 +1274,7 @@ class RedshiftConnector:
             raise ValueError("host, database, username, and password are required")
 
         connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
         
         if_exists = "append" if mode == "append" else "replace"
         df.to_sql(table, engine, schema=schema, if_exists=if_exists, index=False, method="multi")
@@ -1224,7 +1292,7 @@ class RedshiftConnector:
                 return {"success": False, "error": "Missing required credentials"}
 
             connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 5})
             
             with engine.connect() as conn:
                 result = conn.execute(text("SELECT version()"))
@@ -1233,7 +1301,7 @@ class RedshiftConnector:
             return {"success": True, "message": f"Successfully connected to Redshift"}
         except Exception as e:
             logger.error(f"Redshift connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Redshift connection failed")}
 
 
 class AzureSynapseConnector:
@@ -1261,7 +1329,7 @@ class AzureSynapseConnector:
             _validate_identifier(schema, "schema")
             query = f"SELECT * FROM {schema}.{table}"
 
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 10})
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
 
@@ -1276,7 +1344,7 @@ class AzureSynapseConnector:
             raise ValueError("server, database, username, and password are required")
 
         connection_url = f"mssql+pymssql://{username}:{password}@{server}/{database}"
-        engine = create_engine(connection_url, pool_pre_ping=True)
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 10})
         
         if_exists = "append" if mode == "append" else "replace"
         df.to_sql(table, engine, schema=schema, if_exists=if_exists, index=False)
@@ -1293,7 +1361,7 @@ class AzureSynapseConnector:
                 return {"success": False, "error": "Missing required credentials"}
 
             connection_url = f"mssql+pymssql://{username}:{password}@{server}/{database}"
-            engine = create_engine(connection_url, pool_pre_ping=True, connect_args={"timeout": 5})
+            engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 5})
             
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -1301,7 +1369,7 @@ class AzureSynapseConnector:
             return {"success": True, "message": f"Successfully connected to Azure Synapse database '{database}'"}
         except Exception as e:
             logger.error(f"Azure Synapse connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Azure Synapse connection failed")}
 
 
 # ===========================================
@@ -1380,7 +1448,7 @@ class SalesforceConnector:
             return {"success": True, "message": f"Successfully connected to Salesforce org '{org_name}'"}
         except Exception as e:
             logger.error(f"Salesforce connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Salesforce connection failed")}
 
 
 # ===========================================
@@ -1550,7 +1618,7 @@ class S3Connector:
             return {"success": False, "error": str(exc)}
         except Exception as e:
             logger.error(f"S3 connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "S3 connection failed")}
 
 
 class GCSConnector:
@@ -1650,7 +1718,7 @@ class GCSConnector:
             return {"success": False, "error": str(exc)}
         except Exception as e:
             logger.error(f"GCS connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "GCS connection failed")}
 
 
 class AzureBlobConnector:
@@ -1751,7 +1819,7 @@ class AzureBlobConnector:
             return {"success": False, "error": str(exc)}
         except Exception as e:
             logger.error(f"Azure Blob connection test failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": _safe_error(e, "Azure Blob connection failed")}
 
 
 class ConnectorRegistry:

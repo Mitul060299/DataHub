@@ -60,6 +60,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
 from .routers import full_auto_routes
+from .routers import usage as usage_routes
+from .routers import trial as trial_routes
 # ml_routes intentionally not imported — ML/AutoML services are not yet
 # production-ready. The endpoints have been removed for the GA launch and
 # will be re-introduced once the underlying training pipeline is real.
@@ -201,6 +203,12 @@ def _apply_startup_ddl() -> None:
         # 0028 — user onboarding flags
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN NOT NULL DEFAULT false",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_uploaded_first_file BOOLEAN NOT NULL DEFAULT false",
+        # 0064 — 15-day opt-in trial state (one trial per user; abuse prevention)
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_plan TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_used BOOLEAN NOT NULL DEFAULT false",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_method_on_file BOOLEAN NOT NULL DEFAULT false",
         # 0029 — projects table
         """CREATE TABLE IF NOT EXISTS projects (
             id TEXT PRIMARY KEY,
@@ -436,6 +444,63 @@ def _apply_startup_ddl() -> None:
         "CREATE INDEX IF NOT EXISTS ix_dataset_meta_project_id ON dataset_meta (project_id)",
         # 0058 — snapshot path on each pipeline step (replay-from-Parquet path).
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS snapshot_path TEXT",
+        # 0069 — Auto Mode: auto runs + pipeline step audit columns
+        """CREATE TABLE IF NOT EXISTS agent_auto_runs (
+            id                 TEXT PRIMARY KEY,
+            user_id            TEXT NOT NULL,
+            project_id         TEXT NOT NULL,
+            dataset_id         TEXT NOT NULL,
+            session_id         TEXT NOT NULL,
+            goal_raw           TEXT NOT NULL,
+            goal_parsed        JSONB,
+            plan               JSONB,
+            status             TEXT NOT NULL DEFAULT 'running',
+            rules_total        INTEGER,
+            rules_satisfied    INTEGER,
+            rules_failed       INTEGER,
+            rules_skipped      INTEGER,
+            pipeline_run_id    TEXT,
+            output_table_name  TEXT,
+            output_dataset_id  TEXT,
+            interrupt_log      JSONB DEFAULT '[]',
+            reflection_log     JSONB DEFAULT '[]',
+            goal_report        JSONB,
+            tokens_used        INTEGER DEFAULT 0,
+            duration_ms        INTEGER,
+            error_message      TEXT,
+            pre_run_review     BOOLEAN NOT NULL DEFAULT FALSE,
+            dry_run            BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+            completed_at       TIMESTAMPTZ
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_user      ON agent_auto_runs (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_project   ON agent_auto_runs (project_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_session   ON agent_auto_runs (session_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_dataset   ON agent_auto_runs (dataset_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_auto_runs_status    ON agent_auto_runs (status)",
+        """CREATE TABLE IF NOT EXISTS agent_recipes (
+            id                 TEXT PRIMARY KEY,
+            project_id         TEXT NOT NULL,
+            created_by         TEXT NOT NULL,
+            name               TEXT NOT NULL,
+            description        TEXT,
+            schema_fingerprint TEXT NOT NULL DEFAULT '',
+            goal_text          TEXT NOT NULL,
+            rules              JSONB NOT NULL DEFAULT '[]',
+            reference_steps    JSONB NOT NULL DEFAULT '[]',
+            expectations       JSONB NOT NULL DEFAULT '[]',
+            trust_level        TEXT NOT NULL DEFAULT 'guide',
+            run_count          INTEGER NOT NULL DEFAULT 0,
+            success_count      INTEGER NOT NULL DEFAULT 0,
+            last_run_id        TEXT,
+            created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_agent_recipes_project     ON agent_recipes (project_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_recipes_fingerprint ON agent_recipes (schema_fingerprint)",
+        "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS auto_run_id        TEXT",
+        "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS rule_justification TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_pipeline_steps_auto_run ON pipeline_steps (auto_run_id)",
     ]
     try:
         from sqlalchemy import text as _text
@@ -622,6 +687,7 @@ app.include_router(pipeline_workflows.router)
 app.include_router(feedback.router)
 app.include_router(reviews.router)
 app.include_router(billing.router)
+app.include_router(trial_routes.router)
 app.include_router(pipeline_refresh.router)
 app.include_router(cron.router)
 app.include_router(data_sources.router)
@@ -635,3 +701,4 @@ app.include_router(project_members_router)
 app.include_router(project_invite_router)
 app.include_router(organization_members_router)
 app.include_router(org_invite_router)
+app.include_router(usage_routes.router)

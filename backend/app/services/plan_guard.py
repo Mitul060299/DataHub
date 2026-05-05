@@ -157,7 +157,7 @@ def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
     billing_user_id = resolve_org_owner_user_id(user_id, db) if user_id else user_id
 
     if settings.billing_enabled and billing_user_id:
-        effective_plan = billing_repository.get_effective_plan(billing_user_id)
+        effective_plan = billing_repository.get_effective_plan(billing_user_id, db=db)
         if effective_plan:
             return normalize_plan(effective_plan)
     user = db.query(User).filter(User.id == billing_user_id).first()
@@ -408,7 +408,7 @@ def resolve_user_plan(db: Session, authorization: str | None) -> str:
     subject = get_current_subject(authorization)
 
     if settings.billing_enabled and user_id:
-        effective_plan = billing_repository.get_effective_plan(user_id)
+        effective_plan = billing_repository.get_effective_plan(user_id, db=db)
         if effective_plan:
             return normalize_plan(effective_plan)
 

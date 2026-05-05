@@ -13,7 +13,8 @@ from .datasets import get_dataset, get_dataset_from_db, save_dataset
 from ..security import get_current_role, get_current_user_id, require_role
 from ..db import get_db
 from ..services.audit import audit_store
-from ..services.usage_service import increment_usage
+from ..services.usage_service import enforce_usage_limit, increment_usage
+from ..services import billing_repository
 from ..models import AuditEntry
 
 router = APIRouter(prefix="/transformations", tags=["transformations"])
@@ -146,6 +147,9 @@ def apply_recipe(
             metadata={"new_dataset_id": new_id, "steps": len(recipe.steps)},
         )
     )
+    # Quota gate before metering.
+    _bplan = billing_repository.get_effective_plan(user_id, db=db) or "Free"
+    enforce_usage_limit(user_id, _bplan, "api_calls", db)
     increment_usage(user_id, "api_calls", db)
     try:
         from ..services.events import emit_event

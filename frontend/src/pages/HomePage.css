@@ -1398,6 +1398,20 @@
     0 0 40px color-mix(in srgb, var(--plan-color, var(--hp-purple)) 18%, transparent);
 }
 
+.pricing-trial-badge {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--plan-color, var(--hp-purple)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--plan-color, var(--hp-purple)) 45%, transparent);
+  color: var(--plan-color, var(--hp-purple));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .pricing-tier {
   font-size: 13px;
   font-weight: 600;
@@ -1967,6 +1981,69 @@
 .modal-close:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* Exit-intent modal extras */
+.exit-intent-card {
+  text-align: center;
+  max-width: 460px;
+}
+
+.exit-intent-emoji {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.exit-intent-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.exit-intent-email-form {
+  border-top: 1px solid var(--hp-line-strong);
+  padding-top: 20px;
+}
+
+.exit-intent-email-label {
+  font-size: 13px;
+  color: var(--hp-text-2);
+  margin: 0 0 10px;
+}
+
+.exit-intent-email-row {
+  display: flex;
+  gap: 8px;
+}
+
+.exit-intent-email-row .form-input {
+  flex: 1;
+}
+
+.exit-intent-send-btn {
+  padding: 0 18px;
+  height: 44px;
+  border-radius: 10px;
+  border: none;
+  background: var(--hp-purple);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.exit-intent-send-btn:hover { opacity: 0.85; }
+.exit-intent-send-btn:disabled { opacity: 0.5; cursor: default; }
+
+.exit-intent-email-thanks {
+  font-size: 14px;
+  color: #86efac;
+  margin: 16px 0 0;
+  border-top: 1px solid var(--hp-line-strong);
+  padding-top: 16px;
 }
 
 .toast {

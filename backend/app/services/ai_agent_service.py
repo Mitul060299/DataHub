@@ -13,6 +13,7 @@ from ..config import settings
 from ..services.duckdb_service import DuckDBService
 from ..services.data_conversion import DataConversionService
 from ..models_db import DatasetMetaDB, DatasetChunkDB, DatasetDataDB
+from ..services.token_tracking_service import log_call
 
 
 class AIAgentService:
@@ -34,6 +35,7 @@ class AIAgentService:
         dataset_id: str,
         db: Session,
         *,
+        user_id: str = "",
         session_id: str | None = None,
         table_name: str | None = None,
         client_pipeline_steps: list[dict[str, Any]] | None = None,
@@ -107,8 +109,9 @@ class AIAgentService:
             "Identify ALL data quality issues and suggest cleaning operations."
         )
 
+        _usage: dict[str, Any] = {}
         try:
-            response = AIAgentService._call_llm(
+            response, _usage = AIAgentService._call_llm(
                 [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -119,6 +122,15 @@ class AIAgentService:
                 response_format={"type": "json_object"},
             )
         except Exception as exc:
+            log_call(
+                user_id=user_id,
+                session_id=session_id or "",
+                model_used=model,
+                query_type="insights",
+                input_tokens=0,
+                output_tokens=0,
+                dataset_rows=context.get("rowCount", 0),
+            )
             return {
                 "issues": [],
                 "suggestions": [],
@@ -127,6 +139,15 @@ class AIAgentService:
                 "session_fallback_reason": context.get("sessionFallbackReason"),
                 "error": f"Groq request failed: {str(exc)}",
             }
+        log_call(
+            user_id=user_id,
+            session_id=session_id or "",
+            model_used=model,
+            query_type="insights",
+            input_tokens=_usage.get("prompt_tokens", 0),
+            output_tokens=_usage.get("completion_tokens", 0),
+            dataset_rows=context.get("rowCount", 0),
+        )
 
         payload = AIAgentService._safe_json(response)
         if not isinstance(payload, dict):
@@ -240,6 +261,8 @@ class AIAgentService:
         conversation_history: list[dict[str, Any]],
         db: Session,
         secondary_dataset_ids: list[str] | None = None,
+        user_id: str = "",
+        session_id: str = "",
     ) -> dict[str, Any]:
         context = AIAgentService._get_dataset_context(dataset_id, db)
         provider, api_key, model = AIAgentService._provider_config()
@@ -352,8 +375,9 @@ class AIAgentService:
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": user_message})
 
+        _usage2: dict[str, Any] = {}
         try:
-            response = AIAgentService._call_llm(
+            response, _usage2 = AIAgentService._call_llm(
                 messages,
                 provider=provider,
                 api_key=api_key,
@@ -361,11 +385,27 @@ class AIAgentService:
                 response_format={"type": "json_object"},
             )
         except Exception as exc:
+            log_call(
+                user_id=user_id,
+                session_id=session_id,
+                model_used=model,
+                query_type="execute",
+                input_tokens=0,
+                output_tokens=0,
+            )
             return {
                 "response": f"Groq request failed: {str(exc)}. Verify GROQ_API_KEY and GROQ_MODEL.",
                 "transformation": None,
                 "needsConfirmation": False,
             }
+        log_call(
+            user_id=user_id,
+            session_id=session_id,
+            model_used=model,
+            query_type="execute",
+            input_tokens=_usage2.get("prompt_tokens", 0),
+            output_tokens=_usage2.get("completion_tokens", 0),
+        )
         payload = AIAgentService._safe_json(response)
         if not isinstance(payload, dict):
             return {
@@ -395,7 +435,12 @@ class AIAgentService:
         api_key: str,
         model: str,
         response_format: dict[str, Any] | None = None,
-    ) -> str:
+    ) -> tuple[str, dict[str, Any]]:
+        """Call the LLM and return (content, usage_dict).
+
+        usage_dict has keys prompt_tokens, completion_tokens, total_tokens
+        (same as Groq's response.usage object).
+        """
         base_url = AIAgentService._provider_base_url(provider)
         resolved_model = AIAgentService._resolve_model_name(model)
         body: dict[str, Any] = {
@@ -412,7 +457,10 @@ class AIAgentService:
             timeout=30.0,
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        usage = data.get("usage") or {}
+        return content, usage
 
     @staticmethod
     def _sanitize_for_prompt(value: str, max_len: int = 100) -> str:

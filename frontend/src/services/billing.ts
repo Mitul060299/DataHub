@@ -245,3 +245,42 @@ export async function purchaseSeats(quantity: number): Promise<{
   const response = await api.post("/billing/seats", { quantity });
   return response.data;
 }
+
+
+// ─────────────────────────── 15-day free trial ──────────────────────────────
+
+export interface TrialStatus {
+  active: boolean;
+  used: boolean;
+  plan: string | null;
+  started_at: string | null;
+  ends_at: string | null;
+  days_remaining: number;
+  payment_method_on_file: boolean;
+}
+
+/** Activate a 15-day free trial on the chosen paid plan. */
+export async function startTrial(plan: BillingPlanSlug): Promise<TrialStatus> {
+  try {
+    const response = await api.post("/billing/trial/start", { plan });
+    return response.data as TrialStatus;
+  } catch (err: unknown) {
+    const maybe = err as {
+      response?: { data?: { detail?: { error?: string; message?: string } | string } };
+    };
+    const detail = maybe?.response?.data?.detail;
+    if (detail && typeof detail === "object") {
+      throw new BillingError(detail.message || "Could not start free trial.", detail.error);
+    }
+    if (typeof detail === "string") {
+      throw new BillingError(detail);
+    }
+    throw new BillingError("Could not start free trial. Please try again.");
+  }
+}
+
+/** Read current trial state for the signed-in user. */
+export async function fetchTrialStatus(): Promise<TrialStatus> {
+  const response = await api.get("/billing/trial/status");
+  return response.data as TrialStatus;
+}

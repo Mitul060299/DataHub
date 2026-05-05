@@ -1479,7 +1479,6 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           </div>
         ) : null}
       </div>
-      </div>
       )}
 
       {agentMode === "manual" && (

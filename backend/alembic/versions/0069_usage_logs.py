@@ -12,7 +12,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "0069_usage_logs"
-down_revision = "0068_add_organizations"
+down_revision = "0068"
 branch_labels = None
 depends_on = None
 

@@ -168,6 +168,7 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{}'",
         "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false",
         "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS share_token TEXT",
+        "ALTER TABLE dashboards_v2 ADD COLUMN IF NOT EXISTS share_expires_at TIMESTAMPTZ",
         # 0027 — dashboard_tiles extended columns
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS tile_type TEXT NOT NULL DEFAULT 'chart'",
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS echarts_config JSONB",

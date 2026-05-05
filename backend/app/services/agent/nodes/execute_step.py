@@ -37,6 +37,72 @@ def _sanitize_sql_quotes(sql: str) -> str:
     return re.sub(r'`([^`]+)`', r'"\1"', sql)
 
 
+def _fix_coalesce_star_collision(sql: str) -> str:
+    """Auto-insert ``EXCLUDE`` after ``*`` when the SELECT also defines an alias
+    matching an existing column (typical clean / null-fill pattern).
+
+    The LLM frequently produces:
+        SELECT COALESCE("Item", 'unknown') AS "Item", * FROM tbl
+    DuckDB rejects this with:
+        Binder Error: Column "Item" referenced that exists in the SELECT clause
+        - but this column cannot be referenced before it is defined.
+
+    Rewrites to:
+        SELECT COALESCE("Item", 'unknown') AS "Item", * EXCLUDE ("Item") FROM tbl
+
+    Only touches plain SELECT statements where ``*`` appears unqualified (not
+    ``t.*``) and is not already followed by EXCLUDE / REPLACE.
+    """
+    if not sql or '*' not in sql:
+        return sql
+
+    # Match a single SELECT … FROM head (anchored at the start, case-insensitive,
+    # DOTALL so multi-line lists work). Capture the SELECT list between SELECT
+    # and the FROM keyword.
+    head_re = re.compile(
+        r'^(\s*SELECT\s+)(.+?)(\s+FROM\s+)',
+        re.IGNORECASE | re.DOTALL,
+    )
+    m = head_re.match(sql)
+    if not m:
+        return sql
+    select_list = m.group(2)
+
+    # Find a bare ``*`` (not preceded by ``.`` and not already followed by
+    # EXCLUDE/REPLACE). Allow whitespace/parens around it.
+    star_re = re.compile(
+        r'(?<![\w.])\*(?!\s*(?:EXCLUDE|REPLACE)\b)',
+        re.IGNORECASE,
+    )
+    if not star_re.search(select_list):
+        return sql
+
+    # Collect aliases of the form ``... AS "<name>"`` or ``... AS <name>``.
+    alias_re = re.compile(
+        r'\bAS\s+("([^"]+)"|`([^`]+)`|([A-Za-z_][\w]*))',
+        re.IGNORECASE,
+    )
+    aliases: list[str] = []
+    for am in alias_re.finditer(select_list):
+        aliases.append(am.group(2) or am.group(3) or am.group(4) or "")
+    aliases = [a for a in aliases if a]
+    if not aliases:
+        return sql
+
+    # Quote each alias for the EXCLUDE clause.
+    excluded = ", ".join(f'"{a}"' for a in aliases)
+    new_select_list = star_re.sub(f"* EXCLUDE ({excluded})", select_list, count=1)
+    if new_select_list == select_list:
+        return sql
+
+    logging.getLogger(__name__).warning(
+        "SQL_COALESCE_STAR_FIX: auto-inserted EXCLUDE (%s) after '*' to avoid "
+        "DuckDB binder collision with redefined column(s).",
+        excluded,
+    )
+    return sql[: m.start(2)] + new_select_list + sql[m.end(2):]
+
+
 def _primary_alias_from_state(state: AgentState) -> str:
     """Return the primary dataset's named DuckDB alias (never the generic 'dataset')."""
     table_registry: dict = dict(state.get("table_registry") or {})
@@ -82,14 +148,18 @@ def _rewrite_stale_source(sql: str, state: AgentState) -> str:
     table with a higher pipeline_step_number already exists in the registry,
     rewrite FROM/JOIN to use that derived table instead.
 
-    This catches prompt-compliance failures in sequential clean chains where the
-    LLM ignores rule 10 and defaults back to the original dataset alias.
+    Also catches HALLUCINATED chain names (e.g. ``FROM <primary>_clean``) where
+    the LLM guessed a step output name instead of using the actual registered
+    duckdb_name (``clean_<n>_<hex6>``). Any FROM/JOIN target that is not present
+    in the table_registry is rewritten to the latest derived predecessor.
+
     Logs SQL_CHAIN_FALLBACK for observability.
     """
     table_registry: dict = dict(state.get("table_registry") or {})
     primary = _primary_alias_from_state(state)
     if not primary or primary == "dataset":
         return sql
+    # Latest derived table in the registry.
     best_alias: str | None = None
     best_step = -1
     for name, entry in table_registry.items():
@@ -100,15 +170,31 @@ def _rewrite_stale_source(sql: str, state: AgentState) -> str:
             best_alias, best_step = name, sn
     if not best_alias:
         return sql
-    pattern = re.compile(rf'\b(FROM|JOIN)\s+{re.escape(primary)}\b', re.IGNORECASE)
-    if pattern.search(sql):
-        logging.getLogger(__name__).warning(
-            "SQL_CHAIN_FALLBACK: SQL references raw source '%s' but derived table "
-            "'%s' (step %d) exists — rewriting to use derived table.",
-            primary, best_alias, best_step,
-        )
-        return pattern.sub(lambda m: f"{m.group(1)} {best_alias}", sql)
-    return sql
+
+    log = logging.getLogger(__name__)
+    known_tables = {
+        n for n, e in table_registry.items()
+        if isinstance(e, dict) and n != "__primary_alias__"
+    }
+
+    def _sub(match: "re.Match[str]") -> str:
+        kw = match.group(1)
+        target = match.group(2)
+        # Strip optional surrounding quotes/backticks.
+        target_clean = target.strip().strip('"').strip("`")
+        if target_clean == primary or target_clean not in known_tables:
+            log.warning(
+                "SQL_CHAIN_FALLBACK: SQL references '%s' (primary=%s, known=%s) — "
+                "rewriting to derived table '%s' (step %d).",
+                target_clean, primary, sorted(known_tables), best_alias, best_step,
+            )
+            return f"{kw} {best_alias}"
+        return match.group(0)
+
+    # Match FROM/JOIN <ident> where ident is an unquoted identifier.
+    # We deliberately skip subquery refs (FROM ( ... )) and quoted schemas.
+    pattern = re.compile(r'\b(FROM|JOIN)\s+([A-Za-z_][\w]*)\b', re.IGNORECASE)
+    return pattern.sub(_sub, sql)
 
 
 def _resolve_input_table(step: dict, state: AgentState) -> str:
@@ -189,6 +275,9 @@ async def execute_step(state: AgentState) -> dict:
         # Safety net: if LLM ignored chain rule and wrote FROM <original> when a derived
         # table already exists, silently promote to the latest derived table.
         step_sql = _rewrite_stale_source(step_sql, state)
+        # Safety net: auto-insert EXCLUDE after `*` when SELECT also redefines a column
+        # (typical clean / null-fill pattern that would otherwise raise a Binder Error).
+        step_sql = _fix_coalesce_star_collision(step_sql)
 
         if operation in {"add_column", "create_column"} or state.get("intent") == "add_column":
             column_name = str(parameters.get("column_name") or parameters.get("name") or "").strip()

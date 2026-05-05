@@ -59,6 +59,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews
+from .routers import support_chat
 from .routers import full_auto_routes
 from .routers import usage as usage_routes
 from .routers import trial as trial_routes
@@ -501,6 +502,30 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS auto_run_id        TEXT",
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS rule_justification TEXT",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_steps_auto_run ON pipeline_steps (auto_run_id)",
+        # 0070 — support chat widget: session + message tables
+        """CREATE TABLE IF NOT EXISTS support_chat_sessions (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            visitor_id    TEXT NOT NULL,
+            email         TEXT,
+            first_page    TEXT NOT NULL DEFAULT '/',
+            message_count INTEGER NOT NULL DEFAULT 0,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            last_active   TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_support_chat_sessions_visitor ON support_chat_sessions (visitor_id)",
+        "CREATE INDEX IF NOT EXISTS idx_support_chat_sessions_email  ON support_chat_sessions (email)",
+        """CREATE TABLE IF NOT EXISTS support_chat_messages (
+            id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id             UUID NOT NULL REFERENCES support_chat_sessions(id) ON DELETE CASCADE,
+            role                   TEXT NOT NULL,
+            content                TEXT NOT NULL,
+            intent                 TEXT,
+            is_capability_request  BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_support_chat_messages_session ON support_chat_messages (session_id)",
+        "CREATE INDEX IF NOT EXISTS idx_support_chat_messages_intent  ON support_chat_messages (intent)",
+        "CREATE INDEX IF NOT EXISTS idx_support_chat_messages_cap_req ON support_chat_messages (is_capability_request)",
     ]
     try:
         from sqlalchemy import text as _text
@@ -687,6 +712,7 @@ app.include_router(pipeline_workflows.router)
 app.include_router(feedback.router)
 app.include_router(reviews.router)
 app.include_router(billing.router)
+app.include_router(support_chat.router)
 app.include_router(trial_routes.router)
 app.include_router(pipeline_refresh.router)
 app.include_router(cron.router)

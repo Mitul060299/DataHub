@@ -169,6 +169,10 @@ function QuickStart() {
             In the AI panel, type a question like <em>"Show me total revenue by month"</em>. The AI classifies your intent, then generates an execution plan showing each step and estimated row counts.
           </p>
           <p>
+            For complex requests — such as pasting multiple business rules or describing several transformations at once — the AI automatically builds a
+            multi-step plan with one entry per rule, each showing its own SQL. No mode switch required; the agent detects this from your input.
+          </p>
+          <p>
             If your request needs more context, the AI replies with a single clarifying question — shown with a purple <strong>❓ NEEDS YOUR INPUT</strong> badge. Type your answer and press <kbd>Enter</kbd> to continue.
           </p>
           <p>
@@ -245,7 +249,7 @@ function KeyConcepts() {
         <div className="docs-glossary__item">
           <dt>Execution plan</dt>
           <dd>
-            Before making any changes, the AI always presents a plan: a numbered list of steps with descriptions and estimated row counts. Review it, then <strong>Approve</strong> to run, <strong>Modify</strong> to change specific steps, or <strong>Reject</strong> to cancel.
+            Before making any changes, the AI always presents a plan: a numbered list of steps with descriptions, estimated row counts, and the SQL for each step. For complex or multi-rule requests, one plan entry is generated per rule. Review it, then <strong>Approve</strong> to run all steps, <strong>Modify</strong> to change specific steps, or <strong>Reject</strong> to cancel.
           </dd>
         </div>
         <div className="docs-glossary__item">
@@ -1228,6 +1232,22 @@ function AiAgent() {
         Every message you type passes through a multi-step pipeline: intent classification → planning → approval gate → execution → response. You stay in full
         control at every stage.
       </p>
+      <p>
+        The agent automatically determines whether your input is a <strong>single operation</strong> or a <strong>multi-step goal</strong>:
+      </p>
+      <ul>
+        <li>
+          <strong>Single operation</strong> — e.g. <em>"replace nulls in the revenue column with 0"</em>. The agent presents one plan card with one SQL
+          step. Approve to run it.
+        </li>
+        <li>
+          <strong>Multi-step goal</strong> — e.g. pasting multiple business rules, or typing something like <em>"clean the nulls, find the top 5
+          customers by revenue, and create a bar chart"</em>. The agent builds a numbered multi-step plan — one card entry per rule, each with its
+          own SQL — and presents all of them together for a single approval. After you approve, the steps run in the correct dependency order
+          automatically.
+        </li>
+      </ul>
+      <p>You do not need to switch any mode or toggle. The agent decides based on your input.</p>
 
       <h2>Supported intents</h2>
       <p>The agent classifies every message into one intent before generating a plan:</p>
@@ -1253,6 +1273,7 @@ function AiAgent() {
             <tr><td><code>sql_query</code></td><td>Run a read-only SQL query or ad-hoc aggregation</td></tr>
             <tr><td><code>visualise</code></td><td>Create a chart, graph, or visual summary</td></tr>
             <tr><td><code>export</code></td><td>Save a table as CSV, Excel, or Parquet and get a download link</td></tr>
+            <tr><td><code>goal</code></td><td>Multiple rules or steps described together — the agent builds a multi-step plan, one entry per rule, each with its own SQL and correct execution order</td></tr>
             <tr><td><code>clarify</code></td><td>The request is too ambiguous to proceed — triggers exactly one focused clarifying question</td></tr>
             <tr><td><code>converse</code></td><td>Greeting, question about the tool, or anything not data-related</td></tr>
           </tbody>
@@ -1296,7 +1317,8 @@ function AiAgent() {
       <h2>Execution plan: Approve, Modify, Reject</h2>
       <p>
         Before running anything the agent presents a numbered step-by-step plan. Each step shows the operation type, a plain-English description,
-        estimated row count, and the SQL that will run. Three actions are available:
+        estimated row count, and the SQL that will run. For multi-rule inputs the plan contains one entry per rule — you see every SQL query up
+        front. Three actions are available:
       </p>
       <ul>
         <li>
@@ -1365,9 +1387,17 @@ function AiAgent() {
 
       <h2>Branching pipelines</h2>
       <p>
-        When a goal produces multiple independent outputs — e.g. <em>"summarise revenue by region AND by product"</em> — the agent generates a{" "}
-        <strong>branching pipeline</strong> where steps can run in parallel. The plan is rendered as a visual node graph with arrows showing
-        dependencies. The same Approve / Modify / Reject controls apply to branching plans.
+        When a multi-step goal contains independent outputs — e.g. <em>"clean the data, then summarise revenue by region AND by product"</em> — the
+        agent generates a <strong>branching pipeline</strong>:
+      </p>
+      <ul>
+        <li>Step 1 (clean) feeds into both Step 2 (region summary) and Step 3 (product summary).</li>
+        <li>Steps 2 and 3 are independent of each other and run in dependency order after Step 1.</li>
+        <li>The Pipeline panel renders a visual node graph showing the fork, with one arrow per dependent step.</li>
+      </ul>
+      <p>
+        The same Approve / Modify / Reject controls apply. A single approval runs the entire branching plan in the correct order. Each branch
+        produces its own output table visible in the Pipeline panel.
       </p>
     </article>
   );

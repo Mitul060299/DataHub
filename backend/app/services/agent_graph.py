@@ -235,7 +235,6 @@ class AgentGraphService:
             initial_state.setdefault("reflection_history", {})
             initial_state.setdefault("goal_verifier_recursions", 0)
             initial_state.setdefault("interrupt_pending", False)
-                initial_state["pipeline_steps"] = list(prior_snapshot["pipeline_steps"])
 
         try:
             async for event in agent_graph.astream_events(initial_state, config=config, version="v2"):

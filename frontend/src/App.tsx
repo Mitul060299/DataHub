@@ -21,6 +21,7 @@ import { PrivacyPage } from "./pages/PrivacyPage";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { SupportChatWidget } from "./components/SupportChatWidget";
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -72,6 +73,7 @@ export function App() {
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
+      <SupportChatWidget />
       {rateLimitMsg && (
         <div
           style={{

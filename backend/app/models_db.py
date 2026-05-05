@@ -411,6 +411,30 @@ class FeedbackDB(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class SupportChatSessionDB(Base):
+    __tablename__ = "support_chat_sessions"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    visitor_id = Column(Text, nullable=False, index=True)
+    email = Column(Text, nullable=True)
+    first_page = Column(Text, nullable=False, default="/")
+    message_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_active = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SupportChatMessageDB(Base):
+    __tablename__ = "support_chat_messages"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    session_id = Column(UUID(as_uuid=False), ForeignKey("support_chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(Text, nullable=False)          # "user" | "assistant"
+    content = Column(Text, nullable=False)
+    intent = Column(Text, nullable=True)         # classified intent label
+    is_capability_request = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class ReviewDB(Base):
     __tablename__ = "reviews"
 

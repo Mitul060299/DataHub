@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { capture } from "../lib/posthog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -38,6 +38,20 @@ const SESSION_ID_KEY = "datahub_support_session_id";
 
 const GREETING =
   "Hi! I'm the DataHub support assistant. Ask me anything about features, pricing, or how to get started — I'm happy to help.";
+
+// ── URL helper ────────────────────────────────────────────────────────────────
+// When VITE_API_BASE_URL is an absolute URL (Render/Vercel deployments), raw
+// fetch("/api/...") calls go to the frontend origin and get re-written by
+// Vercel's /api/(*) → backend/$1 rule — stripping the /api/ prefix — so the
+// backend's /api/support-chat routes 404. Prefix with the configured base URL
+// when it is absolute to bypass the rewrite layer and hit the backend directly.
+// In Docker+Caddy builds VITE_API_BASE_URL is "/api" (relative), so raw paths
+// already flow correctly through Caddy and we leave them unchanged.
+const _configuredBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
+const _apiBase = _configuredBase.startsWith("http")
+  ? _configuredBase.replace(/\/+$/, "")
+  : "";
+const _url = (path: string) => `${_apiBase}${path}`;
 
 // ── CTA parsing ───────────────────────────────────────────────────────────────
 
@@ -106,7 +120,7 @@ export function useSupportChat(): UseSupportChatReturn {
     if (state.sessionId) return state.sessionId;
 
     const visitorId = getOrCreateVisitorId();
-    const res = await fetch("/api/support-chat/start", {
+    const res = await fetch(_url("/api/support-chat/start"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -222,7 +236,7 @@ export function useSupportChat(): UseSupportChatReturn {
     abortControllerRef.current = controller;
 
     try {
-      const res = await fetch("/api/support-chat/message", {
+      const res = await fetch(_url("/api/support-chat/message"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, message: text }),
@@ -301,7 +315,7 @@ export function useSupportChat(): UseSupportChatReturn {
   const submitEmail = useCallback(async (email: string) => {
     if (!state.sessionId) return;
     try {
-      await fetch("/api/support-chat/email", {
+      await fetch(_url("/api/support-chat/email"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: state.sessionId, email }),

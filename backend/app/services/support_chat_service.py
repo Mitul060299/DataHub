@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid as _uuid_mod
 from typing import AsyncIterator
 
 import httpx
@@ -265,6 +266,7 @@ async def stream_response(
             next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
         )
         msg = SupportChatMessageDB(
+            id=str(_uuid_mod.uuid4()),
             session_id=session_id,
             role="assistant",
             content=assembled,

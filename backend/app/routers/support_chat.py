@@ -98,6 +98,7 @@ async def start_session(
 
     try:
         session = SupportChatSessionDB(
+            id=str(uuid.uuid4()),  # generate in Python — don't rely on server_default
             visitor_id=visitor_id,
             first_page=first_page,
         )
@@ -138,6 +139,7 @@ async def send_message(
     intent, is_cap = classify_intent(user_text)
     try:
         user_msg = SupportChatMessageDB(
+            id=str(uuid.uuid4()),
             session_id=body.session_id,
             role="user",
             content=user_text,

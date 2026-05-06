@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text, UniqueConstraint
+from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
 from sqlalchemy import DateTime, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -136,42 +136,8 @@ class OrganizationMemberDB(Base):
     )
 
 
-class Workspace(Base):
-    __tablename__ = "workspaces"
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)  # uniqueness enforced per-owner via uq_workspaces_owner_name index
-    is_shared = Column(Boolean, nullable=False, default=False)
-    share_token = Column(String, nullable=True)
-    share_expires_at = Column(DateTime(timezone=True), nullable=True)
-    share_scope = Column(String, nullable=True)
-    owner_id = Column(String, nullable=True)  # user_id of the workspace creator
-    workspace_type = Column(String, nullable=False, default="personal")  # 'personal' | 'collab'
-
-    __table_args__ = (
-        UniqueConstraint("owner_id", "name", name="uq_workspaces_owner_name"),
-    )
-
-class WorkspaceMemberDB(Base):
-    """Per-workspace membership rows (active + pending invites)."""
-    __tablename__ = "workspace_members"
-
-    id = Column(String, primary_key=True)
-    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(String, nullable=True)        # null until invite is accepted
-    email = Column(String, nullable=False)          # always set
-    role = Column(String, nullable=False, default="viewer")  # admin|editor|viewer
-    status = Column(String, nullable=False, default="pending")  # pending|active
-    invite_token = Column(String, unique=True, nullable=True)
-    invited_by = Column(String, nullable=False)    # user_id of inviter
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    accepted_at = Column(DateTime(timezone=True), nullable=True)
-
-    __table_args__ = (
-        Index("idx_wm_workspace_id", "workspace_id"),
-        Index("idx_wm_user_id", "user_id"),
-        Index("idx_wm_invite_token", "invite_token", unique=True),
-        Index("idx_wm_workspace_email", "workspace_id", "email", unique=True),
-    )
+# Workspace and WorkspaceMemberDB classes removed — tables dropped by migration 0067.
+# Members are now tracked in project_members + organization_members.
 
 
 class Context(Base):

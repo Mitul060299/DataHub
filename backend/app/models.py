@@ -790,7 +790,6 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=200)
     colour: str = Field(default="#5B6AF0")
     icon: str = Field(default="📁")
-    workspace_id: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -806,7 +805,6 @@ class ProjectOut(BaseModel):
     description: Optional[str] = None
     colour: str = "#5b6af0"
     icon: str = "folder"
-    workspace_id: Optional[str] = None
     user_id: Optional[str] = None
     pipeline_count: int = 0
     dashboard_count: int = 0

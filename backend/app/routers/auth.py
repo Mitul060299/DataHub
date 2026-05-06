@@ -1,5 +1,8 @@
 from fastapi import APIRouter, HTTPException, Header, Depends, Request
+import logging
 import uuid
+import httpx
+from pydantic import BaseModel
 from ..security import create_access_token
 from ..db import get_db
 from sqlalchemy.orm import Session
@@ -9,6 +12,9 @@ from ..config import settings
 from ..models import AuthToken, AuditEntry
 from ..services.audit import audit_store
 from ..services.rate_limiter import limiter
+from ..dependencies import get_current_user, CurrentUser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -85,3 +91,57 @@ def oidc_callback(request: Request, code: str, state: str | None = None) -> Auth
         raise HTTPException(status_code=400, detail="OIDC subject not found")
     app_token = create_access_token(subject, role="viewer")
     return AuthToken(**app_token)
+
+
+# ── Brevo contact helper ───────────────────────────────────────────────────────
+
+def _add_to_brevo(email: str, name: str | None) -> None:
+    """
+    Add a new user to the 'DataHub Signups' Brevo contact list.
+    Called fire-and-forget inside a try/except — never raises.
+    """
+    if not settings.brevo_api_key or not settings.brevo_list_id:
+        return
+    payload: dict = {
+        "email": email,
+        "listIds": [settings.brevo_list_id],
+    }
+    if name:
+        payload["attributes"] = {"FIRSTNAME": name}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            client.post(
+                "https://api.brevo.com/v3/contacts",
+                json=payload,
+                headers={
+                    "api-key": settings.brevo_api_key,
+                    "Content-Type": "application/json",
+                },
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Brevo contact creation failed for %s: %s", email, exc)
+
+
+# ── Signup endpoint ────────────────────────────────────────────────────────────
+
+class SignupRequest(BaseModel):
+    name: str | None = None
+
+
+@router.post("/signup")
+@limiter.limit("10/minute")
+def signup(
+    request: Request,
+    body: SignupRequest = SignupRequest(),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Called by the frontend immediately after a successful Supabase signup.
+    Creates the local user record (via the get_current_user dependency) and
+    registers the user in the Brevo 'DataHub Signups' contact list.
+    """
+    try:
+        _add_to_brevo(current_user.email, body.name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Brevo signup hook failed for %s: %s", current_user.email, exc)
+    return {"ok": True}

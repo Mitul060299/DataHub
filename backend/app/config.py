@@ -173,6 +173,9 @@ class Settings(BaseModel):
     google_service_account_json: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
     # Explicit SA email override — if blank, the email is parsed from the JSON at runtime
     google_service_account_email: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
+    # Brevo (Sendinblue) email marketing — used to add new signups to the contact list
+    brevo_api_key: str = os.getenv("BREVO_API_KEY", "")
+    brevo_list_id: int = int(os.getenv("BREVO_LIST_ID", "0"))
 
 
 settings = Settings()

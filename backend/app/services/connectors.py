@@ -999,6 +999,33 @@ class MongoDBConnector:
 class SnowflakeConnector:
     """Snowflake Data Warehouse connector."""
     name = "snowflake"
+    supports_query_folding: bool = True
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source Snowflake account and return results."""
+        try:
+            import snowflake.connector
+        except ImportError:
+            raise ImportError("snowflake-connector-python is required for Snowflake connector")
+        account = config.get("account")
+        username = config.get("username")
+        password = config.get("password")
+        warehouse = config.get("warehouse")
+        database = config.get("database")
+        schema = config.get("schema", "PUBLIC")
+        _validate_snowflake_account(account)
+        conn = snowflake.connector.connect(
+            account=account,
+            user=username,
+            password=password,
+            warehouse=warehouse,
+            database=database,
+            schema=schema,
+            client_session_keep_alive=True,
+        )
+        df = pd.read_sql(sql, conn)
+        conn.close()
+        return df
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         try:
@@ -1128,6 +1155,25 @@ class SnowflakeConnector:
 class BigQueryConnector:
     """Google BigQuery connector."""
     name = "bigquery"
+    supports_query_folding: bool = True
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source BigQuery project and return results."""
+        try:
+            from google.cloud import bigquery
+            from google.oauth2 import service_account
+        except ImportError:
+            raise ImportError("google-cloud-bigquery is required for BigQuery connector")
+        project_id = config.get("project_id")
+        credentials_json = config.get("credentials_json")
+        if credentials_json:
+            import json
+            creds_dict = json.loads(credentials_json) if isinstance(credentials_json, str) else credentials_json
+            credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            client = bigquery.Client(project=project_id, credentials=credentials)
+        else:
+            client = bigquery.Client(project=project_id)
+        return client.query(sql).to_dataframe()
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         try:
@@ -1235,6 +1281,19 @@ class BigQueryConnector:
 class RedshiftConnector:
     """Amazon Redshift connector (uses PostgreSQL driver)."""
     name = "redshift"
+    supports_query_folding: bool = True
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source Redshift database and return results."""
+        host = config.get("host")
+        port = config.get("port", 5439)
+        database = config.get("database")
+        username = config.get("username")
+        password = config.get("password")
+        connection_url = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"connect_timeout": 10})
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         host = config.get("host")
@@ -1307,6 +1366,18 @@ class RedshiftConnector:
 class AzureSynapseConnector:
     """Azure Synapse Analytics connector (uses SQL Server driver)."""
     name = "azure-sql"
+    supports_query_folding: bool = True
+
+    def execute_sql(self, sql: str, config: Dict[str, Any]) -> pd.DataFrame:
+        """Push an arbitrary SQL query to the source Azure Synapse database and return results."""
+        server = config.get("server")
+        database = config.get("database")
+        username = config.get("username")
+        password = config.get("password")
+        connection_url = f"mssql+pymssql://{username}:{password}@{server}/{database}"
+        engine = create_engine(connection_url, pool_pre_ping=True, poolclass=NullPool, connect_args={"timeout": 10})
+        with engine.connect() as conn:
+            return pd.read_sql_query(text(sql), conn)
 
     def read(self, config: Dict[str, Any]) -> pd.DataFrame:
         server = config.get("server")  # e.g., myserver.database.windows.net

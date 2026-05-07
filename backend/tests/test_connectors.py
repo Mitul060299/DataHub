@@ -777,6 +777,71 @@ class TestQueryFoldOptimizer(unittest.TestCase):
         self.assertNotIn("main.items", folded)
         self.assertIn("FROM items", folded)
 
+    def test_redshift_is_foldable(self):
+        meta = self._meta(source_type="redshift")
+        step = {"type": "sql", "sql": "SELECT * FROM dataset WHERE x > 1"}
+        self.assertTrue(self.FC.is_foldable(step, meta))
+
+    def test_azure_sql_is_foldable(self):
+        meta = self._meta(source_type="azure-sql")
+        step = {"type": "sql", "sql": "SELECT * FROM dataset WHERE x > 1"}
+        self.assertTrue(self.FC.is_foldable(step, meta))
+
+    def test_snowflake_is_foldable(self):
+        meta = self._meta(source_type="snowflake")
+        step = {"type": "sql", "sql": "SELECT * FROM dataset WHERE x > 1"}
+        self.assertTrue(self.FC.is_foldable(step, meta))
+
+    def test_bigquery_is_foldable(self):
+        meta = self._meta(source_type="bigquery")
+        step = {"type": "sql", "sql": "SELECT * FROM dataset WHERE x > 1"}
+        self.assertTrue(self.FC.is_foldable(step, meta))
+
+    def test_bigquery_base_relation_full(self):
+        """BigQuery table ref uses project_id.dataset.table with backticks."""
+        opt = self.QFO()
+        meta = self._meta(
+            source_type="bigquery",
+            connector_config={"project_id": "my-proj", "dataset": "sales", "table": "orders"},
+        )
+        step = {"type": "sql", "sql": "SELECT id FROM dataset WHERE status = 'open'"}
+        folded = opt.build_folded_sql(step, meta)
+        self.assertIsNotNone(folded)
+        self.assertIn("FROM (SELECT * FROM `my-proj.sales.orders`) AS dataset", folded)
+
+    def test_bigquery_base_relation_no_project(self):
+        """BigQuery falls back to dataset.table when project_id is absent."""
+        opt = self.QFO()
+        meta = self._meta(
+            source_type="bigquery",
+            connector_config={"dataset": "sales", "table": "orders"},
+        )
+        step = {"type": "sql", "sql": "SELECT COUNT(*) FROM dataset"}
+        folded = opt.build_folded_sql(step, meta)
+        self.assertIsNotNone(folded)
+        self.assertIn("FROM (SELECT * FROM `sales.orders`) AS dataset", folded)
+
+    def test_bigquery_no_table_returns_none(self):
+        opt = self.QFO()
+        meta = self._meta(
+            source_type="bigquery",
+            connector_config={"project_id": "my-proj", "dataset": "sales"},
+        )
+        step = {"type": "sql", "sql": "SELECT * FROM dataset"}
+        result = opt.build_folded_sql(step, meta)
+        self.assertIsNone(result)
+
+    def test_redshift_fold_uses_schema_prefix(self):
+        opt = self.QFO()
+        meta = self._meta(
+            source_type="redshift",
+            connector_config={"table": "events", "schema": "analytics"},
+        )
+        step = {"type": "sql", "sql": "SELECT user_id FROM dataset"}
+        folded = opt.build_folded_sql(step, meta)
+        self.assertIsNotNone(folded)
+        self.assertIn("FROM (SELECT * FROM analytics.events) AS dataset", folded)
+
 
 # ─── Write-back (connector.write) ────────────────────────────────────────────
 

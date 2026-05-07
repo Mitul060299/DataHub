@@ -43,6 +43,7 @@ _PANDAS_ONLY_OPERATIONS: frozenset[str] = frozenset({
 # Connectors that declare supports_query_folding = True
 _FOLDABLE_CONNECTOR_TYPES: frozenset[str] = frozenset({
     "postgresql", "mysql", "mssql", "oracle", "sqlite",
+    "redshift", "azure-sql", "snowflake", "bigquery",
 })
 
 MAX_FOLD_DEPTH: int = 5  # prevent absurdly deeply nested subquery chains
@@ -190,6 +191,24 @@ class QueryFoldOptimizer:
         orig_query = str(cfg.get("query") or "").strip()
         if orig_query:
             return orig_query
+
+        # BigQuery uses project_id.dataset.table with backtick quoting; its
+        # config keys differ from the standard schema/table convention.
+        if connector_type == "bigquery":
+            project_id = str(cfg.get("project_id") or "").strip()
+            dataset = str(cfg.get("dataset") or "").strip()
+            table = str(cfg.get("table") or "").strip()
+            if not table:
+                logger.debug(
+                    "[FOLD] Cannot fold BigQuery dataset %s — no table in connector_config",
+                    getattr(source_meta, "id", "?"),
+                )
+                return None
+            if project_id and dataset:
+                return f"SELECT * FROM `{project_id}.{dataset}.{table}`"
+            if dataset:
+                return f"SELECT * FROM `{dataset}.{table}`"
+            return f"SELECT * FROM `{table}`"
 
         table = str(cfg.get("table") or "").strip()
         if not table:

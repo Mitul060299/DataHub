@@ -454,6 +454,7 @@ class PipelineDB(Base):
     run_profile = Column(Boolean, nullable=False, default=True)
     run_insights = Column(Boolean, nullable=False, default=True)
     enabled = Column(Boolean, nullable=False, default=True)
+    user_id = Column(String, nullable=True)
     last_run_at = Column(DateTime(timezone=True), nullable=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True)
     last_run_metadata = Column(JSONB, nullable=False, default=dict)

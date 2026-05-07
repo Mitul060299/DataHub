@@ -779,7 +779,17 @@ class PipelineEngine:
             for ds_id in extra_input_dataset_ids:
                 if ds_id == input_dataset_id:
                     continue
-                meta = self.db.query(DatasetMetaDB).filter(DatasetMetaDB.id == ds_id).first()
+                meta = self.db.query(DatasetMetaDB).filter(
+                    DatasetMetaDB.id == ds_id,
+                    DatasetMetaDB.user_id == self.user_id,
+                ).first()
+                if meta is None:
+                    logger.warning(
+                        "[PIPELINE] Skipping dataset %s in extra_input_dataset_ids — "
+                        "not found or not owned by user %s",
+                        ds_id, self.user_id,
+                    )
+                    continue
                 alias = self._sanitize_alias(
                     (meta.name or ds_id) if meta else ds_id
                 )

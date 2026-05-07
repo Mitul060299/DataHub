@@ -47,6 +47,7 @@ def create_pipeline(
     enforce_scheduling(user_plan)
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Pipeline name is required")
+    user_id = get_current_user_id(authorization)
     pipeline_id = str(uuid.uuid4())
     row = PipelineDB(
         id=pipeline_id,
@@ -62,6 +63,7 @@ def create_pipeline(
         run_profile=payload.run_profile,
         run_insights=payload.run_insights,
         enabled=payload.enabled,
+        user_id=user_id,
         created_at=datetime.now(timezone.utc),
     )
     db.add(row)
@@ -92,7 +94,11 @@ def get_pipeline(
 ) -> PipelineSchedule:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    row = db.query(PipelineDB).filter(PipelineDB.id == pipeline_id).first()
+    user_id = get_current_user_id(authorization)
+    row = db.query(PipelineDB).filter(
+        PipelineDB.id == pipeline_id,
+        (PipelineDB.user_id == user_id) | (PipelineDB.user_id.is_(None)),
+    ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     return _to_pipeline_out(row)
@@ -109,7 +115,11 @@ def update_pipeline(
     require_role("editor", role)
     user_plan = resolve_user_plan(db, authorization)
     enforce_scheduling(user_plan)
-    row = db.query(PipelineDB).filter(PipelineDB.id == pipeline_id).first()
+    user_id = get_current_user_id(authorization)
+    row = db.query(PipelineDB).filter(
+        PipelineDB.id == pipeline_id,
+        (PipelineDB.user_id == user_id) | (PipelineDB.user_id.is_(None)),
+    ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     if payload.name is not None:
@@ -152,7 +162,11 @@ def delete_pipeline(
 ) -> dict:
     role = get_current_role(authorization)
     require_role("editor", role)
-    row = db.query(PipelineDB).filter(PipelineDB.id == pipeline_id).first()
+    user_id = get_current_user_id(authorization)
+    row = db.query(PipelineDB).filter(
+        PipelineDB.id == pipeline_id,
+        (PipelineDB.user_id == user_id) | (PipelineDB.user_id.is_(None)),
+    ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     db.delete(row)
@@ -170,6 +184,13 @@ def run_pipeline(
     require_role("editor", role)
     user_plan = resolve_user_plan(db, authorization)
     enforce_scheduling(user_plan)
+    user_id = get_current_user_id(authorization)
+    row = db.query(PipelineDB).filter(
+        PipelineDB.id == pipeline_id,
+        (PipelineDB.user_id == user_id) | (PipelineDB.user_id.is_(None)),
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
     run_pipeline_job(pipeline_id)
     return {"status": "queued", "pipeline_id": pipeline_id}
 

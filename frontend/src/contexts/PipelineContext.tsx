@@ -263,6 +263,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     }, 1500);
     return () => {
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+      if (sessionSyncTimerRef.current) clearTimeout(sessionSyncTimerRef.current);
     };
   }, [steps, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
 

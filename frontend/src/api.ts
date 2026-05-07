@@ -353,14 +353,16 @@ export async function createChatSession(datasetId: string, initialRequest?: stri
 export async function streamChatSessionMessage(sessionId: string, content: string) {
   const token = getAuthToken();
   const baseUrl = (api.defaults.baseURL || "").replace(/\/$/, "");
-  const streamPath = `/chat/sessions/${encodeURIComponent(sessionId)}/messages?content=${encodeURIComponent(content)}`;
+  const streamPath = `/chat/sessions/${encodeURIComponent(sessionId)}/messages`;
   const streamUrl = `${baseUrl}${streamPath}`;
 
   const response = await fetch(streamUrl, {
     method: "POST",
     headers: {
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+    body: JSON.stringify({ content }),
   });
 
   if (!response.ok) {

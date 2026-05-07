@@ -310,8 +310,15 @@ async def list_invoices(user: CurrentUser = Depends(get_current_user)):
 async def invoice_pdf(invoice_id: str, user: CurrentUser = Depends(get_current_user)):
     _ensure_billing_enabled()
 
+    # Verify the invoice belongs to the requesting user before returning the URL
     try:
+        invoices = await billing_service.get_invoices(user.id)
+        invoice_ids = {inv.get("id") for inv in (invoices.get("invoices") or [])}
+        if invoice_id not in invoice_ids:
+            raise HTTPException(status_code=404, detail="Invoice not found")
         return {"pdf_url": await billing_service.get_invoice_pdf_url(invoice_id)}
+    except HTTPException:
+        raise
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

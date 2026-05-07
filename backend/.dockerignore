@@ -1,0 +1,11 @@
+.env*
+_*.txt
+test_*.txt
+*.pyc
+__pycache__
+.git
+.gitignore
+*.md
+tests/
+scripts/
+migrations/

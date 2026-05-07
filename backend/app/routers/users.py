@@ -73,16 +73,10 @@ def get_me(
             db.add(user)
             db.commit()
             db.refresh(user)
-    elif user.role == "viewer":
-        # Upgrade legacy viewer records — anyone who can authenticate is the
-        # owner of their account.  Explicit demotion must be done manually.
-        user.role = "admin"
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
+    # Do NOT auto-upgrade roles. Role is set at creation and can only be changed
+    # by an admin via the admin API. Silent promotion was a security bug.
     datasets_used = db.execute(
-        text("SELECT COUNT(*) FROM dataset_meta WHERE user_id = :uid"),
+        text("SELECT COUNT(*) FROM dataset_meta WHERE user_id = :uid AND deleted_at IS NULL"),
         {"uid": user_id or ""},
     ).scalar() or 0
     storage_rows = (

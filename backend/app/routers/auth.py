@@ -89,7 +89,10 @@ def oidc_callback(request: Request, code: str, state: str | None = None) -> Auth
     subject = claims.get("email") or claims.get("preferred_username") or claims.get("sub")
     if not subject:
         raise HTTPException(status_code=400, detail="OIDC subject not found")
-    app_token = create_access_token(subject, role="viewer")
+    # Use the role embedded in OIDC claims if present; fall back to "editor" (not viewer)
+    # so that SSO users can actually use the product.
+    oidc_role = claims.get("datahub_role") or claims.get("role") or "editor"
+    app_token = create_access_token(subject, role=oidc_role)
     return AuthToken(**app_token)
 
 

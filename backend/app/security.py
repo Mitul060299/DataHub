@@ -302,7 +302,7 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
     if not authorization:
         return "viewer"
     try:
-        scheme, token = authorization.split(" ")
+        scheme, token = authorization.split(" ", 1)
         if scheme.lower() != "bearer":
             return "viewer"
         if _is_jwt(token):
@@ -311,8 +311,9 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
                 claims = _verify_app_token(token)
             if claims:
                 return _map_supabase_role(claims)
-        # Legacy base64 token format removed — it allowed forging arbitrary roles.
-        # All tokens must now be valid JWTs signed by Supabase or app_secret_key.
+            # Token was a JWT but verification failed — treat as unauthenticated,
+            # not as viewer.  Callers that check role must handle this correctly.
+            return "unauthenticated"
         return "viewer"
     except Exception:
         return "viewer"

@@ -252,10 +252,14 @@ async def upsert_session_history(
     return {"success": True}
 
 
+class SendMessageRequest(BaseModel):
+    content: str
+
+
 @router.post("/sessions/{session_id}/messages")
 async def send_message_to_session(
     session_id: str,
-    content: str,
+    body: SendMessageRequest,
     authorization: str | None = Header(default=None),
     current_user_id: str = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
@@ -264,7 +268,7 @@ async def send_message_to_session(
     Send message to session and get streaming response
     Returns Server-Sent Events stream
     """
-    
+    content = body.content
     session = db.query(ChatSessionDB).filter(
         ChatSessionDB.id == session_id,
         ChatSessionDB.user_id == current_user_id

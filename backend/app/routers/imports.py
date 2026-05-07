@@ -2,7 +2,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 import re
 import uuid
@@ -11,7 +11,8 @@ import os
 import logging
 
 from ..db import get_db
-from ..security import get_current_role, get_current_user_id, require_role
+from ..security import get_current_role, get_current_user_id, require_role, get_current_subject
+from ..security import encrypt_connector_config
 from ..services.file_parser import FileParserService
 from ..services.connectors import connector_registry
 from ..services.data_conversion import DataConversionService
@@ -664,6 +665,12 @@ async def connect_database(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     db_type = payload.get("type")
     if not db_type:
         raise HTTPException(status_code=400, detail="Database type is required")
@@ -676,6 +683,10 @@ async def connect_database(
     host = payload.get("host") or ""
     database_name = payload.get("database") or ""
 
+    # Strip non-connection fields before encrypting to avoid storing UI state
+    sensitive_fields = {k: v for k, v in payload.items() if k not in ("name", "type")}
+    encrypted_config = encrypt_connector_config(sensitive_fields)
+
     db.add(
         ImportConnectionDB(
             id=connection_id,
@@ -684,7 +695,8 @@ async def connect_database(
             host=host,
             database=database_name,
             status="connected",
-            config=payload,
+            user_id=user_id,
+            config={"encrypted": encrypted_config},
         )
     )
     db.commit()
@@ -697,21 +709,39 @@ async def connect_database(
 
 
 @router.post("/disconnect/{connection_id}")
-async def disconnect_database(connection_id: str, db: Session = Depends(get_db)) -> dict:
-    connection = db.query(ImportConnectionDB).filter(ImportConnectionDB.id == connection_id).first()
+async def disconnect_database(
+    connection_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    connection = db.query(ImportConnectionDB).filter(
+        ImportConnectionDB.id == connection_id,
+        ImportConnectionDB.user_id == user_id,
+    ).first()
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
     connection.status = "disconnected"
-    connection.last_sync_at = datetime.utcnow()
+    connection.last_sync_at = datetime.now(timezone.utc)
     db.commit()
     return {"success": True}
 
 
 @router.get("/tables")
 async def list_tables(
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    query = db.query(ImportTableDB)
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    query = db.query(ImportTableDB).filter(ImportTableDB.user_id == user_id)
     tables = query.order_by(ImportTableDB.created_at.desc()).all()
     results = []
     for table in tables:
@@ -739,8 +769,13 @@ async def table_preview(
 ) -> dict:
     role = get_current_role(authorization)
     require_role("viewer", role)
-    user_id = get_current_user_id(authorization) or "anonymous"
-    query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    query = db.query(ImportTableDB).filter(
+        ImportTableDB.name == table_name,
+        ImportTableDB.user_id == user_id,
+    )
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -757,9 +792,18 @@ async def table_preview(
 @router.delete("/tables/{table_name}")
 async def delete_table(
     table_name: str,
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    query = db.query(ImportTableDB).filter(
+        ImportTableDB.name == table_name,
+        ImportTableDB.user_id == user_id,
+    )
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -788,8 +832,13 @@ async def export_table(
 ):
     role = get_current_role(authorization)
     require_role("viewer", role)
-    user_id = get_current_user_id(authorization) or "anonymous"
-    query = db.query(ImportTableDB).filter(ImportTableDB.name == table_name)
+    user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    query = db.query(ImportTableDB).filter(
+        ImportTableDB.name == table_name,
+        ImportTableDB.user_id == user_id,
+    )
     table = query.first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")

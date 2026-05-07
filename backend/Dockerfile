@@ -12,5 +12,8 @@ COPY entrypoint.sh /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh
 
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
 EXPOSE 8000
 CMD ["/app/entrypoint.sh"]

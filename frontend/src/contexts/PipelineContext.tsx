@@ -521,7 +521,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, moveStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact, pendingJoinStep, confirmJoin, cancelJoin }),
-    [steps, scheduleInfo, liveArtifact, pendingJoinStep],  // eslint-disable-line react-hooks/exhaustive-deps
+    [steps, scheduleInfo, liveArtifact, pendingJoinStep, datasetId],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return (

@@ -650,8 +650,8 @@ async def create_tables() -> None:
 async def cors_on_error(request: Request, call_next):
     try:
         response = await call_next(request)
-    except Exception as exc:
-        response = JSONResponse(status_code=500, content={"detail": str(exc)})
+    except Exception:
+        response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     origin = request.headers.get("origin", "")
     if origin in _CORS_ORIGINS:
@@ -662,7 +662,8 @@ async def cors_on_error(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    response = JSONResponse(status_code=500, content={"detail": str(exc)})
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
     origin = request.headers.get("origin", "")
     if origin in _CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin

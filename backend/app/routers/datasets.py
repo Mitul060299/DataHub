@@ -117,6 +117,7 @@ _STORAGE_DATASET_CAP = 50_000
 
 _CHUNK_SIZE = 1000
 _DATASET_META_SCHEMA_CHECKED = False
+_DATASET_META_SCHEMA_LOCK = threading.Lock()  # guards schema migration on startup
 
 
 def _get_dataset_lock(dataset_id: str) -> threading.Lock:
@@ -146,52 +147,55 @@ def _ensure_dataset_meta_schema(db: Session) -> None:
     global _DATASET_META_SCHEMA_CHECKED
     if _DATASET_META_SCHEMA_CHECKED:
         return
+    with _DATASET_META_SCHEMA_LOCK:
+        if _DATASET_META_SCHEMA_CHECKED:  # double-checked locking
+            return
 
-    inspector = inspect(db.bind)
-    existing_columns = {col["name"] for col in inspector.get_columns("dataset_meta")}
-    required_columns = {
-        "user_id": "VARCHAR",
-        "name": "VARCHAR",
-        "description": "TEXT",
-        "source_type": "VARCHAR",
-        "storage_provider": "VARCHAR DEFAULT 's3'",
-        "storage_path": "TEXT",
-        "file_format": "VARCHAR DEFAULT 'parquet'",
-        "schema_json": "JSONB DEFAULT '{}'::jsonb",
-        "stats_json": "JSONB DEFAULT '{}'::jsonb",
-        "columns": "JSONB DEFAULT '[]'::jsonb",
-        "row_count": "INTEGER",
-        "file_size_bytes": "BIGINT",
-        "compressed_size_bytes": "BIGINT",
-        "status": "VARCHAR DEFAULT 'processing'",
-        "error_message": "TEXT",
-        "last_queried_at": "TIMESTAMPTZ",
-        "query_count": "INTEGER DEFAULT 0",
-        "access_tier": "VARCHAR DEFAULT 'hot'",
-        "parent_id": "VARCHAR",
-        "created_at": "TIMESTAMPTZ DEFAULT now()",
-        "updated_at": "TIMESTAMPTZ DEFAULT now()",
-    }
+        inspector = inspect(db.bind)
+        existing_columns = {col["name"] for col in inspector.get_columns("dataset_meta")}
+        required_columns = {
+            "user_id": "VARCHAR",
+            "name": "VARCHAR",
+            "description": "TEXT",
+            "source_type": "VARCHAR",
+            "storage_provider": "VARCHAR DEFAULT 's3'",
+            "storage_path": "TEXT",
+            "file_format": "VARCHAR DEFAULT 'parquet'",
+            "schema_json": "JSONB DEFAULT '{}'::jsonb",
+            "stats_json": "JSONB DEFAULT '{}'::jsonb",
+            "columns": "JSONB DEFAULT '[]'::jsonb",
+            "row_count": "INTEGER",
+            "file_size_bytes": "BIGINT",
+            "compressed_size_bytes": "BIGINT",
+            "status": "VARCHAR DEFAULT 'processing'",
+            "error_message": "TEXT",
+            "last_queried_at": "TIMESTAMPTZ",
+            "query_count": "INTEGER DEFAULT 0",
+            "access_tier": "VARCHAR DEFAULT 'hot'",
+            "parent_id": "VARCHAR",
+            "created_at": "TIMESTAMPTZ DEFAULT now()",
+            "updated_at": "TIMESTAMPTZ DEFAULT now()",
+        }
 
-    for column_name, column_ddl in required_columns.items():
-        if column_name not in existing_columns:
+        for column_name, column_ddl in required_columns.items():
+            if column_name not in existing_columns:
+                db.execute(
+                    text(
+                        f"ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS {column_name} {column_ddl}"
+                    )
+                )
+
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("dataset_meta")}
+        if "idx_datasets_user_workspace" not in existing_indexes:
             db.execute(
                 text(
-                    f"ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS {column_name} {column_ddl}"
+                    "CREATE INDEX IF NOT EXISTS idx_datasets_user "
+                    "ON dataset_meta (user_id)"
                 )
             )
 
-    existing_indexes = {idx["name"] for idx in inspector.get_indexes("dataset_meta")}
-    if "idx_datasets_user_workspace" not in existing_indexes:
-        db.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_datasets_user "
-                "ON dataset_meta (user_id)"
-            )
-        )
-
-    db.commit()
-    _DATASET_META_SCHEMA_CHECKED = True
+        db.commit()
+        _DATASET_META_SCHEMA_CHECKED = True
 
 
 # ── File validation endpoint ──────────────────────────────────────────────────

@@ -4,7 +4,7 @@ Path: /api/chat/*
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
@@ -183,7 +183,7 @@ async def update_chat_session(
     if pinned is not None:
         session.pinned = pinned
     
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(timezone.utc)
     db.commit()
     
     return {
@@ -209,7 +209,7 @@ async def delete_chat_session(
         raise HTTPException(status_code=404, detail="Session not found")
     
     session.status = 'archived'
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(timezone.utc)
     db.commit()
     
     return {
@@ -247,7 +247,7 @@ async def upsert_session_history(
         db.add(session)
     else:
         session.messages = payload.messages
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"success": True}
 
@@ -460,7 +460,7 @@ async def rollback_to_checkpoint(
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
     session.messages = snapshot.dataset_state.get('messages', []) if snapshot.dataset_state else []
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(timezone.utc)
     db.commit()
     
     return {

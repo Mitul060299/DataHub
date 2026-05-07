@@ -204,11 +204,14 @@ class QueryFoldOptimizer:
                     getattr(source_meta, "id", "?"),
                 )
                 return None
+            # Escape backticks in identifiers to prevent injection
+            def _bq_esc(s: str) -> str:
+                return s.replace("`", "\\`")
             if project_id and dataset:
-                return f"SELECT * FROM `{project_id}.{dataset}.{table}`"
+                return f"SELECT * FROM `{_bq_esc(project_id)}.{_bq_esc(dataset)}.{_bq_esc(table)}`"
             if dataset:
-                return f"SELECT * FROM `{dataset}.{table}`"
-            return f"SELECT * FROM `{table}`"
+                return f"SELECT * FROM `{_bq_esc(dataset)}.{_bq_esc(table)}`"
+            return f"SELECT * FROM `{_bq_esc(table)}`"
 
         table = str(cfg.get("table") or "").strip()
         if not table:

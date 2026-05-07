@@ -208,5 +208,8 @@ if settings.app_env == "production":
 try:
     _razorpay_plans = importlib.import_module("app.razorpay_plans")
     sys.modules[__name__ + ".razorpay_plans"] = _razorpay_plans
-except Exception:
+except ModuleNotFoundError:
     pass
+except Exception:
+    import logging as _log
+    _log.getLogger(__name__).warning("Failed to import razorpay_plans", exc_info=True)

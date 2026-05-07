@@ -1909,6 +1909,19 @@ def export_dataset(
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Validate sort_by and filter_col against actual schema columns to prevent injection
+    if meta.columns:
+        _col_names_raw = meta.columns
+        if _col_names_raw and isinstance(_col_names_raw[0], dict):
+            _valid_cols = {c.get("name", "") for c in _col_names_raw}
+        else:
+            _valid_cols = set(_col_names_raw)
+        if sort_by and sort_by not in _valid_cols:
+            raise HTTPException(status_code=400, detail=f"Invalid sort column: {sort_by!r}")
+        if filter_col and filter_col not in _valid_cols:
+            raise HTTPException(status_code=400, detail=f"Invalid filter column: {filter_col!r}")
+
     # Prefer the latest pipeline-step snapshot so the CSV reflects any
     # transformations the AI agent has applied in this session.
     _user_id_for_snap = get_current_user_id(authorization)

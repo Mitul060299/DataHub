@@ -37,7 +37,7 @@ export function App() {
     const handler = (e: Event) => {
       const secs = (e as CustomEvent<{ retryAfter: number }>).detail?.retryAfter ?? 60;
       setRateLimitMsg(`Too many requests — please wait ${secs}s before trying again.`);
-      setTimeout(() => setRateLimitMsg(null), 5000);
+      setTimeout(() => setRateLimitMsg(null), secs * 1000);
     };
     window.addEventListener("datahub:rate-limited", handler);
     return () => window.removeEventListener("datahub:rate-limited", handler);

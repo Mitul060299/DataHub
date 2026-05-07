@@ -33,6 +33,21 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
 
   const [open, setOpen] = useState(true);
+
+  // Inject keyframe animations once on mount to avoid stylesheet churn on every render
+  useEffect(() => {
+    const id = "pipeline-keyframes";
+    if (!document.getElementById(id)) {
+      const style = document.createElement("style");
+      style.id = id;
+      style.textContent = [
+        "@keyframes pipeline-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}",
+        "@keyframes pipeline-glow{0%,100%{box-shadow:0 0 20px rgba(91,106,240,0.4)}50%{box-shadow:0 0 36px rgba(124,58,237,0.6)}}",
+        "@keyframes pipeline-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}",
+      ].join("\n");
+      document.head.appendChild(style);
+    }
+  }, []);
   const [undoing, setUndoing] = useState(false);
   const [surgicalRemoving, setSurgicalRemoving] = useState(false);
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
@@ -262,8 +277,8 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       setRunSuccess(true);
       if (runSuccessTimerRef.current) clearTimeout(runSuccessTimerRef.current);
       runSuccessTimerRef.current = setTimeout(() => setRunSuccess(false), 2500);
-    } catch {
-      // Error state handled by caller
+    } catch (err) {
+      setInlineError(err instanceof Error ? err.message : "Pipeline run failed");
     } finally {
       setRunning(false);
     }
@@ -648,11 +663,6 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
 
       {open ? (
         <footer style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <style>{`
-            @keyframes pipeline-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-            @keyframes pipeline-glow{0%,100%{box-shadow:0 0 20px rgba(91,106,240,0.4)}50%{box-shadow:0 0 36px rgba(124,58,237,0.6)}}
-            @keyframes pipeline-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-          `}</style>
           <button
             onClick={() => void handleRun()}
             disabled={!steps.length || running}

@@ -1525,7 +1525,7 @@ export interface SavedVisualization {
 }
 
 export async function listVisualizations(projectId?: string): Promise<SavedVisualization[]> {
-  const response = await api.get("/api/visualizations/saved", {
+  const response = await api.get("/visualizations/saved", {
     params: projectId ? { project_id: projectId } : {},
   });
   return response.data;
@@ -1537,22 +1537,22 @@ export async function saveVisualization(payload: {
   echarts_config: Record<string, unknown>;
   project_id?: string;
 }): Promise<SavedVisualization> {
-  const response = await api.post("/api/visualizations/saved", payload);
+  const response = await api.post("/visualizations/saved", payload);
   return response.data;
 }
 
 export async function getVisualization(id: string): Promise<SavedVisualization> {
-  const response = await api.get(`/api/visualizations/saved/${id}`);
+  const response = await api.get(`/visualizations/saved/${id}`);
   return response.data;
 }
 
 export async function renameVisualization(id: string, name: string): Promise<SavedVisualization> {
-  const response = await api.patch(`/api/visualizations/saved/${id}`, { name });
+  const response = await api.patch(`/visualizations/saved/${id}`, { name });
   return response.data;
 }
 
 export async function deleteVisualization(id: string): Promise<void> {
-  await api.delete(`/api/visualizations/saved/${id}`);
+  await api.delete(`/visualizations/saved/${id}`);
 }
 
 // ── Canvas Layouts ────────────────────────────────────────────────────────────
@@ -1611,12 +1611,12 @@ export interface CanvasTileItem {
 }
 
 export async function getCanvasLimitStatus(): Promise<CanvasLimitStatus> {
-  const response = await api.get("/api/canvas/limit-status");
+  const response = await api.get("/canvas/limit-status");
   return response.data;
 }
 
 export async function listCanvasLayouts(projectId?: string): Promise<CanvasLayout[]> {
-  const response = await api.get("/api/canvas", { params: projectId ? { project_id: projectId } : {} });
+  const response = await api.get("/canvas", { params: projectId ? { project_id: projectId } : {} });
   return response.data;
 }
 
@@ -1624,12 +1624,12 @@ export async function createCanvasLayout(payload: {
   name?: string;
   project_id?: string;
 }): Promise<CanvasLayout> {
-  const response = await api.post("/api/canvas", payload);
+  const response = await api.post("/canvas", payload);
   return response.data;
 }
 
 export async function getCanvasLayout(id: string): Promise<CanvasLayout> {
-  const response = await api.get(`/api/canvas/${id}`);
+  const response = await api.get(`/canvas/${id}`);
   return response.data;
 }
 
@@ -1637,12 +1637,12 @@ export async function saveCanvasLayout(
   id: string,
   payload: { name?: string; layout?: CanvasTileItem[]; is_public?: boolean },
 ): Promise<CanvasLayout> {
-  const response = await api.patch(`/api/canvas/${id}`, payload);
+  const response = await api.patch(`/canvas/${id}`, payload);
   return response.data;
 }
 
 export async function deleteCanvasLayout(id: string): Promise<void> {
-  await api.delete(`/api/canvas/${id}`);
+  await api.delete(`/canvas/${id}`);
 }
 
 export type TileDataResult =
@@ -1654,7 +1654,7 @@ export async function fetchTileData(
   column: string,
   aggregation: string,
 ): Promise<TileDataResult> {
-  const res = await api.get("/api/canvas/tile-data", {
+  const res = await api.get("/canvas/tile-data", {
     params: { dataset_id: datasetId, column, aggregation },
   });
   return res.data as TileDataResult;

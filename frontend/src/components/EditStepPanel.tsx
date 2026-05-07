@@ -371,11 +371,11 @@ export function EditStepPanel({
               className="btn"
               style={{ fontSize: 11, padding: "4px 14px", background: "var(--ac)", color: "#fff", border: "1px solid var(--ac)" }}
               onClick={() => void handleApply()}
-              disabled={phase === "applying"}
+              disabled={isWorking}
             >
-              {phase === "applying" ? "Applying…" : "Apply"}
+              {isWorking ? "Applying\u2026" : "Apply"}
             </button>
-            <button className="btn" style={{ fontSize: 11, padding: "4px 14px" }} onClick={handleDiscard} disabled={phase === "applying"}>
+            <button className="btn" style={{ fontSize: 11, padding: "4px 14px" }} onClick={handleDiscard} disabled={isWorking}>
               Try again
             </button>
           </div>
@@ -415,9 +415,9 @@ export function EditStepPanel({
               className="btn"
               style={{ fontSize: 11, padding: "3px 10px", background: "rgba(245,158,11,0.15)", border: "1px solid #f59e0b", color: "#f59e0b" }}
               onClick={() => void handleTrim()}
-              disabled={phase === "trimming"}
+              disabled={isWorking}
             >
-              {phase === "trimming" ? "Trimming…" : `Trim from "${conflict.failedLabel}"`}
+              {isWorking ? "Trimming\u2026" : `Trim from "${conflict.failedLabel}"`}
             </button>
           </div>
         </div>

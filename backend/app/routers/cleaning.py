@@ -199,6 +199,20 @@ def get_job_status(
     return CleaningController.get_job_status(job_id, authorization)
 
 
+class RewriteStepRequest(BaseModel):
+    """Rewrite a single pipeline step's SQL using a natural-language instruction.
+
+    The backend calls a lightweight LLM with the current SQL, the dataset
+    schema at the point *before* this step, and the user's plain-English
+    change request.  It returns the rewritten SQL and an updated description.
+    No DuckDB execution happens here — the caller applies the result via replay.
+    """
+    current_sql: str
+    current_description: str
+    user_message: str
+    columns: list[str] = Field(default_factory=list, description="Column names available at this step's input")
+
+
 class ReplayRequest(BaseModel):
     """Replay a chain of pipeline steps starting from pivot_dataset_id.
 
@@ -226,3 +240,26 @@ def replay_steps(
     set the active dataset to *final_dataset_id*.
     """
     return CleaningController.replay_steps(dataset_id, payload.steps, authorization, db)
+
+
+@router.post("/datasets/{dataset_id}/rewrite-step")
+async def rewrite_step(
+    dataset_id: str,
+    payload: RewriteStepRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Use an LLM to rewrite a single step's SQL based on a plain-English instruction.
+
+    Returns ``{"new_sql": str, "new_description": str}``.
+    No DuckDB execution is performed — the caller applies the result via /replay.
+    """
+    return await CleaningController.rewrite_step(
+        dataset_id,
+        payload.current_sql,
+        payload.current_description,
+        payload.user_message,
+        payload.columns,
+        authorization,
+        db,
+    )

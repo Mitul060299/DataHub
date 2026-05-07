@@ -362,3 +362,100 @@ class CleaningController:
             "final_dataset_id": current_dataset_id,
             "final_row_count": int(final_dataset.row_count or 0) if final_dataset else None,
         }
+
+    @staticmethod
+    async def rewrite_step(
+        dataset_id: str,
+        current_sql: str,
+        current_description: str,
+        user_message: str,
+        columns: list[str],
+        authorization: str | None,
+        db: Session,
+    ) -> dict[str, str]:
+        """Rewrite a single pipeline step via LLM using a natural-language instruction.
+
+        Returns ``{"new_sql": str, "new_description": str}``.
+        """
+        import asyncio
+        import os
+        import re as _re
+
+        role = get_current_role(authorization)
+        require_role("editor", role)
+
+        dataset = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_groq import ChatGroq
+
+        groq_api_key = os.getenv("GROQ_API_KEY", "")
+        if not groq_api_key:
+            raise HTTPException(status_code=503, detail="LLM is not configured (GROQ_API_KEY missing).")
+
+        model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        llm = ChatGroq(model=model, temperature=0.1, groq_api_key=groq_api_key)
+
+        columns_str = ", ".join(columns) if columns else "(unknown — use column names from the existing SQL)"
+
+        system_prompt = (
+            "You are a data-pipeline SQL rewriter. "
+            "You will be given an existing DuckDB SQL step and a plain-English change request. "
+            "Your job is to return a MODIFIED version of that SQL that incorporates the requested change.\n\n"
+            "Rules:\n"
+            "- Keep the same table/alias references as the original SQL (do NOT change FROM aliases).\n"
+            "- Return ONLY valid DuckDB SQL — no explanations, no markdown fences, no CREATE TABLE wrapper.\n"
+            "- If the change requires a new column alias, use double-quotes around column names.\n"
+            "- After the SQL, on a new line starting with 'DESCRIPTION:', write a concise one-line description of what this step now does (max 60 chars).\n\n"
+            "Output format (strictly):\n"
+            "SELECT ...\n"
+            "DESCRIPTION: <one line>"
+        )
+
+        user_prompt = (
+            f"Dataset: {dataset.name}\n"
+            f"Available columns at this step: {columns_str}\n\n"
+            f"Current step description: {current_description}\n"
+            f"Current SQL:\n{current_sql}\n\n"
+            f"Change requested: {user_message}\n\n"
+            "Return the rewritten SQL followed by a DESCRIPTION line."
+        )
+
+        try:
+            response = await asyncio.wait_for(
+                llm.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]),
+                timeout=30,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="LLM timed out. Please try again.")
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"LLM error: {exc}")
+
+        raw = str(response.content).strip()
+
+        # Extract the optional DESCRIPTION line
+        new_description = current_description
+        desc_match = _re.search(r"(?m)^DESCRIPTION:\s*(.+)$", raw)
+        if desc_match:
+            new_description = desc_match.group(1).strip()[:80]
+            raw = raw[: desc_match.start()].strip()
+
+        # Strip any accidental markdown code fences
+        raw = _re.sub(r"^```(?:sql)?\s*", "", raw, flags=_re.IGNORECASE).strip()
+        raw = _re.sub(r"\s*```$", "", raw).strip()
+
+        # Strip CREATE TABLE ... AS wrapper if the LLM added one despite instructions
+        raw = _re.sub(
+            r"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+\S+\s+AS\s+",
+            "", raw, flags=_re.IGNORECASE,
+        ).strip()
+
+        if not raw.upper().startswith("SELECT"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"LLM returned unexpected output (expected SELECT): {raw[:200]}",
+            )
+
+        return {"new_sql": raw, "new_description": new_description}

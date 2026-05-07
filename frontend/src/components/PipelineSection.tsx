@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { IconBarChart, IconClock, IconCode, IconDownload, IconFilter, IconGrid, IconMerge, IconPlay, IconPlus, IconSortAsc, IconSparkles, IconTrash, IconUpload, IconX } from "./Icons";
+import { IconBarChart, IconClock, IconCode, IconDownload, IconEdit, IconFilter, IconGrid, IconMerge, IconPlay, IconPlus, IconSortAsc, IconSparkles, IconTrash, IconUpload, IconX } from "./Icons";
+import { EditStepPanel } from "./EditStepPanel";
 import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 
@@ -38,6 +39,13 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingStepName, setEditingStepName] = useState("");
 
+  const [editPanelStepId, setEditPanelStepId] = useState<string | null>(null);
+  // Auto-close the edit panel if the step it's editing gets removed (e.g. via undo)
+  useEffect(() => {
+    if (editPanelStepId !== null && !steps.some((s) => s.id === editPanelStepId)) {
+      setEditPanelStepId(null);
+    }
+  }, [steps, editPanelStepId]);
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [builtInPickerOpen, setBuiltInPickerOpen] = useState(false);
@@ -225,6 +233,23 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
         }
       },
     });
+  };
+
+  const handleEditApplied = (
+    updatedSteps: typeof steps,
+    finalDatasetId: string | null,
+    finalRowCount: number | null,
+  ) => {
+    replaceSteps(updatedSteps);
+    setLiveArtifact(null); // live DuckDB table is stale after a replay-based edit
+    if (finalDatasetId && finalDatasetId !== activeDataset?.id) {
+      setActiveDataset({
+        id: finalDatasetId,
+        name: activeDataset?.name ?? "Cleaned dataset",
+        rows: finalRowCount ?? activeDataset?.rows ?? 0,
+      });
+    }
+    setEditPanelStepId(null);
   };
 
   const handleRun = async () => {
@@ -457,6 +482,26 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                         transition: "opacity 120ms ease",
                       }}
                     >
+                      {/* Edit SQL — only show when the step has SQL to edit */}
+                      {step.sql ? (
+                        <button
+                          className="btn"
+                          style={{
+                            height: 20,
+                            width: 20,
+                            padding: 0,
+                            background: editPanelStepId === step.id ? "var(--acl)" : undefined,
+                            border: editPanelStepId === step.id ? "1px solid var(--ac)" : undefined,
+                          }}
+                          title="Edit step SQL"
+                          onClick={() =>
+                            setEditPanelStepId((prev) => (prev === step.id ? null : step.id))
+                          }
+                          disabled={editPanelStepId !== null && editPanelStepId !== step.id}
+                        >
+                          <IconEdit size={12} />
+                        </button>
+                      ) : null}
                       <button
                         className="btn"
                         style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
@@ -499,6 +544,18 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                       }}
                     />
                   </div>
+
+                  {/* Edit step panel — expands below the step row */}
+                  {editPanelStepId === step.id ? (
+                    <EditStepPanel
+                      step={step}
+                      stepIndex={index}
+                      allSteps={steps}
+                      activeDataset={activeDataset}
+                      onClose={() => setEditPanelStepId(null)}
+                      onApplied={handleEditApplied}
+                    />
+                  ) : null}
 
                   {/* Row 2: input → output table flow (only when SQL expanded) */}
                   {isSqlExpanded && (step.input_tables?.length || step.output_table) ? (

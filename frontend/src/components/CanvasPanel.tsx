@@ -43,6 +43,8 @@ interface CanvasPanelProps {
   replayError?: string | null;
   /** Clear the replay error (e.g. when user dismisses) */
   onClearReplayError?: () => void;
+  /** Called whenever the active tab changes — lets the parent hide/show sibling panels */
+  onTabChange?: (tab: CanvasTab) => void;
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -61,10 +63,12 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   }, 1500);
 }
 
-export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError, onTabChange }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const { exportPipeline } = usePipeline();
   const [tab, setTab] = useState<CanvasTab>("data");
+
+  const switchTab = (next: CanvasTab) => { setTab(next); onTabChange?.(next); };
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -301,7 +305,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 key={key}
                 title={label}
                 {...(tourAttr ? { "data-tour": "canvas-tab" } : {})}
-                onClick={() => setTab(key as CanvasTab)}
+                onClick={() => switchTab(key as CanvasTab)}
                 style={{
                   position: "relative",
                   display: "inline-flex",

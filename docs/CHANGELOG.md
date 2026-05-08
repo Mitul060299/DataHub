@@ -4,6 +4,18 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-08 — Hide AI Panel on Pipeline Tab + Panel Border Fix
+
+**UI behaviour:**
+- `frontend/src/components/CanvasPanel.tsx` — added `onTabChange` prop; tab switches now propagate up to the parent so `WorkspacePage` can react to the active tab.
+- `frontend/src/pages/WorkspacePage.tsx` — added `canvasTab` state. `AIPanel` and its drag handle are now only rendered when `canvasTab !== "pipeline"`, giving the pipeline tab the full horizontal width for the visual graph + applied steps.
+
+**Visual polish:**
+- `frontend/src/components/ExplorerPanel.tsx` — panel border changed from `var(--bd)` (`#ffffff0e`, ~5% opacity) to `var(--bd3)` (`#ffffff26`, ~15% opacity); background lifted from `var(--bg1)` to `var(--bg2)` so the left sidebar visually separates from the canvas. Project selector button bumped to `var(--bg3)` background so it has contrast against the new panel background.
+- `frontend/src/components/AIPanel.tsx` — same border + background treatment as ExplorerPanel: `borderLeft` uses `var(--bd3)`, background is `var(--bg2)`, header background updated to match.
+
+---
+
 ## 2026-05-08 — Workspace UI Simplification
 
 **Removed:**

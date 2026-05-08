@@ -38,6 +38,7 @@ export function WorkspacePage() {
   const [resizingExplorer, setResizingExplorer] = useState(false);
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
+  const [canvasTab, setCanvasTab] = useState<string>("data");
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(
     () => localStorage.getItem("datahub_onboarding_dismissed") === "1",
@@ -442,35 +443,40 @@ export function WorkspacePage() {
         replayingPipeline={replayingPipeline}
         replayError={replayError}
         onClearReplayError={() => setReplayError(null)}
+        onTabChange={setCanvasTab}
       />
-      {/* AI panel drag handle */}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        title="Drag to resize AI panel"
-        className="resize-handle"
-        onMouseDown={() => setResizingAI(true)}
-        style={{
-          background: resizingAI ? "var(--acl)" : undefined,
-        }}
-      />
-      <AIPanel
-        dataset={activeDataset}
-        projectId={resolvedProject?.id ?? "default"}
-        width={aiWidth}
-        onStepApplied={() => {
-          setDatasetRefreshNonce((value) => value + 1);
-          void refetch();
-        }}
-        onDatasetMutated={() => {
-          setDatasetRefreshNonce((value) => value + 1);
-        }}
-        onSessionPreview={(rows, columns) => {
-          skipNextClearRef.current = true;
-          setSessionPreview({ rows, columns });
-        }}
-        onUploadClick={() => setImportOpen(true)}
-      />
+      {canvasTab !== "pipeline" && (
+        <>
+          {/* AI panel drag handle */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            title="Drag to resize AI panel"
+            className="resize-handle"
+            onMouseDown={() => setResizingAI(true)}
+            style={{
+              background: resizingAI ? "var(--acl)" : undefined,
+            }}
+          />
+          <AIPanel
+            dataset={activeDataset}
+            projectId={resolvedProject?.id ?? "default"}
+            width={aiWidth}
+            onStepApplied={() => {
+              setDatasetRefreshNonce((value) => value + 1);
+              void refetch();
+            }}
+            onDatasetMutated={() => {
+              setDatasetRefreshNonce((value) => value + 1);
+            }}
+            onSessionPreview={(rows, columns) => {
+              skipNextClearRef.current = true;
+              setSessionPreview({ rows, columns });
+            }}
+            onUploadClick={() => setImportOpen(true)}
+          />
+        </>
+      )}
       <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); }} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal

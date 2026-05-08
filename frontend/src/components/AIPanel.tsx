@@ -1163,8 +1163,8 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   // the "Save ↑" button on the live artifact in the Artifacts panel.
 
   return (
-    <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <header data-tour="ai-agent-header" style={{ height: 42, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", background: "var(--bg1)" }}>
+    <aside style={{ width: width ?? "var(--rw)", minWidth: width ?? 280, borderLeft: "1px solid var(--bd3)", background: "var(--bg2)", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <header data-tour="ai-agent-header" style={{ height: 42, borderBottom: "1px solid var(--bd3)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", background: "var(--bg2)" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
           <span className="badge-dot pulse" style={{ background: "var(--gr)", width: 7, height: 7 }} />
           <IconZap size={14} color="var(--ac)" />

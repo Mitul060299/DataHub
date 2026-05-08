@@ -55,6 +55,7 @@ export function useSEO({
     if (canonical) upsertMeta("property", "og:url", canonical);
 
     // Twitter Card
+    upsertMeta("name", "twitter:card", "summary_large_image");
     upsertMeta("name", "twitter:title", title);
     upsertMeta("name", "twitter:description", description);
     upsertMeta("name", "twitter:image", ogImage);

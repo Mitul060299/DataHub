@@ -294,6 +294,7 @@ export function CanvasView({ workspaceId, projectId }: CanvasViewProps) {
         </div>
       ) : (
         <div
+          className="canvas-card-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",

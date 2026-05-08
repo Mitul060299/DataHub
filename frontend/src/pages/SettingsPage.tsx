@@ -75,6 +75,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
       </div>
 
       <div
+        className="settings-layout"
         style={{
           display: "grid",
           gridTemplateColumns: "200px 1fr",
@@ -89,6 +90,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
         <SettingsSidebar active={section} />
 
         <div
+          className="settings-content"
           style={{
             background: "#111115",
             border: "1px solid #22222a",

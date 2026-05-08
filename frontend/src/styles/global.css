@@ -322,6 +322,27 @@ svg { display: block; flex-shrink: 0; }
     border-left: none !important;
     border-top: 1px solid var(--bd) !important;
   }
+
+  /* Settings page: stack sidebar above content on small screens */
+  .settings-layout {
+    grid-template-columns: 1fr !important;
+    padding: 0 16px 60px !important;
+  }
+
+  .settings-content {
+    margin-left: 0 !important;
+    margin-top: 12px;
+  }
+
+  /* Share panel: cap width on small screens */
+  .share-panel-aside {
+    width: min(400px, 92vw) !important;
+  }
+
+  /* Canvas card grid: smaller min size on mobile */
+  .canvas-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  }
 }
 
 /* ─────────────────────────────────────────────

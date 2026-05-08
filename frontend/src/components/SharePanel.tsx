@@ -102,8 +102,9 @@ export function SharePanel({ dashboardId, shareToken: initialToken, onClose }: S
     try {
       await revokeDashboardAccess(dashboardId, grantId);
       setGrants((prev) => prev.filter((g) => g.id !== grantId));
-    } catch (err) {
-      console.error("Revoke failed:", err);
+      showToast("Access revoked");
+    } catch {
+      showToast("Failed to revoke access");
     }
   };
 
@@ -125,8 +126,8 @@ export function SharePanel({ dashboardId, shareToken: initialToken, onClose }: S
       await deleteShareToken(dashboardId);
       setShareToken(null);
       showToast("Public link removed");
-    } catch (err) {
-      console.error("Delete token failed:", err);
+    } catch {
+      showToast("Failed to remove public link");
     } finally { setGenLoading(false); }
   };
 
@@ -147,6 +148,7 @@ export function SharePanel({ dashboardId, shareToken: initialToken, onClose }: S
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <aside
+        className="share-panel-aside"
         style={{
           width: 400,
           background: "#0F1117",
@@ -160,14 +162,16 @@ export function SharePanel({ dashboardId, shareToken: initialToken, onClose }: S
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1E293B", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 15, fontWeight: 600, color: "#E2E8F0" }}>🔗 Share</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", fontSize: 20 }}>×</button>
+          <button onClick={onClose} aria-label="Close share panel" style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", fontSize: 20 }}>×</button>
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid #1E293B" }}>
+        <div role="tablist" style={{ display: "flex", borderBottom: "1px solid #1E293B" }}>
           {(["invite", "public", "audit"] as Tab[]).map((t) => (
             <button
               key={t}
+              role="tab"
+              aria-selected={tab === t}
               onClick={() => setTab(t)}
               style={{
                 flex: 1,

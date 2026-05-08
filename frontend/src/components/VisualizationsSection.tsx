@@ -100,6 +100,7 @@ export function VisualizationsSection({ projectId }: VisualizationsSectionProps)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
 
   const [preview, setPreview] = useState<{
@@ -151,12 +152,18 @@ export function VisualizationsSection({ projectId }: VisualizationsSectionProps)
 
   const handleDelete = async (id: string) => {
     setMenuId(null);
+    setConfirmDeleteId(null);
     setItems((prev) => prev.filter((v) => v.id !== id));
     try {
       await deleteVisualization(id);
     } catch {
       void fetchAll();
     }
+  };
+
+  const requestDelete = (id: string) => {
+    setMenuId(null);
+    setConfirmDeleteId(id);
   };
 
   const handleDragStart = (e: React.DragEvent, viz: SavedVisualization) => {
@@ -276,7 +283,7 @@ export function VisualizationsSection({ projectId }: VisualizationsSectionProps)
                   title="Delete visualization"
                   onClick={(e) => {
                     e.stopPropagation();
-                    void handleDelete(viz.id);
+                    requestDelete(viz.id);
                   }}
                 >
                   <IconX size={11} />
@@ -361,7 +368,7 @@ export function VisualizationsSection({ projectId }: VisualizationsSectionProps)
                         border: "none",
                         color: "#ef4444",
                       }}
-                      onClick={() => void handleDelete(viz.id)}
+                      onClick={() => requestDelete(viz.id)}
                     >
                       Delete
                     </button>
@@ -380,6 +387,60 @@ export function VisualizationsSection({ projectId }: VisualizationsSectionProps)
           anchorRect={preview.rect}
           onClose={() => setPreview(null)}
         />
+      )}
+
+      {/* delete confirmation dialog */}
+      {confirmDeleteId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="viz-delete-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.55)",
+          }}
+          onClick={(e) => e.target === e.currentTarget && setConfirmDeleteId(null)}
+        >
+          <div
+            style={{
+              background: "var(--bg2)",
+              border: "1px solid var(--bd)",
+              borderRadius: 12,
+              padding: "20px 24px",
+              maxWidth: 320,
+              width: "90vw",
+              boxShadow: "0 16px 48px rgba(0,0,0,.4)",
+            }}
+          >
+            <p id="viz-delete-title" style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 14, color: "var(--tx0)" }}>
+              Delete visualization?
+            </p>
+            <p style={{ margin: "0 0 20px", fontSize: 12, color: "var(--tx1)" }}>
+              This cannot be undone. The chart will be removed from all canvases that use it.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                className="btn"
+                onClick={() => setConfirmDeleteId(null)}
+                style={{ padding: "6px 16px", fontSize: 12 }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn"
+                onClick={() => void handleDelete(confirmDeleteId)}
+                style={{ padding: "6px 16px", fontSize: 12, background: "#ef4444", border: "1px solid #ef4444", color: "#fff" }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

@@ -326,7 +326,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
               >
                 Templates
               </button>
-              <button className="btn" style={{ width: 26, padding: 0 }} onClick={() => setPendingAction({ message: "Clear all pipeline steps? This cannot be undone.", run: async () => { clearSteps(); } })} aria-label="Clear steps" title="Clear all steps">
+              <button className="btn" style={{ width: 26, padding: 0 }} onClick={() => setPendingAction({ message: "Clear all pipeline steps? This cannot be undone.", run: async () => { clearSteps(); window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Pipeline cleared", tone: "success" } })); } })} aria-label="Clear steps" title="Clear all steps">
                 <IconTrash size={14} />
               </button>
             </div>

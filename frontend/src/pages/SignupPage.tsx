@@ -150,7 +150,9 @@ export function SignupPage() {
               </div>
               <span className="auth-strength-label" style={{ color: strengthColor }}>{strengthLabel}</span>
             </div>
-          ) : null}
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--tx2)", marginTop: 4, display: "block" }}>Minimum 8 characters</span>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
@@ -174,7 +176,13 @@ export function SignupPage() {
         </div>
 
         <div className="auth-actions">
-          <button className="btn btn-primary" disabled={loading || !termsAccepted} type="submit">{loading ? "Creating account..." : "Create account"}</button>
+          <button
+            className="btn btn-primary"
+            disabled={loading || !termsAccepted || !email.trim() || password.length < 8}
+            type="submit"
+          >
+            {loading ? "Creating account..." : "Create account"}
+          </button>
         </div>
 
         <div className="auth-row" style={{ marginTop: 12 }}>

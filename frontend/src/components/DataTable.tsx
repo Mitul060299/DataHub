@@ -246,8 +246,11 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
                   {rows.length === 0 ? "No data loaded" : "No rows match your filters"}
                 </td>
               </tr>
-            ) : filteredRows.map((row, index) => (
-              <tr key={`row-${index}`} style={{ borderBottom: "1px solid var(--bd)", transition: "background 0.1s ease" }}
+            ) : filteredRows.map((row, index) => {
+              // Prefer a stable unique id; fall back to index only if unavailable
+              const rowKey = (row as Record<string, unknown>).__id ?? (row as Record<string, unknown>).id ?? `row-${index}`;
+              return (
+              <tr key={String(rowKey)} style={{ borderBottom: "1px solid var(--bd)", transition: "background 0.1s ease" }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(91,106,240,0.04)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
@@ -259,7 +262,7 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
                   const status = typeof value === "string" && statusColor[value] ? value : null;
                   return (
                     <td
-                      key={`${index}-${column}`}
+                      key={`${String(rowKey)}-${column}`}
                       className="mono"
                       style={{
                         padding: "7px 10px",
@@ -272,7 +275,7 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
                   );
                 })}
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
       </div>

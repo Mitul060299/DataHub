@@ -177,6 +177,7 @@ export function TopBar() {
                 }}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
+                aria-label="Open user menu"
               >
                 <span
                   style={{

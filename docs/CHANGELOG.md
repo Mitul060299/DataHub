@@ -4,6 +4,17 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-08 — Workspace UI Simplification
+
+**Removed:**
+- `frontend/src/pages/WorkspacePage.tsx` — removed `ActivityBar` component and its two toggle buttons (Explorer toggle, Pipeline toggle). Removed `PipelinePanel` sliding overlay and all related state (`explorerOpen`, `pipelineOpen`, `pipelineWidth`, `resizingPipeline`). `ExplorerPanel` is now always visible; no toggle needed.
+- Explorer resize calculation: removed `activityBarWidth = 52` offset now that the ActivityBar strip is gone.
+
+**Changed:**
+- `frontend/src/components/CanvasPanel.tsx` — on the "Pipeline" tab, `PipelineGraphTab` (visual graph) is now shown side-by-side with `PipelineSection` (steps list + controls, 300px right panel) instead of the graph alone. Pipeline configuration is now permanently available on the Pipeline tab without needing a separate overlay panel.
+
+---
+
 ## 2026-05-08 — Dead Code Cleanup
 
 **Frontend removed:**

@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePipelineContext } from "../contexts/PipelineContext";
+import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineScheduleTab } from "./PipelineScheduleTab";
+import { PipelineSection } from "./PipelineSection";
 import { DataVersionHistory } from "./DataVersionHistory";
 import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview } from "../api";
 
@@ -61,6 +63,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 
 export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
+  const { exportPipeline } = usePipeline();
   const [tab, setTab] = useState<CanvasTab>("data");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
@@ -541,7 +544,19 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         )}
         {tab === "pipeline" ? (
-          <PipelineGraphTab />
+          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+              <PipelineGraphTab />
+            </div>
+            <div style={{ width: 1, background: "var(--bd)", flexShrink: 0 }} />
+            <div style={{ width: 300, flexShrink: 0, overflowY: "auto" }}>
+              <PipelineSection
+                onExport={() => exportPipeline(steps)}
+                hideHeader
+                onRunPipeline={onRunPipeline}
+              />
+            </div>
+          </div>
         ) : tab === "schedule" && pipelineId ? (
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             <PipelineScheduleTab pipelineId={pipelineId} />

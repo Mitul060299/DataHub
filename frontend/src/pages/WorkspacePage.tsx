@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { api, fetchStepPreview } from "../api";
-import { ActivityBar } from "../components/ActivityBar";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
-import { PipelinePanel } from "../components/PipelinePanel";
 import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
@@ -32,16 +30,12 @@ export function WorkspacePage() {
   const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
-  const [explorerOpen, setExplorerOpen] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [sampleUrl, setSampleUrl] = useState<string | undefined>(undefined);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
   const [explorerSearchFocusNonce, setExplorerSearchFocusNonce] = useState(0);
   const [explorerWidth, setExplorerWidth] = useState(() => Number(localStorage.getItem("explorerWidth") ?? 280));
   const [resizingExplorer, setResizingExplorer] = useState(false);
-  const [pipelineOpen, setPipelineOpen] = useState(() => localStorage.getItem("pipelineOpen") !== "false");
-  const [pipelineWidth, setPipelineWidth] = useState(() => Number(localStorage.getItem("pipelineWidth") ?? 300));
-  const [resizingPipeline, setResizingPipeline] = useState(false);
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
@@ -331,8 +325,7 @@ export function WorkspacePage() {
     const handleMouseMove = (event: MouseEvent) => {
       const minWidth = 220;
       const maxWidth = 520;
-      const activityBarWidth = 52;
-      const nextWidth = Math.max(minWidth, Math.min(maxWidth, event.clientX - activityBarWidth));
+      const nextWidth = Math.max(minWidth, Math.min(maxWidth, event.clientX));
       setExplorerWidth(nextWidth);
       localStorage.setItem("explorerWidth", String(nextWidth));
     };
@@ -347,24 +340,6 @@ export function WorkspacePage() {
       window.removeEventListener("mouseup", stopResizing);
     };
   }, [resizingExplorer]);
-
-  useEffect(() => {
-    if (!resizingPipeline) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      // Pipeline panel sits to the LEFT of AI panel; we track the cursor
-      // relative to the right edge of the window minus AI panel width.
-      const nextWidth = Math.max(240, Math.min(560, window.innerWidth - aiWidth - e.clientX));
-      setPipelineWidth(nextWidth);
-      localStorage.setItem("pipelineWidth", String(nextWidth));
-    };
-    const stop = () => setResizingPipeline(false);
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", stop);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", stop);
-    };
-  }, [resizingPipeline, aiWidth]);
 
   useEffect(() => {
     if (!resizingAI) return;
@@ -421,36 +396,21 @@ export function WorkspacePage() {
         </div>
       )}
       <main style={{ height: "calc(100% - var(--th) - 36px)", display: "flex", minWidth: 0, minHeight: 0 }}>
-      <ActivityBar
-        explorerOpen={explorerOpen}
-        pipelineOpen={pipelineOpen}
-        onToggleExplorer={() => setExplorerOpen((value) => !value)}
-        onTogglePipeline={() => {
-          setPipelineOpen((v) => {
-            localStorage.setItem("pipelineOpen", String(!v));
-            return !v;
-          });
+      <ExplorerPanel
+        refreshNonce={datasetRefreshNonce}
+        searchFocusNonce={explorerSearchFocusNonce}
+        width={explorerWidth}
+      />
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize"
+        className="resize-handle"
+        onMouseDown={() => setResizingExplorer(true)}
+        style={{
+          background: resizingExplorer ? "var(--acl)" : undefined,
         }}
       />
-      {explorerOpen ? (
-        <>
-          <ExplorerPanel
-            refreshNonce={datasetRefreshNonce}
-            searchFocusNonce={explorerSearchFocusNonce}
-            width={explorerWidth}
-          />
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            title="Drag to resize"
-            className="resize-handle"
-            onMouseDown={() => setResizingExplorer(true)}
-            style={{
-              background: resizingExplorer ? "var(--acl)" : undefined,
-            }}
-          />
-        </>
-      ) : null}
       <CanvasPanel
         projectId={resolvedProject?.id ?? ""}
         pipelineId={pipelineId}
@@ -483,29 +443,6 @@ export function WorkspacePage() {
         replayError={replayError}
         onClearReplayError={() => setReplayError(null)}
       />
-      {/* Pipeline column — dedicated panel between canvas and AI */}
-      {pipelineOpen ? (
-        <>
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            title="Drag to resize pipeline panel"
-            className="resize-handle"
-            onMouseDown={() => setResizingPipeline(true)}
-            style={{
-              background: resizingPipeline ? "var(--acl)" : undefined,
-            }}
-          />
-          <PipelinePanel
-            width={pipelineWidth}
-            onClose={() => {
-              setPipelineOpen(false);
-              localStorage.setItem("pipelineOpen", "false");
-            }}
-            onRunPipeline={handleRunPipeline}
-          />
-        </>
-      ) : null}
       {/* AI panel drag handle */}
       <div
         role="separator"

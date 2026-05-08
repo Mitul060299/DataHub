@@ -10,17 +10,17 @@ const STEPS = [
   {
     id: "upload",
     label: "Upload your first file",
-    hint: "Drag & drop a CSV or Excel into the Data panel",
+    hint: "Drag & drop a CSV/Excel into the Data panel, or press Ctrl+I to import",
   },
   {
     id: "question",
     label: "Ask your first question",
-    hint: 'Type a question in the AI chat and press Enter',
+    hint: "Type in the AI Agent on the right, e.g. \"remove duplicates\" or \"show top 10 rows by revenue\"",
   },
   {
     id: "complete",
-    label: "Explore insights & export",
-    hint: "Create charts for analysis, export to CSV or Excel, or save a checkpoint",
+    label: "Explore the Pipeline tab",
+    hint: "Click the git-branch icon tab to see your transformation history, then export when ready",
   },
 ];
 

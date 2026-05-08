@@ -294,17 +294,17 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
         <div style={{ display: "inline-flex", gap: 3 }}>          {([
             { key: "data",     icon: <IconTable size={16} />,     label: "Data" },
-            { key: "pipeline", icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null },
-            { key: "canvas",   icon: <IconBarChart size={16} />,  label: "Canvas",   tourAttr: true },
+            { key: "pipeline", icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
+            { key: "canvas",   icon: <IconBarChart size={16} />,  label: "Canvas",   tourTarget: "canvas-tab" },
             ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),
             ...(dataset?.id  ? [{ key: "history",  icon: <IconRefresh size={16} />, label: "History"  }] : []),
-          ] as { key: string; icon: React.ReactNode; label: string; badge?: number | null; tourAttr?: boolean }[]).map(({ key, icon, label, badge, tourAttr }) => {
+          ] as { key: string; icon: React.ReactNode; label: string; badge?: number | null; tourTarget?: string }[]).map(({ key, icon, label, badge, tourTarget }) => {
             const active = tab === key;
             return (
               <button
                 key={key}
                 title={label}
-                {...(tourAttr ? { "data-tour": "canvas-tab" } : {})}
+                {...(tourTarget ? { "data-tour": tourTarget } : {})}
                 onClick={() => switchTab(key as CanvasTab)}
                 style={{
                   position: "relative",

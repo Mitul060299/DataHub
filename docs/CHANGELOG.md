@@ -4,6 +4,23 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-08 — Onboarding Overhaul
+
+**WelcomeModal (redesigned):**
+- `frontend/src/components/WelcomeModal.tsx` — replaced single-screen modal with a 4-slide interactive walkthrough: (1) feature overview with feature cards, (2) Data tab tips, (3) Pipeline tab tips, (4) sample dataset picker. Animated progress dots allow jumping between slides. Back/Next navigation on every slide.
+
+**Tour (updated):**
+- `frontend/src/components/TourTooltip.tsx` — removed broken `activity-pipeline` step (ActivityBar was removed in a prior commit). Added new `pipeline-tab` step pointing at the Pipeline tab button. Rewrote all step copy to be more concrete and action-oriented (8 steps total).
+- `frontend/src/components/CanvasPanel.tsx` — added `data-tour="pipeline-tab"` to the Pipeline tab button so the tour can highlight it. Refactored tab array to use `tourTarget?: string` instead of `tourAttr?: boolean`.
+
+**Onboarding progress widget:**
+- `frontend/src/components/OnboardingProgress.tsx` — updated step hints to reference the current UI (Pipeline tab instead of Pipeline panel, corrected keyboard shortcut).
+
+**Styles:**
+- `frontend/src/styles/global.css` — added CSS for new welcome modal slide components: progress dots, slide badge, feature cards, tips list, nav row.
+
+---
+
 ## 2026-05-08 — Hide AI Panel on Pipeline Tab + Panel Border Fix
 
 **UI behaviour:**

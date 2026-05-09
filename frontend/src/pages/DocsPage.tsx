@@ -21,6 +21,7 @@ const SECTIONS: Section[] = [
     pages: [
       { id: "welcome", label: "Welcome to datahub.org.in" },
       { id: "quickstart", label: "Quick Start" },
+      { id: "guest-mode", label: "Try without signing in" },
       { id: "concepts", label: "Key Concepts" },
     ],
   },
@@ -40,9 +41,10 @@ const SECTIONS: Section[] = [
     label: "HOW TO GUIDES",
     pages: [
       { id: "guide-start", label: "Create your first project" },
-      { id: "guide-upload", label: "Upload a file" },
+      { id: "guide-upload", label: "Import data (CSV, Excel, JSON, Parquet)" },
       { id: "guide-database", label: "Connect a database" },
       { id: "guide-pipeline", label: "Build a pipeline" },
+      { id: "guide-pipeline-edit", label: "Edit & re-run pipeline steps" },
       { id: "guide-schedule", label: "Schedule a pipeline" },
       { id: "guide-dashboard", label: "Build a dashboard" },
       { id: "guide-invite", label: "Invite team members" },
@@ -126,15 +128,24 @@ function QuickStart() {
   return (
     <article className="docs-article">
       <h1>Quick Start</h1>
-      <p className="docs-lead">Go from zero to your first insight in under five minutes.</p>
+      <p className="docs-lead">Go from zero to your first insight in under five minutes — no account required.</p>
+
+      <div className="docs-callout docs-callout--success">
+        <strong>No sign-up needed.</strong> DataHub works fully in guest mode. Click <strong>Workspace</strong> in the top nav or visit{" "}
+        <a href="/workspace">datahub.org.in/workspace</a> — you'll land directly inside the app as a guest. Sign up later only when you want to save
+        your work permanently.
+      </div>
 
       <div className="docs-step">
         <div className="docs-step__number">1</div>
         <div className="docs-step__body">
-          <h3>Create an account</h3>
+          <h3>Open the Workspace</h3>
           <p>
-            Visit <a href="https://datahub.org.in" target="_blank" rel="noreferrer">datahub.org.in</a> and click <strong>Get started free</strong>. Sign
-            up with Google or email — no credit card required.
+            Click <strong>Workspace</strong> in the top navigation bar. You'll see an empty three-panel layout: the left panel (Explorer), the centre
+            (data canvas), and the right (AI Agent). No login required.
+          </p>
+          <p>
+            If this is your first visit, a welcome modal will open with sample datasets to get you started in one click.
           </p>
         </div>
       </div>
@@ -144,8 +155,8 @@ function QuickStart() {
         <div className="docs-step__body">
           <h3>Create a project</h3>
           <p>
-            From the home page, click <strong>New project</strong>. Give it a name — this is the container that holds your data sources, pipelines,
-            and dashboards.
+            Click <strong>+ New project</strong> on the workspace home. Give it a name (e.g. <em>Sales Q1</em>). Projects are containers that hold your
+            data sources, pipeline steps, and visualisations.
           </p>
         </div>
       </div>
@@ -153,10 +164,13 @@ function QuickStart() {
       <div className="docs-step">
         <div className="docs-step__number">3</div>
         <div className="docs-step__body">
-          <h3>Upload a file</h3>
+          <h3>Import your data</h3>
           <p>
-            Inside your project, click <strong>Add data source → Upload file</strong>. Drag in a CSV or Excel file (up to 50 MB on the Free plan). DataHub
-            will parse and preview it instantly.
+            Click the <strong>+</strong> next to <strong>DATA</strong> in the left panel. The Import modal opens. Drag-and-drop a CSV, Excel, Parquet,
+            or JSON file — or click a format button to browse. DataHub parses and previews the file instantly.
+          </p>
+          <p>
+            Alternatively, try a sample: in the welcome modal pick one of the pre-loaded sample datasets and it will import automatically.
           </p>
         </div>
       </div>
@@ -166,17 +180,12 @@ function QuickStart() {
         <div className="docs-step__body">
           <h3>Ask the AI a question</h3>
           <p>
-            In the AI panel, type a question like <em>"Show me total revenue by month"</em>. The AI classifies your intent, then generates an execution plan showing each step and estimated row counts.
+            In the <strong>AI Agent</strong> panel on the right, type what you want — e.g.{" "}
+            <em>"Show total revenue by month"</em> or <em>"Clean nulls and find the top 5 customers"</em>.
           </p>
           <p>
-            For complex requests — such as pasting multiple business rules or describing several transformations at once — the AI automatically builds a
-            multi-step plan with one entry per rule, each showing its own SQL. No mode switch required; the agent detects this from your input.
-          </p>
-          <p>
-            If your request needs more context, the AI replies with a single clarifying question — shown with a purple <strong>❓ NEEDS YOUR INPUT</strong> badge. Type your answer and press <kbd>Enter</kbd> to continue.
-          </p>
-          <p>
-            Once the plan appears, click <strong>✓ Approve</strong> to run it, <strong>✎ Modify</strong> to tweak a step first, or <strong>✕ Reject</strong> to cancel.
+            The AI generates a step-by-step execution plan before touching your data. Click <strong>✓ Approve</strong> to run it, <strong>✎ Modify</strong>{" "}
+            to tweak a step first, or <strong>✕ Reject</strong> to cancel.
           </p>
         </div>
       </div>
@@ -184,16 +193,93 @@ function QuickStart() {
       <div className="docs-step">
         <div className="docs-step__number">5</div>
         <div className="docs-step__body">
-          <h3>Pin to a dashboard</h3>
+          <h3>View results &amp; build a dashboard</h3>
           <p>
-            Click <strong>Add to dashboard</strong> on any result to pin it as a chart or table card. You now have a live dashboard driven by your data.
+            The transformed data appears in the centre canvas. Click the chart icon on any result column to visualise it. Add charts to a dashboard
+            by clicking <strong>Add to dashboard</strong>.
           </p>
         </div>
       </div>
 
-      <div className="docs-callout docs-callout--success">
-        That's it — your first project, data source, pipeline, and dashboard are live. Read on to learn what each of those concepts means in depth.
+      <div className="docs-step">
+        <div className="docs-step__number">6</div>
+        <div className="docs-step__body">
+          <h3>Sign up to save your work (optional)</h3>
+          <p>
+            When you're ready to save permanently, click <strong>Sign up free</strong> in the top bar. All projects, datasets, and pipelines you
+            created as a guest will be carried over to your new account automatically — nothing is lost.
+          </p>
+        </div>
       </div>
+
+      <div className="docs-callout docs-callout--info">
+        That's the full loop: open → import → analyse → visualise. Read on to learn how each piece works in depth.
+      </div>
+    </article>
+  );
+}
+
+function GuestMode() {
+  return (
+    <article className="docs-article">
+      <h1>Try without signing in</h1>
+      <p className="docs-lead">
+        DataHub lets you use the full product — projects, pipelines, AI agent, dashboards — without creating an account. Sign up only when you want to
+        save your work permanently.
+      </p>
+
+      <h2>How it works</h2>
+      <p>
+        When you visit DataHub for the first time, a temporary <strong>guest session</strong> is automatically created in the background. This session
+        behaves identically to a Free-plan account: you get your own project container, file storage, and AI message quota. Your session is kept alive for
+        30 days in your browser's local storage.
+      </p>
+
+      <div className="docs-callout docs-callout--info">
+        <strong>Nothing is lost on sign-up.</strong> When you create an account (email, Google, or GitHub), every project, dataset, and pipeline you
+        created as a guest is automatically migrated to your new account.
+      </div>
+
+      <h2>Guest vs. registered account</h2>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Guest session</th>
+              <th>Free account (signed in)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Projects</td><td>2</td><td>2</td></tr>
+            <tr><td>File import (CSV, Excel, JSON, Parquet)</td><td>✅</td><td>✅</td></tr>
+            <tr><td>AI agent</td><td>✅ (50 msgs/month)</td><td>✅ (50 msgs/month)</td></tr>
+            <tr><td>Pipeline builder</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Dashboards</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Data persists beyond 30 days</td><td>❌</td><td>✅</td></tr>
+            <tr><td>Access from another device / browser</td><td>❌</td><td>✅</td></tr>
+            <tr><td>Team collaboration</td><td>❌</td><td>❌ (upgrade required)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Signing up as a guest</h2>
+      <p>
+        When you're ready, click the <strong>Sign up free</strong> button in the top-right corner of the screen. Complete the sign-up form. Once
+        confirmed, DataHub automatically links your guest work to your new account — you'll see all your projects and data exactly as you left them.
+      </p>
+
+      <h2>Signing in on a different device</h2>
+      <p>
+        Guest sessions are stored in your browser's <code>localStorage</code>. If you want access on another device or browser, you need to create a
+        free account first — only then can you log in anywhere and see your data.
+      </p>
+
+      <h2>What happens after 30 days (guest)</h2>
+      <p>
+        Inactive guest accounts are cleaned up after 30 days. If you haven't signed up within that window, your projects and uploaded data will be
+        removed. Sign up for free to keep everything permanently.
+      </p>
     </article>
   );
 }
@@ -588,50 +674,131 @@ function GuideStart() {
 function GuideUpload() {
   return (
     <article className="docs-article">
-      <h1>Upload a file</h1>
-      <p className="docs-lead">Uploading a CSV, Excel, Parquet, or JSON file is the fastest way to get data into DataHub.</p>
+      <h1>Import data (CSV, Excel, JSON, Parquet)</h1>
+      <p className="docs-lead">
+        Uploading a file is the fastest way to get data into DataHub. Supported formats: CSV, TSV, Excel (.xlsx/.xls), JSON, Parquet. No sign-in
+        required — guests can import files immediately.
+      </p>
+
+      <h2>Method 1 — left-panel import (most common)</h2>
 
       <div className="docs-step">
         <div className="docs-step__number">1</div>
         <div className="docs-step__body">
-          <h3>Open a project</h3>
-          <p>Navigate to any project from the home page.</p>
+          <h3>Open the Workspace</h3>
+          <p>
+            Click <strong>Workspace</strong> in the top nav. If you have no project yet, click <strong>+ New project</strong> and give it a name.
+            Then open the project so you see the three-panel workspace layout.
+          </p>
         </div>
       </div>
+
       <div className="docs-step">
         <div className="docs-step__number">2</div>
         <div className="docs-step__body">
-          <h3>Click "Add data source"</h3>
-          <p>In the Data Sources panel, click <strong>+ Add data source</strong> then select <strong>Upload file</strong>.</p>
+          <h3>Click the + button next to DATA</h3>
+          <p>
+            In the left <strong>Explorer</strong> panel, find the <strong>DATA</strong> section header. Click the <strong>+</strong> icon next to it.
+            The Import Data Source modal opens.
+          </p>
         </div>
       </div>
+
       <div className="docs-step">
         <div className="docs-step__number">3</div>
         <div className="docs-step__body">
-          <h3>Select your file</h3>
+          <h3>Choose your file type</h3>
           <p>
-            Drag and drop a file or click to browse. Supported formats: <code>.csv</code>, <code>.xlsx</code>, <code>.xls</code>, <code>.parquet</code>,{" "}
-            <code>.json</code>. Maximum file size depends on your plan (50 MB on Free, 1 GB on paid plans).
-          </p>
-          <p>
-            <strong>CSV:</strong> Delimiter (comma / tab / semicolon / pipe / colon) and encoding are detected automatically — no configuration needed.
-          </p>
-          <p>
-            <strong>Excel:</strong> If your workbook has multiple sheets, DataHub will prompt you to pick one before importing.
+            Four large buttons appear: <strong>CSV</strong>, <strong>Excel</strong>, <strong>JSON</strong>, <strong>Parquet</strong>. Click the one
+            matching your file — this sets the file-picker filter to show only the right extension. You can also <strong>drag and drop</strong> a file
+            anywhere onto the modal and the type is detected automatically.
           </p>
         </div>
       </div>
+
       <div className="docs-step">
         <div className="docs-step__number">4</div>
         <div className="docs-step__body">
-          <h3>Preview and confirm</h3>
+          <h3>Select or drop your file</h3>
+          <p>A file-picker dialog opens. Select your file and click Open.</p>
+          <ul>
+            <li>
+              <strong>CSV:</strong> Delimiter (comma, semicolon, tab, pipe, colon) and character encoding (UTF-8, Latin-1, Windows-1252…) are
+              detected automatically — no configuration needed.
+            </li>
+            <li>
+              <strong>Excel:</strong> If your workbook has multiple sheets you'll be prompted to pick one.
+            </li>
+            <li>
+              <strong>JSON:</strong> Flat JSON arrays and newline-delimited JSON (NDJSON) are both supported. Nested objects are flattened
+              automatically.
+            </li>
+            <li>
+              <strong>Parquet:</strong> Recommended for large datasets — fastest ingest. Files above 50 MB use a direct-to-cloud upload path (no
+              server buffering).
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="docs-step">
+        <div className="docs-step__number">5</div>
+        <div className="docs-step__body">
+          <h3>Review the preview</h3>
           <p>
-            DataHub parses the file and shows a preview. Verify the column names and types look correct, then click <strong>Confirm upload</strong>.
+            DataHub parses the file and shows a column count and row count below the file name. If the wrong delimiter or encoding was detected, you'll
+            see garbled column names — close the modal, check the file, and re-import. For CSV you can override the delimiter using the <strong>Custom
+            delimiter</strong> field.
           </p>
         </div>
       </div>
+
+      <div className="docs-step">
+        <div className="docs-step__number">6</div>
+        <div className="docs-step__body">
+          <h3>Name your dataset (optional)</h3>
+          <p>
+            By default the dataset takes the file name without its extension. Enter a custom name in the <strong>Dataset name</strong> field at the top
+            of the modal if you prefer something more descriptive (e.g. <em>Q1 Sales</em>).
+          </p>
+        </div>
+      </div>
+
+      <div className="docs-step">
+        <div className="docs-step__number">7</div>
+        <div className="docs-step__body">
+          <h3>Confirm upload</h3>
+          <p>
+            Click <strong>Import dataset</strong>. A progress bar appears while the file is being processed. When it completes, the dataset appears
+            in the left panel under DATA and is automatically selected in the centre canvas, showing the first 100 rows.
+          </p>
+        </div>
+      </div>
+
+      <h2>Method 2 — drag and drop into the window</h2>
+      <p>
+        Drag any supported file from your file explorer and drop it anywhere over the workspace window. The Import modal opens automatically with your
+        file pre-loaded, ready to confirm.
+      </p>
+
+      <h2>Method 3 — sample datasets</h2>
+      <p>
+        When you first open the workspace, a welcome modal appears with pre-loaded sample datasets (retail sales, HR data, etc.). Click any sample to
+        import it instantly — no file needed.
+      </p>
+
+      <h2>After import</h2>
+      <p>Once a dataset is imported you can:</p>
+      <ul>
+        <li>Browse it in the <strong>Data</strong> tab (centre panel) — scroll, sort, and search columns.</li>
+        <li>Ask the AI agent in the right panel to analyse, clean, or transform it.</li>
+        <li>Build a pipeline step by step using the <strong>Pipeline</strong> tab.</li>
+        <li>Download the raw import as CSV or Parquet via the <strong>Export</strong> button (top-right).</li>
+      </ul>
+
       <div className="docs-callout docs-callout--warn">
-        Files are stored in your account's S3 bucket. Large files count toward your plan storage quota.
+        <strong>Size limits:</strong> Free plan — 50 MB per file, 500 MB total storage. Professional — 1 GB per file, 20 GB total. Parquet files
+        above 50 MB use a direct upload path and bypass the 50 MB server limit on paid plans.
       </div>
     </article>
   );
@@ -641,181 +808,294 @@ function GuideDatabase() {
   return (
     <article className="docs-article">
       <h1>Connect a database</h1>
-      <p className="docs-lead">Database connectors let you query live data from PostgreSQL, MySQL, Snowflake, and more — without exporting to CSV first.</p>
+      <p className="docs-lead">
+        Database connectors let you pull live data from PostgreSQL, MySQL, Snowflake, BigQuery, and more — directly into your pipeline without
+        exporting to CSV first.
+      </p>
+
       <div className="docs-callout docs-callout--info">
-        <strong>Live now.</strong> Professional plan: PostgreSQL, MySQL, SQLite, MSSQL, Oracle. Team plan: adds Snowflake, Redshift, BigQuery.
-        CSV and Excel uploads are available on all plans.
+        <strong>Plan requirement.</strong> CSV and Excel uploads work on all plans including Free. Database connectors require a{" "}
+        <strong>Professional</strong> plan or higher. Cloud warehouses (Snowflake, Redshift, BigQuery) require the <strong>Team</strong> plan.
       </div>
-      <h2>Connector availability</h2>
+
+      <h2>Connector availability by plan</h2>
       <div className="docs-table-wrap">
         <table className="docs-table">
           <thead>
             <tr>
               <th>Connector</th>
               <th>Free</th>
-              <th>Pro</th>
-              <th>Team</th>
-              <th>Business</th>
+              <th>Professional</th>
+              <th>Team / Business</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>CSV / Excel</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>PostgreSQL</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>MySQL</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>SQLite</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>MSSQL</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>Oracle</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>Snowflake</td>
-              <td>—</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>Redshift</td>
-              <td>—</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>BigQuery</td>
-              <td>—</td>
-              <td>—</td>
-              <td>✅</td>
-              <td>✅</td>
-            </tr>
-            <tr>
-              <td>Custom</td>
-              <td>—</td>
-              <td>—</td>
-              <td>—</td>
-              <td>🔜</td>
-            </tr>
+            <tr><td>CSV / Excel / JSON / Parquet</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>PostgreSQL</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>MySQL</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>SQLite</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>MSSQL (SQL Server)</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Oracle</td><td>—</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Snowflake</td><td>—</td><td>—</td><td>✅</td></tr>
+            <tr><td>Redshift</td><td>—</td><td>—</td><td>✅</td></tr>
+            <tr><td>BigQuery</td><td>—</td><td>—</td><td>✅</td></tr>
           </tbody>
         </table>
       </div>
-      <h2>How to connect</h2>
+
+      <h2>How to connect step by step</h2>
+
       <div className="docs-step">
         <div className="docs-step__number">1</div>
         <div className="docs-step__body">
-          <h3>Open a project and click “Add data source”</h3>
-          <p>Select <strong>Connect database</strong> from the data source type picker.</p>
+          <h3>Open the Connectors panel</h3>
+          <p>
+            From the workspace, click the <strong>+</strong> icon next to <strong>DATA</strong> in the left panel. In the Import modal, click the{" "}
+            <strong>Database</strong> tab (or look for the "Connect" option depending on your plan).
+          </p>
+          <p>
+            Alternatively, go to <strong>Settings → Connectors</strong> from the top-right profile menu to manage all your saved connections.
+          </p>
         </div>
       </div>
+
       <div className="docs-step">
         <div className="docs-step__number">2</div>
         <div className="docs-step__body">
-          <h3>Choose your connector</h3>
-          <p>Pick the database type (e.g. PostgreSQL). Enter the connection string and credential fields.</p>
+          <h3>Choose your connector type</h3>
+          <p>
+            Select the database type from the list (PostgreSQL, MySQL, Snowflake, etc.). Each connector shows only the fields relevant to that
+            database.
+          </p>
         </div>
       </div>
+
       <div className="docs-step">
         <div className="docs-step__number">3</div>
         <div className="docs-step__body">
-          <h3>Select a table or write a query</h3>
-          <p>Enter a table name or a <code>SELECT</code> statement. DataHub will preview the first 100 rows.</p>
+          <h3>Enter connection details</h3>
+          <p>Fill in the connection fields. Typical fields for PostgreSQL / MySQL:</p>
+          <ul>
+            <li><strong>Host</strong> — e.g. <code>db.example.com</code> or <code>127.0.0.1</code></li>
+            <li><strong>Port</strong> — defaults: PostgreSQL 5432, MySQL 3306, MSSQL 1433</li>
+            <li><strong>Database</strong> — the database name to connect to</li>
+            <li><strong>Username</strong> and <strong>Password</strong></li>
+            <li><strong>SSL mode</strong> — required for most cloud databases (set to <em>require</em>)</li>
+          </ul>
+          <p>For <strong>Snowflake</strong>: account identifier, warehouse, role, database, schema, username, password.</p>
+          <p>For <strong>BigQuery</strong>: upload your service account JSON key file.</p>
+          <div className="docs-callout docs-callout--warn">
+            Credentials are encrypted at rest with AES-256 and are never stored in plaintext. DataHub connects outbound — you do not need to
+            open inbound firewall ports to DataHub's IP.
+          </div>
         </div>
       </div>
+
       <div className="docs-step">
         <div className="docs-step__number">4</div>
         <div className="docs-step__body">
-          <h3>Confirm &amp; import</h3>
-          <p>Click <strong>Import dataset</strong>. The data is fetched, stored as Parquet in S3, and available to pipelines and dashboards.</p>
+          <h3>Test the connection</h3>
+          <p>
+            Click <strong>Test connection</strong>. DataHub makes a lightweight probe query. A green tick confirms the credentials work. A red error
+            shows the exact database error message — check host, port, and SSL settings if it fails.
+          </p>
         </div>
       </div>
+
+      <div className="docs-step">
+        <div className="docs-step__number">5</div>
+        <div className="docs-step__body">
+          <h3>Select a table or write a query</h3>
+          <p>
+            Enter a table name (e.g. <code>public.orders</code>) or a full <code>SELECT</code> statement. DataHub fetches a live preview of the first
+            100 rows so you can verify the schema.
+          </p>
+          <pre className="docs-codeblock">{`-- Example: import only the last 90 days of orders
+SELECT * FROM public.orders
+WHERE created_at >= NOW() - INTERVAL '90 days'`}</pre>
+        </div>
+      </div>
+
+      <div className="docs-step">
+        <div className="docs-step__number">6</div>
+        <div className="docs-step__body">
+          <h3>Import the dataset</h3>
+          <p>
+            Click <strong>Import dataset</strong>. DataHub runs your query, stores the result as a Parquet snapshot in S3, and registers it as a
+            dataset in your project. The dataset is now available to pipelines and dashboards.
+          </p>
+          <p>
+            To keep the data fresh, set up a <strong>scheduled pipeline</strong> that re-imports from the connector on a cron schedule. See{" "}
+            <em>Schedule a pipeline</em> in the How To Guides.
+          </p>
+        </div>
+      </div>
+
+      <h2>Saving a connection for reuse</h2>
       <p>
-        Questions? <a href="mailto:mitul.srivastava000@gmail.com">Email us</a> or use the feedback form on the home page.
+        After a successful test, tick <strong>Save this connection</strong> and give it a name (e.g. <em>Production Postgres</em>). Saved connections
+        appear in <strong>Settings → Connectors</strong> and can be reused across projects without re-entering credentials.
+      </p>
+
+      <h2>Need help?</h2>
+      <p>
+        <a href="mailto:mitul.srivastava000@gmail.com">Email us</a> or use the in-app feedback button. Include your connector type and the exact
+        error message for fastest resolution.
       </p>
     </article>
   );
 }
-
 function GuidePipeline() {
   return (
     <article className="docs-article">
       <h1>Build a pipeline</h1>
-      <p className="docs-lead">Pipelines are the heart of DataHub. Here's how to build one step by step.</p>
+      <p className="docs-lead">
+        A pipeline is a sequence of transformation steps that turn raw data into clean, structured results. You build it by describing what you want in
+        plain English — the AI generates the SQL and runs it. No code required.
+      </p>
 
+      <h2>Opening the pipeline view</h2>
+      <p>
+        From the workspace, select a dataset in the left panel (under DATA). The centre panel shows a row of tabs:{" "}
+        <strong>Data</strong> (raw table), <strong>Pipeline</strong> (step list), <strong>History</strong> (past runs), and <strong>Schedule</strong>. Click
+        the <strong>Pipeline</strong> tab to see the step builder.
+      </p>
+
+      <h2>Step 1 — Describe a transformation</h2>
+      <p>
+        In the <strong>AI Agent</strong> panel on the right, type what you want to do — for example:
+      </p>
+      <ul>
+        <li><em>"Remove rows where country is null"</em></li>
+        <li><em>"Group by region and sum revenue"</em></li>
+        <li><em>"Clean the data: fix nulls, remove duplicates, parse the date column"</em></li>
+      </ul>
+      <p>
+        The AI classifies your intent, resolves the table name, and generates a numbered execution plan with one entry per operation. The plan shows a
+        plain-English description and the SQL for each step.
+      </p>
+
+      <h2>Step 2 — Review the plan</h2>
+      <p>Three buttons appear on the plan card:</p>
+      <ul>
+        <li>
+          <strong>✓ Approve</strong> — runs all steps immediately. A live progress indicator updates as each step completes.
+        </li>
+        <li>
+          <strong>✎ Modify</strong> — opens a text field inside the plan card. Describe your change (e.g. <em>"Add a dedup step before the filter"</em>).
+          Press Enter. The current plan turns red and a revised plan is generated. You can modify as many times as needed.
+        </li>
+        <li>
+          <strong>✕ Reject</strong> — discards the plan without running anything.
+        </li>
+      </ul>
+
+      <h2>Step 3 — Results appear in the Data tab</h2>
+      <p>
+        After approval, the transformed data appears in the <strong>Data</strong> tab. The Pipeline tab shows each completed step with its row count. The
+        result is saved as an in-memory session view — click <strong>Save as artifact</strong> to persist it permanently.
+      </p>
+
+      <h2>Step 4 — Add more steps</h2>
+      <p>
+        Keep asking questions in the AI panel. Each approved plan appends new steps to the pipeline. Steps chain automatically: each step reads from the
+        output of the previous one.
+      </p>
+
+      <h2>Step 5 — Save as artifact</h2>
+      <p>
+        When the result looks right, click <strong>Save as artifact</strong> (or the save icon in the Pipeline tab). The artifact is stored as Parquet in
+        S3, versioned, and can be pinned to a dashboard or used as input to another pipeline.
+      </p>
+
+      <div className="docs-callout docs-callout--info">
+        See <strong>Edit &amp; re-run pipeline steps</strong> in the How To Guides to learn how to modify individual steps, delete steps, and re-run from a
+        specific point.
+      </div>
+    </article>
+  );
+}
+
+function GuidePipelineEdit() {
+  return (
+    <article className="docs-article">
+      <h1>Edit &amp; re-run pipeline steps</h1>
+      <p className="docs-lead">
+        After building a pipeline you can modify individual steps, delete steps, insert new ones between existing ones, and re-run from any point.
+      </p>
+
+      <h2>Viewing existing steps</h2>
+      <p>
+        Open a dataset and click the <strong>Pipeline</strong> tab in the centre panel. You'll see a numbered list of all steps. Each step shows its
+        type, a description, and the row count after that step ran.
+      </p>
+
+      <h2>Editing a step description</h2>
       <div className="docs-step">
         <div className="docs-step__number">1</div>
         <div className="docs-step__body">
-          <h3>Open a project and click "New pipeline"</h3>
-          <p>In your project's Pipelines panel, click <strong>+ New pipeline</strong> and give it a name.</p>
+          <h3>Click a step to expand it</h3>
+          <p>Click any step row to expand the detail view. You'll see the full description and the generated SQL.</p>
         </div>
       </div>
       <div className="docs-step">
         <div className="docs-step__number">2</div>
         <div className="docs-step__body">
-          <h3>Select a data source</h3>
-          <p>The first step of any pipeline reads from a data source. Pick the file you uploaded earlier, or a previous artifact.</p>
-        </div>
-      </div>
-      <div className="docs-step">
-        <div className="docs-step__number">3</div>
-        <div className="docs-step__body">
-          <h3>Describe a transformation in plain English</h3>
+          <h3>Edit via the AI panel</h3>
           <p>
-            In the AI chat panel, type what you want to do — e.g. <em>"Filter to rows where region = APAC, then group by month and sum revenue"</em>. The AI classifies your intent and generates a step-by-step execution plan with SQL and estimated row counts.
-          </p>
-          <p>
-            If the request is ambiguous the AI asks one clarifying question first. Answer it and press <kbd>Enter</kbd> to receive the plan.
+            In the AI panel on the right, type what you want to change — e.g. <em>"Change step 2 to group by month instead of week"</em>. The AI
+            regenerates the affected step's SQL and presents a new plan for approval.
           </p>
         </div>
       </div>
-      <div className="docs-step">
-        <div className="docs-step__number">4</div>
-        <div className="docs-step__body">
-          <h3>Approve, modify, or reject the plan</h3>
-          <p>
-            The plan card shows each step with a description and estimated row count. Click <strong>✓ Approve</strong> to run all steps, <strong>✎ Modify</strong> to type a change before running (e.g. <em>"Remove the sort step"</em>), or <strong>✕ Reject</strong> to cancel. You can modify as many times as needed before approving.
-          </p>
-        </div>
+
+      <h2>Deleting a step</h2>
+      <p>
+        Click the step row to expand it, then click the <strong>✕ Delete step</strong> button (or the trash icon). Steps that depended on the deleted
+        step are automatically re-numbered. Re-run the pipeline after deleting to recalculate downstream results.
+      </p>
+
+      <h2>Inserting a step between existing steps</h2>
+      <p>
+        In the AI panel, tell the agent where to insert — e.g.{" "}
+        <em>"After step 1 (filter), add a deduplication step, then continue with step 2 (group by)"</em>. The agent generates a plan that includes the
+        insertion and presents it for approval. Existing step numbers shift automatically.
+      </p>
+
+      <h2>Re-running from a specific step</h2>
+      <p>
+        Click the step you want to re-run from, then click <strong>Re-run from here</strong> (the play icon next to the step). All steps from that point
+        forward are re-executed against the output of the preceding step. Steps before the selected one are not re-run.
+      </p>
+      <div className="docs-callout docs-callout--warn">
+        Re-running from an earlier step discards the cached results of all later steps. If you have unsaved artifacts from those steps, save them first.
       </div>
-      <div className="docs-step">
-        <div className="docs-step__number">5</div>
-        <div className="docs-step__body">
-          <h3>Save and name your artifact</h3>
-          <p>After a successful run, the final step's output is saved as an artifact. You can rename it and add it to a dashboard.</p>
-        </div>
-      </div>
+
+      <h2>Re-running the entire pipeline</h2>
+      <p>
+        Click <strong>Run all</strong> (the ▶ button at the top of the Pipeline tab). All steps run in order from step 1. Useful after changing the
+        source data or when re-importing a fresh dataset snapshot.
+      </p>
+
+      <h2>Undoing a step (Replay)</h2>
+      <p>
+        If you want to go back to the data before a particular step ran, click <strong>Preview original</strong> in the toolbar to see the unmodified
+        source data. To permanently roll back, delete the unwanted steps and re-run.
+      </p>
+
+      <h2>Editing custom SQL steps</h2>
+      <p>
+        Steps with type <code>custom</code> contain hand-written SQL. Expand the step to see the full SQL. Click <strong>Edit SQL</strong> to open an
+        inline code editor, modify the query, then click <strong>Save &amp; re-run</strong> to apply the change.
+      </p>
+      <p>
+        Reference the current dataset in custom SQL as <code>{"{{dataset}}"}</code>:
+      </p>
+      <pre className="docs-codeblock">{`SELECT region, SUM(revenue) AS total
+FROM {{dataset}}
+WHERE status = 'closed'
+GROUP BY region
+ORDER BY total DESC`}</pre>
     </article>
   );
 }
@@ -1004,6 +1284,18 @@ function GuideExport() {
 
 function Faq() {
   const faqs: { q: string; a: string }[] = [
+    {
+      q: "Do I need to create an account to use DataHub?",
+      a: "No. DataHub gives you a full guest session immediately — no sign-up, no credit card. You can import files, build pipelines, use the AI agent, and create dashboards without registering. Sign up only when you want to keep your work permanently or access it from another device.",
+    },
+    {
+      q: "What happens to my work if I close the browser without signing up?",
+      a: "Your guest session is stored in your browser's localStorage for 30 days. If you reopen DataHub in the same browser within 30 days, your session is automatically restored and all your data is still there. If you want to access your work from a different device or browser, create a free account first — everything migrates automatically.",
+    },
+    {
+      q: "My file import failed with an error — what should I do?",
+      a: "Check three things: (1) File format — make sure the extension matches the format you selected (CSV, Excel, JSON, or Parquet). (2) File size — Free plan supports up to 50 MB per file. (3) Encoding — if you see garbled characters, try saving your CSV as UTF-8 in Excel before re-uploading. If the problem persists, email mitul.srivastava000@gmail.com with the file name and the exact error message.",
+    },
     {
       q: "Does DataHub work with large files?",
       a: "Free supports files up to 50 MB. Professional supports up to 1 GB, Team up to 5 GB, Business up to 10 GB. Enterprise has no per-file size limit. For very large datasets, consider splitting files or contact us for Enterprise options.",
@@ -1673,6 +1965,8 @@ function DocContent({ page }: { page: string }) {
     case "guide-upload": return <GuideUpload />;
     case "guide-database": return <GuideDatabase />;
     case "guide-pipeline": return <GuidePipeline />;
+    case "guide-pipeline-edit": return <GuidePipelineEdit />;
+    case "guest-mode":   return <GuestMode />;
     case "guide-schedule": return <GuideSchedule />;
     case "guide-dashboard": return <GuideDashboard />;
     case "guide-invite": return <GuideInvite />;

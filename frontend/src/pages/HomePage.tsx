@@ -65,7 +65,7 @@ type Feature = {
   icon: JSX.Element;
   description: string;
   span: "lg" | "md" | "sm" | "tall";
-  visual: "agent" | "pipeline" | "dashboard" | "sources" | "team" | "audit";
+  visual: "browser" | "instant" | "cost" | "prompt" | "sql" | "approve";
 };
 
 const features: Feature[] = [
@@ -75,7 +75,7 @@ const features: Feature[] = [
     icon: <IconMessageCircle size={20} color="#a78bfa" />,
     description: "Open a browser, start working. No 2 GB installer, no admin rights, no IT ticket. Works on Mac, Windows, and Linux — even on a Chromebook.",
     span: "lg",
-    visual: "agent",
+    visual: "browser",
   },
   {
     title: "No setup, no configuration",
@@ -83,7 +83,7 @@ const features: Feature[] = [
     icon: <IconFileText size={20} color="#22c55e" />,
     description: "Skip the warehouse, the ETL stack, the modelling layer. Drop in a file or paste DB credentials — you're analysing in under a minute.",
     span: "md",
-    visual: "pipeline",
+    visual: "instant",
   },
   {
     title: "A fraction of the cost",
@@ -91,7 +91,7 @@ const features: Feature[] = [
     icon: <IconGrid size={20} color="#38bdf8" />,
     description: "Replace three or four separate tools with one. Free tier covers small teams. No per-seat pricing, no surprise overages.",
     span: "md",
-    visual: "dashboard",
+    visual: "cost",
   },
   {
     title: "No coding, no SQL to learn",
@@ -99,15 +99,15 @@ const features: Feature[] = [
     icon: <IconDatabase size={20} color="#f59e0b" />,
     description: "Type what you want in plain English. The AI plans, writes the SQL, and runs it. Analysts and non-technical teammates use the same tool side-by-side.",
     span: "tall",
-    visual: "sources",
+    visual: "prompt",
   },
   {
-    title: "No black box — full transparency",
+    title: "No black box \u2014 full transparency",
     color: "#ec4899",
     icon: <IconTeam size={20} color="#ec4899" />,
     description: "Every step is readable, editable SQL you can inspect and replay. Nothing hidden behind a model.",
     span: "sm",
-    visual: "team",
+    visual: "sql",
   },
   {
     title: "You stay in control",
@@ -115,7 +115,7 @@ const features: Feature[] = [
     icon: <IconShield size={20} color="#f87171" />,
     description: "Review every AI plan before it runs. Approve, edit, or reject. Full audit log of every change.",
     span: "sm",
-    visual: "audit",
+    visual: "approve",
   },
 ];
 
@@ -699,70 +699,110 @@ export function HomePage() {
 
   const renderFeatureVisual = (kind: Feature["visual"]) => {
     switch (kind) {
-      case "agent":
+      case "browser":
         return (
-          <div className="bento-visual bento-visual-agent">
-            <div className="agent-msg user">Show revenue by region this quarter</div>
-            <div className="agent-msg ai">
-              <span className="agent-step">Step 1</span> Group orders by region
-            </div>
-            <div className="agent-msg ai">
-              <span className="agent-step">Step 2</span> Sum revenue, sort desc
-            </div>
-            <div className="agent-msg ai">
-              <span className="agent-step">Step 3</span> Render bar chart
-            </div>
-          </div>
-        );
-      case "pipeline":
-        return (
-          <div className="bento-visual bento-visual-pipeline">
-            {["Load", "Clean", "Join", "Aggregate", "Export"].map((s, i) => (
-              <div key={s} className="pipe-node" style={{ animationDelay: `${i * 0.15}s` }}>
-                {s}
+          <div className="bento-visual bento-visual-browser">
+            <div className="browser-chrome">
+              <span className="browser-dot r" />
+              <span className="browser-dot y" />
+              <span className="browser-dot g" />
+              <div className="browser-url">
+                <span className="lock">🔒</span> app.datahub.in
               </div>
-            ))}
-          </div>
-        );
-      case "dashboard":
-        return (
-          <div className="bento-visual bento-visual-dashboard">
-            <div className="bar" style={{ height: "60%" }} />
-            <div className="bar" style={{ height: "85%" }} />
-            <div className="bar" style={{ height: "45%" }} />
-            <div className="bar" style={{ height: "95%" }} />
-            <div className="bar" style={{ height: "70%" }} />
-          </div>
-        );
-      case "sources":
-        return (
-          <div className="bento-visual bento-visual-sources">
-            {["PG", "SF", "BQ", "RS", "MY", "MS", "CSV", "XLS"].map((s) => (
-              <div key={s} className="src-chip">
-                {s}
+            </div>
+            <div className="browser-body">
+              <div className="browser-pill ok">✓ No install needed</div>
+              <div className="browser-os">
+                <span>macOS</span>
+                <span>Windows</span>
+                <span>Linux</span>
+                <span>ChromeOS</span>
               </div>
-            ))}
+            </div>
           </div>
         );
-      case "team":
+      case "instant":
         return (
-          <div className="bento-visual bento-visual-team">
-            <div className="avatar a1">M</div>
-            <div className="avatar a2">A</div>
-            <div className="avatar a3">+</div>
+          <div className="bento-visual bento-visual-instant">
+            <div className="instant-drop">
+              <span className="instant-file">📄 sales.csv</span>
+              <span className="instant-arrow">→</span>
+              <span className="instant-ready">Ready ✓</span>
+            </div>
+            <div className="instant-meta">
+              <span>No warehouse</span>
+              <span>·</span>
+              <span>No ETL</span>
+              <span>·</span>
+              <span className="instant-timer">&lt; 60s</span>
+            </div>
           </div>
         );
-      case "audit":
+      case "cost":
         return (
-          <div className="bento-visual bento-visual-audit">
-            <div className="audit-row">
-              <span className="dot" /> approved
+          <div className="bento-visual bento-visual-cost">
+            <div className="cost-row strike">
+              <span className="cost-name">Power BI</span>
+              <span className="cost-amt">₹18k/mo</span>
             </div>
-            <div className="audit-row">
-              <span className="dot" /> approved
+            <div className="cost-row strike">
+              <span className="cost-name">Fivetran</span>
+              <span className="cost-amt">₹22k/mo</span>
             </div>
-            <div className="audit-row">
-              <span className="dot" /> approved
+            <div className="cost-row strike">
+              <span className="cost-name">dbt Cloud</span>
+              <span className="cost-amt">₹12k/mo</span>
+            </div>
+            <div className="cost-row total">
+              <span className="cost-name">DataHub</span>
+              <span className="cost-amt">one plan</span>
+            </div>
+          </div>
+        );
+      case "prompt":
+        return (
+          <div className="bento-visual bento-visual-prompt">
+            <div className="prompt-msg user">Show top 5 regions by revenue this quarter</div>
+            <div className="prompt-arrow">↓ AI writes SQL</div>
+            <div className="prompt-msg sql">
+              <span className="kw">SELECT</span> region, <span className="kw">SUM</span>(revenue)
+              <br />
+              <span className="kw">FROM</span> orders
+              <br />
+              <span className="kw">GROUP BY</span> region <span className="kw">LIMIT</span> 5;
+            </div>
+          </div>
+        );
+      case "sql":
+        return (
+          <div className="bento-visual bento-visual-sql">
+            <div className="sql-step">
+              <span className="sql-num">01</span>
+              <code><span className="kw">SELECT</span> *</code>
+            </div>
+            <div className="sql-step">
+              <span className="sql-num">02</span>
+              <code><span className="kw">WHERE</span> date &gt; ...</code>
+            </div>
+            <div className="sql-step">
+              <span className="sql-num">03</span>
+              <code><span className="kw">GROUP BY</span> region</code>
+            </div>
+            <div className="sql-foot">editable · replayable</div>
+          </div>
+        );
+      case "approve":
+        return (
+          <div className="bento-visual bento-visual-approve">
+            <div className="approve-plan">
+              <div className="approve-title">AI proposed plan</div>
+              <div className="approve-step">› Filter rows where region = 'APAC'</div>
+              <div className="approve-step">› Aggregate by month</div>
+            </div>
+            <div className="approve-actions">
+              <span className="btn-approve">Approve</span>
+              <span className="btn-edit">Edit</span>
+              <span className="btn-reject">Reject</span>
             </div>
           </div>
         );

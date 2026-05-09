@@ -117,6 +117,7 @@ export function WorkspaceHomePage() {
   };
 
   const handleProjectCreated = (project: Project) => {
+    capture("project_created", { project_id: project.id, surface: "workspace_home" });
     setActiveProject(project);
     navigate(`/workspace/project/${project.id}/pipeline/new`);
   };
@@ -137,6 +138,7 @@ export function WorkspaceHomePage() {
           name: "Quickstart",
           description: "Started from a sample dataset",
         });
+        capture("project_created", { project_id: project.id, surface: "quickstart_sample" });
       }
       setActiveProject(project);
       const params = new URLSearchParams();

@@ -157,6 +157,12 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
     setIsUploading(true);
     setUploadProgress(0);
 
+    capture("file_upload_started", {
+      type: selectedFile.type || selectedFileType,
+      size: selectedFile.size,
+      presigned: selectedFile.size > 50 * 1024 * 1024 && /\.parquet$/i.test(selectedFile.name),
+    });
+
     const extraHeaders: Record<string, string> = {};
     if (workspaceId) extraHeaders["X-Workspace-Id"] = workspaceId;
     if (projectId) extraHeaders["X-Project-Id"] = projectId;
@@ -251,15 +257,24 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: unknown } } };
       const detail = maybeError.response?.data?.detail;
+      let errorMsg = "Upload failed. Please try again.";
       if (detail && typeof detail === "object" && (detail as Record<string, unknown>).error === "file_too_large") {
-        setErrorText((detail as Record<string, unknown>).message as string);
+        errorMsg = (detail as Record<string, unknown>).message as string;
+        setErrorText(errorMsg);
       } else if (typeof detail === "string") {
-        setErrorText(detail);
+        errorMsg = detail;
+        setErrorText(errorMsg);
       } else if (error instanceof Error) {
-        setErrorText(error.message);
+        errorMsg = error.message;
+        setErrorText(errorMsg);
       } else {
-        setErrorText("Upload failed. Please try again.");
+        setErrorText(errorMsg);
       }
+      capture("file_upload_error", {
+        type: selectedFile?.type || selectedFileType,
+        size: selectedFile?.size,
+        error: errorMsg.slice(0, 200),
+      });
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

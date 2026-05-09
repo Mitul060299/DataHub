@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { capture } from "../lib/posthog";
 import { IconBell, IconChevronDown, IconCreditCard, IconLogOut, IconSettings, IconUser } from "./Icons";
 
 const tabs = [
@@ -307,7 +308,7 @@ export function TopBar() {
               className="btn"
               type="button"
               style={{ height: 32, fontSize: 12, padding: "0 12px", whiteSpace: "nowrap" }}
-              onClick={() => navigate("/login")}
+              onClick={() => { capture("guest_signin_clicked"); navigate("/login"); }}
             >
               Sign in
             </button>
@@ -322,7 +323,7 @@ export function TopBar() {
                 border: "none",
                 whiteSpace: "nowrap",
               }}
-              onClick={() => navigate("/signup")}
+              onClick={() => { capture("guest_signup_cta_clicked", { surface: "topbar" }); navigate("/signup"); }}
             >
               Sign up free
             </button>

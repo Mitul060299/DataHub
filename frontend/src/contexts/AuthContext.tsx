@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { clearAuthToken, setAuthToken } from "../utils/auth";
-import { identify, reset } from "../lib/posthog";
+import { capture, identify, reset, setUserType } from "../lib/posthog";
 import { setSentryUser, clearSentryUser } from "../lib/sentry";
 
 const API_BASE =
@@ -63,6 +63,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
       setAnonSession(synth);
       setAuthToken(existingTok);
+      // Restore PostHog identity for returning guest so events stay linked.
+      identify(existingId, { is_anonymous: true });
+      setUserType("anonymous");
+      capture("anon_session_restored", { user_id: existingId });
       return;
     }
     try {
@@ -78,6 +82,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
       setAnonSession(synth);
       setAuthToken(data.access_token);
+      // Identify new guest in PostHog so all subsequent events are linked.
+      identify(data.user_id, { is_anonymous: true });
+      setUserType("anonymous");
+      capture("anon_session_created", { user_id: data.user_id });
     } catch (e) {
       console.warn("Failed to bootstrap anonymous session", e);
     }
@@ -124,6 +132,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem(ANON_TOKEN_KEY);
         localStorage.removeItem(ANON_USER_ID_KEY);
         setAnonSession(null);
+        setUserType("registered");
         identifyFromSession(nextSession);
       } else {
         // No real session — bootstrap (or restore) an anonymous one so the
@@ -273,9 +282,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem(ANON_TOKEN_KEY);
       localStorage.removeItem(ANON_USER_ID_KEY);
       setAnonSession(null);
-      return { ok: true, migrated: !!(data as { migrated?: boolean }).migrated };
+      const migrated = !!(data as { migrated?: boolean }).migrated;
+      setUserType("registered");
+      capture("anon_claim_success", { migrated });
+      return { ok: true, migrated };
     } catch (e) {
       console.warn("Anon claim error", e);
+      capture("anon_claim_failed");
       return { ok: false };
     }
   }, []);

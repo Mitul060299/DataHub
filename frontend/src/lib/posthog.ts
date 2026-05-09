@@ -48,4 +48,20 @@ export const reset = (): void => {
   }
 };
 
+/**
+ * Register super-properties so every subsequent event is tagged with the
+ * user type without having to pass it manually on every capture() call.
+ * Call once after the auth state resolves.
+ *
+ *   setUserType("anonymous")  — guest session (anon_<uuid>)
+ *   setUserType("registered") — signed-in Supabase user
+ */
+export const setUserType = (type: "anonymous" | "registered"): void => {
+  try {
+    if (key) posthog.register({ user_type: type, is_anonymous: type === "anonymous" });
+  } catch {
+    // never throw
+  }
+};
+
 export default posthog;

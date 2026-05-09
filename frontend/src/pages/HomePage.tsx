@@ -143,8 +143,7 @@ const plans: PricingPlan[] = [
     periodUSD: "forever",
     periodINR: "forever",
     features: [
-      "Solo projects only",
-      "Up to 2 projects",
+      "Solo projects",
       "50 AI messages/month",
       "50 MB file size",
       "500 MB storage",
@@ -168,7 +167,6 @@ const plans: PricingPlan[] = [
     trialBadge: "15 days free",
     features: [
       "Solo projects · 1 seat",
-      "Up to 5 projects",
       "500 AI messages/month",
       "250 MB file size",
       "5 GB storage",
@@ -192,7 +190,6 @@ const plans: PricingPlan[] = [
     trialBadge: "15 days free",
     features: [
       "Solo projects · 1 seat",
-      "Up to 20 projects",
       "1,500 AI messages/month",
       "1 GB file size",
       "20 GB storage",
@@ -215,7 +212,7 @@ const plans: PricingPlan[] = [
     trialBadge: "15 days free",
     features: [
       "Includes 3 seats. +\u20b91,499/extra seat",
-      "10 members per project · 5 collaborative projects",
+      "Unlimited projects · 10 members per project",
       "4,000+ AI messages (scales with seats)",
       "5 GB file size",
       "100 GB+ storage (scales with seats)",
@@ -227,7 +224,7 @@ const plans: PricingPlan[] = [
     ],
     featuresUSD: [
       "Includes 3 seats. +$29/extra seat",
-      "10 members per project · 5 collaborative projects",
+      "Unlimited projects · 10 members per project",
       "4,000+ AI messages (scales with seats)",
       "5 GB file size",
       "100 GB+ storage (scales with seats)",
@@ -251,7 +248,7 @@ const plans: PricingPlan[] = [
     trialBadge: "15 days free",
     features: [
       "Includes 5 seats. +\u20b92,499/extra seat",
-      "50 members per project · unlimited collaborative projects",
+      "Unlimited projects · 50 members per project",
       "15,000+ AI messages (scales with seats)",
       "10 GB file size",
       "500 GB+ storage (scales with seats) · 2 TB+ scan/month",
@@ -263,7 +260,7 @@ const plans: PricingPlan[] = [
     ],
     featuresUSD: [
       "Includes 5 seats. +$49/extra seat",
-      "50 members per project · unlimited collaborative projects",
+      "Unlimited projects · 50 members per project",
       "15,000+ AI messages (scales with seats)",
       "10 GB file size",
       "500 GB+ storage (scales with seats) · 2 TB+ scan/month",
@@ -285,7 +282,7 @@ const plans: PricingPlan[] = [
     periodUSD: "contact us · from $1,500/mo (5+ seats)",
     periodINR: "contact us · from $1,500/mo (5+ seats)",
     features: [
-      "Unlimited members per project · unlimited collaborative projects",
+      "Unlimited projects · unlimited members per project",
       "Negotiated AI / pipeline / scan quotas (fair-use)",
       "Custom storage",
       "Unlimited team members",

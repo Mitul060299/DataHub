@@ -1326,43 +1326,94 @@
 .bento-visual-cost {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
-.cost-row {
+.cost-stack {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 12px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cost-old {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--hp-line);
-  color: var(--hp-text-3);
+  border-radius: 10px;
   animation: slide-in-bottom 0.5s ease both;
 }
 
-.cost-row.strike {
-  text-decoration: line-through;
-  text-decoration-color: rgba(248, 113, 113, 0.7);
-  opacity: 0.7;
-}
-
-.cost-row.strike:nth-child(1) { animation-delay: 0s; }
-.cost-row.strike:nth-child(2) { animation-delay: 0.1s; }
-.cost-row.strike:nth-child(3) { animation-delay: 0.2s; }
-
-.cost-row.total {
-  background: rgba(56, 189, 248, 0.1);
-  border-color: rgba(56, 189, 248, 0.35);
-  color: #7dd3fc;
+.cost-old-label,
+.cost-new-label {
+  font-size: 10px;
   font-weight: 700;
-  margin-top: 4px;
-  animation-delay: 0.35s;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hp-text-3);
+  margin-bottom: 8px;
 }
 
-.cost-row .cost-amt { font-weight: 600; }
+.cost-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.cost-tile {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--hp-text-2);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hp-line);
+  border-radius: 6px;
+}
+
+.cost-plus {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hp-text-3);
+}
+
+.cost-old-price {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fca5a5;
+  text-align: right;
+}
+
+.cost-arrow {
+  text-align: center;
+  font-size: 16px;
+  color: var(--hp-cyan);
+  line-height: 1;
+  animation: fade-in 0.5s ease both;
+  animation-delay: 0.2s;
+}
+
+.cost-new {
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(56, 189, 248, 0.05));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  animation: slide-in-bottom 0.5s ease both;
+  animation-delay: 0.3s;
+}
+
+.cost-new-label { color: #7dd3fc; margin-bottom: 4px; }
+
+.cost-new-price {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
 
 /* 4. Prompt — "No coding, no SQL to learn" */
 .bento-visual-prompt {

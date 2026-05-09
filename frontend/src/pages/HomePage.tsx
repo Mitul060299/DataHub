@@ -741,21 +741,25 @@ export function HomePage() {
       case "cost":
         return (
           <div className="bento-visual bento-visual-cost">
-            <div className="cost-row strike">
-              <span className="cost-name">Power BI</span>
-              <span className="cost-amt">₹18k/mo</span>
-            </div>
-            <div className="cost-row strike">
-              <span className="cost-name">Fivetran</span>
-              <span className="cost-amt">₹22k/mo</span>
-            </div>
-            <div className="cost-row strike">
-              <span className="cost-name">dbt Cloud</span>
-              <span className="cost-amt">₹12k/mo</span>
-            </div>
-            <div className="cost-row total">
-              <span className="cost-name">DataHub</span>
-              <span className="cost-amt">one plan</span>
+            <div className="cost-stack">
+              <div className="cost-old">
+                <div className="cost-old-label">Legacy stack</div>
+                <div className="cost-tiles">
+                  <span className="cost-tile">BI tool</span>
+                  <span className="cost-plus">+</span>
+                  <span className="cost-tile">ETL service</span>
+                  <span className="cost-plus">+</span>
+                  <span className="cost-tile">Modelling layer</span>
+                  <span className="cost-plus">+</span>
+                  <span className="cost-tile">Per-seat licenses</span>
+                </div>
+                <div className="cost-old-price">₹50k+ / month</div>
+              </div>
+              <div className="cost-arrow">↓</div>
+              <div className="cost-new">
+                <div className="cost-new-label">DataHub</div>
+                <div className="cost-new-price">One plan · flat fee</div>
+              </div>
             </div>
           </div>
         );

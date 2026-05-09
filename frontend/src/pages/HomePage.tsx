@@ -89,7 +89,7 @@ const features: Feature[] = [
     title: "A fraction of the cost",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
-    description: "Replace a ₹50k+/month Power BI + Fivetran + dbt stack with one tool. Free tier covers small teams. No per-seat tax.",
+    description: "Replace three or four separate tools with one. Free tier covers small teams. No per-seat pricing, no surprise overages.",
     span: "md",
     visual: "dashboard",
   },

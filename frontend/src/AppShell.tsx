@@ -41,6 +41,12 @@ export function AppShell() {
   }
 
   if (!isPublic && !session) {
+    // Send unauthenticated visitors to the public demo workspace instead of
+    // login. They can still go to /login from the demo top bar if they have
+    // an account.
+    if (location.pathname.startsWith("/workspace")) {
+      return <Navigate to="/try" replace />;
+    }
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

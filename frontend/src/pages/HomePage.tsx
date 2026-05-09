@@ -611,7 +611,7 @@ export function HomePage() {
   };
 
   const handleGetStarted = () => {
-    navigate(session ? "/workspace" : "/signup");
+    navigate(session ? "/workspace" : "/try");
   };
 
 

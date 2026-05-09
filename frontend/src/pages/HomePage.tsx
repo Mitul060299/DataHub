@@ -753,7 +753,7 @@ export function HomePage() {
                   <span className="cost-plus">+</span>
                   <span className="cost-tile">Per-seat licenses</span>
                 </div>
-                <div className="cost-old-price">₹50k+ / month</div>
+                <div className="cost-old-price">{currency === "INR" ? "₹50,000+ / month" : "$600+ / month"}</div>
               </div>
               <div className="cost-arrow">↓</div>
               <div className="cost-new">

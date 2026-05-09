@@ -482,6 +482,11 @@ def _apply_startup_ddl() -> None:
         # add_webhook_user_id — user-scoped webhook access
         "ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS user_id TEXT",
         "CREATE INDEX IF NOT EXISTS idx_webhooks_user_id ON webhooks (user_id)",
+        # add_user_id_to_import_tables — ownership for import_tables / import_connections
+        "ALTER TABLE import_tables      ADD COLUMN IF NOT EXISTS user_id TEXT",
+        "ALTER TABLE import_connections ADD COLUMN IF NOT EXISTS user_id TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_import_tables_user_id      ON import_tables (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_import_connections_user_id ON import_connections (user_id)",
         # 0071 — remove workspace_id from all tables (replaced by user_id + project_id)
         "ALTER TABLE projects             DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE dataset_meta         DROP COLUMN IF EXISTS workspace_id",

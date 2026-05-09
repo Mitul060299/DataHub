@@ -281,15 +281,32 @@ export function TopBar() {
             </div>
           </>
         ) : isAnonymous ? (
-          <>
-            <span style={{ fontSize: 12, color: "#a0a0b8", marginRight: 4 }}>
-              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#f59e0b", marginRight: 6, verticalAlign: "middle" }} />
-              Trying as guest
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                color: "#a0a0b8",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#f59e0b",
+                }}
+              />
+              Guest
             </span>
             <button
               className="btn"
               type="button"
-              style={{ height: 32, fontSize: 12, padding: "0 12px" }}
+              style={{ height: 32, fontSize: 12, padding: "0 12px", whiteSpace: "nowrap" }}
               onClick={() => navigate("/login")}
             >
               Sign in
@@ -297,12 +314,19 @@ export function TopBar() {
             <button
               className="btn btn-primary"
               type="button"
-              style={{ height: 32, fontSize: 12, padding: "0 14px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", border: "none" }}
+              style={{
+                height: 32,
+                fontSize: 12,
+                padding: "0 14px",
+                background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                border: "none",
+                whiteSpace: "nowrap",
+              }}
               onClick={() => navigate("/signup")}
             >
-              Save your work — Sign up free
+              Sign up free
             </button>
-          </>
+          </div>
         ) : (
           <button className="btn btn-primary" type="button" onClick={() => navigate("/login")}>Sign in</button>
         )}

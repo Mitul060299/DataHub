@@ -70,50 +70,50 @@ type Feature = {
 
 const features: Feature[] = [
   {
-    title: "AI Agent",
+    title: "No SQL, no code — just ask",
     color: "#a78bfa",
     icon: <IconMessageCircle size={20} color="#a78bfa" />,
-    description: "Plain-English to SQL with the plan shown before anything runs.",
+    description: "Type what you want in plain English. The AI plans it, writes the SQL, and shows you exactly what it will do before running.",
     span: "lg",
     visual: "agent",
   },
   {
-    title: "Recorded Pipelines",
+    title: "No black box — full transparency",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
-    description: "Every transformation captured as a replayable step.",
+    description: "Every step is a readable, editable block of SQL. Inspect it, tweak it, replay it. Nothing hidden.",
     span: "md",
     visual: "pipeline",
   },
   {
-    title: "Cross-Dataset Visuals",
+    title: "Dashboards built in",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
-    description: "Power BI-style visuals across multiple datasets, shared by link.",
+    description: "Charts and shareable dashboards live in the same tool. No separate Power BI or Tableau license to buy.",
     span: "md",
     visual: "dashboard",
   },
   {
-    title: "Any Data Source",
+    title: "Works with the data you already have",
     color: "#f59e0b",
     icon: <IconDatabase size={20} color="#f59e0b" />,
-    description: "CSV, Excel, JSON, Parquet. Native Postgres, Snowflake, BigQuery.",
+    description: "Drop in CSV, Excel, JSON, or Parquet. Connect Postgres, MySQL, Snowflake, BigQuery. No migration project required.",
     span: "tall",
     visual: "sources",
   },
   {
-    title: "Team Collaboration",
+    title: "Invite your team — no per-seat tax",
     color: "#ec4899",
     icon: <IconTeam size={20} color="#ec4899" />,
-    description: "Project-level collaboration with roles, invites, and version history.",
+    description: "Bring collaborators in without paying per user. Roles, comments and version history included.",
     span: "sm",
     visual: "team",
   },
   {
-    title: "Audit & Governance",
+    title: "Approve before anything runs",
     color: "#f87171",
     icon: <IconShield size={20} color="#f87171" />,
-    description: "Full lineage, approval workflows, audit logs. SOC2-ready.",
+    description: "Review the AI's plan, edit it, or reject it. Full audit log of every change so you stay in control.",
     span: "sm",
     visual: "audit",
   },
@@ -1157,13 +1157,13 @@ export function HomePage() {
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.5 }}
         >
-          <p className="section-eyebrow">Capabilities</p>
+          <p className="section-eyebrow">Why DataHub</p>
           <h2 className="section-title">
-            One platform for data transformation,{" "}
-            <span className="hero-gradient-text">SQL pipelines &amp; dashboards</span>
+            All the power of a BI stack —{" "}
+            <span className="hero-gradient-text">none of the friction</span>
           </h2>
           <p className="section-subtitle">
-            Built for the messy, real-world data that breaks every other tool.{" "}
+            Nothing to install. No SQL to learn. A fraction of the cost of legacy BI and ETL tools — with full transparency into every step.{" "}
             <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "underline" }}>Compare plans →</Link>
           </p>
         </motion.div>

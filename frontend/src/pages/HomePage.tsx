@@ -519,11 +519,7 @@ export function HomePage() {
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Exit-intent modal — fires once per session for non-authenticated visitors
-  const [showExitModal, setShowExitModal] = useState(false);
-  const [exitEmail, setExitEmail] = useState("");
-  const [exitEmailDone, setExitEmailDone] = useState(false);
-  const [exitEmailSubmitting, setExitEmailSubmitting] = useState(false);
+
 
   useEffect(() => {
     demoTimerRef.current = setInterval(() => {
@@ -555,23 +551,7 @@ export function HomePage() {
       .catch(() => {});
   }, []);
 
-  // Exit-intent: detect mouse leaving the top of the viewport toward browser chrome.
-  // Only fires once per session and never for already-authenticated users.
-  useEffect(() => {
-    if (session) return;
-    if (sessionStorage.getItem("dh_exit_modal_shown")) return;
 
-    let fired = false;
-    const onMouseLeave = (e: MouseEvent) => {
-      if (fired || e.clientY > 10) return;
-      fired = true;
-      sessionStorage.setItem("dh_exit_modal_shown", "1");
-      capture("exit_intent_triggered");
-      setShowExitModal(true);
-    };
-    document.addEventListener("mouseleave", onMouseLeave);
-    return () => document.removeEventListener("mouseleave", onMouseLeave);
-  }, [session]);
 
   const handleWaitlist = (planName: string) => {
     setWaitlistEmail("");
@@ -634,26 +614,7 @@ export function HomePage() {
     navigate(session ? "/workspace" : "/signup");
   };
 
-  const handleExitEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = exitEmail.trim();
-    if (!trimmed) return;
-    setExitEmailSubmitting(true);
-    try {
-      await submitFeedbackForm({
-        name: "Exit-intent lead",
-        email: trimmed,
-        subject: "Exit-intent email capture",
-        message: "Visitor provided email via exit-intent modal on homepage.",
-      });
-      capture("exit_intent_email_captured", { $set: { email: trimmed, $email: trimmed } });
-    } catch {
-      // Non-blocking — still mark as done
-    } finally {
-      setExitEmailSubmitting(false);
-      setExitEmailDone(true);
-    }
-  };
+
 
   const handleScrollHow = () => {
     const section = document.getElementById("how");
@@ -1565,72 +1526,7 @@ export function HomePage() {
         </div>
       )}
 
-      {/* EXIT-INTENT MODAL */}
-      {showExitModal && (
-        <div className="modal-backdrop" onClick={() => setShowExitModal(false)}>
-          <div className="modal-card exit-intent-card" onClick={(e) => e.stopPropagation()}>
-            <div className="exit-intent-emoji">👋</div>
-            <h3 className="modal-title">Before you go…</h3>
-            <p className="modal-sub">
-              See DataHub in action — no sign-up needed. Ask real questions about a sample dataset
-              and see AI-generated insights in under 60 seconds.
-            </p>
-            <div className="exit-intent-actions">
-              <button
-                type="button"
-                className="btn-primary-lg"
-                onClick={() => {
-                  capture("exit_intent_try_demo_clicked");
-                  setShowExitModal(false);
-                  navigate("/try");
-                }}
-              >
-                <span className="btn-shine" />
-                Try live demo
-              </button>
-              <button
-                type="button"
-                className="btn-ghost-lg"
-                onClick={() => {
-                  capture("exit_intent_signup_clicked");
-                  setShowExitModal(false);
-                  navigate("/signup");
-                }}
-              >
-                Get started free
-              </button>
-            </div>
-            {!exitEmailDone ? (
-              <form className="exit-intent-email-form" onSubmit={handleExitEmailSubmit}>
-                <p className="exit-intent-email-label">Or drop your email — we will follow up:</p>
-                <div className="exit-intent-email-row">
-                  <input
-                    className="form-input"
-                    type="email"
-                    placeholder="you@company.com"
-                    value={exitEmail}
-                    onChange={(e) => setExitEmail(e.target.value)}
-                    required
-                  />
-                  <button type="submit" className="exit-intent-send-btn" disabled={exitEmailSubmitting}>
-                    {exitEmailSubmitting ? "..." : "Send"}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <p className="exit-intent-email-thanks">Got it — we will be in touch soon.</p>
-            )}
-            <button
-              type="button"
-              className="modal-close"
-              onClick={() => setShowExitModal(false)}
-              aria-label="Close"
-            >
-              x
-            </button>
-          </div>
-        </div>
-      )}
+
     </main>
   );
 }

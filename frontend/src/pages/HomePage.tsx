@@ -70,50 +70,50 @@ type Feature = {
 
 const features: Feature[] = [
   {
-    title: "No SQL, no code — just ask",
+    title: "Nothing to download or install",
     color: "#a78bfa",
     icon: <IconMessageCircle size={20} color="#a78bfa" />,
-    description: "Type what you want in plain English. The AI plans it, writes the SQL, and shows you exactly what it will do before running.",
+    description: "Open a browser, start working. No 2 GB installer, no admin rights, no IT ticket. Works on Mac, Windows, and Linux — even on a Chromebook.",
     span: "lg",
     visual: "agent",
   },
   {
-    title: "No black box — full transparency",
+    title: "No setup, no configuration",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
-    description: "Every step is a readable, editable block of SQL. Inspect it, tweak it, replay it. Nothing hidden.",
+    description: "Skip the warehouse, the ETL stack, the modelling layer. Drop in a file or paste DB credentials — you're analysing in under a minute.",
     span: "md",
     visual: "pipeline",
   },
   {
-    title: "Dashboards built in",
+    title: "A fraction of the cost",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
-    description: "Charts and shareable dashboards live in the same tool. No separate Power BI or Tableau license to buy.",
+    description: "Replace a ₹50k+/month Power BI + Fivetran + dbt stack with one tool. Free tier covers small teams. No per-seat tax.",
     span: "md",
     visual: "dashboard",
   },
   {
-    title: "Works with the data you already have",
+    title: "No coding, no SQL to learn",
     color: "#f59e0b",
     icon: <IconDatabase size={20} color="#f59e0b" />,
-    description: "Drop in CSV, Excel, JSON, or Parquet. Connect Postgres, MySQL, Snowflake, BigQuery. No migration project required.",
+    description: "Type what you want in plain English. The AI plans, writes the SQL, and runs it. Analysts and non-technical teammates use the same tool side-by-side.",
     span: "tall",
     visual: "sources",
   },
   {
-    title: "Invite your team — no per-seat tax",
+    title: "No black box — full transparency",
     color: "#ec4899",
     icon: <IconTeam size={20} color="#ec4899" />,
-    description: "Bring collaborators in without paying per user. Roles, comments and version history included.",
+    description: "Every step is readable, editable SQL you can inspect and replay. Nothing hidden behind a model.",
     span: "sm",
     visual: "team",
   },
   {
-    title: "Approve before anything runs",
+    title: "You stay in control",
     color: "#f87171",
     icon: <IconShield size={20} color="#f87171" />,
-    description: "Review the AI's plan, edit it, or reject it. Full audit log of every change so you stay in control.",
+    description: "Review every AI plan before it runs. Approve, edit, or reject. Full audit log of every change.",
     span: "sm",
     visual: "audit",
   },
@@ -1157,13 +1157,13 @@ export function HomePage() {
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.5 }}
         >
-          <p className="section-eyebrow">Why DataHub</p>
+          <p className="section-eyebrow">Why teams choose DataHub</p>
           <h2 className="section-title">
-            All the power of a BI stack —{" "}
-            <span className="hero-gradient-text">none of the friction</span>
+            Faster, simpler, and{" "}
+            <span className="hero-gradient-text">far cheaper</span> than the alternatives
           </h2>
           <p className="section-subtitle">
-            Nothing to install. No SQL to learn. A fraction of the cost of legacy BI and ETL tools — with full transparency into every step.{" "}
+            Skip the install, the setup, the SQL, and the six-figure license. Get to insights today — without trading away transparency or control.{" "}
             <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "underline" }}>Compare plans →</Link>
           </p>
         </motion.div>

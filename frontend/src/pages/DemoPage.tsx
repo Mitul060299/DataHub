@@ -1,236 +1,385 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import { useSEO } from "../hooks/useSEO";
 import { capture } from "../lib/posthog";
+import { useAuth } from "../contexts/AuthContext";
 import "./DemoPage.css";
 
 /**
- * Public demo page (`/try`) — lets visitors interact with a sample dataset
- * and pre-scripted AI insights without signing up. All save / export /
- * connector actions surface a "Sign up free" CTA. Designed as a top-of-funnel
- * conversion lever.
+ * /try — Anonymous demo workspace powered by a real backend DuckDB session.
  *
- * Everything is in-memory; no backend calls are made from this page.
+ * Architecture:
+ *  - On mount, a random session_id is generated and stored in localStorage.
+ *  - POST /api/demo/init  → loads retail_store_sales.csv into an isolated
+ *    server-side DuckDB connection; returns first 100 rows + column info.
+ *  - POST /api/demo/command → executes NL→SQL on that session; returns
+ *    SQL + result rows.
+ *  - Usage limits (localStorage "demo_commands_run"):
+ *      0–2  : run normally
+ *      >=2  : non-blocking banner shown after 2nd command
+ *      >=3  : blocking modal after 3rd command
+ *  - Blocked actions (upload, new project, save, export) → signup prompt.
+ *  - Redirect signed-in users → /workspace.
  */
 
-type Customer = {
-  customer_id: number;
-  name: string;
-  email: string;
-  signup_date: string;
-  total_spend: number | null;
-  region: "North" | "South" | "East" | "West";
+// Types
+type Msg = {
+  id: string;
+  role: "user" | "ai";
+  text: string;
+  sql?: string;
+  columns?: string[];
+  rows?: unknown[][];
+  rowCount?: number;
+  error?: string;
+  commandKey?: string;
 };
 
-// Hardcoded sample so the page renders instantly with no fetch.
-const CUSTOMERS: Customer[] = [
-  { customer_id: 1001, name: "Alice Johnson", email: "alice@example.com", signup_date: "2024-01-15", total_spend: 1200.5, region: "North" },
-  { customer_id: 1002, name: "Bob Smith", email: "bob@example.com", signup_date: "2024-02-18", total_spend: 850.0, region: "West" },
-  { customer_id: 1003, name: "Chandra Patel", email: "chandra@example.com", signup_date: "2024-03-05", total_spend: 540.75, region: "South" },
-  { customer_id: 1004, name: "Diego Martinez", email: "diego@example.com", signup_date: "2024-03-20", total_spend: 130.25, region: "East" },
-  { customer_id: 1005, name: "Elena Wang", email: "elena@example.com", signup_date: "2024-04-10", total_spend: 2450.0, region: "North" },
-  { customer_id: 1006, name: "Fatima Noor", email: "fatima@example.com", signup_date: "2024-05-08", total_spend: null, region: "West" },
-  { customer_id: 1007, name: "George Adeyemi", email: "george@example.com", signup_date: "2024-05-22", total_spend: 3120.4, region: "East" },
-  { customer_id: 1008, name: "Hana Suzuki", email: "hana@example.com", signup_date: "2024-06-01", total_spend: 415.6, region: "South" },
-  { customer_id: 1009, name: "Ivan Petrov", email: "ivan@example.com", signup_date: "2024-06-14", total_spend: 1890.0, region: "North" },
-  { customer_id: 1010, name: "Jenna Brooks", email: "jenna@example.com", signup_date: "2024-07-02", total_spend: 275.3, region: "West" },
-  { customer_id: 1011, name: "Kabir Mehta", email: "kabir@example.com", signup_date: "2024-07-19", total_spend: 4520.75, region: "East" },
-  { customer_id: 1012, name: "Lara Costa", email: "lara@example.com", signup_date: "2024-08-04", total_spend: 98.0, region: "South" },
-  { customer_id: 1013, name: "Mateo Ruiz", email: "mateo@example.com", signup_date: "2024-08-21", total_spend: 680.2, region: "West" },
-  { customer_id: 1014, name: "Nadia Khan", email: "nadia@example.com", signup_date: "2024-09-09", total_spend: 1675.45, region: "North" },
-  { customer_id: 1015, name: "Omar Haddad", email: "omar@example.com", signup_date: "2024-09-25", total_spend: 2100.0, region: "East" },
-  { customer_id: 1016, name: "Priya Iyer", email: "priya@example.com", signup_date: "2024-10-11", total_spend: 355.8, region: "South" },
-  { customer_id: 1017, name: "Quentin Lefevre", email: "quentin@example.com", signup_date: "2024-10-28", total_spend: 920.1, region: "West" },
-  { customer_id: 1018, name: "Rina Tanaka", email: "rina@example.com", signup_date: "2024-11-13", total_spend: 3340.5, region: "North" },
-  { customer_id: 1019, name: "Sami Al-Rashid", email: "sami@example.com", signup_date: "2024-11-30", total_spend: 210.0, region: "East" },
-  { customer_id: 1020, name: "Tara Singh", email: "tara@example.com", signup_date: "2024-12-12", total_spend: 1455.65, region: "South" },
-  { customer_id: 1021, name: "Uma Reddy", email: "uma@example.com", signup_date: "2025-01-06", total_spend: 560.4, region: "West" },
-  { customer_id: 1022, name: "Viktor Novak", email: "viktor@example.com", signup_date: "2025-01-22", total_spend: 2780.0, region: "North" },
-  { customer_id: 1023, name: "Wei Chen", email: "wei@example.com", signup_date: "2025-02-08", total_spend: 310.25, region: "East" },
-  { customer_id: 1024, name: "Xochitl Diaz", email: "xochitl@example.com", signup_date: "2025-02-24", total_spend: 1940.9, region: "South" },
-  { customer_id: 1025, name: "Yara Hassan", email: "yara@example.com", signup_date: "2025-03-11", total_spend: 75.0, region: "West" },
-  { customer_id: 1026, name: "Zane Cooper", email: "zane@example.com", signup_date: "2025-03-27", total_spend: 4015.8, region: "North" },
-  { customer_id: 1027, name: "Anika Roy", email: "anika@example.com", signup_date: "2025-04-09", total_spend: 1230.0, region: "East" },
-  { customer_id: 1028, name: "Bruno Silva", email: "bruno@example.com", signup_date: "2025-04-22", total_spend: 485.5, region: "South" },
-  { customer_id: 1029, name: "Camille Dubois", email: "camille@example.com", signup_date: "2025-05-05", total_spend: 2660.0, region: "West" },
-  { customer_id: 1030, name: "Dmitri Volkov", email: "dmitri@example.com", signup_date: "2025-05-19", total_spend: 1110.75, region: "North" },
-];
+type DemoInitResult = {
+  ok: boolean;
+  session_id: string;
+  dataset_name: string;
+  total_rows: number;
+  columns: string[];
+  rows: unknown[][];
+};
 
-type InsightId = "spend_by_region" | "top_customers" | "monthly_signups";
-
-type Insight = {
-  id: InsightId;
-  prompt: string;
-  reply: string;
+type DemoCommandResult = {
+  ok: boolean;
+  command_key: string;
   sql: string;
-  chartTitle: string;
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
 };
 
-const INSIGHTS: Insight[] = [
-  {
-    id: "spend_by_region",
-    prompt: "Show total spend by region",
-    reply:
-      "Grouped customers by region and summed total_spend (skipping nulls). North leads with the highest revenue, followed by East. West has the lowest median spend.",
-    sql:
-      "SELECT region,\n       ROUND(SUM(total_spend), 2) AS total_revenue,\n       COUNT(*)             AS customers\nFROM customers\nWHERE total_spend IS NOT NULL\nGROUP BY region\nORDER BY total_revenue DESC;",
-    chartTitle: "Total revenue by region",
-  },
-  {
-    id: "top_customers",
-    prompt: "Who are our top 5 customers by spend?",
-    reply:
-      "Sorted by total_spend descending, ignoring rows where spend is missing. Kabir Mehta is the top spender at ₹4,520.75, followed by Zane Cooper.",
-    sql:
-      "SELECT name, region, total_spend\nFROM customers\nWHERE total_spend IS NOT NULL\nORDER BY total_spend DESC\nLIMIT 5;",
-    chartTitle: "Top 5 customers by total spend",
-  },
-  {
-    id: "monthly_signups",
-    prompt: "Plot signups by month",
-    reply:
-      "Truncated signup_date to month and counted distinct customers. Signups have grown steadily — early-2025 cohorts are about 1.5× the early-2024 cohorts.",
-    sql:
-      "SELECT DATE_TRUNC('month', signup_date) AS month,\n       COUNT(*)                       AS signups\nFROM customers\nGROUP BY 1\nORDER BY 1;",
-    chartTitle: "Customer signups per month",
-  },
+// Constants
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8000";
+
+const SUGGESTED_COMMANDS = [
+  { key: "revenue_by_category", label: "Show total revenue by category" },
+  { key: "missing_values",      label: "Find missing values across all columns" },
+  { key: "monthly_sales_trend", label: "Show monthly sales trend" },
+  { key: "payment_breakdown",   label: "Breakdown sales by payment method" },
 ];
 
-function buildChartOption(insightId: InsightId) {
-  if (insightId === "spend_by_region") {
-    const grouped = new Map<string, number>();
-    for (const c of CUSTOMERS) {
-      if (c.total_spend == null) continue;
-      grouped.set(c.region, (grouped.get(c.region) ?? 0) + c.total_spend);
-    }
-    const entries = Array.from(grouped.entries()).sort((a, b) => b[1] - a[1]);
-    return {
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-      grid: { left: 56, right: 24, top: 24, bottom: 36 },
-      xAxis: { type: "category", data: entries.map((e) => e[0]), axisLine: { lineStyle: { color: "#475569" } } },
-      yAxis: { type: "value", axisLine: { lineStyle: { color: "#475569" } }, splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
-      series: [
-        {
-          name: "Total spend",
-          type: "bar",
-          data: entries.map((e) => Math.round(e[1] * 100) / 100),
-          itemStyle: { color: "#5B6AF0", borderRadius: [4, 4, 0, 0] },
-          barWidth: "55%",
-        },
-      ],
-    };
+const COMMAND_LIMIT_BANNER = 2;
+const COMMAND_LIMIT_MODAL  = 3;
+
+// localStorage helpers
+function getSessionId(): string {
+  const key = "demo_session_id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = `demo_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+    localStorage.setItem(key, id);
   }
-  if (insightId === "top_customers") {
-    const sorted = [...CUSTOMERS]
-      .filter((c) => c.total_spend != null)
-      .sort((a, b) => (b.total_spend! - a.total_spend!))
-      .slice(0, 5)
-      .reverse();
-    return {
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-      grid: { left: 130, right: 24, top: 24, bottom: 36 },
-      xAxis: { type: "value", axisLine: { lineStyle: { color: "#475569" } }, splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
-      yAxis: { type: "category", data: sorted.map((c) => c.name), axisLine: { lineStyle: { color: "#475569" } } },
-      series: [
-        {
-          name: "Spend",
-          type: "bar",
-          data: sorted.map((c) => c.total_spend),
-          itemStyle: { color: "#7C3AED", borderRadius: [0, 4, 4, 0] },
-          barWidth: "55%",
-        },
-      ],
-    };
-  }
-  // monthly_signups
-  const monthly = new Map<string, number>();
-  for (const c of CUSTOMERS) {
-    const month = c.signup_date.slice(0, 7);
-    monthly.set(month, (monthly.get(month) ?? 0) + 1);
-  }
-  const months = Array.from(monthly.entries()).sort();
-  return {
-    tooltip: { trigger: "axis" },
-    grid: { left: 48, right: 24, top: 24, bottom: 56 },
-    xAxis: {
-      type: "category",
-      data: months.map((m) => m[0]),
-      axisLine: { lineStyle: { color: "#475569" } },
-      axisLabel: { rotate: 45, fontSize: 11 },
-    },
-    yAxis: { type: "value", axisLine: { lineStyle: { color: "#475569" } }, splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
-    series: [
-      {
-        name: "Signups",
-        type: "line",
-        smooth: true,
-        showSymbol: true,
-        symbolSize: 8,
-        data: months.map((m) => m[1]),
-        itemStyle: { color: "#22c55e" },
-        areaStyle: { color: "rgba(34,197,94,0.18)" },
-        lineStyle: { width: 2.5 },
-      },
-    ],
-  };
+  return id;
 }
 
+function getCommandsRun(): number {
+  return Number(localStorage.getItem("demo_commands_run") ?? "0");
+}
+
+function incrementCommandsRun(): number {
+  const next = getCommandsRun() + 1;
+  localStorage.setItem("demo_commands_run", String(next));
+  return next;
+}
+
+// Chart builder
+function buildChartOption(commandKey: string, columns: string[], rows: unknown[][]): object | null {
+  if (!rows.length || !columns.length) return null;
+
+  if (commandKey === "revenue_by_category") {
+    const labels = rows.map((r) => String(r[0]));
+    const values = rows.map((r) => Number(r[1]) || 0);
+    return {
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      grid: { left: 220, right: 24, top: 16, bottom: 28 },
+      xAxis: { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
+      yAxis: { type: "category", data: labels },
+      series: [{ type: "bar", data: values, itemStyle: { color: "#5B6AF0", borderRadius: [0, 4, 4, 0] }, barWidth: "55%" }],
+    };
+  }
+
+  if (commandKey === "monthly_sales_trend") {
+    const labels = rows.map((r) => String(r[0]));
+    const values = rows.map((r) => Number(r[1]) || 0);
+    return {
+      tooltip: { trigger: "axis" },
+      grid: { left: 60, right: 16, top: 16, bottom: 52 },
+      xAxis: { type: "category", data: labels, axisLabel: { rotate: 45, fontSize: 10 } },
+      yAxis: { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
+      series: [{ type: "line", smooth: true, data: values, itemStyle: { color: "#22c55e" }, areaStyle: { color: "rgba(34,197,94,0.15)" }, lineStyle: { width: 2 } }],
+    };
+  }
+
+  if (commandKey === "payment_breakdown") {
+    const pieData = rows.map((r) => ({ name: String(r[0]), value: Number(r[2]) || 0 }));
+    return {
+      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+      series: [{
+        type: "pie",
+        radius: ["40%", "70%"],
+        data: pieData,
+        itemStyle: { borderRadius: 6 },
+        label: { color: "#c7cad6", fontSize: 12 },
+      }],
+    };
+  }
+
+  if (commandKey === "missing_values" && rows.length === 1) {
+    const colHeaders = columns.filter((c) => c !== "total_rows");
+    const values = colHeaders.map((_c, i) => Number(rows[0][i]) || 0);
+    const labels = colHeaders.map((c) => c.replace("missing_", "").replace(/_/g, " "));
+    return {
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      grid: { left: 180, right: 24, top: 8, bottom: 28 },
+      xAxis: { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
+      yAxis: { type: "category", data: labels },
+      series: [{ type: "bar", data: values, itemStyle: { color: "#f59e0b", borderRadius: [0, 4, 4, 0] }, barWidth: "55%" }],
+    };
+  }
+
+  return null;
+}
+
+// Inline text renderer
+function renderInline(s: string): string {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>");
+}
+
+function AiText({ text }: { text: string }) {
+  return (
+    <div className="demo-ai-prose">
+      {text.split("\n").map((line, i) => {
+        if (line.startsWith("- ")) return <li key={i} dangerouslySetInnerHTML={{ __html: renderInline(line.slice(2)) }} />;
+        if (line === "") return <br key={i} />;
+        return <p key={i} dangerouslySetInnerHTML={{ __html: renderInline(line) }} />;
+      })}
+    </div>
+  );
+}
+
+function getAiReply(commandKey: string, rowCount: number): string {
+  switch (commandKey) {
+    case "revenue_by_category":
+      return `Grouped all 12,575 transactions by **Category** and summed \`Total Spent\` (skipping 604 null rows). Results show **${rowCount} categories**. Beverages and Patisserie tend to lead. The chart shows the ranking.`;
+    case "missing_values":
+      return "Scanned all 11 columns for NULLs and blanks. Key findings:\n- **Discount Applied** has the most missing values (~4,199 rows — 33%)\n- **Item** has ~1,213 nulls (10%)\n- **Price Per Unit**, **Quantity**, and **Total Spent** each have ~604 nulls\n\nSign up to run a cleaning pipeline that fills or drops these rows automatically.";
+    case "monthly_sales_trend":
+      return `Grouped transactions by month (2022-01 to 2025-01) and summed revenue. The chart shows ${rowCount} months of data. Revenue peaks in mid-2023 and early 2024.`;
+    case "payment_breakdown":
+      return `Split transactions by **Payment Method**. ${rowCount} distinct methods found. Credit Card and Digital Wallet dominate by revenue.`;
+    default:
+      return `Query returned **${rowCount} row${rowCount === 1 ? "" : "s"}**. See the results in the table.`;
+  }
+}
+
+// Main component
 export function DemoPage() {
   const navigate = useNavigate();
-  const [selectedInsight, setSelectedInsight] = useState<InsightId>("spend_by_region");
-  const [showSignupGate, setShowSignupGate] = useState<null | string>(null);
+  const { session } = useAuth();
+
+  useEffect(() => {
+    if (session) navigate("/workspace", { replace: true });
+  }, [session, navigate]);
 
   useSEO({
-    title: "Try datahub.org.in (no signup) — interactive demo",
+    title: "Try DataHub Free — Real AI data analysis, no signup",
     description:
-      "Play with a real customer dataset, run AI insights, and see charts in seconds. No signup required. See why teams use datahub.org.in for AI-powered SQL pipelines.",
+      "Explore a real retail dataset with AI-powered SQL. Ask questions in plain English, see generated SQL, get instant charts. No signup needed to start.",
     canonical: "https://datahub.org.in/try",
   });
 
+  const sessionId = useMemo(() => getSessionId(), []);
+  const [initDone, setInitDone] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [datasetName, setDatasetName] = useState("Demo — Retail Store Sales");
+  const [totalRows, setTotalRows] = useState<number>(0);
+  const [tableColumns, setTableColumns] = useState<string[]>([]);
+  const [tableRows, setTableRows] = useState<unknown[][]>([]);
+
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+  const [commandsRun, setCommandsRun] = useState(getCommandsRun);
+
+  const [showBanner, setShowBanner] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [gateReason, setGateReason] = useState("");
+
+  const bottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    capture("demo_viewed");
-  }, []);
+    capture("demo_workspace_visited");
 
-  const insight = INSIGHTS.find((i) => i.id === selectedInsight)!;
-  const option = useMemo(() => buildChartOption(selectedInsight), [selectedInsight]);
+    const init = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/demo/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: DemoInitResult = await res.json();
+        setDatasetName(data.dataset_name);
+        setTotalRows(data.total_rows);
+        setTableColumns(data.columns);
+        setTableRows(data.rows);
+        setInitDone(true);
+        setMessages([{
+          id: "init",
+          role: "ai",
+          text: `I've loaded **${data.dataset_name}** (${data.total_rows.toLocaleString()} rows · ${data.columns.length} columns) with data from 2022–2025.\n\nTry one of the suggested commands below, or type your own question.`,
+        }]);
+      } catch {
+        setInitError("Couldn't connect to the demo server. Please refresh.");
+      }
+    };
+    init();
 
-  const handlePickInsight = (id: InsightId) => {
-    setSelectedInsight(id);
-    capture("demo_insight_selected", { insight: id });
-  };
+    const cleanup = () => {
+      try {
+        navigator.sendBeacon(
+          `${API_BASE}/api/demo/session`,
+          JSON.stringify({ session_id: sessionId }),
+        );
+      } catch { /* non-fatal */ }
+      capture("demo_exited_without_signup");
+    };
+    window.addEventListener("beforeunload", cleanup);
+    return () => window.removeEventListener("beforeunload", cleanup);
+  }, [sessionId]);
 
-  const handleGated = (action: string) => {
-    capture("demo_signup_gate_shown", { action });
-    setShowSignupGate(action);
-  };
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isThinking]);
 
-  const handleSignup = (source: string) => {
-    capture("demo_signup_clicked", { source });
-    // Persist intent so the post-signup workspace landing can resume the
-    // demo: WorkspaceHomePage reads this to auto-open the welcome flow with
-    // the customers sample preselected.
+  const handleSignup = useCallback((source: string) => {
+    capture("demo_converted_to_signup", { source });
     try {
       sessionStorage.setItem(
         "datahub_signup_intent",
-        JSON.stringify({ source: "demo", sample: "/samples/customers.csv", at: Date.now() }),
+        JSON.stringify({ source: "demo", at: Date.now() }),
       );
-    } catch {
-      /* sessionStorage may be blocked (private mode) — non-fatal. */
-    }
+    } catch { /* non-fatal */ }
     navigate("/signup");
+  }, [navigate]);
+
+  const handleBlockedAction = useCallback((reason: string) => {
+    capture("demo_signup_prompt_shown", { trigger: "blocked_action", reason });
+    setGateReason(reason);
+    setShowModal(true);
+  }, []);
+
+  const runCommand = useCallback(async (text: string) => {
+    if (!text.trim() || isThinking) return;
+
+    const n = getCommandsRun();
+    if (n >= COMMAND_LIMIT_MODAL) {
+      capture("demo_signup_prompt_shown", { trigger: "command_limit", command_number: n + 1 });
+      setGateReason("command_limit");
+      setShowModal(true);
+      return;
+    }
+
+    setMessages((prev) => [...prev, { id: `u_${Date.now()}`, role: "user", text }]);
+    setInputText("");
+    setIsThinking(true);
+
+    const newCount = incrementCommandsRun();
+    setCommandsRun(newCount);
+    capture("demo_command_run", { command_number: newCount });
+
+    try {
+      const res = await fetch(`${API_BASE}/api/demo/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, message: text }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { detail?: string }).detail ?? `HTTP ${res.status}`);
+      }
+      const data: DemoCommandResult = await res.json();
+      setTableColumns(data.columns);
+      setTableRows(data.rows);
+      setMessages((prev) => [...prev, {
+        id: `a_${Date.now()}`,
+        role: "ai",
+        text: getAiReply(data.command_key, data.row_count),
+        sql: data.sql,
+        columns: data.columns,
+        rows: data.rows,
+        rowCount: data.row_count,
+        commandKey: data.command_key,
+      }]);
+    } catch (err: unknown) {
+      setMessages((prev) => [...prev, {
+        id: `e_${Date.now()}`,
+        role: "ai",
+        text: `Something went wrong: ${err instanceof Error ? err.message : "Unknown error"}. Try a suggested command instead.`,
+      }]);
+    } finally {
+      setIsThinking(false);
+    }
+
+    if (newCount >= COMMAND_LIMIT_BANNER) {
+      setShowBanner(true);
+      capture("demo_signup_prompt_shown", { trigger: "command_limit", command_number: newCount });
+    }
+  }, [sessionId, isThinking]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      runCommand(inputText);
+    }
   };
+
+  if (initError) {
+    return (
+      <div className="demo-shell demo-error-screen">
+        <p>{initError}</p>
+        <button className="demo-btn demo-btn-primary" onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }
+
+  const inputDisabled = isThinking || commandsRun >= COMMAND_LIMIT_MODAL;
 
   return (
     <div className="demo-shell">
       {/* Top bar */}
       <header className="demo-topbar">
         <Link to="/" className="demo-brand" aria-label="Back to homepage">
-          <span className="demo-brand-mark">▣</span>
+          <span className="demo-brand-mark">&#x25A3;</span>
           <span>datahub.org.in</span>
-          <span className="demo-pill">SANDBOX</span>
+          <span className="demo-preview-chip">FREE PREVIEW</span>
         </Link>
+
+        <div className="demo-topbar-center">
+          {initDone && (
+            <span className="demo-dataset-label">
+              📊 {datasetName} &middot; {totalRows.toLocaleString()} rows
+            </span>
+          )}
+        </div>
+
         <div className="demo-topbar-actions">
+          <span className="demo-preview-note">
+            Changes aren&apos;t saved &middot;{" "}
+            <button className="demo-inline-link" onClick={() => handleSignup("topbar_note")}>
+              Sign up free
+            </button>{" "}
+            to use your own data
+          </span>
           <Link to="/login" className="demo-link">Sign in</Link>
           <button className="demo-btn demo-btn-primary" onClick={() => handleSignup("topbar")}>
             Sign up free
@@ -238,203 +387,263 @@ export function DemoPage() {
         </div>
       </header>
 
-      {/* Sandbox banner */}
-      <div className="demo-banner" role="status">
-        <span>
-          You&apos;re in a <strong>sandbox</strong> — try the product with a sample customer dataset. Nothing you do here is saved.
-        </span>
-        <button className="demo-banner-cta" onClick={() => handleSignup("banner")}>
-          Sign up free to use your own data →
-        </button>
-      </div>
-
-      {/* Main 3-pane layout */}
+      {/* 3-pane grid */}
       <div className="demo-grid">
-        {/* Left pane: dataset */}
+        {/* Left: Explorer */}
         <aside className="demo-pane demo-pane-left">
           <div className="demo-pane-header">
-            <h3>Datasets</h3>
-            <button
-              className="demo-pane-action"
-              onClick={() => handleGated("connect_database")}
-              title="Connect a database"
-            >
-              + Connect DB
+            <h3>Explorer</h3>
+          </div>
+
+          <div className="demo-explorer-section">
+            <div className="demo-explorer-label">DATASETS</div>
+            <div className="demo-dataset demo-dataset-active">
+              <span className="demo-dataset-icon">📄</span>
+              <div className="demo-dataset-meta">
+                <strong>retail_store_sales.csv</strong>
+                <span>{totalRows > 0 ? `${totalRows.toLocaleString()} rows` : "Loading…"} · 11 cols</span>
+              </div>
+            </div>
+            <button className="demo-add-source" onClick={() => handleBlockedAction("Sign up to upload your own data")}>
+              + Upload your own file
             </button>
           </div>
-          <div className="demo-dataset demo-dataset-active">
-            <span className="demo-dataset-icon">📄</span>
-            <div className="demo-dataset-meta">
-              <strong>customers.csv</strong>
-              <span>{CUSTOMERS.length} rows · 6 columns</span>
-            </div>
-          </div>
-          <button
-            className="demo-add-source"
-            onClick={() => handleGated("upload_file")}
-          >
-            + Upload your own CSV
-          </button>
 
-          <div className="demo-side-section">
-            <h4>Sources you could connect</h4>
+          <div className="demo-explorer-section">
+            <div className="demo-explorer-label">DATA SOURCES</div>
             <ul className="demo-source-list">
-              <li>
-                <span>Postgres</span>
-                <button onClick={() => handleGated("connect_postgres")}>+</button>
-              </li>
-              <li>
-                <span>Snowflake</span>
-                <button onClick={() => handleGated("connect_snowflake")}>+</button>
-              </li>
-              <li>
-                <span>Google Sheets</span>
-                <button onClick={() => handleGated("connect_sheets")}>+</button>
-              </li>
-              <li>
-                <span>BigQuery</span>
-                <button onClick={() => handleGated("connect_bigquery")}>+</button>
-              </li>
+              {["PostgreSQL", "Snowflake", "BigQuery", "Google Sheets"].map((src) => (
+                <li key={src}>
+                  <span>{src}</span>
+                  <button onClick={() => handleBlockedAction(`Sign up to connect ${src}`)}>+</button>
+                </li>
+              ))}
             </ul>
+          </div>
+
+          <div className="demo-explorer-section">
+            <div className="demo-explorer-label">PROJECTS</div>
+            <div className="demo-project-item demo-project-active">
+              <span>Demo — Retail Store Sales</span>
+              <span className="demo-project-badge">demo</span>
+            </div>
+            <button className="demo-add-source" onClick={() => handleBlockedAction("Sign up to create new projects")}>
+              + New project
+            </button>
+          </div>
+
+          <div className="demo-left-cta">
+            <button className="demo-btn demo-btn-primary demo-cta-wide" onClick={() => handleSignup("left_pane")}>
+              Sign up free →
+            </button>
+            <p className="demo-cta-foot">No card · Free forever plan</p>
           </div>
         </aside>
 
-        {/* Middle pane: data preview */}
+        {/* Center: Data table */}
         <main className="demo-pane demo-pane-mid">
           <div className="demo-pane-header">
-            <h3>customers.csv — preview</h3>
+            <h3>{initDone ? "retail_store_sales.csv" : "Loading…"}</h3>
             <div className="demo-pane-actions">
-              <button className="demo-btn-ghost" onClick={() => handleGated("export_csv")}>
-                ⬇ Export CSV
-              </button>
-              <button className="demo-btn-ghost" onClick={() => handleGated("save_checkpoint")}>
-                ⏺ Save checkpoint
-              </button>
+              <button className="demo-btn-ghost" onClick={() => handleBlockedAction("Sign up to export results")}>⬇ Export CSV</button>
+              <button className="demo-btn-ghost" onClick={() => handleBlockedAction("Sign up to save pipelines")}>⏺ Save pipeline</button>
             </div>
           </div>
-          <div className="demo-table-wrap">
-            <table className="demo-table">
-              <thead>
-                <tr>
-                  <th>customer_id</th>
-                  <th>name</th>
-                  <th>email</th>
-                  <th>signup_date</th>
-                  <th className="demo-num">total_spend</th>
-                  <th>region</th>
-                </tr>
-              </thead>
-              <tbody>
-                {CUSTOMERS.map((c) => (
-                  <tr key={c.customer_id}>
-                    <td>{c.customer_id}</td>
-                    <td>{c.name}</td>
-                    <td>{c.email}</td>
-                    <td>{c.signup_date}</td>
-                    <td className="demo-num">
-                      {c.total_spend == null ? <span className="demo-null">null</span> : c.total_spend.toFixed(2)}
-                    </td>
-                    <td>{c.region}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="demo-table-footnote">
-            Showing all {CUSTOMERS.length} rows. In the full app you can transform, join, and pipeline this with plain-English prompts.
-          </p>
+
+          {!initDone ? (
+            <div className="demo-loading">
+              <div className="demo-thinking"><span /><span /><span /></div>
+              <p>Loading retail dataset…</p>
+            </div>
+          ) : (
+            <>
+              <div className="demo-table-wrap">
+                <table className="demo-table">
+                  <thead>
+                    <tr>{tableColumns.map((col) => <th key={col}>{col}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row, ri) => (
+                      <tr key={ri}>
+                        {(row as unknown[]).map((cell, ci) => (
+                          <td key={ci} className={typeof cell === "number" ? "demo-num" : undefined}>
+                            {cell === null || cell === undefined
+                              ? <span className="demo-null">null</span>
+                              : String(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="demo-table-footnote">
+                Showing {tableRows.length} of {totalRows.toLocaleString()} rows
+                {totalRows > 100 && " · Sign up to query the full dataset"}
+              </p>
+            </>
+          )}
         </main>
 
-        {/* Right pane: AI assistant */}
-        <aside className="demo-pane demo-pane-right">
+        {/* Right: AI Agent */}
+        <aside className="demo-pane demo-pane-right demo-ai-pane">
           <div className="demo-pane-header">
-            <h3>AI assistant</h3>
-            <span className="demo-pane-sub">Click a sample prompt</span>
+            <h3>✦ AI Agent</h3>
+            {commandsRun > 0 && (
+              <span className="demo-one-done-chip">
+                {commandsRun} / {COMMAND_LIMIT_MODAL} free commands used
+              </span>
+            )}
           </div>
 
-          <div className="demo-prompts">
-            {INSIGHTS.map((ins) => (
-              <button
-                key={ins.id}
-                className={`demo-prompt-chip ${ins.id === selectedInsight ? "demo-prompt-chip-active" : ""}`}
-                onClick={() => handlePickInsight(ins.id)}
-              >
-                {ins.prompt}
-              </button>
+          {commandsRun === 0 && initDone && (
+            <div className="demo-chips">
+              {SUGGESTED_COMMANDS.map((cmd) => (
+                <button
+                  key={cmd.key}
+                  className="demo-chip"
+                  onClick={() => runCommand(cmd.label)}
+                  disabled={isThinking}
+                >
+                  {cmd.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="demo-chat-messages">
+            {messages.map((msg) => (
+              <div key={msg.id} className={`demo-msg demo-msg-${msg.role}`}>
+                <span className={`demo-msg-avatar ${msg.role === "ai" ? "demo-msg-avatar-ai" : "demo-msg-avatar-user"}`}>
+                  {msg.role === "ai" ? "✦" : "You"}
+                </span>
+                <div className="demo-msg-body">
+                  {msg.role === "ai"
+                    ? <AiText text={msg.text} />
+                    : <p className="demo-msg-text">{msg.text}</p>}
+
+                  {msg.sql && (
+                    <details className="demo-sql">
+                      <summary>View generated SQL</summary>
+                      <pre>{msg.sql}</pre>
+                    </details>
+                  )}
+
+                  {msg.commandKey && msg.columns && msg.rows && (() => {
+                    const opt = buildChartOption(msg.commandKey, msg.columns, msg.rows);
+                    return opt ? (
+                      <div className="demo-inline-chart">
+                        <ReactECharts option={opt} style={{ height: 200, width: "100%" }} notMerge />
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
             ))}
+
+            {isThinking && (
+              <div className="demo-msg demo-msg-ai">
+                <span className="demo-msg-avatar demo-msg-avatar-ai">✦</span>
+                <div className="demo-msg-body">
+                  <div className="demo-thinking"><span /><span /><span /></div>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
           </div>
 
-          <div className="demo-ai-card">
-            <div className="demo-ai-row">
-              <span className="demo-ai-avatar">✦</span>
-              <div className="demo-ai-text">
-                <strong>You</strong>
-                <p>{insight.prompt}</p>
-              </div>
-            </div>
-            <div className="demo-ai-row">
-              <span className="demo-ai-avatar demo-ai-avatar-bot">AI</span>
-              <div className="demo-ai-text">
-                <strong>datahub agent</strong>
-                <p>{insight.reply}</p>
-                <details className="demo-sql">
-                  <summary>View generated SQL</summary>
-                  <pre>{insight.sql}</pre>
-                </details>
-              </div>
-            </div>
+          <div className="demo-chat-input-row">
+            <textarea
+              className="demo-chat-input"
+              placeholder={
+                commandsRun >= COMMAND_LIMIT_MODAL
+                  ? "Sign up free to keep asking questions…"
+                  : "Ask anything about this data…"
+              }
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              disabled={inputDisabled}
+              onClick={() => {
+                if (commandsRun >= COMMAND_LIMIT_MODAL) {
+                  capture("demo_signup_prompt_shown", { trigger: "input_click_after_limit" });
+                  setGateReason("command_limit");
+                  setShowModal(true);
+                }
+              }}
+            />
+            <button
+              className="demo-chat-send"
+              onClick={() => runCommand(inputText)}
+              disabled={inputDisabled || !inputText.trim()}
+              aria-label="Send"
+            >
+              &#x27A4;
+            </button>
           </div>
 
-          <div className="demo-chart-card">
-            <div className="demo-chart-header">
-              <strong>{insight.chartTitle}</strong>
-              <button className="demo-btn-ghost-sm" onClick={() => handleGated("save_chart")}>
-                ⬆ Save chart
+          {showBanner && commandsRun < COMMAND_LIMIT_MODAL && (
+            <div className="demo-soft-banner">
+              <span>You&apos;re in the demo workspace. Sign up free to use your own data.</span>
+              <button className="demo-btn demo-btn-primary demo-soft-banner-btn" onClick={() => handleSignup("soft_banner")}>
+                Sign up Free
               </button>
             </div>
-            <div className="demo-chart-body">
-              <ReactECharts option={option} style={{ height: 260, width: "100%" }} notMerge />
-            </div>
-          </div>
-
-          <button
-            className="demo-btn demo-btn-primary demo-cta-wide"
-            onClick={() => handleSignup("right_pane")}
-          >
-            Sign up free to use your own data →
-          </button>
-          <p className="demo-cta-foot">No credit card · 2-minute setup · Free forever plan</p>
+          )}
         </aside>
       </div>
 
-      {/* Sign-up gate modal */}
-      {showSignupGate ? (
-        <div className="demo-gate-overlay" onClick={() => setShowSignupGate(null)}>
-          <div className="demo-gate" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <button className="demo-gate-close" onClick={() => setShowSignupGate(null)} aria-label="Close">×</button>
-            <h2>Sign up to unlock this</h2>
-            <p>
-              You&apos;re in the sandbox, so we can&apos;t save changes or connect to real data sources here.
-              Create a free account in 30 seconds — no card required — to:
-            </p>
+      {/* Blocking modal */}
+      {showModal && (
+        <div className="demo-gate-overlay" onClick={() => setShowModal(false)}>
+          <div
+            className="demo-gate"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <button className="demo-gate-close" onClick={() => setShowModal(false)} aria-label="Close">×</button>
+
+            {gateReason === "command_limit" ? (
+              <>
+                <div className="demo-gate-icon">🎯</div>
+                <h2>You&apos;ve seen what DataHub can do on real data.</h2>
+                <p>Ready to bring your own? Create a free account in 30 seconds — no card needed.</p>
+              </>
+            ) : (
+              <>
+                <div className="demo-gate-icon">🔒</div>
+                <h2>{gateReason}</h2>
+                <p>Create a free account to unlock this and every other DataHub feature.</p>
+              </>
+            )}
+
             <ul className="demo-gate-list">
-              <li>Upload your own CSVs and Excel files (up to 100 MB on the free plan)</li>
-              <li>Connect Postgres, Snowflake, BigQuery, Google Sheets &amp; more</li>
-              <li>Save checkpoints, run scheduled pipelines, and export anywhere</li>
-              <li>Share dashboards with your team</li>
+              <li>Upload CSV, Excel, JSON, or Parquet files</li>
+              <li>Ask unlimited AI questions about your data</li>
+              <li>Connect PostgreSQL, Snowflake, BigQuery, Google Sheets &amp; more</li>
+              <li>Save pipelines, export results, and build dashboards</li>
+              <li>Share with your team with role-based access</li>
             </ul>
+
             <div className="demo-gate-actions">
-              <button className="demo-btn demo-btn-primary" onClick={() => handleSignup(`gate_${showSignupGate}`)}>
-                Sign up free
+              <button className="demo-btn demo-btn-primary demo-gate-btn" onClick={() => handleSignup("gate_google")}>
+                Sign up with Google
               </button>
-              <Link to="/login" className="demo-btn demo-btn-ghost" onClick={() => capture("demo_login_clicked", { source: `gate_${showSignupGate}` })}>
-                I already have an account
-              </Link>
+              <button className="demo-btn demo-btn-secondary demo-gate-btn" onClick={() => handleSignup("gate_email")}>
+                Sign up with email
+              </button>
             </div>
-            <p className="demo-cta-foot">Free forever plan · No credit card required</p>
+
+            <button className="demo-gate-continue" onClick={() => setShowModal(false)}>
+              Continue exploring demo
+            </button>
+
+            <p className="demo-cta-foot">Free forever · 100 AI messages/month · No credit card</p>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

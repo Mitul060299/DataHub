@@ -998,8 +998,9 @@ export function HomePage() {
                 navigate("/try");
               }}
             >
-              ▶ Try a live demo — no signup required
+              ▶ Try it free — no signup required
             </button>
+            <p className="hero-demo-subtext">Pre-loaded with real retail data. See DataHub in action.</p>
           </motion.div>
 
           <motion.div
@@ -1571,8 +1572,8 @@ export function HomePage() {
             <div className="exit-intent-emoji">👋</div>
             <h3 className="modal-title">Before you go…</h3>
             <p className="modal-sub">
-              See DataHub in action — no sign-up needed. Try a live demo with real data and AI
-              insights in under 60 seconds.
+              See DataHub in action — no sign-up needed. Ask real questions about a sample dataset
+              and see AI-generated insights in under 60 seconds.
             </p>
             <div className="exit-intent-actions">
               <button

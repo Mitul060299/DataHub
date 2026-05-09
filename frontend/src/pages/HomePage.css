@@ -368,6 +368,14 @@
   color: #fff;
 }
 
+.hero-demo-subtext {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #6b7194;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
 /* ----- Animated product preview window ---------------------------------- */
 .hero-preview {
   position: relative;

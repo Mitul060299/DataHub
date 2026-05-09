@@ -5,7 +5,7 @@ import { useSEO } from "../hooks/useSEO";
 import { capture } from "../lib/posthog";
 
 export function SignupPage() {
-  const { signUpWithPassword, signInWithProvider, session } = useAuth();
+  const { signUpWithPassword, signInWithProvider, session, claimAnonymous } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -31,9 +31,13 @@ export function SignupPage() {
 
   useEffect(() => {
     if (session) {
-      navigate("/workspace", { replace: true });
+      // If we just upgraded from an anonymous session, migrate that data over
+      // to the new account before sending the user into the workspace.
+      void claimAnonymous(session.access_token, name || undefined).finally(() => {
+        navigate("/workspace", { replace: true });
+      });
     }
-  }, [session, navigate]);
+  }, [session, navigate, claimAnonymous, name]);
 
   // Lightweight password strength heuristic — purely visual; the real
   // policy (>=8 chars) is enforced server-side by Supabase.

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
-import { DemoPage } from "./pages/DemoPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketplacePage } from "./pages/MarketplacePage";
@@ -49,8 +48,8 @@ export function App() {
         <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route path="/try" element={<DemoPage />} />
-      <Route path="/demo" element={<Navigate to="/try" replace />} />
+      <Route path="/try" element={<Navigate to="/workspace" replace />} />
+      <Route path="/demo" element={<Navigate to="/workspace" replace />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route path="/public-dashboard/:token" element={<PublicDashboardPage />} />
       <Route path="/dashboard/share/:token" element={<PublicDashboardPage />} />

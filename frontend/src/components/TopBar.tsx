@@ -12,7 +12,7 @@ const tabs = [
 export function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { session, user, signOut } = useAuth();
+  const { session, user, signOut, isAnonymous } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -279,6 +279,29 @@ export function TopBar() {
                 </div>
               ) : null}
             </div>
+          </>
+        ) : isAnonymous ? (
+          <>
+            <span style={{ fontSize: 12, color: "#a0a0b8", marginRight: 4 }}>
+              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#f59e0b", marginRight: 6, verticalAlign: "middle" }} />
+              Trying as guest
+            </span>
+            <button
+              className="btn"
+              type="button"
+              style={{ height: 32, fontSize: 12, padding: "0 12px" }}
+              onClick={() => navigate("/login")}
+            >
+              Sign in
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              style={{ height: 32, fontSize: 12, padding: "0 14px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", border: "none" }}
+              onClick={() => navigate("/signup")}
+            >
+              Save your work — Sign up free
+            </button>
           </>
         ) : (
           <button className="btn btn-primary" type="button" onClick={() => navigate("/login")}>Sign in</button>

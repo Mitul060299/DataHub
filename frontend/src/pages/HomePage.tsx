@@ -611,7 +611,7 @@ export function HomePage() {
   };
 
   const handleGetStarted = () => {
-    navigate(session ? "/workspace" : "/try");
+    navigate("/workspace");
   };
 
 
@@ -956,12 +956,12 @@ export function HomePage() {
               className="hero-try-link"
               onClick={() => {
                 capture("homepage_try_demo_clicked");
-                navigate("/try");
+                navigate("/workspace");
               }}
             >
               ▶ Try it free — no signup required
             </button>
-            <p className="hero-demo-subtext">Pre-loaded with real retail data. See DataHub in action.</p>
+            <p className="hero-demo-subtext">Full workspace, no email needed. Sign up later to save your work.</p>
           </motion.div>
 
           <motion.div

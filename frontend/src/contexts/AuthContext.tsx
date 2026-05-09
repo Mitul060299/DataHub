@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
@@ -6,11 +6,27 @@ import { clearAuthToken, setAuthToken } from "../utils/auth";
 import { identify, reset } from "../lib/posthog";
 import { setSentryUser, clearSentryUser } from "../lib/sentry";
 
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8000";
+const ANON_TOKEN_KEY = "datahub_anon_token";
+const ANON_USER_ID_KEY = "datahub_anon_user_id";
+
+// Synthetic session shape for anonymous users so the rest of the app can keep
+// reading `session?.user?.id`/`user?.email` without branching everywhere.
+type AnonSession = {
+  isAnonymous: true;
+  user: { id: string; email: string };
+  access_token: string;
+};
+
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   loading: boolean;
   isSuperuser: boolean;
+  isAuthenticated: boolean;     // true for either real or anonymous sessions
+  isAnonymous: boolean;
+  anonUserId: string | null;
   signInWithPassword: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUpWithPassword: (
     email: string,
@@ -21,13 +37,51 @@ type AuthContextValue = {
   signInWithProvider: (provider: "google" | "github") => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
   resetPasswordEmail: (email: string) => Promise<{ error: AuthError | null }>;
+  /** After Supabase signup completes, migrate anon data to the real account. */
+  claimAnonymous: (supabaseAccessToken: string, name?: string) => Promise<{ ok: boolean; migrated?: boolean }>;
+  /** Force-create an anon account even if one already exists (used after sign-out). */
+  ensureAnonymousSession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
+  const [anonSession, setAnonSession] = useState<AnonSession | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Bootstrap (or restore) an anonymous account.  Idempotent: returns existing
+  // anon session from localStorage if present, otherwise mints one server-side.
+  const ensureAnonymousSession = useCallback(async () => {
+    const existingTok = localStorage.getItem(ANON_TOKEN_KEY);
+    const existingId = localStorage.getItem(ANON_USER_ID_KEY);
+    if (existingTok && existingId) {
+      const synth: AnonSession = {
+        isAnonymous: true,
+        user: { id: existingId, email: existingId },
+        access_token: existingTok,
+      };
+      setAnonSession(synth);
+      setAuthToken(existingTok);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { access_token: string; user_id: string };
+      localStorage.setItem(ANON_TOKEN_KEY, data.access_token);
+      localStorage.setItem(ANON_USER_ID_KEY, data.user_id);
+      const synth: AnonSession = {
+        isAnonymous: true,
+        user: { id: data.user_id, email: data.user_id },
+        access_token: data.access_token,
+      };
+      setAnonSession(synth);
+      setAuthToken(data.access_token);
+    } catch (e) {
+      console.warn("Failed to bootstrap anonymous session", e);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -66,11 +120,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(nextSession);
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
-        // Re-identify returning visitors on every page load so PostHog never
-        // falls back to the anonymous distinct_id for an already-logged-in user.
+        // Real session present — clear any leftover anon credentials.
+        localStorage.removeItem(ANON_TOKEN_KEY);
+        localStorage.removeItem(ANON_USER_ID_KEY);
+        setAnonSession(null);
         identifyFromSession(nextSession);
       } else {
-        clearAuthToken();
+        // No real session — bootstrap (or restore) an anonymous one so the
+        // entire product is usable without sign-up.
+        await ensureAnonymousSession();
       }
       setLoading(false);
     };
@@ -81,6 +139,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(nextSession);
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
+        // Drop anon credentials once the user is on a real account.
+        localStorage.removeItem(ANON_TOKEN_KEY);
+        localStorage.removeItem(ANON_USER_ID_KEY);
+        setAnonSession(null);
         identifyFromSession(nextSession);
       } else {
         clearAuthToken();
@@ -108,6 +170,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch {
           // ignore quota / disabled storage errors
         }
+        // Sign-out completed — fall back to a brand new anon session so the
+        // visitor isn't kicked out of the app entirely.
+        void ensureAnonymousSession();
       }
       setLoading(false);
     });
@@ -182,7 +247,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  // Migrate anon work to the new Supabase account.  Called from SignupPage
+  // after Supabase auth completes.  Best-effort: we don't block sign-up if it
+  // fails, but we log loudly.
+  const claimAnonymous = useCallback(async (supabaseAccessToken: string, name?: string) => {
+    const anonTok = localStorage.getItem(ANON_TOKEN_KEY);
+    if (!anonTok) {
+      return { ok: true, migrated: false };
+    }
+    try {
+      const res = await fetch(`${API_BASE}/auth/claim`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${anonTok}`,
+        },
+        body: JSON.stringify({ supabase_token: supabaseAccessToken, name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.warn("Anon claim failed", data);
+        return { ok: false };
+      }
+      // Drop the anon token so future requests use the real Supabase JWT.
+      localStorage.removeItem(ANON_TOKEN_KEY);
+      localStorage.removeItem(ANON_USER_ID_KEY);
+      setAnonSession(null);
+      return { ok: true, migrated: !!(data as { migrated?: boolean }).migrated };
+    } catch (e) {
+      console.warn("Anon claim error", e);
+      return { ok: false };
+    }
+  }, []);
+
   const user = session?.user ?? null;
+  const isAuthenticated = !!session || !!anonSession;
+  const isAnonymous = !session && !!anonSession;
+  const anonUserId = anonSession?.user.id ?? null;
   const isSuperuser = useMemo(() => {
     const role = user?.app_metadata?.role || user?.user_metadata?.role;
     return role === "superuser" || role === "admin";
@@ -195,11 +296,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         loading,
         isSuperuser,
+        isAuthenticated,
+        isAnonymous,
+        anonUserId,
         signInWithPassword,
         signUpWithPassword,
         signInWithProvider,
         signOut,
         resetPasswordEmail,
+        claimAnonymous,
+        ensureAnonymousSession,
       }}
     >
       {children}

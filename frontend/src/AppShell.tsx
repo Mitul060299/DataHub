@@ -9,7 +9,7 @@ import { billingEnabled } from "./utils/featureFlags";
 const PUBLIC_PATHS = ["/home", "/marketplace", "/pricing", "/docs"];
 
 export function AppShell() {
-  const { session, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function AppShell() {
     return <div style={{ height: "100%", display: "grid", placeItems: "center" }}>Loading...</div>;
   }
 
-  if (isPublic && !session) {
+  if (isPublic && !isAuthenticated) {
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <TopBar />
@@ -40,13 +40,8 @@ export function AppShell() {
     );
   }
 
-  if (!isPublic && !session) {
-    // Send unauthenticated visitors to the public demo workspace instead of
-    // login. They can still go to /login from the demo top bar if they have
-    // an account.
-    if (location.pathname.startsWith("/workspace")) {
-      return <Navigate to="/try" replace />;
-    }
+  if (!isPublic && !isAuthenticated) {
+    // No anon bootstrap yet (likely API down) — send to login as a fallback.
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

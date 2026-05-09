@@ -28,8 +28,6 @@ Security:
     only the LLM-generated SQL (validated by guard_duckdb_sql_paths) runs.
   - Rate-limited: 30 requests / minute per IP (via slowapi).
 """
-from __future__ import annotations
-
 import json
 import logging
 import math

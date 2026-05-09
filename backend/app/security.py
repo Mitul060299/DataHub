@@ -270,6 +270,30 @@ def _verify_app_token(token: str) -> Dict[str, Any]:
         return {}
 
 
+def _verify_token(token: str) -> Dict[str, Any]:
+    """Route to the correct verifier based on the token's 'iss' claim.
+
+    Anonymous/app-signed tokens have no 'iss' (or an 'iss' that does not match
+    the Supabase issuer).  For those tokens we skip _verify_supabase_token
+    entirely so we never emit noisy InvalidSignatureError log lines.
+    Supabase tokens (iss == <supabase_url>/auth/v1) are tried against Supabase
+    first, with a graceful app-token fallback kept for safety.
+    """
+    try:
+        unverified = _decode_jwt_unverified(token)
+        iss = unverified.get("iss", "")
+        supabase_iss = _get_supabase_issuer()
+        if supabase_iss and iss == supabase_iss:
+            claims = _verify_supabase_token(token)
+            if not claims:
+                claims = _verify_app_token(token)
+            return claims
+        # No iss, or iss doesn't match Supabase → treat as an app-signed token.
+        return _verify_app_token(token)
+    except Exception:
+        return {}
+
+
 def _decode_jwt_unverified(token: str) -> Dict[str, Any]:
     try:
         decoded = jwt.decode(
@@ -306,9 +330,7 @@ def get_current_role(authorization: str | None = Header(default=None)) -> str:
         if scheme.lower() != "bearer":
             return "viewer"
         if _is_jwt(token):
-            claims = _verify_supabase_token(token)
-            if not claims:
-                claims = _verify_app_token(token)
+            claims = _verify_token(token)
             if claims:
                 return _map_supabase_role(claims)
             # Token was a JWT but verification failed — treat as unauthenticated,
@@ -327,9 +349,7 @@ def get_current_subject(authorization: str | None = Header(default=None)) -> Opt
         if scheme.lower() != "bearer":
             return None
         if _is_jwt(token):
-            claims = _verify_supabase_token(token)
-            if not claims:
-                claims = _verify_app_token(token)
+            claims = _verify_token(token)
             if claims:
                 return (
                     claims.get("email")
@@ -352,9 +372,7 @@ def get_current_user_id(authorization: str | None = Header(default=None)) -> Opt
         if scheme.lower() != "bearer":
             return None
         if _is_jwt(token):
-            claims = _verify_supabase_token(token)
-            if not claims:
-                claims = _verify_app_token(token)
+            claims = _verify_token(token)
             if claims:
                 return claims.get("sub")
         return None

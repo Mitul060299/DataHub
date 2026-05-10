@@ -1514,6 +1514,7 @@ export function HomePage() {
           <div className="footer-links">
             <Link className="footer-link" to="/pricing">Pricing</Link>
             <Link className="footer-link" to="/docs">Docs</Link>
+            <Link className="footer-link" to="/blog">Blog</Link>
             <Link className="footer-link" to="/privacy">Privacy</Link>
             <Link className="footer-link" to="/terms">Terms</Link>
             <a className="footer-link" href={`mailto:${SUPPORT_EMAIL}`}>Contact</a>

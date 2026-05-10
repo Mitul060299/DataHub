@@ -2305,15 +2305,11 @@
 /* ============================================================================
    PROBLEMS SECTION
    ============================================================================ */
-.section-problems {
-  padding: 80px var(--hp-side);
-}
-
 .problems-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 18px;
-  margin-top: 48px;
+  margin-top: 8px;
 }
 
 .problem-card {
@@ -2376,15 +2372,11 @@
 /* ============================================================================
    WHO IT'S FOR (PERSONAS) SECTION
    ============================================================================ */
-.section-personas {
-  padding: 80px var(--hp-side);
-}
-
 .personas-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 18px;
-  margin-top: 48px;
+  margin-top: 8px;
 }
 
 .persona-card {

@@ -1198,8 +1198,8 @@ export function HomePage() {
             },
             {
               emoji: "💸",
-              title: "Paying Alteryx pricing for analyst work",
-              body: "Alteryx costs $5,000+ per seat per year. DataHub covers the same core workflows — dedup, join, clean, validate — at a fraction of the price.",
+              title: "Paying enterprise prices for analyst work",
+              body: "Legacy desktop ETL tools cost thousands per seat per year. DataHub covers the same core workflows — dedup, join, clean, validate — at a fraction of the price.",
               slug: "alteryx-alternative-cheaper",
             },
           ].map((item, i) => (

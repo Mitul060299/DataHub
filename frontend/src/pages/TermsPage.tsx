@@ -94,11 +94,13 @@ export function TermsPage() {
       </Section>
 
       <Section title="7. AI-Generated Outputs">
-        DataHub uses artificial intelligence to generate data analysis, transformations, and insights.
-        AI-generated outputs may contain errors, inaccuracies, or omissions. You are solely responsible
-        for verifying AI-generated results before making business decisions. DataHub is not liable for
-        any decisions made based on AI-generated analysis. AI outputs do not constitute professional
-        financial, legal, medical, or other regulated advice.
+        DataHub uses artificial intelligence (currently powered by Groq Inc.) to generate data
+        analysis, transformations, and insights. AI-generated outputs may contain errors,
+        inaccuracies, or omissions. You are solely responsible for verifying AI-generated results
+        before making business decisions. DataHub is not liable for any decisions made based on
+        AI-generated analysis. AI outputs do not constitute professional financial, legal, medical, or
+        other regulated advice. <strong>We may change AI model providers at any time without prior
+        notice; quality, speed, and behaviour may vary as a result.</strong>
       </Section>
 
       <Section title="8. Intellectual Property">
@@ -112,8 +114,13 @@ export function TermsPage() {
       <Section title="9. Limitation of Liability">
         DataHub is provided "as is" without warranties of any kind. We do not warrant that the Service
         will be uninterrupted or error-free. In no event shall we be liable for indirect, incidental,
-        special, consequential, or punitive damages. Our total liability for any claim shall not exceed
-        the amount you paid us in the 3 months preceding the claim.
+        special, consequential, or punitive damages, or for any loss of profits, revenue, data, or
+        goodwill. <strong>Our total aggregate liability for any and all claims shall not exceed the
+        greater of (a) the amount you paid us in the three (3) months immediately preceding the event
+        giving rise to the claim, or (b) one hundred US dollars (USD 100) / equivalent in INR.</strong>
+        These limitations apply regardless of the legal theory and even if we have been advised of the
+        possibility of such damages. Some jurisdictions do not allow the exclusion or limitation of
+        certain damages, so some of these limitations may not apply to you.
       </Section>
 
       <Section title="10. Indemnification">
@@ -130,6 +137,25 @@ export function TermsPage() {
         the American Arbitration Association, conducted in English.<br /><br />
         Before initiating any formal dispute, you agree to contact us at mitul.srivastava000@gmail.com and
         attempt informal resolution for at least 30 days.
+      </Section>
+
+      <Section title="11.b. Beta Status of the Service">
+        DataHub is currently offered in <strong>public beta</strong>. The Service is under active
+        development; features may change, be removed, or experience defects. Pricing, plan limits, and
+        availability may change with notice. We strongly recommend keeping independent backups of any
+        critical data you upload. Use of beta features is at your own risk and the warranty
+        disclaimers and liability limitations in Sections 9, 14, and 15 apply with full force.
+      </Section>
+
+      <Section title="11.c. Export Controls and Sanctions">
+        You represent and warrant that you are not located in, under the control of, or a national or
+        resident of any country or region subject to comprehensive sanctions administered by the
+        Office of Foreign Assets Control (OFAC) of the US Treasury, the United Nations, the European
+        Union, the United Kingdom, or India; and that you are not on any restricted-party or
+        denied-persons list maintained by those authorities. You agree not to use the Service in
+        violation of any export-control or sanctions law, and not to use the Service to develop or
+        process data related to weapons of mass destruction, missile technology, or nuclear, chemical,
+        or biological weapons.
       </Section>
 
       <Section title="12. Termination">

@@ -66,10 +66,13 @@ export function PrivacyPage() {
 
       <Section title="4. Data Storage and Security">
         Your data is stored on Supabase PostgreSQL, AWS S3 (Mumbai region for Indian users), and
-        Render.com application servers. All data is encrypted in transit via TLS 1.2+ and at rest using
-        AES-256. We implement row-level security, JWT authentication, and access controls. Account data
-        is retained while your account is active and deleted within 30 days of account deletion.
-        Payment records are retained for 7 years as required by law.
+        Render application servers. Frontend assets are served from Vercel's global CDN. All data is
+        encrypted in transit via TLS 1.2+ and at rest using AES-256. We implement row-level security,
+        JWT authentication, and access controls. Account data is retained while your account is
+        active and deleted within 30 days of account deletion. Payment records are retained for
+        7 years as required by law. <strong>Naming our subprocessors here is a transparency and
+        compliance practice required by GDPR, CCPA, and India's DPDP Act 2023 — it does not weaken
+        the security of your data.</strong>
       </Section>
 
       <Section title="5. Cookies and Tracking">
@@ -79,11 +82,27 @@ export function PrivacyPage() {
         from logging in.
       </Section>
 
-      <Section title="6. Third-Party Services">
-        We share data with: Supabase (database and auth), AWS (file storage), Render (app hosting),
-        Razorpay (Indian payments), Dodo Payments (international payments), PostHog (analytics), Resend
-        (email), and Groq (AI inference). We do not share your data with any other third parties without
-        your consent.
+      <Section title="6. Third-Party Service Providers (Subprocessors)">
+        We use the following third-party providers to deliver the Service. Each is bound by
+        confidentiality, security, and data-processing obligations under written agreements or their
+        published Data Processing Addenda:<br /><br />
+        <strong>Infrastructure & storage:</strong> Vercel Inc. (frontend hosting and CDN), Render
+        Services Inc. (backend application servers), Amazon Web Services Inc. (file storage — S3,
+        Mumbai region for Indian users), Supabase Inc. (PostgreSQL database and authentication).
+        <br /><br />
+        <strong>AI inference:</strong> Groq Inc. We send only the prompts and data necessary for the
+        request. Per Groq's terms, your data is <strong>not used to train any model</strong> and is
+        not retained beyond the duration of the inference request.<br /><br />
+        <strong>Payments:</strong> Razorpay Software Pvt. Ltd. (Indian payments), Dodo Payments
+        (international payments). Card numbers are handled entirely by these processors and never
+        touch our servers.<br /><br />
+        <strong>Operational:</strong> PostHog Inc. (product analytics), Resend Inc. (transactional
+        email).<br /><br />
+        <strong>Subprocessor changes:</strong> We may add, change, or remove subprocessors as the
+        Service evolves. We will notify registered users of material changes by email at least 14 days
+        before they take effect, giving you the opportunity to terminate your subscription if you
+        object. We do not share your data with any third party outside this list without your
+        consent.
       </Section>
 
       <Section title="7. Your Rights">

@@ -31,7 +31,8 @@ export function BlogIndexPage() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        height: "100%",
+        overflowY: "auto",
         background: "#0d0f1a",
         color: "#e2e8f0",
         fontFamily: "'Inter', system-ui, sans-serif",

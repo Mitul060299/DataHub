@@ -7,7 +7,22 @@
     <!-- ── Preconnect hints (reduce font load latency) ──── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+    <!--
+      All Google Fonts consolidated into one non-blocking request.
+      Using rel="preload" + onload swap avoids render-blocking @import chains
+      that were causing FCP/LCP delays of 3–12 s across every page.
+      Covers: Inter (body), JetBrains Mono (code), Syne (display headings),
+              Space Grotesk + Fraunces (auth pages).
+    -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" />
+    </noscript>
 
     <!-- ── Primary meta ─────────────────────────────── -->
     <title>datahub.org.in – AI Data Analysis Tool | SQL Pipelines, No Black Boxes</title>

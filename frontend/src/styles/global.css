@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap');
+/* Fonts are loaded non-blocking from index.html (rel=preload + onload swap).
+   Do NOT add @import url(fonts.googleapis.com) here — CSS @import is synchronously
+   render-blocking and was causing 3–12 s FCP/LCP delays across all pages. */
 
 :root {
   /* ─── Surface (5-step depth scale) ────────────────────────── */

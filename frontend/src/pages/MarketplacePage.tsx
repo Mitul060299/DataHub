@@ -191,7 +191,7 @@ export function MarketplacePage() {
 
   const [templates, setTemplates] = useState<MarketplaceItem[]>([]);
   const [community, setCommunity] = useState<MarketplaceItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);  // true from the start so skeleton shows immediately
   const [error, setError] = useState<string | null>(null);
 
   const [actingId, setActingId] = useState<string | null>(null);
@@ -392,7 +392,36 @@ export function MarketplacePage() {
 
       {/* Grid */}
       {loading ? (
-        <p style={{ color: "#71717a", textAlign: "center", marginTop: 60 }}>Loading…</p>
+        // Skeleton grid — shows immediately so there's a meaningful LCP element
+        // even when the Render backend is cold-starting (can take 20-30 s).
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+          gap: 14,
+        }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} style={{
+              border: "1px solid #27272a", borderRadius: 10, padding: 16,
+              background: "#111113", display: "flex", flexDirection: "column", gap: 10,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ height: 16, width: "55%", background: "#27272a", borderRadius: 4 }} />
+                <div style={{ height: 16, width: 64, background: "#27272a", borderRadius: 12 }} />
+              </div>
+              <div style={{ height: 12, width: "90%", background: "#1e1e22", borderRadius: 4 }} />
+              <div style={{ height: 12, width: "75%", background: "#1e1e22", borderRadius: 4 }} />
+              <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                {[40, 52, 44].map((w, j) => (
+                  <div key={j} style={{ height: 18, width: w, background: "#27272a", borderRadius: 4 }} />
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                <div style={{ height: 12, width: 80, background: "#1e1e22", borderRadius: 4 }} />
+                <div style={{ height: 28, width: 90, background: "#27272a", borderRadius: 6 }} />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : error ? (
         <p style={{ color: "#ef4444", textAlign: "center", marginTop: 60 }}>{error}</p>
       ) : filtered.length === 0 ? (

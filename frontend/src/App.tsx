@@ -19,6 +19,8 @@ import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { BlogIndexPage } from "./pages/BlogIndexPage";
+import { BlogPostPage } from "./pages/BlogPostPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SupportChatWidget } from "./components/SupportChatWidget";
 
@@ -56,6 +58,8 @@ export function App() {
       <Route path="/docs" element={<DocsPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/blog" element={<BlogIndexPage />} />
+      <Route path="/blog/:slug" element={<BlogPostPage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<HomePage />} />
         <Route path="home" element={<HomePage />} />

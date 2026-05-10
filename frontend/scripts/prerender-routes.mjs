@@ -62,6 +62,87 @@ const routes = [
       "How DataHub collects, uses, stores, and protects your data. We never use customer data to train AI models. Full encryption and audit logging.",
     ogType: "article",
   },
+
+  // ── Blog index ──────────────────────────────────────────────
+  {
+    path: "blog",
+    title: "Blog – DataHub | Data Cleaning, Excel & Analyst Guides",
+    description:
+      "Practical guides for data analysts: reconcile Excel files, remove CSV duplicates, automate data cleaning, and cut your prep time. No code required.",
+    ogType: "website",
+  },
+
+  // ── Blog posts ──────────────────────────────────────────────
+  {
+    path: "blog/reconcile-excel-files-automatically",
+    title: "How to Reconcile Two Excel Files Automatically | DataHub Blog",
+    description:
+      "Stop comparing spreadsheets row by row. This guide shows you how to automatically reconcile two Excel files — flagging differences, missing rows, and variances — in minutes.",
+    ogType: "article",
+  },
+  {
+    path: "blog/remove-duplicates-csv-without-code",
+    title: "How to Remove Duplicates from a CSV File Without Code | DataHub Blog",
+    description:
+      "Duplicate rows corrupt aggregations and erode trust in your data. Remove exact and near-duplicate records from any CSV file without writing code or using Python.",
+    ogType: "article",
+  },
+  {
+    path: "blog/alteryx-alternative-cheaper",
+    title: "The Best Cheaper Alteryx Alternative in 2026 | DataHub Blog",
+    description:
+      "Alteryx Designer costs £4,000+ per seat per year. Here are the best Alteryx alternatives with the same data blending, transformation, and automation capabilities at a fraction of the cost.",
+    ogType: "article",
+  },
+  {
+    path: "blog/data-cleaning-tool-for-analysts",
+    title: "The Best Data Cleaning Tool for Analysts (No Code Required) | DataHub Blog",
+    description:
+      "Analysts spend 60–80% of their time cleaning data. The right tool collapses that to minutes. Here's what to use for null handling, deduplication, type conversion, and more.",
+    ogType: "article",
+  },
+  {
+    path: "blog/standardise-column-names-excel",
+    title: "How to Standardise Column Names in Excel Automatically | DataHub Blog",
+    description:
+      "Inconsistent column headers break every VLOOKUP, pivot table, and downstream report. Here's how to fix column names in bulk — no manual renaming, no formulas.",
+    ogType: "article",
+  },
+  {
+    path: "blog/clean-messy-excel-csv-without-coding",
+    title: "How to Clean Messy Excel and CSV Files Faster — Without Coding | DataHub Blog",
+    description:
+      "Leading spaces, mixed date formats, merged cells, pseudo-nulls — messy files are the norm. This guide walks through every common data quality problem and how to fix it fast.",
+    ogType: "article",
+  },
+  {
+    path: "blog/affordable-alteryx-alternative-small-teams",
+    title: "Best Affordable Alteryx Alternative for Small Teams and Freelancers | DataHub Blog",
+    description:
+      "Solo analysts and small teams don't need a £40,000/year enterprise licence. These Alteryx alternatives give you the same data transformation power at prices built for freelancers and growing teams.",
+    ogType: "article",
+  },
+  {
+    path: "blog/prepare-raw-data-for-power-bi",
+    title: "How to Prepare Raw Data for Power BI Dashboards | DataHub Blog",
+    description:
+      "Power BI is powerful — but only if the data going in is clean, typed correctly, and properly structured. This guide covers everything to do before you open Power BI Desktop.",
+    ogType: "article",
+  },
+  {
+    path: "blog/why-analysts-spend-more-time-cleaning",
+    title: "Why Data Analysts Spend More Time Cleaning Data Than Analysing It | DataHub Blog",
+    description:
+      "Survey after survey shows analysts spend 60–80% of their time on data preparation. Why hasn't this changed — and what's actually being done about it in 2026?",
+    ogType: "article",
+  },
+  {
+    path: "blog/automate-repetitive-data-cleaning-workflows",
+    title: "How to Automate Repetitive Data Cleaning and Transformation Workflows | DataHub Blog",
+    description:
+      "If you're running the same data cleaning steps every week, you're manually doing work a pipeline should handle. Here's how to build reusable, automated cleaning workflows.",
+    ogType: "article",
+  },
 ];
 
 /**

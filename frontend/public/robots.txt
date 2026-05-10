@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /blog
+Allow: /blog/
 
 # Don't index authenticated/dynamic app routes
 Disallow: /workspace
@@ -9,4 +11,29 @@ Disallow: /dashboard/
 Disallow: /invite/
 Disallow: /public-dashboard/
 
+# Explicit rules for Googlebot
+User-agent: Googlebot
+Allow: /
+Allow: /blog
+Allow: /blog/
+Disallow: /workspace
+Disallow: /settings
+Disallow: /sources
+Disallow: /dashboard/
+Disallow: /invite/
+Disallow: /public-dashboard/
+
+# Explicit rules for Bingbot
+User-agent: Bingbot
+Allow: /
+Allow: /blog
+Allow: /blog/
+Disallow: /workspace
+Disallow: /settings
+Disallow: /sources
+Disallow: /dashboard/
+Disallow: /invite/
+Disallow: /public-dashboard/
+
+# Sitemap — submitted to both Google Search Console and Bing Webmaster Tools
 Sitemap: https://datahub.org.in/sitemap.xml

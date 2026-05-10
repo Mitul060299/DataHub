@@ -83,7 +83,7 @@ export default function RemoveDuplicatesCsvWithoutCode() {
       <P>
         DataHub's <InlineCode>fuzzy_deduplicate</InlineCode> operation uses{" "}
         <InlineCode>rapidfuzz</InlineCode> to compute a similarity ratio between strings. You set a
-        threshold (default is 85% similarity). Records above the threshold are grouped, and you
+        threshold (default is 90% similarity). Records above the threshold are grouped, and you
         choose which canonical value to keep. Results show the similarity score for each match so
         you can review borderline cases.
       </P>
@@ -120,7 +120,7 @@ export default function RemoveDuplicatesCsvWithoutCode() {
       <H3>Address data</H3>
       <P>
         Normalise before deduplicating: lowercase everything, expand abbreviations (St → Street, Ave
-        → Avenue), strip punctuation. Then fuzzy match at 85%.
+        → Avenue), strip punctuation. Then fuzzy match at 90%.
       </P>
 
       <H2>Comparison</H2>

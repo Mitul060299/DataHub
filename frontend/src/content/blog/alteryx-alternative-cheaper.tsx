@@ -75,7 +75,7 @@ export default function AlteryxAlternativeCheaper() {
           column renaming, validation rules
         </LI>
         <LI>Reconciliation: full outer join with variance columns, auto key detection</LI>
-        <LI>Pipeline scheduling and webhook triggers</LI>
+        <LI>Pipeline scheduling (cron-based, for database-connected sources)</LI>
         <LI>Team collaboration with shared projects and audit logging</LI>
       </UL>
       <Callout type="tip">
@@ -179,7 +179,7 @@ export default function AlteryxAlternativeCheaper() {
         </LI>
         <LI>
           Procurement requires a vendor with SOC 2 Type II certification and enterprise SLAs —
-          DataHub offers this on the Enterprise plan
+          DataHub has RBAC, full audit logging, and encrypted storage; SOC 2 certification is in progress
         </LI>
       </UL>
       <P>
@@ -195,11 +195,11 @@ export default function AlteryxAlternativeCheaper() {
           },
           {
             q: "Does DataHub work for the same use cases as Alteryx — blending, prep, and output?",
-            a: "Yes for the core cases. DataHub covers data ingestion (file upload + database connection), transformation (30+ operations), blending (joins across sources), and output (CSV download, database write-back, scheduled refresh). Advanced Alteryx modules like predictive modelling, spatial analytics, and some enterprise connectors are not in scope.",
+            a: "Yes for the core cases. DataHub covers data ingestion (file upload + database connection), transformation (30+ operations), blending (joins across uploaded datasets), and output (CSV download, scheduled refresh for database-connected sources). Advanced Alteryx modules like predictive modelling, spatial analytics, and some enterprise connectors are not in scope.",
           },
           {
             q: "Is DataHub compliant for enterprise use?",
-            a: "DataHub is SOC 2 Type II certified on the Enterprise plan. It supports SSO/SAML, audit logging, data residency selection, and custom data retention policies. For regulated industries, the Enterprise plan adds a custom DPA and dedicated infrastructure.",
+            a: "DataHub supports SSO/SAML, audit logging, RBAC, and encrypted storage at rest and in transit. SOC 2 certification is in progress. For regulated industries, the Enterprise plan adds a custom DPA and dedicated infrastructure.",
           },
           {
             q: "What's the minimum commitment — do I have to pay annually?",

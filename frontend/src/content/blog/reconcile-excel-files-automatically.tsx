@@ -192,11 +192,11 @@ FULL OUTER JOIN file2 b ON a.customer_id = b.customer_id`}</CodeBlock>
           },
           {
             q: "Is there a row limit?",
-            a: "The free plan handles files up to 50MB. Starter and above support files up to 5GB. For very large files (millions of rows), connecting directly to a database source is more efficient than file uploads.",
+            a: "The free plan handles files up to 50MB. Starter supports up to 250MB, Professional up to 1GB, Team up to 5GB, and Business up to 10GB. For very large files (millions of rows), connecting directly to a database source is more efficient than file uploads.",
           },
           {
             q: "Can I reconcile Excel against a database table?",
-            a: "Yes. You can upload an Excel file as one source and connect to a PostgreSQL, MySQL, Snowflake, or other supported database as the second source. The reconciliation works the same way regardless of where each dataset comes from.",
+            a: "Yes. You can upload an Excel file as one dataset and also upload a CSV export from your database as the second source. DataHub supports joins across any two uploaded datasets, regardless of original format.",
           },
         ]}
       />

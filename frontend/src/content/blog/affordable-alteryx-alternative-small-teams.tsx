@@ -209,7 +209,7 @@ export default function AffordableAlteryxAlternativeSmallTeams() {
           },
           {
             q: "How does DataHub handle data security for client data?",
-            a: "All data is encrypted at rest and in transit. Each project is tenant-isolated — data from one project is never shared with or visible from another. DataHub does not use customer data to train AI models. On Enterprise, you can select data residency (EU, US, or Mumbai region).",
+            a: "All data is encrypted at rest and in transit. Each project is tenant-isolated — data from one project is never shared with or visible from another. DataHub does not use customer data to train AI models. Data is currently hosted in the Mumbai region (AWS ap-south-1); additional regions are on the roadmap for Enterprise.",
           },
           {
             q: "Can I run DataHub on my own infrastructure if I'm concerned about cloud data storage?",

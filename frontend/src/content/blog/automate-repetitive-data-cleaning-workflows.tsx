@@ -209,8 +209,7 @@ export default function AutomateRepetitiveDataCleaningWorkflows() {
       <H3>Daily inventory sync</H3>
       <P>
         Connect to warehouse database → filter to active SKUs → cast types → validate stock levels
-        not negative → write cleaned data back to reporting database → trigger dashboard refresh
-        via webhook.
+        not negative → export cleaned CSV → import to reporting database or downstream BI tool.
       </P>
 
       <H3>Supplier data onboarding</H3>
@@ -224,7 +223,7 @@ export default function AutomateRepetitiveDataCleaningWorkflows() {
         items={[
           {
             q: "Can I run a DataHub pipeline automatically without manual intervention?",
-            a: "Yes. If your data source is a database or API connection (not manual file uploads), you can schedule pipelines to run on a cron schedule or trigger them via webhook. For file-based workflows, the trigger is the upload — but the pipeline steps run automatically after upload.",
+            a: "Yes. If your data source is a database connection (not manual file uploads), you can schedule pipelines to run on a cron schedule. For file-based workflows, the trigger is the upload — the pipeline steps then run automatically after upload.",
           },
           {
             q: "What happens when a pipeline step fails?",
@@ -232,7 +231,7 @@ export default function AutomateRepetitiveDataCleaningWorkflows() {
           },
           {
             q: "Can I version-control my pipelines?",
-            a: "Pipeline versions are tracked automatically. Each time you modify a pipeline, a new version is created. You can view the history, compare versions, and roll back to a previous version if a change breaks something.",
+            a: "Pipeline versions are tracked automatically. Each time you modify a pipeline, a new version is created and recorded. You can view the version history to see what changed across runs.",
           },
           {
             q: "How many steps can a pipeline have?",

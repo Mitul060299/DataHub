@@ -132,25 +132,26 @@ export default function PrepareRawDataForPowerBi() {
         table."
       </Callout>
       <P>
-        DataHub runs this as an anti-join and shows you the orphan records. You can then decide
-        whether to drop them, add a placeholder "Unknown" dimension record, or investigate the
-        source.
+        DataHub finds the orphan records by filtering fact table rows where the key does not appear
+        in the dimension table. You can then decide whether to drop them, add a placeholder
+        "Unknown" dimension record, or investigate the source.
       </P>
 
-      <H2>Step 6: Create a proper date table before import</H2>
+      <H2>Step 6: Fill date gaps before import</H2>
       <P>
         Power BI's time intelligence functions (SAMEPERIODLASTYEAR, TOTALYTD, etc.) require a
-        proper date dimension table with no gaps. While you can create this in DAX with CALENDAR(),
-        it's cleaner to generate it in your data preparation step so it's consistent across all
-        reports.
+        complete, contiguous date series with no gaps. DataHub's{" "}
+        <InlineCode>detect_date_gaps</InlineCode> operation reindexes your date column to fill
+        missing dates, ensuring your time series is complete before you load it into Power BI.
       </P>
       <Callout type="tip">
-        "Create a date dimension table spanning from 2020-01-01 to today, with columns for year,
-        quarter, month number, month name, week number, and day of week."
+        "Fill any missing dates in the order_date column between 2020-01-01 and today."
       </Callout>
       <P>
-        DataHub generates this table as a downloadable CSV. Import it alongside your fact table and
-        create the relationship in Power BI on the date column.
+        DataHub fills the gaps and exports the result as a clean CSV. Import it alongside your fact
+        table and create the relationship in Power BI on the date column. For a full date dimension
+        table (year, quarter, month name columns), you can add a{" "}
+        <InlineCode>add_calculated_column</InlineCode> step for each attribute.
       </P>
 
       <H2>Comparison: preparing data in Power Query vs DataHub</H2>
@@ -181,7 +182,7 @@ export default function PrepareRawDataForPowerBi() {
           {
             feature: "Relationship key validation",
             manual: "Manual anti-join in Power Query steps",
-            datahub: "Plain-English description generates anti-join automatically",
+            datahub: "Plain-English: find orphan keys — filtered automatically",
           },
           {
             feature: "Reuse across reports",
@@ -203,7 +204,7 @@ export default function PrepareRawDataForPowerBi() {
         <LI>Handle nulls and pseudo-nulls per column</LI>
         <LI>Remove duplicates from fact tables</LI>
         <LI>Validate foreign key integrity across tables</LI>
-        <LI>Generate or import a clean date dimension table</LI>
+        <LI>Fill date gaps to ensure a contiguous date series</LI>
         <LI>Export cleaned files as CSV — import those into Power BI, not the raw originals</LI>
       </OL>
 

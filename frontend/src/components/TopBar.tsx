@@ -99,9 +99,9 @@ export function TopBar() {
         <img
           src="/logo.png"
           alt=""
-          width={30}
-          height={30}
-          style={{ display: "block", borderRadius: 8 }}
+          width={32}
+          height={32}
+          style={{ display: "block" }}
         />
         <span
           style={{

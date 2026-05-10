@@ -2064,6 +2064,7 @@ export function DocsPage() {
       {/* Top bar */}
       <header className="docs-topbar">
         <span className="docs-topbar__logo">
+          <img src="/logo.png" alt="" width={28} height={28} style={{ display: "block" }} />
           <span className="docs-topbar__brand">datahub.org.in</span>
           <span className="docs-topbar__docsLabel">Docs</span>
         </span>

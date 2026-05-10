@@ -201,6 +201,30 @@ const styles = {
     lineHeight: 1.5,
     maxHeight: 96,
   },
+  starterChips: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 6,
+    padding: "8px 12px 10px",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  },
+  starterLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.4)",
+    marginBottom: 2,
+  },
+  chip: {
+    background: "rgba(91,106,240,0.12)",
+    border: "1px solid rgba(91,106,240,0.28)",
+    borderRadius: 8,
+    color: "#c4b5fd",
+    fontSize: 12.5,
+    padding: "7px 10px",
+    cursor: "pointer",
+    textAlign: "left" as const,
+    lineHeight: 1.4,
+    transition: "background 0.15s ease, border-color 0.15s ease",
+  },
   sendBtn: (disabled: boolean): React.CSSProperties => ({
     background: disabled ? "rgba(91,106,240,0.3)" : "#5B6AF0",
     border: "none",
@@ -251,6 +275,12 @@ function injectKeyframes() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const STARTER_PROMPTS = [
+  "What can DataHub actually do?",
+  "How is this different from Excel or Power Query?",
+  "Can I try it without signing up?",
+];
 
 function isValidEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -339,6 +369,22 @@ export function SupportChatWidget() {
               ✕
             </button>
           </div>
+
+          {/* Starter prompts — shown only before the user has sent anything */}
+          {chat.messages.filter(m => m.role === "user").length === 0 && (
+            <div style={styles.starterChips}>
+              <span style={styles.starterLabel}>Common questions</span>
+              {STARTER_PROMPTS.map(prompt => (
+                <button
+                  key={prompt}
+                  style={styles.chip}
+                  onClick={() => { void chat.sendMessage(prompt); }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Messages */}
           <div style={styles.messages}>

@@ -31,31 +31,31 @@ const howSteps = [
     icon: <IconUpload size={18} color="#22c55e" />,
     title: "Upload your data",
     description:
-      "CSV, Excel, JSON, Parquet. Or connect directly to PostgreSQL, Snowflake, BigQuery, Redshift.",
+      "Drop in a CSV, Excel, JSON, or Parquet file. Or connect a database — PostgreSQL, Snowflake, BigQuery, Redshift, and more. Ready in under a minute.",
   },
   {
     step: "02",
     color: "#a78bfa",
     icon: <IconBrain size={18} color="#a78bfa" />,
-    title: "Ask in plain English",
+    title: "Describe what you want",
     description:
-      'Say "remove duplicates", "join with customers", or "show revenue by region as a bar chart". The agent understands.',
+      "No SQL. No formulas. Just type what you need in plain English — \"remove duplicates\", \"join with customers\", \"flag outliers in revenue\". The AI understands.",
   },
   {
     step: "03",
     color: "#facc15",
     icon: <IconCheck size={18} color="#facc15" />,
-    title: "Review the plan",
+    title: "See every step before it runs",
     description:
-      "The agent shows exactly what it will do before executing. Approve, edit, or ask it to try again.",
+      "DataHub shows you exactly what it will do — as readable SQL — before executing anything. Approve, adjust, or reject. Nothing runs without your sign-off.",
   },
   {
     step: "04",
     color: "#38bdf8",
     icon: <IconShare size={18} color="#38bdf8" />,
-    title: "Share & publish",
+    title: "Share clean, trusted results",
     description:
-      "Publish results with one link. Every step recorded and replayable. Full audit trail included.",
+      "Export clean data, publish a dashboard with one link, or feed results into Power BI or Sheets. Every step is logged and replayable for full audit trail.",
   },
 ];
 
@@ -331,11 +331,11 @@ const myths = [
 const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "General feedback"];
 
 const DEMO_QUERIES = [
-  "Remove duplicates and fill nulls with averages",
-  "Show revenue by region as a bar chart",
-  "Join with customers table on customer_id",
-  "Flag rows where revenue exceeds the monthly average",
-  "Export cleaned data to Google Sheets",
+  "Removed 4,200 duplicate rows from a 50,000-row export in 3 seconds",
+  "Reconciled April GL export against bank statement — 12 mismatches found",
+  "Standardised column names across 30 supplier files automatically",
+  "Filled missing revenue values with column averages, flagged 6 outliers",
+  "Joined orders with customers and exported clean CSV for Power BI",
 ];
 
 const MARQUEE_ITEMS = [
@@ -912,7 +912,7 @@ export function HomePage() {
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
             <span className="hero-badge-dot" />
-            Beta live. Help us improve.
+            Free forever · No credit card required
           </motion.div>
 
           <motion.h1
@@ -921,10 +921,10 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            The{" "}
-            <span className="hero-gradient-text">simple and reliable way</span>
+            Stop spending hours{" "}
+            <span className="hero-gradient-text">cleaning the same data</span>
             <br />
-            to prepare and analyse your data
+            every week
           </motion.h1>
 
           <motion.p
@@ -933,9 +933,9 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            DataHub cleans, transforms, and analyses your CSVs, Excel files, and database tables —
-            all in plain English. Every step runs as readable SQL you can review, edit, and replay,
-            so you can always trust the result.
+            DataHub is built for analysts, freelancers, and teams who work with messy spreadsheets
+            and databases — and want clean, trusted results in minutes, not hours. Describe the
+            problem in plain English. DataHub writes the SQL, runs it, and shows you every step.
           </motion.p>
 
           <motion.div
@@ -1143,6 +1143,140 @@ export function HomePage() {
               </span>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* PROBLEMS WE SOLVE */}
+      <section className="section section-problems">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
+          <p className="section-eyebrow">What DataHub solves</p>
+          <h2 className="section-title">
+            Recognise any of{" "}
+            <span className="hero-gradient-text">these problems?</span>
+          </h2>
+          <p className="section-subtitle">
+            These are the exact workflows DataHub was built for. Click any card to see how it works.
+          </p>
+        </motion.div>
+        <div className="problems-grid">
+          {[
+            {
+              emoji: "🔁",
+              title: "Reconciling two Excel files manually",
+              body: "Copy-pasting between sheets, running VLOOKUP, hunting for mismatches. DataHub joins them on a key column and flags every difference in seconds.",
+              slug: "reconcile-excel-files-automatically",
+            },
+            {
+              emoji: "🗑️",
+              title: "Removing duplicates from a CSV",
+              body: "Thousands of rows, some duplicated exactly, some just slightly different. DataHub removes exact and near-duplicate rows without you writing a single formula.",
+              slug: "remove-duplicates-csv-without-code",
+            },
+            {
+              emoji: "📊",
+              title: "Cleaning data before Power BI",
+              body: "Raw exports break every import — wrong column names, blank rows, date formats Power BI won't accept. DataHub cleans it all in one reusable pipeline.",
+              slug: "prepare-raw-data-for-power-bi",
+            },
+            {
+              emoji: "🔤",
+              title: "Inconsistent column names across files",
+              body: "\"Customer ID\", \"CustomerID\", \"cust_id\" — all the same thing, all different files. DataHub standardises every name to snake_case automatically.",
+              slug: "standardise-column-names-excel",
+            },
+            {
+              emoji: "⏱️",
+              title: "Redoing the same clean-up every month",
+              body: "Same steps, new file, every reporting cycle. Save the steps as a named pipeline and re-run it on any new file in one click.",
+              slug: "automate-repetitive-data-cleaning-workflows",
+            },
+            {
+              emoji: "💸",
+              title: "Paying Alteryx pricing for analyst work",
+              body: "Alteryx costs $5,000+ per seat per year. DataHub covers the same core workflows — dedup, join, clean, validate — at a fraction of the price.",
+              slug: "alteryx-alternative-cheaper",
+            },
+          ].map((item, i) => (
+            <motion.div
+              key={item.slug}
+              className="problem-card"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.4, delay: i * 0.07 }}
+            >
+              <Link to={`/blog/${item.slug}`} className="problem-card-link">
+                <span className="problem-emoji">{item.emoji}</span>
+                <h3 className="problem-title">{item.title}</h3>
+                <p className="problem-body">{item.body}</p>
+                <span className="problem-cta">See how it works →</span>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* WHO IT'S FOR */}
+      <section className="section section-personas">
+        <motion.div
+          className="section-header"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
+          <p className="section-eyebrow">Who it's for</p>
+          <h2 className="section-title">
+            Built for people who{" "}
+            <span className="hero-gradient-text">work with data every day</span>
+          </h2>
+        </motion.div>
+        <div className="personas-grid">
+          {[
+            {
+              icon: "📈",
+              role: "The Analyst",
+              description:
+                "You live in Excel and Power BI. You spend the first half of every week cleaning the same files before you can do any actual analysis. DataHub automates the cleaning and prep so you can get to insights faster.",
+            },
+            {
+              icon: "🧑‍💼",
+              role: "The Freelancer / Consultant",
+              description:
+                "Every client sends files in a different format. Column names change. Date formats differ. Headers are in row 3. DataHub turns messy client data into clean deliverables without manual wrangling on every project.",
+            },
+            {
+              icon: "🏢",
+              role: "The Small Team",
+              description:
+                "You don't have a data engineer. You can't spin up a data warehouse. But you have CSVs, a database, and questions to answer. DataHub gives everyone on the team self-serve data prep without writing a single query.",
+            },
+            {
+              icon: "✅",
+              role: "The Manager",
+              description:
+                "You just need the numbers to be right before you share them. DataHub shows every transformation step in plain language — no black box, no guessing — so you can trust what you sign off on.",
+            },
+          ].map((p, i) => (
+            <motion.div
+              key={p.role}
+              className="persona-card"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.4, delay: i * 0.09 }}
+            >
+              <span className="persona-icon">{p.icon}</span>
+              <h3 className="persona-role">{p.role}</h3>
+              <p className="persona-desc">{p.description}</p>
+            </motion.div>
+          ))}
         </div>
       </section>
 

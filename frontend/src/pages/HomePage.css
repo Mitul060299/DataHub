@@ -2303,6 +2303,127 @@
 }
 
 /* ============================================================================
+   PROBLEMS SECTION
+   ============================================================================ */
+.section-problems {
+  padding: 80px var(--hp-side);
+}
+
+.problems-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 48px;
+}
+
+.problem-card {
+  position: relative;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%);
+  border: 1px solid var(--hp-line);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+  overflow: hidden;
+}
+
+.problem-card:hover {
+  border-color: rgba(167, 139, 250, 0.4);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(167, 139, 250, 0.12);
+  transform: translateY(-3px);
+}
+
+.problem-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 28px 24px;
+  text-decoration: none;
+  height: 100%;
+}
+
+.problem-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.problem-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.problem-body {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+  margin: 0;
+  flex: 1;
+}
+
+.problem-cta {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #a78bfa;
+  margin-top: 4px;
+  transition: color 0.2s;
+}
+
+.problem-card:hover .problem-cta {
+  color: #c4b5fd;
+}
+
+/* ============================================================================
+   WHO IT'S FOR (PERSONAS) SECTION
+   ============================================================================ */
+.section-personas {
+  padding: 80px var(--hp-side);
+}
+
+.personas-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-top: 48px;
+}
+
+.persona-card {
+  padding: 30px 24px 28px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 100%);
+  border: 1px solid var(--hp-line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+.persona-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(56, 189, 248, 0.1);
+  transform: translateY(-3px);
+}
+
+.persona-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.persona-role {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.persona-desc {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ============================================================================
    RESPONSIVE
    ============================================================================ */
 @media (max-width: 1100px) {
@@ -2312,6 +2433,7 @@
   .bento-md { grid-column: span 2; }
   .bento-tall { grid-column: span 2; grid-row: span 2; }
   .bento-sm { grid-column: span 2; }
+  .personas-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 900px) {
@@ -2322,6 +2444,8 @@
     grid-column: span 2;
     grid-row: span 1;
   }
+  .problems-grid { grid-template-columns: repeat(2, 1fr); }
+  .personas-grid { grid-template-columns: repeat(2, 1fr); }
   .window-body { grid-template-columns: 1fr; }
   .window-sidebar { display: none; }
   .ws-preview { grid-template-columns: 24px 140px 1fr 130px; font-size: 10px; }
@@ -2337,7 +2461,9 @@
   .section { padding: 70px 20px; }
   .hero { padding: 70px 20px 50px; min-height: 90vh; }
   .how-grid,
-  .pricing-grid {
+  .pricing-grid,
+  .problems-grid,
+  .personas-grid {
     grid-template-columns: 1fr;
   }
   .bento-grid { grid-template-columns: 1fr; }

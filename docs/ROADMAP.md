@@ -74,7 +74,15 @@
 - **`clarify_step` SSE event** — `agent_graph.py` emits `agent.done` with `intent: "clarify"` from `clarify_step` node (previously the question was generated but never streamed)
 - **Intent-aware follow-up chips** — `validate` → fix/chart/export chips; `clarify` and `converse` → no chips
 
-## Phase 9 - Enterprise Hardening ➕ Planned
+## Phase 9 - SEO & Content Marketing ✅ Complete
+- **Blog infrastructure** — `/blog` index page and `/blog/:slug` article shell; public routes with no auth gate.
+- **10 long-form articles** — 1,800–2,100 words each, targeting high-intent analyst search queries (Excel reconciliation, CSV deduplication, Alteryx alternatives, data cleaning tools, Power BI prep, workflow automation).
+- **JSON-LD structured data** — `Article` schema per post (headline, datePublished, author, publisher + logo) for Google and Bing rich results.
+- **Static prerendering** — 11 blog routes added to `prerender-routes.mjs`; Vercel serves real HTML to crawlers.
+- **Sitemap & robots updates** — all 11 blog URLs in `sitemap.xml`; explicit `Googlebot` and `Bingbot` sections in `robots.txt` with `Allow: /blog`.
+- **Shared component library** — `_components.tsx` with `CompareTable`, `MidCTA`, `FAQ`, `Callout`, `CodeBlock` for article authoring consistency.
+
+## Phase 10 - Enterprise Hardening ➕ Planned
 - SSO / SAML integration
 - On-premise / air-gapped deployment
 - Advanced data lineage and compliance packs (SOC2, GDPR)

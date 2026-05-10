@@ -4,6 +4,51 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-10 — SEO Blog Infrastructure
+
+**New pages (`/blog`, `/blog/:slug`):**
+- `frontend/src/pages/BlogIndexPage.tsx` — public card-grid listing all 10 articles; JSON-LD `Blog` schema; no auth required.
+- `frontend/src/pages/BlogPostPage.tsx` — article shell that lazy-loads each article component by slug; JSON-LD `Article` schema (headline, datePublished, author, publisher); unknown slugs redirect to `/blog`.
+- `frontend/src/data/blogPosts.ts` — central registry (slug, title, excerpt, date, readTime, tags) with `getPostBySlug` and `getRelatedPosts` helpers.
+- `frontend/src/content/blog/_components.tsx` — shared styled components used by all articles: `H2`, `H3`, `P`, `Lead`, `UL`, `LI`, `OL`, `Callout` (info/tip/warning), `CodeBlock`, `InlineCode`, `CompareTable`, `MidCTA`, `FAQ`, `Article`.
+
+**10 long-form articles (1,800–2,100 words each):**
+
+| Slug | Target query |
+|------|--------------|
+| `reconcile-excel-files-automatically` | how to reconcile two Excel files automatically |
+| `remove-duplicates-csv-without-code` | remove duplicates from CSV without code |
+| `alteryx-alternative-cheaper` | Alteryx alternative cheaper |
+| `data-cleaning-tool-for-analysts` | data cleaning tool for analysts |
+| `standardise-column-names-excel` | how to standardise column names in Excel |
+| `clean-messy-excel-csv-without-coding` | clean messy Excel/CSV without coding |
+| `affordable-alteryx-alternative-small-teams` | affordable Alteryx alternative small teams/freelancers |
+| `prepare-raw-data-for-power-bi` | how to prepare raw data for Power BI dashboards |
+| `why-analysts-spend-more-time-cleaning` | why analysts spend more time cleaning data |
+| `automate-repetitive-data-cleaning-workflows` | automate repetitive data cleaning workflows |
+
+Each article includes a comparison table, FAQ section, mid-article CTA, and end CTA driving to `/signup` and `/pricing`.
+
+**Routing & prerender:**
+- `frontend/src/App.tsx` — `/blog` and `/blog/:slug` routes added as public routes (outside `AppShell`).
+- `frontend/scripts/prerender-routes.mjs` — 11 new entries (blog index + 10 articles) so Vercel serves real HTML to crawlers instead of the JS bundle.
+
+**SEO config:**
+- `frontend/public/sitemap.xml` — 11 new `<url>` entries (priority 0.8; blog index `changefreq weekly`, articles `changefreq monthly`).
+- `frontend/public/robots.txt` — explicit `User-agent: Googlebot` and `User-agent: Bingbot` sections with `Allow: /blog` and `Allow: /blog/`.
+
+---
+
+## 2026-05-08 — Documentation Refresh
+
+**Updated docs:**
+- `docs/ONBOARDING.md` — full rewrite to reflect current UI: added Welcome Modal (4-slide walkthrough), Workspace Layout (always-visible Explorer, Pipeline tab inline layout, AI panel hide behaviour), First-Time Tour (8 current steps), and Getting Started Checklist sections. Updated Pipeline Operations section to reference the Pipeline tab. Fixed broken `＋ Join` character. Updated AI Chat Agent description.
+- `docs/CAPABILITIES.md` — corrected AI agent state machine node count from 8 to 9 (`clarify_step` node was missing from the summary).
+- `docs/AI_AGENT_AUTO_MODE.md` — updated `Last updated` date to 2026-05-08.
+- `docs/WEB_APP_USER_JOURNEY_PROPOSAL.md` — added May 8, 2026 implementation status block documenting all workspace simplification and onboarding overhaul changes.
+
+---
+
 ## 2026-05-08 — Onboarding Overhaul
 
 **WelcomeModal (redesigned):**

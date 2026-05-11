@@ -327,11 +327,11 @@ async def context_loader(state: AgentState) -> dict:
         # materialise as a DuckDB TABLE in the persistent session so AI-agent SQL
         # can reference the dataset by its named alias.
         _primary_alias = _sanitize_alias(str(dataset.name if dataset.name else dataset_id))
+        import pandas as _pd_cnk
+        from ....models_db import DatasetChunkDB, DatasetDataDB  # local to avoid circular
+        _cnk_rows: list[dict] = []
         _cnk_db = SessionLocal()
         try:
-            from ....models_db import DatasetChunkDB, DatasetDataDB  # local to avoid circular
-            import pandas as _pd_cnk
-            _cnk_rows: list[dict] = []
             for _cc in (
                 _cnk_db.query(DatasetChunkDB)
                 .filter(DatasetChunkDB.dataset_id == dataset_id)
@@ -367,19 +367,89 @@ async def context_loader(state: AgentState) -> dict:
                     "JSONB_DUCKDB_TABLE_FAILED: alias=%s error=%s", _primary_alias, _cnk_exc
                 )
 
-        if _primary_alias not in table_registry:
-            table_registry[_primary_alias] = {
-                "duckdb_name": _primary_alias,
-                "dataset_id": dataset_id,
-                "display_name": _primary_alias,
-                "source_intent": "upload",
-                "parent_tables": [],
-                "row_count": int(dataset.row_count or 0),
-                "column_names": list(dataset.columns or []),
-                "pipeline_step_number": 0,
-                "is_artifact": False,
-                "is_view": False,
-            }
+        # Replay any prior pipeline step views that reference this TABLE as source.
+        # This handles legacy JSONB-only datasets after a page refresh.
+        _derived_entries_j = [
+            v for v in table_registry.values()
+            if isinstance(v, dict) and int(v.get("pipeline_step_number", 0)) > 0
+        ]
+        _needs_replay_j = not _derived_entries_j
+        if _derived_entries_j and session_id:
+            _probe_j = _derived_entries_j[0].get("duckdb_name", "")
+            if _probe_j:
+                try:
+                    get_connection(session_id).execute(f'SELECT 1 FROM "{_probe_j}" LIMIT 0')
+                except Exception:
+                    _needs_replay_j = True
+
+        if session_id and _needs_replay_j:
+            import re as _re_replay_j
+            from ....models_db import PipelineStepDB as _PipelineStepDB_j
+            _jdb = SessionLocal()
+            try:
+                _j_steps = (
+                    _jdb.query(_PipelineStepDB_j)
+                    .filter(
+                        _PipelineStepDB_j.session_id == session_id,
+                        _PipelineStepDB_j.output_table.isnot(None),
+                        _PipelineStepDB_j.duckdb_sql.isnot(None),
+                        _PipelineStepDB_j.status == "completed",
+                    )
+                    .order_by(_PipelineStepDB_j.step_number)
+                    .all()
+                )
+            finally:
+                _jdb.close()
+            if _j_steps:
+                _jconn = get_connection(session_id)
+                for _jps in _j_steps:
+                    _jout = str(_jps.output_table)
+                    _jsql = str(_jps.duckdb_sql)
+                    _jm = _re_replay_j.match(
+                        r"(?i)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+\S+\s+AS\s+",
+                        _jsql,
+                    )
+                    _jsel = (_jsql[_jm.end():].strip() if _jm else _jsql).rstrip("; \t\r\n")
+                    try:
+                        _jconn.execute(f'CREATE OR REPLACE VIEW "{_jout}" AS ({_jsel})')
+                        table_registry[_jout] = {
+                            "duckdb_name": _jout,
+                            "dataset_id": "",
+                            "display_name": _jps.description or _jout,
+                            "source_intent": _jps.operation or "transform",
+                            "parent_tables": list(_jps.input_tables or []),
+                            "row_count": int(_jps.row_count_after or 0),
+                            "column_names": [],
+                            "pipeline_step_number": int(_jps.step_number or 0),
+                            "is_artifact": False,
+                            "is_view": True,
+                        }
+                        _restored_pipeline_steps.append({
+                            "step_number": int(_jps.step_number or 0),
+                            "operation": _jps.operation or "transform",
+                            "description": _jps.description or "",
+                            "sql": _jsql,
+                            "output_table": _jout,
+                            "row_count_after": int(_jps.row_count_after or 0),
+                        })
+                    except Exception as _jerr:
+                        _logger.warning(
+                            "JSONB_REPLAY_FAILED: table=%s error=%s", _jout, _jerr
+                        )
+
+        # Always set the table_registry entry for the primary alias
+        table_registry[_primary_alias] = {
+            "duckdb_name": _primary_alias,
+            "dataset_id": dataset_id,
+            "display_name": _primary_alias,
+            "source_intent": "upload",
+            "parent_tables": [],
+            "row_count": int(dataset.row_count or 0),
+            "column_names": list(dataset.columns or []),
+            "pipeline_step_number": 0,
+            "is_artifact": False,
+            "is_view": False,
+        }
 
     # Store the primary alias in the state so execute_step can rewrite
     # any residual "FROM dataset" references at runtime.
@@ -486,17 +556,22 @@ async def context_loader(state: AgentState) -> dict:
     except Exception:
         pass
 
-    _register_dataset_view(dataset_id, primary_alias, storage_path=dataset.storage_path if dataset else None)
-    # Register "dataset" as a DuckDB compatibility fallback — do NOT remove this.
-    # Non-LLM callers that depend on this alias:
-    #   - ai_agent_service.py query_parquet() sampling ("SELECT * FROM dataset LIMIT …")
-    #   - duckdb_service.py _normalize_dataset_sql() connector SQL normalisation
-    # LLM-generated SQL should now use the named alias; execute_step rewrites any
-    # residual "FROM dataset" references at runtime and emits a WARNING to signal
-    # a planner prompt regression.
-    if primary_alias != "dataset" and dataset and dataset.storage_path:
-        _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
+    if dataset and dataset.storage_path:
+        # Parquet-backed: register as VIEW (handles both initial load and re-registration).
+        _register_dataset_view(dataset_id, primary_alias, storage_path=dataset.storage_path)
+        # Register "dataset" as a DuckDB compatibility fallback — do NOT remove this.
+        # Non-LLM callers that depend on this alias:
+        #   - ai_agent_service.py query_parquet() sampling ("SELECT * FROM dataset LIMIT …")
+        #   - duckdb_service.py _normalize_dataset_sql() connector SQL normalisation
+        # LLM-generated SQL should now use the named alias; execute_step rewrites any
+        # residual "FROM dataset" references at runtime and emits a WARNING to signal
+        # a planner prompt regression.
+        if primary_alias != "dataset":
+            _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
+    # For JSONB-backed datasets, the TABLE + "dataset" VIEW were already created
+    # in the elif branch above — no need to call _register_dataset_view here.
 
+    _is_parquet_view = bool(dataset and dataset.storage_path)
     primary_entry: TableRegistryEntry = {
         "duckdb_name": primary_alias,
         "dataset_id": dataset_id,
@@ -507,7 +582,7 @@ async def context_loader(state: AgentState) -> dict:
         "column_names": col_names,
         "pipeline_step_number": 0,
         "is_artifact": False,
-        "is_view": True,
+        "is_view": _is_parquet_view,
     }
     table_registry[primary_alias] = primary_entry
 

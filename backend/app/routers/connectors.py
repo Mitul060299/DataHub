@@ -148,11 +148,26 @@ def import_from_connector(
 
     # ── Persist dataset (always — even for live, we store schema/preview info) ──
     save_df = df.head(10) if payload.import_mode == "live" else df
+
+    # Derive a human-readable name: prefer the table name from config, then a
+    # sanitised excerpt from the query, then fall back to "<connector>_import".
+    _table_hint = str(effective_config.get("table") or "").strip()
+    _query_hint = str(effective_config.get("query") or "").strip()
+    _dataset_name = (
+        _table_hint
+        or (_query_hint[:40].split()[1] if len(_query_hint.split()) > 1 else _query_hint[:40])
+        or f"{payload.connector}_import"
+    ).strip() or f"{payload.connector}_import"
+
+    _meta_extra: dict = {"name": _dataset_name}
+    if payload.project_id:
+        _meta_extra["project_id"] = payload.project_id
+
     dataset_id = save_dataset(
         save_df,
         db,
         user_id=user_id,
-        meta_extra={"project_id": payload.project_id} if payload.project_id else None,
+        meta_extra=_meta_extra,
     )
 
     # ── Upload Parquet to object storage ───────────────────────────────────
@@ -160,14 +175,16 @@ def import_from_connector(
     # exactly like a file-uploaded dataset.  On failure we log and continue —
     # the JSONB chunks stored by save_dataset remain as a fallback.
     _storage_path: str | None = None
+    _schema_json: dict | None = None
+    _stats_json: dict | None = None
     try:
         from ..services.data_conversion import DataConversionService
         from ..services.object_storage import StorageService
-        _parquet_bytes, _, _, _, _ = DataConversionService.dataframe_to_parquet(
+        _parquet_bytes, _schema_json, _, _stats_json, _ = DataConversionService.dataframe_to_parquet(
             save_df,
             original_size=max(estimated_original_size, 1),
         )
-        _safe_name = payload.connector.lower().replace("-", "_").replace(" ", "_") + ".parquet"
+        _safe_name = _dataset_name.lower().replace(" ", "_")[:50] + ".parquet"
         _storage_path = StorageService.upload(
             user_id,
             dataset_id,
@@ -186,8 +203,13 @@ def import_from_connector(
         meta.connector_credential_id = credential_id
         meta.import_mode = payload.import_mode
         meta.source_type = payload.connector
+        meta.name = _dataset_name  # ensure name is persisted even if meta_extra missed it
         if _storage_path:
             meta.storage_path = _storage_path
+        if _schema_json:
+            meta.schema_json = _schema_json
+        if _stats_json:
+            meta.stats_json = _stats_json
         # Strip credential-bearing fields before persisting: passwords and keys
         # are already encrypted in ConnectorCredentialDB.  Storing them again
         # in plaintext on dataset_meta would expose them to any reader of the

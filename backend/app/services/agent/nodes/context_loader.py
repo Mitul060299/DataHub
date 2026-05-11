@@ -358,9 +358,16 @@ async def context_loader(state: AgentState) -> dict:
                     _conn_cnk.execute(
                         f'CREATE OR REPLACE VIEW "dataset" AS SELECT * FROM "{_primary_alias}"'
                     )
+                # Also register the raw UUID alias — pipeline step SQL stored before
+                # the dataset was given a proper name references the UUID directly.
+                _uuid_alias_cnk = _re.sub(r"[^A-Za-z0-9_]", "_", dataset_id)
+                if _uuid_alias_cnk != _primary_alias:
+                    _conn_cnk.execute(
+                        f'CREATE OR REPLACE VIEW "{_uuid_alias_cnk}" AS SELECT * FROM "{_primary_alias}"'
+                    )
                 _logger.info(
-                    "JSONB_DUCKDB_TABLE: alias=%s rows=%d dataset_id=%s",
-                    _primary_alias, len(_cnk_rows), dataset_id,
+                    "JSONB_DUCKDB_TABLE: alias=%s uuid_alias=%s rows=%d dataset_id=%s",
+                    _primary_alias, _uuid_alias_cnk, len(_cnk_rows), dataset_id,
                 )
             except Exception as _cnk_exc:
                 _logger.warning(

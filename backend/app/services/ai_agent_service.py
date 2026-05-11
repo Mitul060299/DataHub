@@ -588,6 +588,60 @@ class AIAgentService:
                 )
                 # Source registration may fail for connector-only datasets;
                 # derived steps that don't reference the source can still replay.
+        elif dataset:
+            # Connector-imported dataset with no Parquet file — load from JSONB
+            # chunks and materialise as a DuckDB TABLE so pipeline SQL can run.
+            _src_alias = _re_replay.sub(r"[^A-Za-z0-9_]", "_", (dataset.name or "").strip()).lower()
+            _src_alias = _re_replay.sub(r"_+", "_", _src_alias).strip("_")
+            if not _src_alias:
+                # No usable name — fall back to the sanitized UUID
+                _src_alias = _re_replay.sub(r"[^A-Za-z0-9_]", "_", str(dataset.id))
+            elif _src_alias[0].isdigit():
+                _src_alias = "ds_" + _src_alias
+            try:
+                import pandas as _pd_replay
+                from ..models_db import DatasetChunkDB as _ChunkDB, DatasetDataDB as _DataDB
+                _rdb = SessionLocal()
+                try:
+                    _rows: list[dict] = []
+                    for _cc in (
+                        _rdb.query(_ChunkDB)
+                        .filter(_ChunkDB.dataset_id == str(dataset.id))
+                        .order_by(_ChunkDB.chunk_index)
+                        .all()
+                    ):
+                        _rows.extend(_cc.rows or [])
+                    if not _rows:
+                        _dd = _rdb.query(_DataDB).filter(_DataDB.id == str(dataset.id)).first()
+                        if _dd and isinstance(_dd.rows, list):
+                            _rows = list(_dd.rows)
+                finally:
+                    _rdb.close()
+                if _rows:
+                    _df_r = _pd_replay.DataFrame(_rows)
+                    conn.register("_replay_src", _df_r)
+                    conn.execute(f'CREATE OR REPLACE TABLE "{_src_alias}" AS SELECT * FROM _replay_src')
+                    if _src_alias != "dataset":
+                        conn.execute(f'CREATE OR REPLACE VIEW "dataset" AS SELECT * FROM "{_src_alias}"')
+                    # Also register the raw UUID alias — stored pipeline step SQL
+                    # may reference the UUID from before the name was set.
+                    _uuid_alias = _re_replay.sub(r"[^A-Za-z0-9_]", "_", str(dataset.id))
+                    if _uuid_alias != _src_alias:
+                        conn.execute(f'CREATE OR REPLACE VIEW "{_uuid_alias}" AS SELECT * FROM "{_src_alias}"')
+                    _logger.info(
+                        "replay: JSONB source table created alias=%s rows=%d session=%s",
+                        _src_alias, len(_rows), session_id[:8],
+                    )
+                else:
+                    _logger.warning(
+                        "replay: JSONB dataset %s has no rows — pipeline replay may fail",
+                        dataset.id,
+                    )
+            except Exception as _jexc:
+                _logger.warning(
+                    "replay: JSONB source table creation failed session=%s: %s",
+                    session_id[:8], _jexc,
+                )
 
         # 2. Build the canonical step list
         normalized: list[dict[str, Any]] = []

@@ -414,7 +414,11 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
             </p>
             {step !== "pick" && (
               <p style={{ margin: 0, fontSize: 12, color: "var(--tx1, #8888a0)", marginTop: 2 }}>
-                {step === "configure" ? "Enter credentials then test or save" : "Select a table to import as a dataset"}
+                {step === "configure"
+                  ? "Enter credentials, choose connection type, then connect"
+                  : importMode === "live"
+                    ? "Select a table to connect via DirectQuery"
+                    : "Select a table to import as a dataset"}
               </p>
             )}
           </div>
@@ -593,6 +597,46 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
                 </div>
               )}
 
+              {/* Connection type — Import vs DirectQuery (Power BI style) */}
+              {selected.id !== "google_sheets" && (
+                <div>
+                  <span style={label}>Connection type</span>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 2 }}>
+                    {(["cached", "live"] as const).map((m) => {
+                      const active = importMode === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setImportMode(m)}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            border: active ? "1.5px solid rgba(91,106,240,0.7)" : "1px solid var(--bd, #2e2e3a)",
+                            background: active ? "rgba(91,106,240,0.12)" : "var(--bg3, #18181e)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "border-color 0.12s, background 0.12s",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 14 }}>{m === "cached" ? "⬇" : "⚡"}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: active ? "#818cf8" : "var(--tx0, #e8e8f0)" }}>
+                              {m === "cached" ? "Import" : "DirectQuery"}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 11, color: "var(--tx1, #8888a0)", lineHeight: 1.4 }}>
+                            {m === "cached"
+                              ? "Copy data into DataHub. Fast queries, manual refresh."
+                              : "Query your source directly. Always fresh, no storage used."}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Test result */}
               {testResult && (
                 <div style={{
@@ -618,33 +662,29 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
           {/* ── Step: browse ── */}
           {step === "browse" && (
             <div>
-              {/* Mode toggle */}
+              {/* Static mode badge (mode was chosen in configure step) */}
               {!loadingTables && tables.length > 0 && (
-                <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-                  {(["cached", "live"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setImportMode(m); setImportedTables(new Set()); }}
-                      style={{
-                        flex: 1,
-                        padding: "7px 0",
-                        borderRadius: 7,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        border: importMode === m ? "1px solid rgba(91,106,240,0.6)" : "1px solid var(--bd, #2e2e3a)",
-                        background: importMode === m ? "rgba(91,106,240,0.18)" : "var(--bg3, #18181e)",
-                        color: importMode === m ? "#818cf8" : "var(--tx1, #8888a0)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {m === "cached" ? "Import (snapshot)" : "Live Connect"}
-                    </button>
-                  ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                    border: importMode === "live" ? "1px solid rgba(52,211,153,0.4)" : "1px solid rgba(91,106,240,0.4)",
+                    background: importMode === "live" ? "rgba(52,211,153,0.08)" : "rgba(91,106,240,0.08)",
+                    color: importMode === "live" ? "#34d399" : "#818cf8",
+                    textTransform: "uppercase", letterSpacing: "0.05em",
+                  }}>
+                    {importMode === "live" ? "⚡ DirectQuery" : "⬇ Import"}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--tx1, #8888a0)" }}>
+                    {importMode === "live"
+                      ? "Queries run against your source database"
+                      : "Data will be copied into DataHub"}
+                  </span>
                 </div>
               )}
               {importMode === "live" && !loadingTables && tables.length > 0 && (
                 <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.25)", fontSize: 12, color: "#fbbf24", lineHeight: 1.5 }}>
-                  <strong>Live Connect:</strong> Only a 500-row preview is stored in DataHub. All pipeline transforms are pushed to your source database. Results of each step are saved as Parquet snapshots.
+                  A 500-row preview is cached for the AI agent. All pipeline steps are pushed to your source database. Step outputs are saved as Parquet snapshots.
                 </div>
               )}
               {loadingTables && (
@@ -699,7 +739,7 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
                             ? (importMode === "live" ? "✓ Connected" : "✓ Imported")
                             : importing === t.table
                               ? (importMode === "live" ? "Connecting…" : "Importing…")
-                              : (importMode === "live" ? "Connect Live" : "Import")}
+                              : (importMode === "live" ? "Connect" : "Load")}
                         </button>
                       </div>
                     );
@@ -741,7 +781,13 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
                   disabled={saving}
                   style={{ padding: "7px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, border: "1px solid rgba(91,106,240,0.5)", background: "rgba(91,106,240,0.2)", color: "#818cf8", cursor: "pointer" }}
                 >
-                  {saving ? "Connecting…" : selected.id === "google_sheets" ? "Import sheet" : "Save & browse tables"}
+                  {saving
+                    ? "Connecting…"
+                    : selected.id === "google_sheets"
+                      ? "Import sheet"
+                      : importMode === "live"
+                        ? "Connect & browse tables"
+                        : "Save & browse tables"}
                 </button>
               </div>
             )}

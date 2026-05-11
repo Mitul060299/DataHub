@@ -72,12 +72,14 @@ def import_from_connector(
     if payload.connection_id:
         # Re-use a saved connection — load the config stored server-side so
         # the client never needs to resend credentials after a page refresh.
+        # Merge: stored connection config provides credentials; payload.config
+        # provides runtime overrides like table/query/schema.
         conn_row = db.query(ImportConnectionDB).filter(
             ImportConnectionDB.id == payload.connection_id,
         ).first()
         if not conn_row:
             raise HTTPException(status_code=404, detail="Connection not found")
-        effective_config = dict(conn_row.config or {})
+        effective_config = {**dict(conn_row.config or {}), **dict(payload.config)}
     elif payload.credential_id:
         # Use a previously saved credential. Scope strictly to the requesting
         # user so user A cannot reuse user B's saved DB credentials.

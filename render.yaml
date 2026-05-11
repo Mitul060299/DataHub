@@ -4,6 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
+    region: singapore        # closest Render region to India (~60ms vs ~300ms from oregon)
     preDeployCommand: "alembic upgrade head"
     envVars:
       - key: RUN_MIGRATIONS

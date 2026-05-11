@@ -27,11 +27,10 @@ export function AppShell() {
 
   const isPublic = location.pathname === "/" || PUBLIC_PATHS.some((p) => location.pathname.startsWith(p));
 
-  if (loading) {
-    return <div style={{ height: "100%", display: "grid", placeItems: "center" }}>Loading...</div>;
-  }
-
-  if (isPublic && !isAuthenticated) {
+  // Public pages render immediately — auth resolves in the background so the
+  // hero / landing content paints without waiting for a server round-trip.
+  // This is the primary fix for high LCP on connections far from the backend.
+  if (isPublic) {
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <TopBar />
@@ -40,7 +39,13 @@ export function AppShell() {
     );
   }
 
-  if (!isPublic && !isAuthenticated) {
+  // For private pages we must still wait for auth to avoid a flash of
+  // protected content followed by a redirect to /login.
+  if (loading) {
+    return <div style={{ height: "100%", display: "grid", placeItems: "center" }}>Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
     // No anon bootstrap yet (likely API down) — send to login as a fallback.
     return <Navigate to="/login" replace state={{ from: location }} />;
   }

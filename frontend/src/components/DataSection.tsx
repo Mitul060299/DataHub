@@ -5,6 +5,7 @@ import type { Dataset } from "../contexts/WorkspaceContext";
 const normalizeFormat = (value?: string | null) => {
   if (!value) return null;
   const lowered = value.toLowerCase();
+  if (lowered === "live") return "live";
   if (["xlsx", "xls", "excel"].includes(lowered)) return "excel";
   if (["csv", "txt", "tsv"].includes(lowered)) return "csv";
   if (lowered === "json") return "json";
@@ -13,6 +14,7 @@ const normalizeFormat = (value?: string | null) => {
 };
 
 const formatAccent: Record<string, string> = {
+  live: "#34d399",
   csv: "var(--ac)",
   excel: "var(--gr)",
   json: "var(--or)",

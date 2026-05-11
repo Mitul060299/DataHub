@@ -666,6 +666,7 @@ def list_datasets(
                 dataset_id=dataset_id,
                 name=str(row.name) if row.name is not None else None,
                 file_format=str(row.file_format) if row.file_format is not None else None,
+                import_mode=str(row.import_mode) if getattr(row, "import_mode", None) is not None else None,
                 columns=columns,
                 row_count=row_count,
                 parent_id=str(row.parent_id) if row.parent_id is not None else None,

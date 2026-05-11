@@ -80,6 +80,19 @@ def import_from_connector(
         if not conn_row:
             raise HTTPException(status_code=404, detail="Connection not found")
         effective_config = {**dict(conn_row.config or {}), **dict(payload.config)}
+        # For live mode we need a ConnectorCredentialDB entry so query folding
+        # can decrypt credentials later.  Create one from the saved connection.
+        if payload.import_mode == "live" and not credential_id:
+            _live_cred = ConnectorCredentialDB(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                connector_type=payload.connector,
+                label=conn_row.name or payload.connector,
+                encrypted_config=encrypt_connector_config(effective_config),
+            )
+            db.add(_live_cred)
+            db.flush()
+            credential_id = _live_cred.id
     elif payload.credential_id:
         # Use a previously saved credential. Scope strictly to the requesting
         # user so user A cannot reuse user B's saved DB credentials.
@@ -109,20 +122,14 @@ def import_from_connector(
         credential_id = cred_row.id
 
     # ── Read data from source ──────────────────────────────────────────────
+    # For live connections pull only a 500-row sample — the credentials are
+    # stored and query folding will execute full-table work on the source DB.
+    # For cached imports pull everything and snapshot to Parquet.
+    _live_mode = payload.import_mode == "live"
+    _read_config = {**effective_config, "_sample_limit": 500} if _live_mode else effective_config
     try:
-        if payload.import_mode == "live":
-            # Live mode: skip data pull — just save metadata
-            if not credential_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="import_mode='live' requires save_credential=true or a credential_id",
-                )
-            # We need a minimal DataFrame to get column info for the dataset record
-            df = connector.read(effective_config)
-            estimated_original_size = int(df.memory_usage(deep=True).sum())
-        else:
-            df = connector.read(effective_config)
-            estimated_original_size = int(df.memory_usage(deep=True).sum())
+        df = connector.read(_read_config)
+        estimated_original_size = int(df.memory_usage(deep=True).sum())
     except HTTPException:
         raise
     except ValueError as exc:
@@ -147,7 +154,8 @@ def import_from_connector(
     )
 
     # ── Persist dataset (always — even for live, we store schema/preview info) ──
-    save_df = df.head(10) if payload.import_mode == "live" else df
+    # For live mode df is already the 500-row sample (sample_limit applied above).
+    save_df = df
 
     # Derive a human-readable name: prefer the table name from config, then a
     # sanitised excerpt from the query, then fall back to "<connector>_import".

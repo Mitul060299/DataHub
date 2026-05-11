@@ -171,6 +171,8 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistDone, setWaitlistDone] = useState(false);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  // Import mode: 'cached' = full snapshot, 'live' = sample only + query folding
+  const [importMode, setImportMode] = useState<"cached" | "live">("cached");
 
   // Load saved connections whenever the modal opens
   useEffect(() => {
@@ -198,6 +200,7 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
     setImporting(null);
     setImportedTables(new Set());
     setError(null);
+    setImportMode("cached");
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -343,7 +346,7 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
     try {
       // Pass connection_id so backend loads credentials from ImportConnectionDB;
       // pass project_id so the dataset appears under the active project.
-      await importFromConnection(savedId, selected.id, buildConfig(), table, projectId);
+      await importFromConnection(savedId, selected.id, buildConfig(), table, projectId, importMode);
       setImportedTables((prev) => new Set(prev).add(table));
       onImported?.();
     } catch (e: unknown) {
@@ -615,6 +618,35 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
           {/* ── Step: browse ── */}
           {step === "browse" && (
             <div>
+              {/* Mode toggle */}
+              {!loadingTables && tables.length > 0 && (
+                <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                  {(["cached", "live"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => { setImportMode(m); setImportedTables(new Set()); }}
+                      style={{
+                        flex: 1,
+                        padding: "7px 0",
+                        borderRadius: 7,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: importMode === m ? "1px solid rgba(91,106,240,0.6)" : "1px solid var(--bd, #2e2e3a)",
+                        background: importMode === m ? "rgba(91,106,240,0.18)" : "var(--bg3, #18181e)",
+                        color: importMode === m ? "#818cf8" : "var(--tx1, #8888a0)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {m === "cached" ? "Import (snapshot)" : "Live Connect"}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {importMode === "live" && !loadingTables && tables.length > 0 && (
+                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.25)", fontSize: 12, color: "#fbbf24", lineHeight: 1.5 }}>
+                  <strong>Live Connect:</strong> Only a 500-row preview is stored in DataHub. All pipeline transforms are pushed to your source database. Results of each step are saved as Parquet snapshots.
+                </div>
+              )}
               {loadingTables && (
                 <p style={{ fontSize: 13, color: "var(--tx1, #8888a0)", textAlign: "center", padding: "24px 0" }}>Loading tables…</p>
               )}
@@ -663,7 +695,11 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
                             cursor: done ? "default" : "pointer",
                           }}
                         >
-                          {done ? "✓ Imported" : importing === t.table ? "Importing…" : "Import"}
+                          {done
+                            ? (importMode === "live" ? "✓ Connected" : "✓ Imported")
+                            : importing === t.table
+                              ? (importMode === "live" ? "Connecting…" : "Importing…")
+                              : (importMode === "live" ? "Connect Live" : "Import")}
                         </button>
                       </div>
                     );

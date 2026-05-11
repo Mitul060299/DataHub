@@ -130,6 +130,27 @@ _ALLOWED_SQLITE_EXTENSIONS = {".db", ".sqlite", ".sqlite3"}
 _MAX_DOCSTORE_ROWS = 50_000
 
 
+def _apply_sample_limit(query: str, config: Dict[str, Any], dialect: str = "standard") -> str:
+    """Wrap query with a row limit when ``_sample_limit`` is present in config.
+
+    Used for Live Connect mode so we only pull a preview sample rather than the
+    full table.  The wrapping is dialect-aware:
+      - standard / postgresql / mysql / sqlite / redshift: LIMIT n
+      - mssql / sqlserver: SELECT TOP n * FROM (...)
+      - oracle: ROWNUM <= n predicate
+    """
+    limit = config.get("_sample_limit")
+    if not limit:
+        return query
+    n = int(limit)
+    if dialect in ("mssql", "sqlserver"):
+        return f"SELECT TOP {n} * FROM ({query}) AS _s"
+    if dialect == "oracle":
+        return f"SELECT * FROM ({query}) WHERE ROWNUM <= {n}"
+    # standard (postgresql, mysql, sqlite, redshift, bigquery …)
+    return f"SELECT * FROM ({query}) AS _s LIMIT {n}"
+
+
 def _safe_error(exc: Exception, default: str = "Operation failed") -> str:
     """Return a generic error message safe to send to API clients.
 
@@ -334,6 +355,7 @@ class PostgreSQLConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
+        query = _apply_sample_limit(query, config)
         engine = self._build_engine(config)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
@@ -478,6 +500,7 @@ class MySQLConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
+        query = _apply_sample_limit(query, config)
         engine = self._build_engine(config)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
@@ -568,6 +591,7 @@ class SQLServerConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
+        query = _apply_sample_limit(query, config, dialect="mssql")
         engine = self._build_engine(config)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
@@ -656,6 +680,7 @@ class OracleConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
+        query = _apply_sample_limit(query, config, dialect="oracle")
         engine = self._build_engine(config)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
@@ -736,6 +761,7 @@ class SQLiteConnector:
                 _validate_where(where)
                 query = f"{query} WHERE {where}"
 
+        query = _apply_sample_limit(query, config)
         engine = self._build_engine(config)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)
@@ -945,6 +971,7 @@ class SnowflakeConnector:
             _validate_identifier(table, "table")
             query = f"SELECT * FROM {table}"
 
+        query = _apply_sample_limit(query, config)
         df = pd.read_sql(query, conn)
         conn.close()
         return df
@@ -1091,6 +1118,7 @@ class BigQueryConnector:
                 full_table = table
             query = f"SELECT * FROM `{full_table}`"
 
+        query = _apply_sample_limit(query, config)
         df = client.query(query).to_dataframe()
         return df
 
@@ -1208,6 +1236,7 @@ class RedshiftConnector:
             _validate_identifier(schema, "schema")
             query = f'SELECT * FROM "{schema}"."{table}"'
 
+        query = _apply_sample_limit(query, config)
         engine = self._build_engine(config)
         with engine.connect() as conn:
             return pd.read_sql_query(text(query), conn)

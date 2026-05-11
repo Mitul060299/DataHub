@@ -550,6 +550,7 @@ export async function importFromConnection(
   config: Record<string, unknown>,
   tableName?: string,
   projectId?: string,
+  importMode: "cached" | "live" = "cached",
 ) {
   const importConfig = tableName ? { ...config, table: tableName } : config;
   const response = await api.post("/connectors/import", {
@@ -558,6 +559,9 @@ export async function importFromConnection(
     // When connectionId is set the backend loads credentials from ImportConnectionDB
     connection_id: connectionId || undefined,
     project_id: projectId || undefined,
+    import_mode: importMode,
+    // Live connections always need encrypted credentials stored for query folding
+    save_credential: importMode === "live" ? true : undefined,
   });
   return response.data;
 }

@@ -154,7 +154,10 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width }: Explore
         id: String(item.id ?? item.dataset_id ?? ""),
         name: String(item.name ?? item.filename ?? item.table_name ?? "dataset"),
         rows: Number(item.row_count ?? item.rows ?? 0),
-        format: item.file_format ? String(item.file_format) : null,
+        // Live-connected datasets get a distinct badge instead of 'parquet'
+        format: item.import_mode === "live"
+          ? "live"
+          : item.file_format ? String(item.file_format) : null,
         parentId: item.parent_id ? String(item.parent_id) : null,
       }));
       setDatasets(mapped);

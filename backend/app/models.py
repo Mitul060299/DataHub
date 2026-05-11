@@ -16,6 +16,7 @@ class DatasetMeta(BaseModel):
     dataset_id: str
     name: Optional[str] = None
     file_format: Optional[str] = None
+    import_mode: Optional[str] = None
     columns: List[str]
     row_count: int
     parent_id: Optional[str] = None

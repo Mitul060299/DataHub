@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 import pandas as pd
@@ -22,6 +23,8 @@ from ..security import (
     decrypt_connector_config,
 )
 from ..services.plan_guard import resolve_user_plan, enforce_connector_access, enforce_file_constraints
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
@@ -81,19 +84,31 @@ def import_from_connector(
         credential_id = cred_row.id
 
     # ── Read data from source ──────────────────────────────────────────────
-    if payload.import_mode == "live":
-        # Live mode: skip data pull — just save metadata
-        if not credential_id:
-            raise HTTPException(
-                status_code=400,
-                detail="import_mode='live' requires save_credential=true or a credential_id",
-            )
-        # We need a minimal DataFrame to get column info for the dataset record
-        df = connector.read(effective_config)
-        estimated_original_size = int(df.memory_usage(deep=True).sum())
-    else:
-        df = connector.read(effective_config)
-        estimated_original_size = int(df.memory_usage(deep=True).sum())
+    try:
+        if payload.import_mode == "live":
+            # Live mode: skip data pull — just save metadata
+            if not credential_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="import_mode='live' requires save_credential=true or a credential_id",
+                )
+            # We need a minimal DataFrame to get column info for the dataset record
+            df = connector.read(effective_config)
+            estimated_original_size = int(df.memory_usage(deep=True).sum())
+        else:
+            df = connector.read(effective_config)
+            estimated_original_size = int(df.memory_usage(deep=True).sum())
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Connector read failed for %s: %s", payload.connector, exc, exc_info=True)
+        from ..services.connectors import _safe_error
+        raise HTTPException(
+            status_code=502,
+            detail=_safe_error(exc, "Failed to read data from connector"),
+        ) from exc
 
     if df.empty:
         raise HTTPException(status_code=400, detail="No data returned from connector")

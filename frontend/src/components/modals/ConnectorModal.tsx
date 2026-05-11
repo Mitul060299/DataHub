@@ -143,11 +143,12 @@ interface ConnectorModalProps {
   open: boolean;
   onClose: () => void;
   onImported?: () => void;
+  projectId?: string;
 }
 
 type Step = "pick" | "configure" | "browse";
 
-export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProps) {
+export function ConnectorModal({ open, onClose, onImported, projectId }: ConnectorModalProps) {
   const [step, setStep] = useState<Step>("pick");
   const [selected, setSelected] = useState<ConnectorDef | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -305,7 +306,7 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
     setSaving(true);
     setError(null);
     try {
-      await importFromConnection("", selected.id, buildConfig());
+      await importFromConnection("", selected.id, buildConfig(), undefined, projectId);
       onImported?.();
       handleClose();
     } catch (e: unknown) {
@@ -340,7 +341,9 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
     setImporting(table);
     setError(null);
     try {
-      await importFromConnection(savedId, selected.id, buildConfig(), table);
+      // Pass connection_id so backend loads credentials from ImportConnectionDB;
+      // pass project_id so the dataset appears under the active project.
+      await importFromConnection(savedId, selected.id, buildConfig(), table, projectId);
       setImportedTables((prev) => new Set(prev).add(table));
       onImported?.();
     } catch (e: unknown) {

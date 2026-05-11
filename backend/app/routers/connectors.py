@@ -69,7 +69,16 @@ def import_from_connector(
     credential_id: str | None = None
     effective_config = dict(payload.config)
 
-    if payload.credential_id:
+    if payload.connection_id:
+        # Re-use a saved connection — load the config stored server-side so
+        # the client never needs to resend credentials after a page refresh.
+        conn_row = db.query(ImportConnectionDB).filter(
+            ImportConnectionDB.id == payload.connection_id,
+        ).first()
+        if not conn_row:
+            raise HTTPException(status_code=404, detail="Connection not found")
+        effective_config = dict(conn_row.config or {})
+    elif payload.credential_id:
         # Use a previously saved credential. Scope strictly to the requesting
         # user so user A cannot reuse user B's saved DB credentials.
         cred_row = (
@@ -141,6 +150,7 @@ def import_from_connector(
         save_df,
         db,
         user_id=user_id,
+        meta_extra={"project_id": payload.project_id} if payload.project_id else None,
     )
 
     # ── Attach fold/live metadata to DatasetMetaDB ─────────────────────────

@@ -549,9 +549,16 @@ export async function importFromConnection(
   connector: string,
   config: Record<string, unknown>,
   tableName?: string,
+  projectId?: string,
 ) {
   const importConfig = tableName ? { ...config, table: tableName } : config;
-  const response = await api.post("/connectors/import", { connector, config: importConfig });
+  const response = await api.post("/connectors/import", {
+    connector,
+    config: importConfig,
+    // When connectionId is set the backend loads credentials from ImportConnectionDB
+    connection_id: connectionId || undefined,
+    project_id: projectId || undefined,
+  });
   return response.data;
 }
 

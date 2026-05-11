@@ -432,11 +432,15 @@ class PipelineRun(BaseModel):
 class ConnectorImportRequest(BaseModel):
     connector: str
     config: Dict[str, Any] = Field(default_factory=dict)
+    # Use a previously saved connection (ImportConnectionDB) — config is loaded
+    # server-side so credentials never need to be re-sent by the client.
+    connection_id: Optional[str] = None
     # Optional: persist credentials for future fold/write-back/live operations
     credential_id: Optional[str] = None   # use a previously saved credential
     save_credential: bool = False         # encrypt + save config as a new credential
     credential_label: Optional[str] = None
     import_mode: str = "cached"           # 'cached' (default) | 'live'
+    project_id: Optional[str] = None      # assign imported dataset to this project
 
 
 class ConnectorCredentialCreate(BaseModel):

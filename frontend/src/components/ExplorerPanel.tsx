@@ -407,6 +407,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width }: Explore
         open={connectorModalOpen}
         onClose={() => setConnectorModalOpen(false)}
         onImported={() => void loadDatasets()}
+        projectId={activeProject?.id}
       />
     </aside>
   );

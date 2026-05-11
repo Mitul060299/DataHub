@@ -35,6 +35,11 @@ class DuckDBService:
                     try:
                         cls._db.execute("INSTALL httpfs;")
                         cls._db.execute("LOAD httpfs;")
+                        # Prevent DuckDB from auto-loading httpfs again on S3 paths,
+                        # which would call httpfs_init a second time and crash with
+                        # "Attempted to register an already registered secret type: 's3'"
+                        cls._db.execute("SET autoinstall_known_extensions=false;")
+                        cls._db.execute("SET autoload_known_extensions=false;")
                     except Exception:
                         pass
                     cls._configure_storage()

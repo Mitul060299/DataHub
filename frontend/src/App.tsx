@@ -1,28 +1,38 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./AppShell";
-import { DashboardPage } from "./pages/DashboardPage";
-import { HomePage } from "./pages/HomePage";
-import { LoginPage } from "./pages/LoginPage";
-import { MarketplacePage } from "./pages/MarketplacePage";
-import { PricingPage } from "./pages/PricingPage";
-
-import { PublicDashboardPage } from "./pages/PublicDashboardPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { SignupPage } from "./pages/SignupPage";
-import { SourcesPage } from "./pages/SourcesPage";
-import { WorkspaceHomePage } from "./pages/WorkspaceHomePage";
-import { WorkspacePage } from "./pages/WorkspacePage";
-import { ProjectHomePage } from "./pages/ProjectHomePage";
-import { DocsPage } from "./pages/DocsPage";
-import { TermsPage } from "./pages/TermsPage";
-import { PrivacyPage } from "./pages/PrivacyPage";
-import { InviteAcceptPage } from "./pages/InviteAcceptPage";
-import { NotFoundPage } from "./pages/NotFoundPage";
-import { BlogIndexPage } from "./pages/BlogIndexPage";
-import { BlogPostPage } from "./pages/BlogPostPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SupportChatWidget } from "./components/SupportChatWidget";
+
+// Static imports — smallest pages on the critical auth/landing path
+import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
+import { SignupPage } from "./pages/SignupPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
+
+// Lazy-loaded pages — each creates a separate async chunk loaded only when navigated to
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
+const MarketplacePage = lazy(() => import("./pages/MarketplacePage").then(m => ({ default: m.MarketplacePage })));
+const PricingPage = lazy(() => import("./pages/PricingPage").then(m => ({ default: m.PricingPage })));
+const PublicDashboardPage = lazy(() => import("./pages/PublicDashboardPage").then(m => ({ default: m.PublicDashboardPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const SourcesPage = lazy(() => import("./pages/SourcesPage").then(m => ({ default: m.SourcesPage })));
+const WorkspaceHomePage = lazy(() => import("./pages/WorkspaceHomePage").then(m => ({ default: m.WorkspaceHomePage })));
+const WorkspacePage = lazy(() => import("./pages/WorkspacePage").then(m => ({ default: m.WorkspacePage })));
+const ProjectHomePage = lazy(() => import("./pages/ProjectHomePage").then(m => ({ default: m.ProjectHomePage })));
+const DocsPage = lazy(() => import("./pages/DocsPage").then(m => ({ default: m.DocsPage })));
+const TermsPage = lazy(() => import("./pages/TermsPage").then(m => ({ default: m.TermsPage })));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage").then(m => ({ default: m.PrivacyPage })));
+const InviteAcceptPage = lazy(() => import("./pages/InviteAcceptPage").then(m => ({ default: m.InviteAcceptPage })));
+const BlogIndexPage = lazy(() => import("./pages/BlogIndexPage").then(m => ({ default: m.BlogIndexPage })));
+const BlogPostPage = lazy(() => import("./pages/BlogPostPage").then(m => ({ default: m.BlogPostPage })));
+
+// Minimal fallback — full-viewport fill prevents layout shifts while a page chunk loads
+const PageFallback = () => (
+  <div style={{ height: "100vh", display: "grid", placeItems: "center", background: "#0d0d0d" }}>
+    <span style={{ opacity: 0.35, fontSize: 13, color: "#fff" }}>Loading…</span>
+  </div>
+);
 
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -47,6 +57,7 @@ export function App() {
   return (
     <>
       <ErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
@@ -82,6 +93,7 @@ export function App() {
       </Route>
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </Suspense>
       </ErrorBoundary>
       {!hideSupportChat && <SupportChatWidget />}
       {rateLimitMsg && (

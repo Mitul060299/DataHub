@@ -912,7 +912,7 @@ export function HomePage() {
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
             <span className="hero-badge-dot" />
-            Free forever · No credit card required
+            Free plan available · No credit card required
           </motion.div>
 
           <motion.h1

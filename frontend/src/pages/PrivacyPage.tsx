@@ -65,44 +65,45 @@ export function PrivacyPage() {
       </Section>
 
       <Section title="4. Data Storage and Security">
-        Your data is stored on Supabase PostgreSQL, AWS S3 (Mumbai region for Indian users), and
-        Render application servers. Frontend assets are served from Vercel's global CDN. All data is
-        encrypted in transit via TLS 1.2+ and at rest using AES-256. We implement row-level security,
-        JWT authentication, and access controls. Account data is retained while your account is
+        Your data is stored on industry-standard cloud infrastructure using managed relational
+        database, object storage, and application-hosting services. All storage is encrypted in
+        transit via TLS 1.2+ and at rest using AES-256. We implement row-level security, token-based
+        authentication, and strict access controls. Account data is retained while your account is
         active and deleted within 30 days of account deletion. Payment records are retained for
-        7 years as required by law. <strong>Naming our subprocessors here is a transparency and
-        compliance practice required by GDPR, CCPA, and India's DPDP Act 2023 — it does not weaken
-        the security of your data.</strong>
+        7 years as required by law.
       </Section>
 
       <Section title="5. Cookies and Tracking">
-        We use essential cookies for authentication and session management (Supabase), analytics cookies
-        via PostHog for usage tracking, and preference cookies for UI settings. You can disable
-        non-essential cookies via your browser settings. Disabling essential cookies will prevent you
-        from logging in.
+        We use essential cookies for authentication and session management, analytics cookies for
+        usage tracking to improve the product, and preference cookies for UI settings. You can
+        disable non-essential cookies via your browser settings. Disabling essential cookies will
+        prevent you from logging in.
       </Section>
 
-      <Section title="6. Third-Party Service Providers (Subprocessors)">
-        We use the following third-party providers to deliver the Service. Each is bound by
-        confidentiality, security, and data-processing obligations under written agreements or their
-        published Data Processing Addenda:<br /><br />
-        <strong>Infrastructure & storage:</strong> Vercel Inc. (frontend hosting and CDN), Render
-        Services Inc. (backend application servers), Amazon Web Services Inc. (file storage — S3,
-        Mumbai region for Indian users), Supabase Inc. (PostgreSQL database and authentication).
-        <br /><br />
-        <strong>AI inference:</strong> Groq Inc. We send only the prompts and data necessary for the
-        request. Per Groq's terms, your data is <strong>not used to train any model</strong> and is
-        not retained beyond the duration of the inference request.<br /><br />
-        <strong>Payments:</strong> Razorpay Software Pvt. Ltd. (Indian payments), Dodo Payments
-        (international payments). Card numbers are handled entirely by these processors and never
-        touch our servers.<br /><br />
-        <strong>Operational:</strong> PostHog Inc. (product analytics), Resend Inc. (transactional
-        email).<br /><br />
-        <strong>Subprocessor changes:</strong> We may add, change, or remove subprocessors as the
-        Service evolves. We will notify registered users of material changes by email at least 14 days
-        before they take effect, giving you the opportunity to terminate your subscription if you
-        object. We do not share your data with any third party outside this list without your
-        consent.
+      <Section title="6. Third-Party Service Providers">
+        We work with carefully selected third-party providers to deliver the Service. These providers
+        fall into the following categories, each bound by confidentiality obligations and appropriate
+        data-processing agreements:<br /><br />
+        <strong>Cloud hosting and infrastructure</strong> — to host the application, serve the
+        frontend, and store your files securely.<br /><br />
+        <strong>Database and authentication</strong> — to store your account information and
+        authenticate you securely.<br /><br />
+        <strong>AI inference</strong> — to process natural-language requests. We send only the
+        minimum data necessary for the request. Your data is <strong>not used to train any AI
+        model</strong> and is not retained by AI providers beyond the duration of a single
+        request.<br /><br />
+        <strong>Payment processing</strong> — to handle subscriptions and billing. Card numbers
+        are handled entirely by our payment processors and never touch our servers.<br /><br />
+        <strong>Product analytics</strong> — to understand how users interact with the product
+        so we can improve it. No personally identifiable file content is sent to analytics
+        services.<br /><br />
+        <strong>Email delivery</strong> — to send transactional emails (password resets, billing
+        receipts, product updates).<br /><br />
+        <strong>Provider changes:</strong> We may add, change, or remove providers as the Service
+        evolves. We will notify registered users of material changes by email at least 14 days before
+        they take effect. Enterprise customers may request our full subprocessor list by emailing
+        mitul.srivastava000@gmail.com. We do not share your data with any third party outside these
+        categories without your explicit consent.
       </Section>
 
       <Section title="7. Your Rights">
@@ -123,21 +124,17 @@ export function PrivacyPage() {
       </Section>
 
       <Section title="9. International Data Transfers">
-        Your data is stored primarily on AWS S3 in the Asia Pacific (Mumbai, India) region
-        (ap-south-1). Indian users' data remaining in India is fully consistent with India's Digital
-        Personal Data Protection Act 2023 (DPDP).<br /><br />
-        Application servers run on Render.com (United States). Authentication and database services run
-        on Supabase (United States). AI inference is handled by Groq (United States). These providers
-        are bound by data processing agreements.<br /><br />
-        <strong>For EU/UK users (GDPR):</strong> Transfers to India and the United States are made
-        under appropriate safeguards. AWS has Standard Contractual Clauses (SCCs) in place covering
-        all regions including Mumbai. Our other US-based processors (Supabase, Render, Groq) operate
-        under Standard Contractual Clauses. EU-region storage is on our roadmap for enterprise
-        customers who require contractual data residency guarantees. To request a Data Processing
-        Agreement (DPA), contact mitul.srivastava000@gmail.com.<br /><br />
-        <strong>For California users (CCPA):</strong> We do not sell your personal information. No US
-        law requires your data to remain within the United States for SaaS products. Your rights under
-        CCPA are described in Section 7.
+        Indian users' file and database data is stored in data centres located within India, consistent
+        with India's Digital Personal Data Protection Act 2023 (DPDP). Some supporting services
+        (authentication, AI inference, email delivery) involve processing in the United States. These
+        providers operate under Standard Contractual Clauses or equivalent data-transfer
+        mechanisms.<br /><br />
+        <strong>For EU/UK users (GDPR):</strong> Transfers outside the EEA are made under appropriate
+        safeguards. EU-region storage is on our roadmap for enterprise customers who require
+        contractual data residency guarantees. To request a Data Processing Agreement (DPA), contact
+        mitul.srivastava000@gmail.com.<br /><br />
+        <strong>For California users (CCPA):</strong> We do not sell your personal information. Your
+        rights under CCPA are described in Section 7.
       </Section>
 
       <Section title="10. Changes to This Policy">

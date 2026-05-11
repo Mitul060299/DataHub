@@ -194,8 +194,7 @@ export function TermsPage() {
         where such delay or failure results from causes beyond our reasonable control, including but
         not limited to acts of God, natural disasters, war, terrorism, riots, embargoes, acts of civil
         or military authorities, fire, floods, accidents, pandemics, network infrastructure failures,
-        or acts or omissions of third-party service providers (including AWS, Supabase, Render, or
-        Groq).
+        or acts or omissions of our third-party infrastructure and service providers.
       </Section>
 
       <Section title="17. Severability and Entire Agreement">

@@ -655,7 +655,11 @@ async def create_tables() -> None:
 async def cors_on_error(request: Request, call_next):
     try:
         response = await call_next(request)
-    except Exception:
+    except Exception as _exc:
+        logger.error(
+            "Unhandled exception in middleware for %s %s: %s",
+            request.method, request.url.path, _exc, exc_info=True,
+        )
         response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     origin = request.headers.get("origin", "")

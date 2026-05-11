@@ -1,3 +1,4 @@
+import json as _json
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
@@ -25,6 +26,19 @@ from ..security import (
 from ..services.plan_guard import resolve_user_plan, enforce_connector_access, enforce_file_constraints
 
 logger = logging.getLogger(__name__)
+
+
+def _df_to_jsonable_rows(df: pd.DataFrame) -> list[dict]:
+    """Convert DataFrame rows to JSON-safe dicts.
+
+    pd.read_sql_query returns numpy int64/float64/datetime64 and may produce
+    NaN values, none of which are valid JSON.  pandas' own to_json handles all
+    of these edge cases (NaN → null, datetime → ISO string, numpy → native).
+    """
+    return _json.loads(
+        df.to_json(orient="records", date_format="iso", default_handler=str)
+    )
+
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
@@ -150,7 +164,7 @@ def import_from_connector(
         columns=list(df.columns),
         file_format=payload.connector,
         row_count=int(df.shape[0]),
-        sample_rows=df.head(10).to_dict(orient="records"),
+        sample_rows=_df_to_jsonable_rows(df.head(10)),
     )
 
 

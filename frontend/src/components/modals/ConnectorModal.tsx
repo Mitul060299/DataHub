@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   testConnector,
   saveConnection,
+  listConnections,
   listConnectionTables,
+  deleteConnection,
   importFromConnection,
   submitFeedbackForm,
+  type SavedConnection,
   type ConnectionTable,
 } from "../../api";
 
@@ -158,11 +161,25 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
   const [importing, setImporting] = useState<string | null>(null);
   const [importedTables, setImportedTables] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  // Saved connections
+  const [savedConnections, setSavedConnections] = useState<SavedConnection[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // Waitlist for coming-soon connectors
   const [waitlistConnector, setWaitlistConnector] = useState<string | null>(null);
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistDone, setWaitlistDone] = useState(false);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+
+  // Load saved connections whenever the modal opens
+  useEffect(() => {
+    if (!open) return;
+    setLoadingSaved(true);
+    listConnections()
+      .then(({ connections }) => setSavedConnections(connections))
+      .catch(() => setSavedConnections([]))
+      .finally(() => setLoadingSaved(false));
+  }, [open]);
 
   if (!open) return null;
 
@@ -183,6 +200,40 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
   };
 
   const handleClose = () => { reset(); onClose(); };
+
+  // Re-open a previously saved connection (go straight to browse)
+  const openSavedConnection = async (conn: SavedConnection) => {
+    const def = CONNECTORS.find((c) => c.id === conn.type) ?? null;
+    setSelected(def);
+    setSavedId(conn.id);
+    setConnName(conn.name);
+    setError(null);
+    setStep("browse");
+    setLoadingTables(true);
+    setTables([]);
+    setImportedTables(new Set());
+    try {
+      const { tables: t } = await listConnectionTables(conn.id);
+      setTables(t);
+    } catch {
+      setError("Failed to load tables for this connection.");
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  const handleDeleteConnection = async (e: React.MouseEvent, connId: string) => {
+    e.stopPropagation();
+    setDeletingId(connId);
+    try {
+      await deleteConnection(connId);
+      setSavedConnections((prev) => prev.filter((c) => c.id !== connId));
+    } catch {
+      // ignore
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const pickConnector = (c: ConnectorDef) => {
     if (c.locked) {
@@ -271,6 +322,7 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
     try {
       const conn = await saveConnection(connName || selected.label, selected.id, buildConfig());
       setSavedId(conn.id);
+      setSavedConnections((prev) => [conn, ...prev]);
       setStep("browse");
       setLoadingTables(true);
       const { tables: t } = await listConnectionTables(conn.id);
@@ -369,6 +421,64 @@ export function ConnectorModal({ open, onClose, onImported }: ConnectorModalProp
           {/* ── Step: pick ── */}
           {step === "pick" && (
             <>
+            {/* Saved connections */}
+            {(loadingSaved || savedConnections.length > 0) && (
+              <div style={{ marginBottom: 18 }}>
+                <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "var(--tx1, #8888a0)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  Saved connections
+                </p>
+                {loadingSaved ? (
+                  <p style={{ fontSize: 12, color: "var(--tx1, #8888a0)" }}>Loading…</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {savedConnections.map((conn) => (
+                      <button
+                        key={conn.id}
+                        onClick={() => void openSavedConnection(conn)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "9px 12px",
+                          background: "var(--bg3, #18181e)",
+                          border: "1px solid var(--bd, #2e2e3a)",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          textAlign: "left",
+                          width: "100%",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                          <span style={{ fontSize: 18, flexShrink: 0 }}>
+                            {CONNECTORS.find((c) => c.id === conn.type)?.icon ?? "🔌"}
+                          </span>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--tx0, #e8e8f0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {conn.name}
+                            </p>
+                            <p style={{ margin: 0, fontSize: 11, color: "var(--tx1, #8888a0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {conn.host ?? conn.type}{conn.database ? ` / ${conn.database}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => void handleDeleteConnection(e, conn.id)}
+                          disabled={deletingId === conn.id}
+                          title="Remove saved connection"
+                          style={{ background: "transparent", border: "none", color: "var(--tx1, #8888a0)", fontSize: 14, cursor: "pointer", padding: "2px 6px", flexShrink: 0, opacity: deletingId === conn.id ? 0.4 : 1 }}
+                        >
+                          ×
+                        </button>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div style={{ height: 1, background: "var(--bd, #2e2e3a)", margin: "14px 0" }} />
+              </div>
+            )}
+            <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "var(--tx1, #8888a0)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              New connection
+            </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {CONNECTORS.map((c) => (
                 <button

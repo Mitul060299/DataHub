@@ -478,7 +478,13 @@ def save_dataset(
     materialize_dataset(db, triggered_by="user_upload", **meta_kwargs)
 
     if store_rows:
-        rows = df.to_dict(orient="records")
+        # Use pandas JSON serialisation to convert numpy types, datetime.date,
+        # datetime.datetime, Decimal etc. to JSON-native Python objects before
+        # inserting into JSONB columns — psycopg's JSON encoder does not handle
+        # those types and will raise TypeError at flush time.
+        rows = json.loads(
+            df.to_json(orient="records", date_format="iso", default_handler=str)
+        )
         chunks = _chunk_rows(rows, _CHUNK_SIZE)
         for index, chunk in enumerate(chunks):
             db.add(

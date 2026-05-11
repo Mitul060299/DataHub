@@ -13,6 +13,8 @@ Legend: ✅ Implemented | 🟡 Partial/Scaffolded | ➕ Planned
 - DB connectors — PostgreSQL, MySQL, SQLite, MSSQL, Oracle ✅ (Professional tier)
 - DB connectors — Snowflake, BigQuery, Redshift ✅ (Team tier)
 - SaaS API connectors (Salesforce) ✅ (Enterprise tier)
+- **Import mode (snapshot)** ✅ — full table copy into DataHub Parquet storage; fast DuckDB queries; manual refresh
+- **DirectQuery mode (Live Connect)** ✅ — 500-row preview only; all pipeline steps pushed to source DB via query folding; always-fresh; Power BI-style Import/DirectQuery selector in the connector modal
 - Live dataset federation ✅ — query DB/API connector in real time; result cached with TTL
 - Batch imports 🟡 (CSV upload)
 - Incremental imports 🟡 (sql_query updated_at)
@@ -103,7 +105,7 @@ All operations available via NL pipeline editing and the visual step builder:
 - Learn from feedback 🟡 (feedback collection API)
 - Conversational interface ✅ (streaming SSE chat + Markdown rendering)
 - NL pipeline editing ✅ — 30+ supported operations; schema-aware; auto-retry on LLM parse failure
-- AI agent state machine ✅ — 8-node pipeline (context loading → intent classification → planning → approval gate → execution → reflection → recording → response)
+- AI agent state machine ✅ — 9-node pipeline (context loading → intent classification → clarification → planning → approval gate → execution → reflection → recording → response)
 - Multi-turn conversation memory ✅ — full conversation history threaded through the agent stack; prior turns included in every request
 - Live per-step streaming progress ✅ — a progress event is emitted before each execution step; frontend shows “Step N/M: operation” in real time
 - Schema-aware converse ✅ — `converse` intent receives active dataset schema so questions like “what columns do I have?” get accurate answers

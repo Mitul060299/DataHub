@@ -49,7 +49,8 @@ DataHub is migrating from project-level to **project-level** collaboration:
 ### DuckDB (embedded in backend)
 - Executes analytical SQL against dataset Parquet files.
 - Queries S3-backed data using storage credentials.
-- A query optimization layer collapses adjacent compatible pipeline steps into a single SQL query, reducing round-trips.
+- **Query folding (push-down):** a `FoldabilityClassifier` + `QueryFoldOptimizer` layer in `pipeline_engine.py` collapses adjacent compatible pipeline steps into a single SQL query and, for DirectQuery datasets, executes that SQL directly against the source database using the stored encrypted credentials. Reduces round-trips for Import-mode datasets and enables always-fresh processing for DirectQuery datasets.
+- **DirectQuery mode:** datasets connected in DirectQuery mode have only a 500-row preview stored locally. During pipeline runs, folded SQL is sent to the source DB via the connector; each step's output DataFrame is then materialized as a Parquet snapshot in object storage.
 - **Write-back**: pipeline output can be written back to the source connector using encrypted credentials stored in Postgres.
 - **Thread safety**: the global singleton (`DuckDBService._db`) is initialised with a double-checked lock (`_db_lock: threading.Lock`) so concurrent startup requests cannot race and produce a dead connection handle.
 - **503 safety**: if DuckDB preview fails, the dataset endpoint returns HTTP 503 immediately instead of falling back to a full `pd.read_parquet()` load that would OOM-kill the process.

@@ -6,6 +6,7 @@ Complete guide to connecting DataHub with various data sources including relatio
 
 ## Table of Contents
 
+- [Connection Types: Import vs DirectQuery](#connection-types-import-vs-directquery)
 - [Connector Availability by Tier](#connector-availability-by-tier)
 - [Relational Databases](#relational-databases)
   - [PostgreSQL](#postgresql)
@@ -28,6 +29,40 @@ Complete guide to connecting DataHub with various data sources including relatio
 - [File Formats](#file-formats)
 - [Local Testing](#local-testing)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Connection Types: Import vs DirectQuery
+
+When you add a database connection, DataHub asks you to choose a **connection type** — the same choice Power BI presents as Import vs DirectQuery.
+
+### Import (default)
+
+| | |
+|---|---|
+| **What happens** | DataHub copies all data from the selected table into its own Parquet storage (R2/S3). |
+| **Queries** | Run against the local copy inside DuckDB — fast, no network roundtrip. |
+| **Freshness** | Snapshot at import time. Re-import to pick up source changes. |
+| **Storage** | Counts towards your plan's storage quota. |
+| **Best for** | Static or infrequently changing tables; offline analysis; large datasets you want to query repeatedly. |
+
+### DirectQuery (Live Connect)
+
+| | |
+|---|---|
+| **What happens** | DataHub stores only a **500-row preview** (for the AI agent and schema inference). No full copy is made. |
+| **Queries** | Pipeline steps are **pushed down to the source database** via query folding — SQL runs on your DB, results come back as DataFrames. |
+| **Freshness** | Always queries the live source — every pipeline run reflects the current state of the table. |
+| **Storage** | Only the 500-row preview + per-step Parquet snapshots are stored. |
+| **Best for** | Large or frequently updated tables; regulated environments where data cannot leave the source system; real-time dashboards. |
+
+**How DirectQuery pipeline execution works:**
+1. You connect a table in DirectQuery mode — a 500-row sample is stored and the encrypted credentials are saved.
+2. When a pipeline runs, `FoldabilityClassifier` inspects each step. Foldable steps (filter, select, rename, etc.) are merged into a single SQL query pushed to the source DB.
+3. Non-foldable steps fall back to the preview sample for local DuckDB execution.
+4. Each step's output DataFrame is materialized as a Parquet snapshot in object storage, visible in the Artifacts panel.
+
+**Changing modes:** Delete the dataset and re-import with the other connection type. The mode is fixed at import time.
 
 ---
 

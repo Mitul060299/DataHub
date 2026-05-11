@@ -4,6 +4,38 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-11 — DirectQuery (Live Connect) Mode
+
+**Backend:**
+- `backend/app/services/connectors.py` — `_apply_sample_limit(query, config, dialect)` helper wraps any SQL query with a dialect-aware row limit when `config["_sample_limit"]` is set. Supports `standard` (LIMIT), `mssql` (TOP N), and `oracle` (ROWNUM) dialects. Applied to 8 SQL connectors: PostgreSQL, MySQL, SQLite, MSSQL, Oracle, Redshift, Snowflake, BigQuery.
+- `backend/app/routers/connectors.py` — `POST /connectors/import` now accepts `import_mode: "cached" | "live"`. In live mode: (1) pulls only 500 rows (`_sample_limit=500`) as a preview; (2) automatically creates a `ConnectorCredentialDB` row from the connection config when one is not already present, so query folding can decrypt credentials during pipeline execution.
+- `backend/app/models.py` — `DatasetMeta` Pydantic model gains an `import_mode: Optional[str]` field.
+- `backend/app/routers/datasets.py` — `GET /datasets` list response now includes `import_mode` per dataset.
+
+**Frontend:**
+- `frontend/src/api.ts` — `importFromConnection` gains an `importMode: "cached" | "live"` parameter (defaults to `"cached"`). Sends `save_credential: true` for live mode so the backend persists credentials for query folding.
+- `frontend/src/components/modals/ConnectorModal.tsx` — Power BI-style connection type selector added to the **configure step** (before table browsing): two cards — **Import** (copy data into DataHub, fast queries, manual refresh) and **DirectQuery** (query source directly, always fresh, no storage used). The **browse step** now shows a static mode badge (`⬇ Import` / `⚡ DirectQuery`) instead of a changeable toggle — mode is committed before you see tables. Button labels: `Load` for Import, `Connect` for DirectQuery. Footer CTA: `Save & browse tables` / `Connect & browse tables`. Warning banner in browse step explains the 500-row preview + pipeline push-down behaviour.
+- `frontend/src/components/ExplorerPanel.tsx` — dataset list mapping: `import_mode === "live"` overrides `file_format` → `"live"` so the dataset shows a green badge.
+- `frontend/src/components/DataSection.tsx` — `normalizeFormat` recognises `"live"`; `formatAccent` maps `live` → `#34d399` (green).
+
+**How it works:**
+1. User selects **DirectQuery** in the connector modal → 500-row sample stored (Parquet + JSONB) for schema inference and AI agent context.
+2. Dataset appears in the Explorer with a green ⚡ `LIVE` badge.
+3. When a pipeline runs, `FoldabilityClassifier` + `QueryFoldOptimizer` (in `pipeline_engine.py`) push SQL back to the source database using the stored encrypted credentials.
+4. Each pipeline step's output is materialized as a Parquet snapshot in object storage (R2/S3) via `step_materialize`.
+
+---
+
+## 2026-05-11 — DuckDB Session Replay Fix (commit `1295377`)
+
+**Bug:** After a page refresh, `_replay_session_views()` in `ai_agent_service.py` skipped source registration for datasets backed by JSONB chunks (no `storage_path`), causing `"Catalog Error: Table … does not exist"` on the first AI query.
+
+**Fix:**
+- `backend/app/services/ai_agent_service.py` — added `elif dataset:` branch in `_replay_session_views()`: loads rows from `DatasetChunkDB`/`DatasetDataDB`, creates `TABLE "{alias}"`, `VIEW "dataset"`, and `VIEW "{uuid_alias}"` so stored SQL referencing the UUID alias resolves correctly.
+- `backend/app/services/agent/nodes/context_loader.py` — JSONB branch now also registers `VIEW "{uuid_alias}"` after `CREATE TABLE "{_primary_alias}"` so both name forms resolve in the session.
+
+---
+
 ## 2026-05-10 — SEO Blog Infrastructure
 
 **New pages (`/blog`, `/blog/:slug`):**

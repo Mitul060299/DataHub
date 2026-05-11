@@ -894,6 +894,31 @@ function GuideDatabase() {
       <div className="docs-step">
         <div className="docs-step__number">4</div>
         <div className="docs-step__body">
+          <h3>Choose connection type — Import or DirectQuery</h3>
+          <p>
+            After entering credentials, choose how DataHub will use this connection. Two options appear (like Power BI's Import vs DirectQuery):
+          </p>
+          <div className="docs-table-wrap">
+            <table className="docs-table">
+              <thead><tr><th></th><th>⬇ Import</th><th>⚡ DirectQuery</th></tr></thead>
+              <tbody>
+                <tr><td><strong>What happens</strong></td><td>Full table copy stored in DataHub (Parquet in S3)</td><td>Only a 500-row preview is stored; no full copy</td></tr>
+                <tr><td><strong>Query speed</strong></td><td>Fast — runs locally on DataHub's DuckDB engine</td><td>Depends on source DB latency</td></tr>
+                <tr><td><strong>Data freshness</strong></td><td>Snapshot at import time — re-import to refresh</td><td>Always queries the live source</td></tr>
+                <tr><td><strong>Pipeline steps</strong></td><td>Run locally against the stored copy</td><td>Pushed down to your source DB via query folding</td></tr>
+                <tr><td><strong>Best for</strong></td><td>Static tables, repeated analysis, large datasets</td><td>Frequently updated tables, regulated data, real-time dashboards</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The mode is fixed when you connect. To change it, delete the dataset and reconnect with the other option.
+          </p>
+        </div>
+      </div>
+
+      <div className="docs-step">
+        <div className="docs-step__number">5</div>
+        <div className="docs-step__body">
           <h3>Test the connection</h3>
           <p>
             Click <strong>Test connection</strong>. DataHub makes a lightweight probe query. A green tick confirms the credentials work. A red error
@@ -903,30 +928,32 @@ function GuideDatabase() {
       </div>
 
       <div className="docs-step">
-        <div className="docs-step__number">5</div>
+        <div className="docs-step__number">6</div>
         <div className="docs-step__body">
-          <h3>Select a table or write a query</h3>
+          <h3>Browse and connect tables</h3>
           <p>
-            Enter a table name (e.g. <code>public.orders</code>) or a full <code>SELECT</code> statement. DataHub fetches a live preview of the first
-            100 rows so you can verify the schema.
+            Click <strong>Save &amp; browse tables</strong> (Import) or <strong>Connect &amp; browse tables</strong> (DirectQuery). A list of all
+            tables in your database appears. Click <strong>Load</strong> (Import) or <strong>Connect</strong> (DirectQuery) next to each table you
+            want to add as a dataset.
           </p>
-          <pre className="docs-codeblock">{`-- Example: import only the last 90 days of orders
-SELECT * FROM public.orders
-WHERE created_at >= NOW() - INTERVAL '90 days'`}</pre>
+          <p>
+            Connected tables appear in the left panel under DATA with the appropriate badge: a format badge (e.g. <code>parquet</code>) for Import
+            mode, or a green <strong>⚡ LIVE</strong> badge for DirectQuery mode.
+          </p>
         </div>
       </div>
 
       <div className="docs-step">
-        <div className="docs-step__number">6</div>
+        <div className="docs-step__number">7</div>
         <div className="docs-step__body">
-          <h3>Import the dataset</h3>
+          <h3>After connecting</h3>
           <p>
-            Click <strong>Import dataset</strong>. DataHub runs your query, stores the result as a Parquet snapshot in S3, and registers it as a
-            dataset in your project. The dataset is now available to pipelines and dashboards.
+            <strong>Import:</strong> DataHub copies all rows, stores them as Parquet, and registers the dataset. Use a scheduled pipeline to
+            re-import on a regular cadence — see <em>Schedule a pipeline</em> in the How To Guides.
           </p>
           <p>
-            To keep the data fresh, set up a <strong>scheduled pipeline</strong> that re-imports from the connector on a cron schedule. See{" "}
-            <em>Schedule a pipeline</em> in the How To Guides.
+            <strong>DirectQuery:</strong> A 500-row preview is stored for the AI agent and schema inference. Every pipeline run pushes SQL to your
+            source database. Each step's output is saved as a Parquet snapshot in the Artifacts panel.
           </p>
         </div>
       </div>

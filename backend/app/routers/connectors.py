@@ -155,12 +155,39 @@ def import_from_connector(
         meta_extra={"project_id": payload.project_id} if payload.project_id else None,
     )
 
+    # ── Upload Parquet to object storage ───────────────────────────────────
+    # This makes the dataset queryable by DuckDB (AI agent, transforms, exports)
+    # exactly like a file-uploaded dataset.  On failure we log and continue —
+    # the JSONB chunks stored by save_dataset remain as a fallback.
+    _storage_path: str | None = None
+    try:
+        from ..services.data_conversion import DataConversionService
+        from ..services.object_storage import StorageService
+        _parquet_bytes, _, _, _, _ = DataConversionService.dataframe_to_parquet(
+            save_df,
+            original_size=max(estimated_original_size, 1),
+        )
+        _safe_name = payload.connector.lower().replace("-", "_").replace(" ", "_") + ".parquet"
+        _storage_path = StorageService.upload(
+            user_id,
+            dataset_id,
+            _parquet_bytes,
+            _safe_name,
+        )
+        logger.info("Parquet uploaded for connector import %s → %s", dataset_id, _storage_path)
+    except Exception as _up_exc:
+        logger.warning(
+            "Parquet upload skipped for connector import %s: %s", dataset_id, _up_exc
+        )
+
     # ── Attach fold/live metadata to DatasetMetaDB ─────────────────────────
     meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
     if meta:
         meta.connector_credential_id = credential_id
         meta.import_mode = payload.import_mode
         meta.source_type = payload.connector
+        if _storage_path:
+            meta.storage_path = _storage_path
         # Strip credential-bearing fields before persisting: passwords and keys
         # are already encrypted in ConnectorCredentialDB.  Storing them again
         # in plaintext on dataset_meta would expose them to any reader of the

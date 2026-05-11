@@ -96,6 +96,9 @@ async def context_loader(state: AgentState) -> dict:
         except SessionExpiredError as exc:
             return {"error": str(exc)}
 
+    # _primary_alias is set in whichever branch below runs.
+    _primary_alias: str = ""
+
     # Always re-register primary dataset view so execute_step can query it.
     if dataset and dataset.storage_path:
         _primary_alias = _sanitize_alias(str(dataset.name if dataset and dataset.name else dataset_id))
@@ -318,10 +321,70 @@ async def context_loader(state: AgentState) -> dict:
                 finally:
                     _ps_db.close()
 
+    elif dataset and session_id:
+        # Connector-imported dataset stored as JSONB chunks (no Parquet file on
+        # object storage).  Load the rows from DatasetChunkDB/DatasetDataDB and
+        # materialise as a DuckDB TABLE in the persistent session so AI-agent SQL
+        # can reference the dataset by its named alias.
+        _primary_alias = _sanitize_alias(str(dataset.name if dataset.name else dataset_id))
+        _cnk_db = SessionLocal()
+        try:
+            from ....models_db import DatasetChunkDB, DatasetDataDB  # local to avoid circular
+            import pandas as _pd_cnk
+            _cnk_rows: list[dict] = []
+            for _cc in (
+                _cnk_db.query(DatasetChunkDB)
+                .filter(DatasetChunkDB.dataset_id == dataset_id)
+                .order_by(DatasetChunkDB.chunk_index)
+                .all()
+            ):
+                _cnk_rows.extend(_cc.rows or [])
+            if not _cnk_rows:
+                _ddata = _cnk_db.query(DatasetDataDB).filter(DatasetDataDB.id == dataset_id).first()
+                if _ddata and isinstance(_ddata.rows, list):
+                    _cnk_rows = list(_ddata.rows)
+        finally:
+            _cnk_db.close()
+
+        if _cnk_rows:
+            try:
+                _df_cnk = _pd_cnk.DataFrame(_cnk_rows)
+                _conn_cnk = get_connection(session_id)
+                _conn_cnk.register("_cnk_src", _df_cnk)
+                _conn_cnk.execute(
+                    f'CREATE OR REPLACE TABLE "{_primary_alias}" AS SELECT * FROM _cnk_src'
+                )
+                if _primary_alias != "dataset":
+                    _conn_cnk.execute(
+                        f'CREATE OR REPLACE VIEW "dataset" AS SELECT * FROM "{_primary_alias}"'
+                    )
+                _logger.info(
+                    "JSONB_DUCKDB_TABLE: alias=%s rows=%d dataset_id=%s",
+                    _primary_alias, len(_cnk_rows), dataset_id,
+                )
+            except Exception as _cnk_exc:
+                _logger.warning(
+                    "JSONB_DUCKDB_TABLE_FAILED: alias=%s error=%s", _primary_alias, _cnk_exc
+                )
+
+        if _primary_alias not in table_registry:
+            table_registry[_primary_alias] = {
+                "duckdb_name": _primary_alias,
+                "dataset_id": dataset_id,
+                "display_name": _primary_alias,
+                "source_intent": "upload",
+                "parent_tables": [],
+                "row_count": int(dataset.row_count or 0),
+                "column_names": list(dataset.columns or []),
+                "pipeline_step_number": 0,
+                "is_artifact": False,
+                "is_view": False,
+            }
+
     # Store the primary alias in the state so execute_step can rewrite
     # any residual "FROM dataset" references at runtime.
-    if dataset and dataset.storage_path:
-        table_registry["__primary_alias__"] = _primary_alias  # type: ignore[possibly-undefined]
+    if _primary_alias:
+        table_registry["__primary_alias__"] = _primary_alias
 
     # Auto-discover all other datasets in the workspace so the planner can reference
     # them by name in SQL.  This is expensive (DB query + N DuckDB view registrations)

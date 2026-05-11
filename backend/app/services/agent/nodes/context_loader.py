@@ -75,6 +75,7 @@ async def context_loader(state: AgentState) -> dict:
     # Re-registers views after an approval-path restart so execute_step SQL works.
     session_id = state.get("session_id", "")
     table_registry: dict = dict(state.get("table_registry") or {})
+    _restored_pipeline_steps: list[dict] = []
 
     def _register_dataset_view(ds_id: str, alias: str, storage_path: str | None = None) -> None:
         """Register one dataset as a named view in the persistent DuckDB session."""
@@ -140,7 +141,6 @@ async def context_loader(state: AgentState) -> dict:
         ]
         _needs_replay = not _derived_entries  # registry empty → definitely need replay
         if _derived_entries and session_id:
-            # Registry says derived views exist — verify at least one is live in DuckDB
             _probe_name = _derived_entries[0].get("duckdb_name", "")
             if _probe_name:
                 try:
@@ -153,7 +153,6 @@ async def context_loader(state: AgentState) -> dict:
                         "SESSION_PROBE_MISS: view=%s gone from DuckDB, will replay",
                         _probe_name,
                     )
-        _restored_pipeline_steps: list[dict] = []
 
         # ── Build the canonical "what should exist" list for replay ──────────
         # PRIORITY 1: pipeline_steps sent by the frontend in this very request.

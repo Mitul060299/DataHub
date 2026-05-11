@@ -20,6 +20,10 @@ interface ConnectorDef {
   description: string;
   locked?: boolean;
   lockedLabel?: string;
+  /** True for SQL databases/warehouses that support DirectQuery (query folding).
+   *  False/absent for file/object connectors (S3, GCS, Azure Blob, Google Sheets,
+   *  SQLite) where DirectQuery has no meaning — Import is the only option. */
+  supportsDirectQuery?: boolean;
   fields: FieldDef[];
 }
 
@@ -33,21 +37,25 @@ interface FieldDef {
 }
 
 const CONNECTORS: ConnectorDef[] = [
+  // ── File / SaaS connectors (Import-only — no SQL engine to fold to) ─────
   {
     id: "google_sheets",
     label: "Google Sheets",
     icon: "📊",
     description: "Import from a public Google Sheet",
+    supportsDirectQuery: false,
     fields: [
       { key: "sheet_url", label: "Sheet URL", type: "text", placeholder: "https://docs.google.com/spreadsheets/d/...", required: true },
       { key: "gid", label: "Sheet tab ID (gid)", type: "number", placeholder: "0 (first tab)", defaultValue: "0" },
     ],
   },
+  // ── SQL databases — Import or DirectQuery ──────────────────────────────
   {
     id: "postgresql",
     label: "PostgreSQL",
     icon: "🐘",
     description: "Connect to a PostgreSQL database",
+    supportsDirectQuery: true,
     fields: [
       { key: "host", label: "Host", type: "text", placeholder: "db.example.com", required: true },
       { key: "port", label: "Port", type: "number", placeholder: "5432", defaultValue: "5432" },
@@ -62,6 +70,7 @@ const CONNECTORS: ConnectorDef[] = [
     label: "MySQL",
     icon: "🐬",
     description: "Connect to a MySQL / MariaDB database",
+    supportsDirectQuery: true,
     fields: [
       { key: "host", label: "Host", type: "text", placeholder: "db.example.com", required: true },
       { key: "port", label: "Port", type: "number", placeholder: "3306", defaultValue: "3306" },
@@ -75,6 +84,7 @@ const CONNECTORS: ConnectorDef[] = [
     label: "SQLite",
     icon: "🗄️",
     description: "Connect to a SQLite database file",
+    supportsDirectQuery: false,  // local file — no live remote source
     fields: [
       { key: "file_path", label: "File path", type: "text", placeholder: "/data/mydb.sqlite", required: true },
       { key: "table", label: "Table (optional)", type: "text", placeholder: "my_table" },
@@ -86,6 +96,7 @@ const CONNECTORS: ConnectorDef[] = [
     label: "SQL Server",
     icon: "🪟",
     description: "Connect to Microsoft SQL Server",
+    supportsDirectQuery: true,
     fields: [
       { key: "host", label: "Host", type: "text", placeholder: "db.example.com", required: true },
       { key: "port", label: "Port", type: "number", placeholder: "1433", defaultValue: "1433" },
@@ -100,6 +111,7 @@ const CONNECTORS: ConnectorDef[] = [
     label: "Oracle",
     icon: "🔶",
     description: "Connect to Oracle Database",
+    supportsDirectQuery: true,
     fields: [
       { key: "host", label: "Host", type: "text", placeholder: "db.example.com", required: true },
       { key: "port", label: "Port", type: "number", placeholder: "1521", defaultValue: "1521" },
@@ -108,6 +120,7 @@ const CONNECTORS: ConnectorDef[] = [
       { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: true },
     ],
   },
+  // ── Cloud SQL warehouses — Import or DirectQuery (coming soon) ──────────
   {
     id: "snowflake",
     label: "Snowflake",
@@ -115,7 +128,15 @@ const CONNECTORS: ConnectorDef[] = [
     description: "Snowflake data warehouse",
     locked: true,
     lockedLabel: "coming soon",
-    fields: [],
+    supportsDirectQuery: true,
+    fields: [
+      { key: "account", label: "Account", type: "text", placeholder: "xy12345.us-east-1", required: true },
+      { key: "username", label: "Username", type: "text", placeholder: "my_user", required: true },
+      { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: true },
+      { key: "warehouse", label: "Warehouse", type: "text", placeholder: "COMPUTE_WH", required: true },
+      { key: "database", label: "Database", type: "text", placeholder: "MY_DB", required: true },
+      { key: "schema", label: "Schema (optional)", type: "text", placeholder: "PUBLIC", defaultValue: "PUBLIC" },
+    ],
   },
   {
     id: "bigquery",
@@ -124,7 +145,12 @@ const CONNECTORS: ConnectorDef[] = [
     description: "Google BigQuery",
     locked: true,
     lockedLabel: "coming soon",
-    fields: [],
+    supportsDirectQuery: true,
+    fields: [
+      { key: "project_id", label: "Project ID", type: "text", placeholder: "my-gcp-project", required: true },
+      { key: "dataset", label: "Dataset", type: "text", placeholder: "my_dataset", required: true },
+      { key: "credentials_json", label: "Service account key (JSON)", type: "password", placeholder: "{\"type\": \"service_account\"...}", required: true },
+    ],
   },
   {
     id: "redshift",
@@ -133,7 +159,61 @@ const CONNECTORS: ConnectorDef[] = [
     description: "Amazon Redshift",
     locked: true,
     lockedLabel: "coming soon",
-    fields: [],
+    supportsDirectQuery: true,
+    fields: [
+      { key: "host", label: "Host", type: "text", placeholder: "my-cluster.abc123.us-east-1.redshift.amazonaws.com", required: true },
+      { key: "port", label: "Port", type: "number", placeholder: "5439", defaultValue: "5439" },
+      { key: "database", label: "Database", type: "text", placeholder: "dev", required: true },
+      { key: "username", label: "Username", type: "text", placeholder: "awsuser", required: true },
+      { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: true },
+      { key: "schema", label: "Schema (optional)", type: "text", placeholder: "public", defaultValue: "public" },
+    ],
+  },
+  // ── Object storage — Import-only (downloads a file, no SQL engine) ─────
+  {
+    id: "s3",
+    label: "Amazon S3",
+    icon: "🪣",
+    description: "Import CSV, Parquet, or JSON from S3",
+    locked: true,
+    lockedLabel: "coming soon",
+    supportsDirectQuery: false,
+    fields: [
+      { key: "access_key_id", label: "Access Key ID", type: "text", placeholder: "AKIAIOSFODNN7EXAMPLE", required: true },
+      { key: "secret_access_key", label: "Secret Access Key", type: "password", placeholder: "••••••••", required: true },
+      { key: "region", label: "Region", type: "text", placeholder: "us-east-1", defaultValue: "us-east-1" },
+      { key: "bucket", label: "Bucket", type: "text", placeholder: "my-bucket", required: true },
+      { key: "key", label: "File path (key)", type: "text", placeholder: "data/file.csv", required: true },
+    ],
+  },
+  {
+    id: "gcs",
+    label: "Google Cloud Storage",
+    icon: "🗂️",
+    description: "Import CSV, Parquet, or JSON from GCS",
+    locked: true,
+    lockedLabel: "coming soon",
+    supportsDirectQuery: false,
+    fields: [
+      { key: "project_id", label: "Project ID", type: "text", placeholder: "my-gcp-project" },
+      { key: "bucket", label: "Bucket", type: "text", placeholder: "my-bucket", required: true },
+      { key: "key", label: "File path", type: "text", placeholder: "data/file.parquet", required: true },
+      { key: "credentials_json", label: "Service account key (JSON, optional)", type: "password", placeholder: "{\"type\": \"service_account\"...}" },
+    ],
+  },
+  {
+    id: "azure_blob",
+    label: "Azure Blob Storage",
+    icon: "🔷",
+    description: "Import CSV, Parquet, or JSON from Azure Blob",
+    locked: true,
+    lockedLabel: "coming soon",
+    supportsDirectQuery: false,
+    fields: [
+      { key: "connection_string", label: "Connection string", type: "password", placeholder: "DefaultEndpointsProtocol=https;AccountName=..." },
+      { key: "container", label: "Container", type: "text", placeholder: "my-container", required: true },
+      { key: "key", label: "File path (blob)", type: "text", placeholder: "data/file.csv", required: true },
+    ],
   },
 ];
 
@@ -605,8 +685,8 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
               )}
 
               {/* Connection type — Import vs DirectQuery (Power BI style) */}
-              {/* Exclude: google_sheets (no SQL), sqlite (local file — no live source) */}
-              {!["google_sheets", "sqlite"].includes(selected.id) && (
+              {/* Only shown for SQL connectors with supportsDirectQuery: true */}
+              {selected.supportsDirectQuery && (
                 <div>
                   <span style={label}>Connection type</span>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 2 }}>
@@ -672,7 +752,7 @@ export function ConnectorModal({ open, onClose, onImported, projectId }: Connect
             <div>
               {/* Mode selector — interactive when arriving from saved connection
                   (modeChosen=false), static badge when mode was set in configure */}
-              {selected && !["google_sheets", "sqlite"].includes(selected.id) && (
+              {selected?.supportsDirectQuery && (
                 modeChosen ? (
                   /* Static badge — user already chose in configure step */
                   !loadingTables && tables.length > 0 && (

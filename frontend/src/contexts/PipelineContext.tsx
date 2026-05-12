@@ -45,6 +45,11 @@ export interface PipelineStep {
   snapshot_path?: string | null;
   /** Full raw config dict from the agent, used for surgical step replay */
   rawConfig?: Record<string, unknown>;
+  /**
+   * ID of the parent step this step branched off (Phase 2 fork support).
+   * null/undefined = linear trunk step.
+   */
+  parentStepId?: string | null;
 }
 
 interface PipelineContextValue {
@@ -67,6 +72,20 @@ interface PipelineContextValue {
   pendingJoinStep: PipelineStep | null;
   confirmJoin: () => void;
   cancelJoin: () => void;
+  /**
+   * Phase 1 — "Run up to here":
+   * When non-null, steps after this stepId are shown as "not applied" (faded).
+   * Cleared automatically when a new step is added, Run All is called, or dataset switches.
+   */
+  appliedThroughStepId: string | null;
+  setAppliedThrough: (stepId: string | null) => void;
+  /**
+   * Phase 2 — "Fork from here":
+   * When non-null, the NEXT step added will have parentStepId = this value.
+   * Cleared after one step is consumed.
+   */
+  pendingForkParentStepId: string | null;
+  forkAtStep: (stepId: string) => void;
 }
 
 const PipelineContext = createContext<PipelineContextValue | undefined>(undefined);
@@ -153,6 +172,12 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     scheduleServerSessionSync(datasetId, artifact);
   };
   const [pendingJoinStep, setPendingJoinStep] = useState<PipelineStep | null>(null);
+  // Phase 1: "Run up to here" state — steps after this ID are shown faded.
+  const [appliedThroughStepId, setAppliedThroughStepId] = useState<string | null>(null);
+  const setAppliedThrough = (stepId: string | null) => setAppliedThroughStepId(stepId);
+  // Phase 2: Fork state — next step added picks up this parentStepId.
+  const [pendingForkParentStepId, setPendingForkParentStepId] = useState<string | null>(null);
+  const forkAtStep = (stepId: string) => setPendingForkParentStepId(stepId);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -302,6 +327,9 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       stepsOwnerRef.current = null;
       setSteps([]);
       setLiveArtifactRaw(null);
+      // Phase 1 + 2: clear transient state on dataset switch.
+      setAppliedThroughStepId(null);
+      setPendingForkParentStepId(null);
       return;
     }
     // If this is the same dataset that useState already hydrated from localStorage,
@@ -351,6 +379,9 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     commitStep(step);
   };
 
+  // Clear "run up to here" state when the dataset switches (handled in dataset switch effect)
+  // and also when a new step is added (done in commitStep below).
+
   const commitStep = (step: PipelineStep) => {
     let resolved: PipelineStep[] = [];
     setSteps((current) => {
@@ -386,9 +417,16 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
         const maxNum = Math.max(0, ...current.map((s) => s.stepNumber));
         incoming = { ...incoming, stepNumber: maxNum + 1 };
       }
+      // Phase 2: attach parentStepId from pendingForkParentStepId if set.
+      if (pendingForkParentStepId) {
+        incoming = { ...incoming, parentStepId: pendingForkParentStepId };
+        setPendingForkParentStepId(null);
+      }
       resolved = [...current, incoming];
       return resolved;
     });
+    // Phase 1: clear "run up to here" when a new step is added.
+    setAppliedThroughStepId(null);
     // Structural change — flush to DB immediately using the resolved array
     // (don't read from localStorage which may not have been updated yet).
     structuralChangeRef.current += 1;
@@ -513,6 +551,8 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   const runPipeline = async () => {
     if (!steps.length) return;
+    // Phase 1: running all steps clears the "run up to here" bookmark.
+    setAppliedThroughStepId(null);
     try {
       await api.post("/pipelines/default/run");
     } catch {
@@ -521,8 +561,8 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, moveStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact, pendingJoinStep, confirmJoin, cancelJoin }),
-    [steps, scheduleInfo, liveArtifact, pendingJoinStep, datasetId],  // eslint-disable-line react-hooks/exhaustive-deps
+    () => ({ steps, addStep, removeStep, renameStep, keepStepsThrough, clearSteps, replaceSteps, updateStep, moveStep, runPipeline, scheduleInfo, setScheduleInfo, liveArtifact, setLiveArtifact, pendingJoinStep, confirmJoin, cancelJoin, appliedThroughStepId, setAppliedThrough, pendingForkParentStepId, forkAtStep }),
+    [steps, scheduleInfo, liveArtifact, pendingJoinStep, datasetId, appliedThroughStepId, pendingForkParentStepId],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return (

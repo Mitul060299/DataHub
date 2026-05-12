@@ -903,6 +903,10 @@ class PipelineStepDB(Base):
     # successful step. ``_replay_session_views`` prefers this over re-executing
     # ``duckdb_sql`` because it is deterministic and O(1) per step.
     snapshot_path = Column(Text, nullable=True)
+    # Phase 2 forking: ID of the pipeline_steps row this step branched off.
+    # null = linear trunk step.  Enables the frontend to render sibling branches
+    # in the DAG view and group steps by branch in the linear list.
+    parent_step_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (

@@ -312,7 +312,17 @@ function buildLayout(
     const inputs = new Set((cur.input_tables ?? []).map((t) => String(t)));
     let parent: string | null = null;
 
+    // 0. Explicit fork: parentStepId is set by the user via "Fork from here".
+    //    Takes precedence over all heuristics so manual branches render correctly.
+    if (cur.parentStepId) {
+      const parentStep = steps.find((s) => s.id === cur.parentStepId);
+      if (parentStep) {
+        parent = stepNodeId(parentStep);
+      }
+    }
+
     // 1. Explicit table dependency.
+    if (parent === null) {
     for (let j = i - 1; j >= 0; j -= 1) {
       const cand = steps[j];
       const out = cand.output_table ? String(cand.output_table) : "";
@@ -320,6 +330,7 @@ function buildLayout(
         parent = stepNodeId(cand);
         break;
       }
+    }
     }
 
     // 2. Implicit: chain through the latest write-op.

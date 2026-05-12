@@ -256,12 +256,20 @@ class CleaningController:
         steps: list[dict[str, Any]],
         authorization: str | None,
         db: Session,
+        *,
+        up_to_step_number: int | None = None,
     ) -> dict[str, Any]:
         """Re-execute *steps* sequentially starting from *pivot_dataset_id*.
 
         Each step must have a ``sql`` key.  Steps without SQL are skipped and
         their input/output dataset ID is reported as the current pivot so the
         frontend knows they didn't produce a new dataset.
+
+        If *up_to_step_number* is provided (1-based), steps are first
+        truncated to that length.  Additionally, when the *last* step in the
+        (possibly truncated) list already has an ``output_dataset_id`` that
+        exists in the DB, we skip re-execution entirely and return that
+        dataset directly (snapshot fast-path for "Run up to here").
 
         Returns::
 
@@ -277,6 +285,48 @@ class CleaningController:
         """
         role = get_current_role(authorization)
         require_role("editor", role)
+
+        # Honour up_to_step_number by slicing the steps list.
+        if up_to_step_number is not None:
+            steps = steps[:up_to_step_number]
+
+        # Snapshot fast-path: if the last step already carries a persisted
+        # output_dataset_id (meaning it was previously executed and saved),
+        # and that dataset still exists in the DB, return it immediately
+        # without re-running any SQL.  This makes "Run up to here" instant
+        # when the pipeline has already been applied at least once.
+        if steps:
+            last = steps[-1]
+            fast_ds_id = (
+                last.get("outputDataset", {}).get("id") if isinstance(last.get("outputDataset"), dict)
+                else last.get("output_dataset_id")
+            )
+            if fast_ds_id:
+                fast_ds = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == fast_ds_id).first()
+                if fast_ds:
+                    # Build a synthetic replayed_steps list so the frontend
+                    # can still patch its step array correctly.
+                    synthetic: list[dict[str, Any]] = []
+                    cur = pivot_dataset_id
+                    for i, s in enumerate(steps):
+                        out_id = (
+                            s.get("outputDataset", {}).get("id") if isinstance(s.get("outputDataset"), dict)
+                            else s.get("output_dataset_id")
+                        ) or cur
+                        synthetic.append({
+                            "step_index": i,
+                            "input_dataset_id": cur,
+                            "output_dataset_id": out_id,
+                            "row_count": None,
+                            "skipped": False,
+                            "from_snapshot": True,
+                        })
+                        cur = out_id
+                    return {
+                        "replayed_steps": synthetic,
+                        "final_dataset_id": fast_ds_id,
+                        "final_row_count": int(fast_ds.row_count or 0),
+                    }
 
         from ..services.data_transformation_service import DataTransformationService  # lazy
         user_id = get_current_subject(authorization) or "unknown"

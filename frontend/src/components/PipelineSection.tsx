@@ -29,7 +29,7 @@ interface PipelineSectionProps {
 }
 
 export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
-  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact } = usePipelineContext();
+  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact, appliedThroughStepId, setAppliedThrough, forkAtStep } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
 
   const [open, setOpen] = useState(true);
@@ -267,6 +267,92 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     setEditPanelStepId(null);
   };
 
+  /**
+   * Phase 1 — "Run up to here": switches the active dataset to step N's
+   * output without running any steps after N.  Later steps stay listed but
+   * are shown faded with a "Resume" banner.  Non-destructive (cf. Undo from).
+   */
+  const handleRunUpTo = async (stepId: string) => {
+    const stepIndex = steps.findIndex((s) => s.id === stepId);
+    if (stepIndex < 0) return;
+    const step = steps[stepIndex];
+
+    // Fast-path: the step already has a materialized output dataset — just
+    // switch to it without hitting the backend.
+    if (step.outputDataset?.id) {
+      setActiveDataset({
+        id: step.outputDataset.id,
+        name: step.outputDataset.name ?? activeDataset?.name ?? "Cleaned dataset",
+        rows: step.outputDataset.rowCount ?? activeDataset?.rows ?? 0,
+      });
+      setAppliedThrough(stepId);
+      window.dispatchEvent(new CustomEvent("datahub:toast", {
+        detail: { message: `Viewing pipeline up to step ${step.stepNumber}: ${getStepLabel(step)}`, tone: "info" },
+      }));
+      return;
+    }
+
+    // Otherwise we need to replay up to this step from the source dataset.
+    const baseDatasetId = steps[0]?.inputDataset?.id ?? activeDataset?.id;
+    if (!baseDatasetId) {
+      setInlineError("Cannot determine base dataset for replay.");
+      return;
+    }
+    const stepsToRun = steps.slice(0, stepIndex + 1);
+    const replayPayloads = stepsToRun.map((s) => s.rawConfig ?? { operation: s.operation, sql: s.sql });
+    setRunning(true);
+    try {
+      const response = await api.post(`/cleaning/datasets/${baseDatasetId}/replay`, {
+        steps: replayPayloads,
+        up_to_step_number: stepIndex + 1,
+      });
+      const data = response.data as {
+        final_dataset_id: string;
+        final_row_count: number | null;
+        replayed_steps: Array<{ step_index: number; input_dataset_id: string; output_dataset_id: string; row_count: number | null; skipped: boolean }>;
+      };
+      if (data.final_dataset_id) {
+        setActiveDataset({
+          id: data.final_dataset_id,
+          name: activeDataset?.name ?? "Cleaned dataset",
+          rows: data.final_row_count ?? 0,
+        });
+      }
+      setAppliedThrough(stepId);
+      window.dispatchEvent(new CustomEvent("datahub:toast", {
+        detail: { message: `Viewing pipeline up to step ${step.stepNumber}: ${getStepLabel(step)}`, tone: "info" },
+      }));
+    } catch (err: unknown) {
+      setInlineError(`Run up to step failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  /**
+   * Phase 2 — "Fork from here": sets the active dataset to step N's output
+   * and primes PipelineContext so the next step the user adds will branch off
+   * step N (parentStepId = step N's id).
+   */
+  const handleForkAtStep = (stepId: string) => {
+    const step = steps.find((s) => s.id === stepId);
+    if (!step) return;
+    if (step.outputDataset?.id) {
+      setActiveDataset({
+        id: step.outputDataset.id,
+        name: step.outputDataset.name ?? activeDataset?.name ?? "Cleaned dataset",
+        rows: step.outputDataset.rowCount ?? activeDataset?.rows ?? 0,
+      });
+    }
+    forkAtStep(stepId);
+    window.dispatchEvent(new CustomEvent("datahub:toast", {
+      detail: {
+        message: `Branched off step ${step.stepNumber} — your next action starts a new branch`,
+        tone: "info",
+      },
+    }));
+  };
+
   const handleRun = async () => {
     if (running || !steps.length) return;
     setRunning(true);
@@ -363,6 +449,26 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       )}
       {open ? (
         <div style={{ flex: 1, overflow: "auto", display: "grid", gap: 8, paddingRight: 4 }}>
+          {/* Phase 1 — "Run up to here" Resume banner */}
+          {appliedThroughStepId && steps.some((s) => s.id === appliedThroughStepId) && (() => {
+            const idx = steps.findIndex((s) => s.id === appliedThroughStepId);
+            const nextStep = steps[idx + 1];
+            if (!nextStep) return null;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(91,106,240,0.08)", border: "1px solid var(--acg)", borderRadius: "var(--r6)", padding: "7px 10px", fontSize: 12 }}>
+                <span style={{ flex: 1, color: "var(--tx1)" }}>
+                  Viewing up to step {steps[idx].stepNumber}. Steps {nextStep.stepNumber}+ are paused.
+                </span>
+                <button
+                  className="btn"
+                  style={{ fontSize: 11, padding: "3px 10px", background: "var(--acl)", border: "1px solid var(--acg)", color: "var(--ac)", display: "inline-flex", alignItems: "center", gap: 5 }}
+                  onClick={() => { setAppliedThrough(null); void handleRun(); }}
+                >
+                  <IconPlay size={11} /> Resume from step {nextStep.stepNumber}
+                </button>
+              </div>
+            );
+          })()}
           <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", overflow: "hidden" }}>
             <div style={{ borderBottom: "1px solid var(--bd)", padding: "6px 8px", fontSize: 11, letterSpacing: "0.08em", color: "var(--tx1)", fontWeight: 600 }}>
               APPLIED STEPS
@@ -385,14 +491,26 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
             ) : null}
 
             {steps.map((step, index) => {
-              const isActiveStep = index === steps.length - 1;
+              // Phase 1: determine if this step is "not applied" (after the run-up-to bookmark)
+              const appliedThroughIndex = appliedThroughStepId
+                ? steps.findIndex((s) => s.id === appliedThroughStepId)
+                : steps.length - 1;
+              const isNotApplied = appliedThroughStepId !== null && index > appliedThroughIndex;
+              // Phase 2: detect branch divider — first step in a new branch off a different parent
+              const isBranchStart = !!step.parentStepId && (index === 0 || steps[index - 1].id !== step.parentStepId);
+
+              const isActiveStep = !isNotApplied && index === (appliedThroughStepId ? appliedThroughIndex : steps.length - 1);
               const stepStatus: "completed" | "active" | "pending" = step.status === "failed"
+                ? "pending"
+                : isNotApplied
                 ? "pending"
                 : isActiveStep
                 ? "active"
                 : (index < steps.length - 1 ? "completed" : "pending");
               const statusColor = step.status === "failed"
                 ? "var(--rd)"
+                : isNotApplied
+                ? "var(--bd3)"
                 : stepStatus === "completed"
                 ? "var(--gr)"
                 : (stepStatus === "active" ? "var(--ac)" : "var(--bd3)");
@@ -404,6 +522,13 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                   : null;
 
               return (
+                <>
+                  {/* Phase 2 — branch divider pill */}
+                  {isBranchStart ? (
+                    <div key={`branch-${step.id}`} style={{ borderBottom: "1px solid var(--bd)", padding: "4px 8px", display: "flex", alignItems: "center", gap: 6, background: "rgba(124,58,237,0.06)" }}>
+                      <span style={{ fontSize: 10, color: "var(--accent2)", fontWeight: 600, letterSpacing: "0.06em" }}>↳ Branch off step {steps.find((s) => s.id === step.parentStepId)?.stepNumber ?? "?"}</span>
+                    </div>
+                  ) : null}
                 <div
                   key={step.id}
                   onMouseEnter={() => setHoveredStepId(step.id)}
@@ -412,7 +537,14 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                     padding: "6px 8px",
                     borderBottom: index === steps.length - 1 ? "none" : "1px solid var(--bd)",
                     background: isActiveStep ? "var(--acl)" : "transparent",
-                    borderLeft: `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
+                    // Phase 1: faded styling for "not applied" steps
+                    opacity: isNotApplied ? 0.45 : 1,
+                    borderLeft: isNotApplied
+                      ? "2px dashed var(--bd3)"
+                      : `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
+                    borderLeft: isNotApplied
+                      ? "2px dashed var(--bd3)"
+                      : `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
                     display: "flex",
                     flexDirection: "column",
                     gap: 4,
@@ -517,6 +649,26 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                           <IconEdit size={12} />
                         </button>
                       ) : null}
+                      {/* Phase 1 — Run up to here */}
+                      <button
+                        className="btn"
+                        style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                        title="Run pipeline up to this step (non-destructive)"
+                        onClick={() => void handleRunUpTo(step.id)}
+                        disabled={running}
+                      >
+                        <IconPlay size={11} />
+                      </button>
+                      {/* Phase 2 — Fork from here */}
+                      <button
+                        className="btn"
+                        style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
+                        title="Fork from this step — next action starts a new branch"
+                        onClick={() => handleForkAtStep(step.id)}
+                        disabled={running}
+                      >
+                        ⑂
+                      </button>
                       <button
                         className="btn"
                         style={{ height: 20, width: 20, padding: 0, fontSize: 11 }}
@@ -655,6 +807,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                     </div>
                   ) : null}
                 </div>
+                </>
               );
             })}
           </div>

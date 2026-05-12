@@ -219,8 +219,16 @@ class ReplayRequest(BaseModel):
     Each step dict must contain at minimum a ``sql`` key with the DuckDB
     SQL that was used to produce its output.  The full ``rawConfig`` stored
     by the frontend can be passed in as-is.
+
+    If *up_to_step_number* is provided (1-based), only steps with
+    ``step_number <= up_to_step_number`` will be executed.  This supports
+    the "Run up to here" feature: the frontend slices ``steps`` to the
+    target step and sets this field accordingly so the controller can apply
+    the snapshot fast-path when the target step already has a persisted
+    Parquet snapshot.
     """
     steps: list[dict[str, Any]] = Field(default_factory=list)
+    up_to_step_number: int | None = Field(default=None, ge=1)
 
 
 @router.post("/datasets/{dataset_id}/replay")
@@ -236,10 +244,17 @@ def replay_steps(
     the frontend calls this with the steps that followed N, starting from
     the output dataset of step N-1.
 
+    Also used for "Run up to here": the frontend passes a truncated steps
+    list and sets ``up_to_step_number`` so the controller can short-circuit
+    via the target step's Parquet snapshot when available.
+
     Returns the updated chain so the frontend can patch the steps array and
     set the active dataset to *final_dataset_id*.
     """
-    return CleaningController.replay_steps(dataset_id, payload.steps, authorization, db)
+    return CleaningController.replay_steps(
+        dataset_id, payload.steps, authorization, db,
+        up_to_step_number=payload.up_to_step_number,
+    )
 
 
 @router.post("/datasets/{dataset_id}/rewrite-step")

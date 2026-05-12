@@ -478,6 +478,7 @@ def _apply_startup_ddl() -> None:
         "CREATE INDEX IF NOT EXISTS idx_agent_recipes_fingerprint ON agent_recipes (schema_fingerprint)",
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS auto_run_id        TEXT",
         "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS rule_justification TEXT",
+        "ALTER TABLE pipeline_steps ADD COLUMN IF NOT EXISTS parent_step_id     TEXT",
         "CREATE INDEX IF NOT EXISTS idx_pipeline_steps_auto_run ON pipeline_steps (auto_run_id)",
         # add_webhook_user_id — user-scoped webhook access
         "ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS user_id TEXT",

@@ -924,6 +924,37 @@ def save_pipeline_steps(
             "deleted_step_numbers": deleted_step_numbers,
             "deleted_tables": deleted_tables,
         }
+
+    # Persist parent_step_id on any PipelineStepDB rows that carry it from the
+    # client (Phase 2 fork support).  Runs best-effort — failures don't block.
+    if sess_id:
+        from ..models_db import PipelineStepDB as _PSdb2
+        for s in steps:
+            if not isinstance(s, dict):
+                continue
+            pid = s.get("parentStepId") or s.get("parent_step_id")
+            if not pid:
+                continue
+            sn = s.get("stepNumber") or s.get("step_number")
+            try:
+                sn_int = int(sn or 0)
+            except Exception:
+                continue
+            if sn_int <= 0:
+                continue
+            try:
+                db.query(_PSdb2).filter(
+                    _PSdb2.user_id == user_id,
+                    _PSdb2.session_id == sess_id,
+                    _PSdb2.step_number == sn_int,
+                ).update({"parent_step_id": str(pid)}, synchronize_session=False)
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
     return {
         "dataset_id": dataset_id,
         "saved": len(steps),

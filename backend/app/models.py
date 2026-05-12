@@ -493,6 +493,11 @@ class UserProfileOut(BaseModel):
     usage: UserUsage
     has_completed_onboarding: bool = False
     has_uploaded_first_file: bool = False
+    # Activation milestone timestamps (nullable — None means not yet reached)
+    first_dataset_at: Optional[str] = None
+    first_ai_answer_at: Optional[str] = None
+    first_pipeline_step_at: Optional[str] = None
+    first_export_at: Optional[str] = None
 
 
 class ProjectMemberInvite(BaseModel):

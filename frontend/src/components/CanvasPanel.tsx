@@ -205,6 +205,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       window.dispatchEvent(new CustomEvent("datahub:toast", {
         detail: { message: `${labelMap[type]} download started`, tone: "success" },
       }));
+      import("../lib/activation").then(({ recordMilestone }) => recordMilestone("result_exported", { export_type: type }));
     } catch (err) {
       console.error(`Export ${type} failed:`, err);
       const msg = (err instanceof Error && err.message) ? err.message : "Export failed. Please try again.";
@@ -573,13 +574,49 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           !dataset && !loading ? (
             <CanvasEmptyState onImport={onImport} />
           ) : (
-            <DataTable
-              loading={viewingStepIndex !== null ? timelineLoading : loading}
-              rows={effectiveRows ?? []}
-              columns={effectiveCols ?? []}
-              stepCount={steps.length}
-              lastAction={viewingStepIndex !== null ? "" : lastAction}
-            />
+            <>
+              {dataset && /^customers$/i.test(dataset.name.trim()) && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "7px 14px",
+                    background: "rgba(91,106,240,0.10)",
+                    borderBottom: "1px solid rgba(91,106,240,0.22)",
+                    fontSize: 12,
+                    color: "var(--tx1)",
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>💡</span>
+                  <span>This is the <strong>Customers sample</strong>. Ready to analyse your own data?</span>
+                  <button
+                    onClick={onImport}
+                    style={{
+                      marginLeft: "auto",
+                      padding: "3px 10px",
+                      borderRadius: 5,
+                      border: "1px solid var(--ac)",
+                      background: "transparent",
+                      color: "var(--ac)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Upload your data →
+                  </button>
+                </div>
+              )}
+              <DataTable
+                loading={viewingStepIndex !== null ? timelineLoading : loading}
+                rows={effectiveRows ?? []}
+                columns={effectiveCols ?? []}
+                stepCount={steps.length}
+                lastAction={viewingStepIndex !== null ? "" : lastAction}
+              />
+            </>
           )
         ) : (
           <CanvasView workspaceId={workspaceId} projectId={projectId} />

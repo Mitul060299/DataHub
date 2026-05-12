@@ -2,6 +2,9 @@ interface OnboardingProgressProps {
   hasUploadedFirstFile: boolean;
   hasCompletedOnboarding: boolean;
   hasAskedFirstQuestion?: boolean;
+  firstAiAnswerAt?: string | null;
+  hasPipelineStep?: boolean;
+  hasExported?: boolean;
   onDismiss: () => void;
   onStartTour?: () => void;
 }
@@ -9,18 +12,28 @@ interface OnboardingProgressProps {
 const STEPS = [
   {
     id: "upload",
-    label: "Upload your first file",
-    hint: "Drag & drop a CSV/Excel into the Data panel, or press Ctrl+I to import",
+    label: "Load data",
+    hint: "Drag & drop a CSV into the Data panel, or press Ctrl+I to import",
   },
   {
     id: "question",
-    label: "Ask your first question",
-    hint: "Type in the AI Agent on the right, e.g. \"remove duplicates\" or \"show top 10 rows by revenue\"",
+    label: "Ask the AI",
+    hint: 'Type a question in the AI panel on the right, e.g. "Show top 10 by spend"',
   },
   {
-    id: "complete",
-    label: "Explore the Pipeline tab",
-    hint: "Click the git-branch icon tab to see your transformation history, then export when ready",
+    id: "aha",
+    label: "Get your first AI answer",
+    hint: "The AI will write and run SQL on your data — review the result in the preview",
+  },
+  {
+    id: "pipeline",
+    label: "Approve a transform",
+    hint: "Click the Pipeline tab, then Approve a pending step to save it",
+  },
+  {
+    id: "export",
+    label: "Export your result",
+    hint: "Click Export (↑ icon) to download as CSV, Excel or send to Google Sheets",
   },
 ];
 
@@ -28,16 +41,23 @@ export const OnboardingProgress = ({
   hasUploadedFirstFile,
   hasCompletedOnboarding,
   hasAskedFirstQuestion,
+  firstAiAnswerAt,
+  hasPipelineStep,
+  hasExported,
   onDismiss,
   onStartTour,
 }: OnboardingProgressProps) => {
   if (hasCompletedOnboarding) return null;
 
-  const completedCount =
-    (hasUploadedFirstFile ? 1 : 0) +
-    (hasAskedFirstQuestion ? 1 : 0) +
-    (hasCompletedOnboarding ? 1 : 0);
+  const stepDone = [
+    hasUploadedFirstFile,
+    hasAskedFirstQuestion ?? false,
+    !!firstAiAnswerAt,
+    hasPipelineStep ?? false,
+    hasExported ?? false,
+  ];
 
+  const completedCount = stepDone.filter(Boolean).length;
   const pct = Math.round((completedCount / STEPS.length) * 100);
 
   return (
@@ -64,10 +84,7 @@ export const OnboardingProgress = ({
       </div>
       <ul className="onboarding-progress__steps">
         {STEPS.map((step, idx) => {
-          const done =
-            idx === 0 ? hasUploadedFirstFile :
-            idx === 1 ? (hasAskedFirstQuestion ?? false) :
-            hasCompletedOnboarding;
+          const done = stepDone[idx];
           return (
             <li
               key={step.id}

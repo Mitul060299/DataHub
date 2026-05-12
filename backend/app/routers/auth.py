@@ -170,6 +170,12 @@ def signup(
         _add_to_brevo(current_user.email, body.name)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Brevo signup hook failed for %s: %s", current_user.email, exc)
+    # Fire-and-forget welcome email (T+0, best-effort)
+    try:
+        from ..services.email_service import send_welcome_email
+        send_welcome_email(to=current_user.email, username=body.name or None)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Welcome email failed for %s: %s", current_user.email, exc)
     return {"ok": True}
 
 

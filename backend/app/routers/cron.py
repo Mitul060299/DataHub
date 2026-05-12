@@ -101,6 +101,34 @@ async def send_weekly_digest(
     return {"ok": True, "message": "Weekly digest enqueued"}
 
 
+@router.post("/activation-nudge")
+async def send_activation_nudge(
+    background_tasks: BackgroundTasks,
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Triggered hourly.  Computes retention cohorts and sends lifecycle emails.
+
+    Cohorts handled (each email is idempotent — sent at most once per user):
+      ghost              — signed up but never opened workspace
+      stalled_upload     — uploaded data but no first AI answer in 24-72 h
+      day3_no_aha        — 3 days since first dataset, still no AI answer
+      day7_winback       — 7 days since first dataset, still no AI answer
+      activated_dormant  — got first AI answer but inactive for 7+ days
+    """
+    if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.cron_secret):
+        raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+    from ..services.activation_email_service import run_activation_nudge
+
+    def _run():
+        result = run_activation_nudge(db)
+        logger.info("activation-nudge: %s", result)
+
+    background_tasks.add_task(_run)
+    return {"ok": True, "message": "Activation nudge enqueued"}
+
+
 def _compute_next_run(cron_expression: str, tz_name: str) -> datetime | None:
     try:
         import pytz

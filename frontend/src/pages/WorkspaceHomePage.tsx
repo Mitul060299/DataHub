@@ -87,23 +87,33 @@ export function WorkspaceHomePage() {
   // Auto-open the welcome modal when:
   //   (a) the user just landed here from the public demo, OR
   //   (b) they're a brand-new user (no projects + onboarding incomplete).
+  // For brand-new users we go one step further: after the modal opens we
+  // immediately trigger the Customers quickstart so they land in the workspace
+  // with sample data loaded — no extra click required.
   // Once-per-session guard via sessionStorage prevents re-popping on
   // navigation back to /workspace.
   useEffect(() => {
     if (welcomeOpen) return;
-    if (projectsLoading) return;
+    if (projectsLoading || quickstarting) return;
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     if (alreadyShown) return;
 
     const fromDemo = demoIntent !== null;
     const brandNew = projects.length === 0 && !hasCompletedOnboarding;
 
-    if (fromDemo || brandNew) {
+    if (fromDemo) {
       setWelcomeOpen(true);
       sessionStorage.setItem("datahub_welcome_home_shown", "1");
-      capture("onboarding_modal_shown", { surface: "workspace_home", from_demo: fromDemo });
+      capture("onboarding_modal_shown", { surface: "workspace_home", from_demo: true });
+    } else if (brandNew) {
+      // Skip the modal entirely for brand-new users: auto-quickstart with the
+      // Customers sample so they reach value in one step.
+      sessionStorage.setItem("datahub_welcome_home_shown", "1");
+      capture("onboarding_modal_shown", { surface: "workspace_home", from_demo: false });
+      void handleQuickstartSample("/samples/customers.csv", /* skipModal */ true);
     }
-  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, welcomeOpen]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).
@@ -124,7 +134,7 @@ export function WorkspaceHomePage() {
 
   // Welcome-modal sample picker. Ensures a project exists, then jumps into
   // its pipeline view with `?sample=<url>` so WorkspacePage auto-imports it.
-  const handleQuickstartSample = async (url: string) => {
+  const handleQuickstartSample = async (url: string, skipModal = false) => {
     if (quickstarting) return;
     setQuickstarting(true);
     capture("welcome_sample_picked", { url, surface: "workspace_home", from_demo: !!demoIntent });
@@ -147,10 +157,10 @@ export function WorkspaceHomePage() {
       navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
     } catch (err) {
       console.error("Failed to start quickstart sample", err);
-      window.alert("Could not open the sample. Please try creating a project manually.");
+      if (!skipModal) window.alert("Could not open the sample. Please try creating a project manually.");
     } finally {
       setQuickstarting(false);
-      setWelcomeOpen(false);
+      if (!skipModal) setWelcomeOpen(false);
     }
   };
 

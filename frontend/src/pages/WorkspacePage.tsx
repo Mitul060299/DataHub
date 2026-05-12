@@ -10,12 +10,14 @@ import { SheetsExportModal } from "../components/SheetsExportModal";
 import { WelcomeModal } from "../components/WelcomeModal";
 import { OnboardingProgress } from "../components/OnboardingProgress";
 import { TourTooltip, STEPS } from "../components/TourTooltip";
+import { AhaCelebration } from "../components/AhaCelebration";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
 import { useTour } from "../hooks/useTour";
 import { capture } from "../lib/posthog";
+import { recordMilestone } from "../lib/activation";
 
 
 export function WorkspacePage() {
@@ -29,7 +31,7 @@ export function WorkspacePage() {
     : activeProject;
   const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
-  const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete } = useUser();
+  const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete, firstAiAnswerAt, recordMilestone: ctxRecordMilestone } = useUser();
   const [importOpen, setImportOpen] = useState(false);
   const [sampleUrl, setSampleUrl] = useState<string | undefined>(undefined);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
@@ -44,6 +46,7 @@ export function WorkspacePage() {
     () => localStorage.getItem("datahub_onboarding_dismissed") === "1",
   );
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
+  const [showAhaCelebration, setShowAhaCelebration] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const [showingOriginal, setShowingOriginal] = useState(false);
@@ -148,8 +151,13 @@ export function WorkspacePage() {
     }
   };
 
-  // Show welcome modal on first visit
+  // Show welcome modal on first visit + record workspace_first_visit milestone
   useEffect(() => {
+    const visitedKey = "datahub_workspace_first_visit_recorded";
+    if (!localStorage.getItem(visitedKey)) {
+      localStorage.setItem(visitedKey, "1");
+      recordMilestone("workspace_first_visit");
+    }
     if (!hasCompletedOnboarding) {
       const shown = sessionStorage.getItem("datahub_welcome_shown");
       if (!shown) {
@@ -158,7 +166,8 @@ export function WorkspacePage() {
         capture("onboarding_modal_shown");
       }
     }
-  }, [hasCompletedOnboarding]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-import a sample CSV when the user lands here with `?sample=<url>` in
   // the URL. Used by the Welcome flow on WorkspaceHomePage and by the
@@ -180,13 +189,16 @@ export function WorkspacePage() {
   }, [searchParams, setSearchParams]);
 
   // Auto-start tooltip tour for first-time visitors (1 s delay so layout settles)
+  // Tour now starts AFTER aha (first AI answer) so it teaches Pipeline/Export
+  // rather than competing with the value moment.
   useEffect(() => {
+    if (!firstAiAnswerAt) return;
     const id = setTimeout(() => {
       if (!isTourDone()) startTour();
-    }, 1000);
+    }, 1500);
     return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [firstAiAnswerAt]);
 
   // Mark onboarding complete when all steps done
   useEffect(() => {
@@ -474,6 +486,14 @@ export function WorkspacePage() {
               setSessionPreview({ rows, columns });
             }}
             onUploadClick={() => setImportOpen(true)}
+            onFirstPrompt={() => {
+              setHasAskedFirstQuestion(true);
+              ctxRecordMilestone("ai_prompt_submitted");
+            }}
+            onFirstAiAnswer={() => {
+              ctxRecordMilestone("aha_first_ai_answer");
+              if (!firstAiAnswerAt) setShowAhaCelebration(true);
+            }}
           />
         </>
       )}
@@ -495,12 +515,18 @@ export function WorkspacePage() {
           }}
         />
       )}
+      {showAhaCelebration && (
+        <AhaCelebration
+          onDismiss={() => setShowAhaCelebration(false)}
+        />
+      )}
       {!onboardingDismissed && (
         <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 900, width: 260 }}>
           <OnboardingProgress
             hasUploadedFirstFile={hasUploadedFirstFile}
             hasCompletedOnboarding={hasCompletedOnboarding}
             hasAskedFirstQuestion={hasAskedFirstQuestion}
+            firstAiAnswerAt={firstAiAnswerAt}
             onDismiss={() => {
               setOnboardingDismissed(true);
               localStorage.setItem("datahub_onboarding_dismissed", "1");

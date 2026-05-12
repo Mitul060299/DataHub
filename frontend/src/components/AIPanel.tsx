@@ -14,7 +14,9 @@ import { api, saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
 import { EmptyStateChatPanel } from "./EmptyStateChatPanel";
 import { type ColSchema } from "./SuggestionChips";
+import { AiSuggestionStrip } from "./AiSuggestionStrip";
 import { capture } from "../lib/posthog";
+import { recordMilestone } from "../lib/activation";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
 import { getAuthToken } from "../utils/auth";
@@ -257,9 +259,13 @@ interface AIPanelProps {
   onSessionPreview?: (rows: Record<string, unknown>[], columns: string[]) => void;
   /** Opens the import/upload modal (wired from WorkspacePage) */
   onUploadClick?: () => void;
+  /** Fired once when the user receives their first AI answer (activation aha moment) */
+  onFirstAiAnswer?: () => void;
+  /** Fired once when the user submits their first AI prompt */
+  onFirstPrompt?: () => void;
 }
 
-export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -284,6 +290,10 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   // Stable ref to the latest runDataQualityReport so setTimeout doesn't
   // capture a stale closure where liveArtifact is still null from mount.
   const runQualityRef = useRef<() => Promise<void>>();
+  // Guard: fire onFirstAiAnswer only once per component lifetime
+  const firstAiAnswerFiredRef = useRef(false);
+  // Guard: fire onFirstPrompt only once per component lifetime
+  const firstPromptFiredRef = useRef(false);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -607,6 +617,11 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           ];
           void saveHistory(dataset.id, historyToSave);
         }
+        // Fire aha milestone once per component lifetime
+        if (!firstAiAnswerFiredRef.current && onFirstAiAnswer) {
+          firstAiAnswerFiredRef.current = true;
+          onFirstAiAnswer();
+        }
         break;
       }
       case "agent.step.done": {
@@ -918,6 +933,10 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       ]);
       lastSentInputRef.current = content;
       capture("ai_message_sent", { dataset_id: dataset.id });
+      if (!firstPromptFiredRef.current && onFirstPrompt) {
+        firstPromptFiredRef.current = true;
+        onFirstPrompt();
+      }
     }
     setInput("");
 
@@ -981,6 +1000,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         ? { ...message, planPending: false, planApproved: true }
         : message
     )));
+    recordMilestone("pipeline_step_approved");
     void handleSend(latestUserPrompt, true, pendingPlanSteps);
   };
 
@@ -1498,6 +1518,14 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       </div>
 
       <div style={{ borderTop: "1px solid var(--bd)", padding: 10 }}>
+        <AiSuggestionStrip
+          columns={columnSchema}
+          onSelect={(prompt) => {
+            setInput(prompt);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
+          alreadyUsed={messages.some((m) => m.role === "user")}
+        />
         <textarea
           ref={textareaRef}
           value={input}

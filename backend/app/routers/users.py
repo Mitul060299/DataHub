@@ -99,6 +99,22 @@ def get_me(
         usage=usage,
         has_completed_onboarding=getattr(user, "has_completed_onboarding", False) or False,
         has_uploaded_first_file=getattr(user, "has_uploaded_first_file", False) or False,
+        first_dataset_at=(
+            getattr(user, "first_dataset_at", None).isoformat()
+            if getattr(user, "first_dataset_at", None) else None
+        ),
+        first_ai_answer_at=(
+            getattr(user, "first_ai_answer_at", None).isoformat()
+            if getattr(user, "first_ai_answer_at", None) else None
+        ),
+        first_pipeline_step_at=(
+            getattr(user, "first_pipeline_step_at", None).isoformat()
+            if getattr(user, "first_pipeline_step_at", None) else None
+        ),
+        first_export_at=(
+            getattr(user, "first_export_at", None).isoformat()
+            if getattr(user, "first_export_at", None) else None
+        ),
     )
 
 
@@ -123,6 +139,39 @@ def update_onboarding(
         "has_completed_onboarding": user.has_completed_onboarding,
         "has_uploaded_first_file": user.has_uploaded_first_file,
     }
+
+
+@router.post("/me/milestones/{name}")
+def record_user_milestone(
+    name: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Idempotent endpoint to record an activation milestone for the current user.
+
+    Called by the frontend ``lib/activation.ts`` wrapper so server-side PostHog
+    events survive adblockers.  Returns ``{"first_time": true}`` when this is the
+    first occurrence, ``{"first_time": false}`` if already recorded.
+    """
+    from ..services.activation_service import record_milestone, VALID_MILESTONES
+
+    if name not in VALID_MILESTONES:
+        raise HTTPException(status_code=400, detail=f"Unknown milestone: {name!r}")
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user_id = get_current_user_id(authorization) or ""
+    # Resolve the actual DB user so we can pass the correct user_id to the service.
+    user = db.query(User).filter(User.username == subject).first()
+    if user:
+        user_id = user.id
+
+    first_time = record_milestone(user_id, name, db, email=subject)
+    return {"ok": True, "milestone": name, "first_time": first_time}
+
+
 def update_my_plan(
     payload: dict,
     authorization: str | None = Header(default=None),
@@ -302,3 +351,79 @@ def delete_me(
             pass
         db.delete(user)
         db.commit()
+
+# -- Email preferences ----------------------------------------------------------
+
+@router.get("/me/email-preferences")
+def get_email_preferences(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the current user's lifecycle email preferences."""
+    from ..models_db import EmailPreferencesDB
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    pref = db.query(EmailPreferencesDB).filter(EmailPreferencesDB.user_id == subject).first()
+    if pref is None:
+        return {"lifecycle_emails": True, "weekly_digest": True}
+    return {"lifecycle_emails": bool(pref.lifecycle_emails), "weekly_digest": bool(pref.weekly_digest)}
+
+
+@router.patch("/me/email-preferences")
+def update_email_preferences(
+    body: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Update lifecycle / weekly-digest email opt-in flags."""
+    from ..models_db import EmailPreferencesDB
+    from datetime import datetime, timezone
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Resolve email for the prefs row
+    from ..models_db import User
+    user = db.query(User).filter(User.id == subject).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    pref = db.query(EmailPreferencesDB).filter(EmailPreferencesDB.user_id == subject).first()
+    if pref is None:
+        pref = EmailPreferencesDB(user_id=subject, email=user.username)
+        db.add(pref)
+
+    if "lifecycle_emails" in body:
+        pref.lifecycle_emails = bool(body["lifecycle_emails"])
+    if "weekly_digest" in body:
+        pref.weekly_digest = bool(body["weekly_digest"])
+    pref.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    db.commit()
+    return {"ok": True, "lifecycle_emails": bool(pref.lifecycle_emails), "weekly_digest": bool(pref.weekly_digest)}
+
+
+@router.get("/me/unsubscribe/{token}", include_in_schema=False)
+def unsubscribe_via_token(
+    token: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Public one-click unsubscribe endpoint (no auth required, uses opaque token)."""
+    from ..models_db import EmailPreferencesDB
+    from datetime import datetime, timezone
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing token")
+
+    pref = db.query(EmailPreferencesDB).filter(EmailPreferencesDB.unsubscribe_token == token).first()
+    if pref is None:
+        raise HTTPException(status_code=404, detail="Invalid or expired unsubscribe token")
+
+    pref.lifecycle_emails = False
+    pref.weekly_digest = False
+    pref.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+    return {"ok": True, "message": "You have been unsubscribed from all marketing emails."}

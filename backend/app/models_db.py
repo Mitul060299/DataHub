@@ -25,6 +25,11 @@ class User(Base):
     razorpay_customer_id = Column(String, nullable=True)
     # subscription_id is a UUID FK to subscriptions.id (see migration 0025)
     subscription_id = Column(UUID(as_uuid=False), nullable=True)
+    # Activation milestone timestamps (migration 0070)
+    first_dataset_at = Column(DateTime(timezone=True), nullable=True)
+    first_ai_answer_at = Column(DateTime(timezone=True), nullable=True)
+    first_pipeline_step_at = Column(DateTime(timezone=True), nullable=True)
+    first_export_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class UserUsageDB(Base):
@@ -1122,3 +1127,42 @@ class UsageLogDB(Base):
     __table_args__ = (
         Index("idx_usage_logs_user_ts", "user_id", "timestamp"),
     )
+
+
+class EmailLogDB(Base):
+    """Tracks every transactional / lifecycle email sent to a user.
+
+    Used for idempotency (prevents duplicate sends) and open/click tracking
+    via the Resend webhook (POST /api/webhooks/resend).
+    Append-only; rows are never deleted.
+    """
+    __tablename__ = "email_log"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, index=True)
+    email = Column(String, nullable=False)
+    template = Column(String, nullable=False)       # e.g. "welcome", "day1_stalled_upload"
+    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    opened_at = Column(DateTime(timezone=True), nullable=True)
+    clicked_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_email_log_user_template", "user_id", "template"),
+    )
+
+
+class EmailPreferencesDB(Base):
+    """Per-user email opt-out preferences.  One row per user, upserted on signup.
+
+    When ``lifecycle_emails`` is False the activation-nudge cron skips
+    the user entirely.  The unsubscribe token is a random 32-byte hex
+    string embedded in the unsubscribe link of every email.
+    """
+    __tablename__ = "email_preferences"
+
+    user_id = Column(String, primary_key=True)
+    email = Column(String, nullable=False)
+    lifecycle_emails = Column(Boolean, nullable=False, default=True)
+    weekly_digest = Column(Boolean, nullable=False, default=True)
+    unsubscribe_token = Column(String, nullable=False, default="")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

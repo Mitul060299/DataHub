@@ -9,51 +9,27 @@ interface TourStep {
 
 const STEPS: TourStep[] = [
   {
-    target: "data-section",
-    title: "Your datasets live here",
-    content: "Upload a CSV or Excel file, connect a database, or try a sample. Press Ctrl+I (⌘I on Mac) any time to open the import panel.",
-    position: "right",
-  },
-  {
-    target: "ai-agent-header",
-    title: "Ask the AI anything",
-    content: "Type in plain English — 'remove duplicates', 'filter where revenue > 1000', 'group by region and sum sales'. The agent writes and runs the SQL for you.",
-    position: "left",
+    target: "pipeline-tab",
+    title: "Open the Pipeline tab",
+    content: "Every AI transform you approve is saved as a node here. Click this tab to see your transformation history as a visual graph.",
+    position: "bottom",
   },
   {
     target: "approve-button",
-    title: "You review before anything runs",
-    content: "DataHub shows the full step plan and SQL before executing. Review it, edit the SQL directly, or ask the agent to revise — nothing changes without your approval.",
+    title: "Review & approve a step",
+    content: "The AI shows its full SQL before running anything. Approve to save the step to your pipeline — or ask it to revise.",
     position: "left",
   },
   {
-    target: "pipeline-tab",
-    title: "The Pipeline tab",
-    content: "Click here to see your full transformation history as a visual graph. The right panel shows each applied step with row counts, timing and a 'show SQL' link.",
-    position: "bottom",
-  },
-  {
     target: "artifacts-section",
-    title: "Save checkpoints",
-    content: "After running transformations, save a checkpoint here to persist your cleaned data. You can branch from any checkpoint or export it directly.",
-    position: "right",
-  },
-  {
-    target: "canvas-tab",
-    title: "Build your analysis on the Canvas",
-    content: "Switch to Canvas to drag and arrange saved charts into a personal analysis view — great for laying out insights side by side or sharing with your team.",
-    position: "bottom",
-  },
-  {
-    target: "viz-section",
-    title: "Your saved charts",
-    content: "Charts created with the AI are stored here. Drag them onto Canvas, download them, or use them as the basis for a new analysis.",
+    title: "Saved checkpoints",
+    content: "After approving a step, save a checkpoint here. You can branch from any checkpoint or compare two snapshots side by side.",
     position: "right",
   },
   {
     target: "export-button",
-    title: "Export when you're done",
-    content: "Download as CSV for universal use, Excel (.xlsx) for Power BI, or export to Tableau. You can also sync to Google Sheets via the export dropdown.",
+    title: "Export your result",
+    content: "Download as CSV for any tool, Excel for Power BI, or sync directly to Google Sheets. Click the arrow icon to open the export menu.",
     position: "bottom",
   },
 ];

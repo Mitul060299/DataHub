@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import type { ReactNode } from "react";
 import { fetchCurrentUser, updateOnboardingState } from "../api";
 import { useAuth } from "./AuthContext";
+import { recordMilestone as _recordMilestone } from "../lib/activation";
+import type { Milestone } from "../lib/activation";
 
 type UserPlan = "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
 
@@ -44,8 +46,11 @@ type UserContextType = {
   } | null;
   hasCompletedOnboarding: boolean;
   hasUploadedFirstFile: boolean;
+  firstAiAnswerAt: string | null;
+  firstDatasetAt: string | null;
   markOnboardingComplete: () => void;
   markFirstUpload: () => void;
+  recordMilestone: (milestone: Milestone, props?: Record<string, unknown>) => void;
 };
 
 const planLimits: Record<UserPlan, PlanLimits> = {
@@ -195,6 +200,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserContextType["user"]>(null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [hasUploadedFirstFile, setHasUploadedFirstFile] = useState(false);
+  const [firstAiAnswerAt, setFirstAiAnswerAt] = useState<string | null>(null);
+  const [firstDatasetAt, setFirstDatasetAt] = useState<string | null>(null);
   const { session, loading } = useAuth();
 
   useEffect(() => {
@@ -222,6 +229,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         });
         setHasCompletedOnboarding(profile.has_completed_onboarding ?? false);
         setHasUploadedFirstFile(profile.has_uploaded_first_file ?? false);
+        setFirstAiAnswerAt((profile as { first_ai_answer_at?: string | null }).first_ai_answer_at ?? null);
+        setFirstDatasetAt((profile as { first_dataset_at?: string | null }).first_dataset_at ?? null);
       } catch {
         if (!mounted) return;
         setUser(null);
@@ -241,7 +250,26 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const markFirstUpload = useCallback(() => {
     setHasUploadedFirstFile(true);
     updateOnboardingState({ uploadedFirstFile: true }).catch(() => {});
-  }, []);
+    if (!firstDatasetAt) {
+      setFirstDatasetAt(new Date().toISOString());
+      _recordMilestone("dataset_loaded", { source: "upload" });
+    }
+  }, [firstDatasetAt]);
+
+  const recordMilestone = useCallback(
+    (milestone: Milestone, props?: Record<string, unknown>) => {
+      // Update local state when the aha milestone fires so components can
+      // react immediately without waiting for a server round-trip.
+      if (milestone === "aha_first_ai_answer" && !firstAiAnswerAt) {
+        setFirstAiAnswerAt(new Date().toISOString());
+      }
+      if (milestone === "dataset_loaded" && !firstDatasetAt) {
+        setFirstDatasetAt(new Date().toISOString());
+      }
+      _recordMilestone(milestone, props);
+    },
+    [firstAiAnswerAt, firstDatasetAt],
+  );
 
   const limits = planLimits[plan];
 
@@ -255,8 +283,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         user,
         hasCompletedOnboarding,
         hasUploadedFirstFile,
+        firstAiAnswerAt,
+        firstDatasetAt,
         markOnboardingComplete,
         markFirstUpload,
+        recordMilestone,
       }}
     >
       {children}

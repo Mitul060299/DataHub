@@ -218,7 +218,7 @@ def _apply_startup_ddl() -> None:
             name TEXT NOT NULL,
             description TEXT,
             colour TEXT NOT NULL DEFAULT '#5B6AF0',
-            icon TEXT NOT NULL DEFAULT '\ud83d\udcc1',
+            icon TEXT NOT NULL DEFAULT '\U0001F4C1',
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
@@ -487,7 +487,18 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE import_connections ADD COLUMN IF NOT EXISTS user_id TEXT",
         "CREATE INDEX IF NOT EXISTS idx_import_tables_user_id      ON import_tables (user_id)",
         "CREATE INDEX IF NOT EXISTS idx_import_connections_user_id ON import_connections (user_id)",
-        # 0071 — remove workspace_id from all tables (replaced by user_id + project_id)
+        # 0071 — remove workspace_id from all tables (replaced by user_id + project_id).
+        # chat_sessions.workspace_id has dependent Supabase RLS policies on
+        # contexts + context_versions that must be dropped first; all other
+        # tables can be dropped directly.
+        "DROP POLICY IF EXISTS contexts_select        ON contexts",
+        "DROP POLICY IF EXISTS contexts_insert        ON contexts",
+        "DROP POLICY IF EXISTS contexts_update        ON contexts",
+        "DROP POLICY IF EXISTS contexts_delete        ON contexts",
+        "DROP POLICY IF EXISTS context_versions_select  ON context_versions",
+        "DROP POLICY IF EXISTS context_versions_insert  ON context_versions",
+        "DROP POLICY IF EXISTS context_versions_update  ON context_versions",
+        "DROP POLICY IF EXISTS context_versions_delete  ON context_versions",
         "ALTER TABLE projects             DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE dataset_meta         DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE connector_credentials DROP COLUMN IF EXISTS workspace_id",

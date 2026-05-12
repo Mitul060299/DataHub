@@ -84,33 +84,41 @@ export function WorkspaceHomePage() {
     }
   }, []);
 
-  // Auto-open the welcome modal when:
-  //   (a) the user just landed here from the public demo, OR
-  //   (b) they're a brand-new user (no projects + onboarding incomplete).
-  // For brand-new users we go one step further: after the modal opens we
-  // immediately trigger the Customers quickstart so they land in the workspace
-  // with sample data loaded — no extra click required.
-  // Once-per-session guard via sessionStorage prevents re-popping on
-  // navigation back to /workspace.
+  // Auto-quickstart for demo visitors and brand-new users.
+  //
+  // For demo users (came from the public /try flow):
+  //   • If they already have a project, navigate immediately — no API call, no modal.
+  //   • If they have no projects, create one then navigate (same path as brand-new).
+  // For brand-new users (no projects, onboarding incomplete):
+  //   • Auto-quickstart with the Customers sample — no query picker modal.
+  //
+  // We intentionally skip the WelcomeModal query-picker here: it confused users
+  // (looked like "ask AI a question" but actually just loaded the dataset).
+  // The workspace itself now guides them with the dataset-nudge + AI-input nudge.
+  //
+  // Once-per-session guard via sessionStorage prevents re-triggering on back-nav.
   useEffect(() => {
-    if (welcomeOpen) return;
-    if (projectsLoading || quickstarting) return;
+    if (welcomeOpen || quickstarting) return;
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     if (alreadyShown) return;
 
     const fromDemo = demoIntent !== null;
-    const brandNew = projects.length === 0 && !hasCompletedOnboarding;
+    const brandNew = !projectsLoading && projects.length === 0 && !hasCompletedOnboarding;
 
-    if (fromDemo) {
-      setWelcomeOpen(true);
+    if (fromDemo && projects.length > 0) {
+      // Fast path: existing project → navigate without any API call
       sessionStorage.setItem("datahub_welcome_home_shown", "1");
-      capture("onboarding_modal_shown", { surface: "workspace_home", from_demo: true });
-    } else if (brandNew) {
-      // Skip the modal entirely for brand-new users: auto-quickstart with the
-      // Customers sample so they reach value in one step.
+      capture("onboarding_auto_quickstart", { surface: "workspace_home", from_demo: true, fast: true });
+      const project = projects[0];
+      setActiveProject(project);
+      const sample = demoIntent?.sample ?? "/samples/customers.csv";
+      const params = new URLSearchParams({ sample, from: "demo" });
+      navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
+    } else if ((fromDemo && !projectsLoading) || brandNew) {
+      // Need to create a project first — do it silently (no modal)
       sessionStorage.setItem("datahub_welcome_home_shown", "1");
-      capture("onboarding_modal_shown", { surface: "workspace_home", from_demo: false });
-      void handleQuickstartSample("/samples/customers.csv", /* skipModal */ true);
+      capture("onboarding_auto_quickstart", { surface: "workspace_home", from_demo: fromDemo });
+      void handleQuickstartSample(demoIntent?.sample ?? "/samples/customers.csv", /* skipModal */ true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding]);

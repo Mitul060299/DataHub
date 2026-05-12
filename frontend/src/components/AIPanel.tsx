@@ -263,9 +263,11 @@ interface AIPanelProps {
   onFirstAiAnswer?: () => void;
   /** Fired once when the user submits their first AI prompt */
   onFirstPrompt?: () => void;
+  /** When true, pulses the chat input to guide user to type their first question */
+  showInputNudge?: boolean;
 }
 
-export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -1517,7 +1519,35 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         ) : null}
       </div>
 
-      <div style={{ borderTop: "1px solid var(--bd)", padding: 10 }}>
+      <div style={{ borderTop: "1px solid var(--bd)", padding: 10, position: "relative" }}>
+        {showInputNudge && (
+          <>
+            <style>{`@keyframes dh-ai-nudge-pulse{0%,100%{box-shadow:0 0 0 2px rgba(91,106,240,0.4)}50%{box-shadow:0 0 0 6px rgba(91,106,240,0.1)}}`}</style>
+            <div style={{
+              position: "absolute",
+              bottom: "calc(100% + 8px)",
+              left: 12,
+              right: 12,
+              background: "linear-gradient(135deg,rgba(91,106,240,0.18),rgba(124,58,237,0.14))",
+              border: "1px solid rgba(91,106,240,0.45)",
+              borderRadius: 8,
+              padding: "8px 10px",
+              fontSize: 12,
+              color: "#c7d2fe",
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              pointerEvents: "none",
+              zIndex: 10,
+              animation: "dh-ai-nudge-pulse 1.8s ease-in-out infinite",
+            }}>
+              <span style={{ fontSize: 14 }}>💬</span>
+              <span>Now type a question about your data here!</span>
+              <div style={{ position: "absolute", top: "100%", left: 16, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid rgba(91,106,240,0.45)" }} />
+            </div>
+          </>
+        )}
         <AiSuggestionStrip
           columns={columnSchema}
           onSelect={(prompt) => {

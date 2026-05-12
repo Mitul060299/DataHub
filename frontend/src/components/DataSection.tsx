@@ -29,9 +29,11 @@ interface DataSectionProps {
   onRemove: (dataset: Dataset) => void;
   onRename?: (dataset: Dataset, newName: string) => void;
   onAddConnection?: () => void;
+  /** When true, pulses the first dataset row to prompt the user to click it */
+  showNudge?: boolean;
 }
 
-export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename, onAddConnection }: DataSectionProps) {
+export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename, onAddConnection, showNudge }: DataSectionProps) {
   const [open, setOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -128,6 +130,7 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
           {datasets.map((dataset) => {
             const active = activeDatasetId === dataset.id;
             const normalizedFormat = normalizeFormat(dataset.format);
+            const isFirstNudge = showNudge && idx === 0 && !active;
             const formatColor = normalizedFormat ? (formatAccent[normalizedFormat] ?? "var(--tx1)") : undefined;
             return (
               <div
@@ -135,14 +138,40 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
                 style={{
                   height: 30,
                   borderRadius: "var(--r6)",
-                  border: "1px solid var(--bd)",
+                  border: isFirstNudge ? "1px solid var(--ac)" : "1px solid var(--bd)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "0 6px 0 8px",
                   background: active ? "var(--acl)" : "transparent",
+                  boxShadow: isFirstNudge ? "0 0 0 3px rgba(var(--ac-rgb, 91,106,240),0.25)" : undefined,
+                  animation: isFirstNudge ? "dh-nudge-pulse 1.6s ease-in-out infinite" : undefined,
+                  position: "relative",
                 }}
               >
+                {isFirstNudge && (
+                  <>
+                    <style>{`@keyframes dh-nudge-pulse{0%,100%{box-shadow:0 0 0 2px rgba(91,106,240,0.35)}50%{box-shadow:0 0 0 5px rgba(91,106,240,0.15)}}`}</style>
+                    <div style={{
+                      position: "absolute",
+                      bottom: "calc(100% + 6px)",
+                      left: 0,
+                      background: "var(--ac)",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      whiteSpace: "nowrap",
+                      pointerEvents: "none",
+                      zIndex: 10,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                    }}>
+                      👆 Click to preview your data
+                      <div style={{ position: "absolute", top: "100%", left: 10, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "5px solid var(--ac)" }} />
+                    </div>
+                  </>
+                )}
                 {editingId === dataset.id ? (
                   <>
                     <span style={{ flexShrink: 0, display: "inline-flex" }}><IconDatabase size={14} /></span>

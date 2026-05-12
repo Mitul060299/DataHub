@@ -48,6 +48,10 @@ export function WorkspacePage() {
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
   const [showAhaCelebration, setShowAhaCelebration] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
+  // Onboarding nudges: pulse on dataset row after import, then pulse AI input after first select
+  const [showDatasetNudge, setShowDatasetNudge] = useState(false);
+  const [showAiNudge, setShowAiNudge] = useState(false);
+  const prevActiveDatasetIdRef = useRef<string | undefined>(undefined);
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const [showingOriginal, setShowingOriginal] = useState(false);
   const [replayingPipeline, setReplayingPipeline] = useState(false);
@@ -151,23 +155,31 @@ export function WorkspacePage() {
     }
   };
 
-  // Show welcome modal on first visit + record workspace_first_visit milestone
+  // Record workspace_first_visit milestone on first open.
+  // We no longer auto-open the WelcomeModal here — new users are guided by the
+  // OnboardingProgress panel + dataset/AI nudges instead.
   useEffect(() => {
     const visitedKey = "datahub_workspace_first_visit_recorded";
     if (!localStorage.getItem(visitedKey)) {
       localStorage.setItem(visitedKey, "1");
       recordMilestone("workspace_first_visit");
     }
-    if (!hasCompletedOnboarding) {
-      const shown = sessionStorage.getItem("datahub_welcome_shown");
-      if (!shown) {
-        setWelcomeOpen(true);
-        sessionStorage.setItem("datahub_welcome_shown", "1");
-        capture("onboarding_modal_shown");
-      }
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When the user selects a dataset for the first time: clear the dataset nudge
+  // and start the AI-input nudge so they know where to type their question.
+  useEffect(() => {
+    const prevId = prevActiveDatasetIdRef.current;
+    const newId = activeDataset?.id;
+    if (!prevId && newId) {
+      setShowDatasetNudge(false);
+      setShowAiNudge(true);
+      const t = setTimeout(() => setShowAiNudge(false), 8000);
+      return () => clearTimeout(t);
+    }
+    prevActiveDatasetIdRef.current = newId;
+  }, [activeDataset?.id]);
 
   // Auto-import a sample CSV when the user lands here with `?sample=<url>` in
   // the URL. Used by the Welcome flow on WorkspaceHomePage and by the
@@ -413,6 +425,7 @@ export function WorkspacePage() {
         refreshNonce={datasetRefreshNonce}
         searchFocusNonce={explorerSearchFocusNonce}
         width={explorerWidth}
+        showDatasetNudge={showDatasetNudge}
       />
       <div
         role="separator"
@@ -474,6 +487,7 @@ export function WorkspacePage() {
             dataset={activeDataset}
             projectId={resolvedProject?.id ?? "default"}
             width={aiWidth}
+            showInputNudge={showAiNudge}
             onStepApplied={() => {
               setDatasetRefreshNonce((value) => value + 1);
               void refetch();
@@ -488,6 +502,7 @@ export function WorkspacePage() {
             onUploadClick={() => setImportOpen(true)}
             onFirstPrompt={() => {
               setHasAskedFirstQuestion(true);
+              setShowAiNudge(false);
               ctxRecordMilestone("ai_prompt_submitted");
             }}
             onFirstAiAnswer={() => {
@@ -497,7 +512,7 @@ export function WorkspacePage() {
           />
         </>
       )}
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); }} preloadUrl={sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); }} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
@@ -521,7 +536,7 @@ export function WorkspacePage() {
         />
       )}
       {!onboardingDismissed && (
-        <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 900, width: 260 }}>
+        <div style={{ position: "fixed", bottom: 16, left: explorerWidth + 12, zIndex: 900, width: 260 }}>
           <OnboardingProgress
             hasUploadedFirstFile={hasUploadedFirstFile}
             hasCompletedOnboarding={hasCompletedOnboarding}

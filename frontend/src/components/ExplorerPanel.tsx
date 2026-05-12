@@ -16,9 +16,10 @@ interface ExplorerPanelProps {
   refreshNonce?: number;
   searchFocusNonce?: number;
   width?: number;
+  showDatasetNudge?: boolean;
 }
 
-export function ExplorerPanel({ refreshNonce, searchFocusNonce, width }: ExplorerPanelProps) {
+export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatasetNudge }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, projectsLoading } = useWorkspaceContext();
   const { steps, liveArtifact } = usePipelineContext();
 
@@ -345,6 +346,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width }: Explore
           onImport={() => setImportModalOpen(true)}
           onAddConnection={() => setConnectorModalOpen(true)}
           onRemove={(dataset) => void removeDataset(dataset)}
+          showNudge={showDatasetNudge}
           onRename={async (dataset, name) => {
             await renameDataset(dataset.id, name);
             void loadDatasets();

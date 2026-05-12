@@ -72,8 +72,21 @@ def record_milestone(
             if email:
                 user = db.query(User).filter(User.username == email).first()
         if user:
-            existing = getattr(user, col, None)
-            if existing is not None:
+            try:
+                existing = getattr(user, col, None)
+            except Exception as exc:
+                # Migration 0070 hasn't applied yet — column is missing.
+                # Silently skip the DB write but still emit the PostHog event.
+                logger.warning("activation: column %s missing (migration 0070 not applied?): %s", col, exc)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                existing = None
+                col = None  # prevent the setattr/commit branch below
+            if col is None:
+                pass
+            elif existing is not None:
                 first_time = False  # already recorded
             else:
                 setattr(user, col, datetime.now(timezone.utc))

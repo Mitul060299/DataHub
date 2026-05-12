@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
 from sqlalchemy import DateTime, JSON
+from sqlalchemy.orm import deferred
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from .db import Base
@@ -25,11 +26,14 @@ class User(Base):
     razorpay_customer_id = Column(String, nullable=True)
     # subscription_id is a UUID FK to subscriptions.id (see migration 0025)
     subscription_id = Column(UUID(as_uuid=False), nullable=True)
-    # Activation milestone timestamps (migration 0070)
-    first_dataset_at = Column(DateTime(timezone=True), nullable=True)
-    first_ai_answer_at = Column(DateTime(timezone=True), nullable=True)
-    first_pipeline_step_at = Column(DateTime(timezone=True), nullable=True)
-    first_export_at = Column(DateTime(timezone=True), nullable=True)
+    # Activation milestone timestamps (migration 0070).
+    # Deferred so the default SELECT * style query does not break on databases
+    # where the migration hasn't been applied yet — these columns are only
+    # touched by activation_service / users router paths.
+    first_dataset_at = deferred(Column(DateTime(timezone=True), nullable=True))
+    first_ai_answer_at = deferred(Column(DateTime(timezone=True), nullable=True))
+    first_pipeline_step_at = deferred(Column(DateTime(timezone=True), nullable=True))
+    first_export_at = deferred(Column(DateTime(timezone=True), nullable=True))
 
 
 class UserUsageDB(Base):

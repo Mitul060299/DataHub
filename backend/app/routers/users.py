@@ -91,6 +91,21 @@ def get_me(
         aiMessagesUsed=0,
     )
     effective_plan = resolve_user_plan(db, authorization)
+
+    # Milestone columns are deferred and may not exist if migration 0070
+    # hasn't been applied yet. Tolerate UndefinedColumn / OperationalError
+    # so the profile still loads (and the workspace doesn't appear empty).
+    def _safe_iso(attr: str) -> str | None:
+        try:
+            v = getattr(user, attr, None)
+            return v.isoformat() if v else None
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return None
+
     return UserProfileOut(
         id=user.id,
         username=user.username,
@@ -99,22 +114,10 @@ def get_me(
         usage=usage,
         has_completed_onboarding=getattr(user, "has_completed_onboarding", False) or False,
         has_uploaded_first_file=getattr(user, "has_uploaded_first_file", False) or False,
-        first_dataset_at=(
-            getattr(user, "first_dataset_at", None).isoformat()
-            if getattr(user, "first_dataset_at", None) else None
-        ),
-        first_ai_answer_at=(
-            getattr(user, "first_ai_answer_at", None).isoformat()
-            if getattr(user, "first_ai_answer_at", None) else None
-        ),
-        first_pipeline_step_at=(
-            getattr(user, "first_pipeline_step_at", None).isoformat()
-            if getattr(user, "first_pipeline_step_at", None) else None
-        ),
-        first_export_at=(
-            getattr(user, "first_export_at", None).isoformat()
-            if getattr(user, "first_export_at", None) else None
-        ),
+        first_dataset_at=_safe_iso("first_dataset_at"),
+        first_ai_answer_at=_safe_iso("first_ai_answer_at"),
+        first_pipeline_step_at=_safe_iso("first_pipeline_step_at"),
+        first_export_at=_safe_iso("first_export_at"),
     )
 
 

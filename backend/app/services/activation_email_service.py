@@ -107,6 +107,28 @@ def run_activation_nudge(db: Session) -> dict:
         .all()
     )
 
+    # Milestone columns are NOT mapped on the User model (see models_db.py).
+    # Fetch them in a single raw query keyed by user_id. If migration 0070
+    # hasn't applied, this returns an empty dict and we abort the cron.
+    milestones_by_user: dict[str, tuple] = {}
+    try:
+        from sqlalchemy import text as _sql
+        rows = db.execute(_sql(
+            "SELECT id, first_dataset_at, first_ai_answer_at "
+            "FROM users WHERE username NOT LIKE 'anon_%'"
+        )).all()
+        milestones_by_user = {r[0]: (r[1], r[2]) for r in rows}
+    except Exception as exc:
+        logger.warning(
+            "activation_nudge: cannot read milestone columns (migration 0070 not applied?) — aborting cron: %s",
+            exc,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return counts
+
     for user in users:
         email = user.username  # username is the email for Supabase-registered users
         if not email or "@" not in email:
@@ -115,8 +137,7 @@ def run_activation_nudge(db: Session) -> dict:
             counts["skipped"] += 1
             continue
 
-        first_dataset_at = getattr(user, "first_dataset_at", None)
-        first_ai_answer_at = getattr(user, "first_ai_answer_at", None)
+        first_dataset_at, first_ai_answer_at = milestones_by_user.get(user.id, (None, None))
         display_name = email.split("@")[0]
 
         # ── GHOST: never loaded a dataset, welcome email sent > 24h ago ────────

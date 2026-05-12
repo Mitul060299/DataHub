@@ -63,39 +63,50 @@ def record_milestone(
     first_time = True
 
     # ── Persist to DB if there's a column for this milestone ─────────────────
+    # Use raw SQL because the milestone columns are NOT mapped on the User
+    # model (see models_db.py for rationale). All errors (including missing
+    # column when migration 0070 hasn't applied) are swallowed so the
+    # PostHog emit still fires.
     col = _MILESTONE_COLUMNS.get(milestone)
     if col:
-        from ..models_db import User
-        user = db.query(User).filter(User.id == user_id).first()
-        if user is None:
-            # Fallback: look up by username (for auth flows that pass email)
-            if email:
-                user = db.query(User).filter(User.username == email).first()
-        if user:
+        # Resolve user_id from email if needed
+        resolved_user_id = user_id
+        if not resolved_user_id and email:
             try:
-                existing = getattr(user, col, None)
-            except Exception as exc:
-                # Migration 0070 hasn't applied yet — column is missing.
-                # Silently skip the DB write but still emit the PostHog event.
-                logger.warning("activation: column %s missing (migration 0070 not applied?): %s", col, exc)
+                from sqlalchemy import text as _sql
+                row = db.execute(
+                    _sql("SELECT id FROM users WHERE username = :u LIMIT 1"),
+                    {"u": email},
+                ).first()
+                resolved_user_id = row[0] if row else ""
+            except Exception:
                 try:
                     db.rollback()
                 except Exception:
                     pass
-                existing = None
-                col = None  # prevent the setattr/commit branch below
-            if col is None:
-                pass
-            elif existing is not None:
-                first_time = False  # already recorded
-            else:
-                setattr(user, col, datetime.now(timezone.utc))
-                try:
-                    db.commit()
-                except Exception as exc:
-                    db.rollback()
-                    logger.warning("activation: db commit failed for %s/%s: %s", user_id, milestone, exc)
+
+        if resolved_user_id:
+            try:
+                from sqlalchemy import text as _sql
+                # Only set if currently NULL (idempotent + tells us first_time)
+                result = db.execute(
+                    _sql(f"UPDATE users SET {col} = now() WHERE id = :uid AND {col} IS NULL"),
+                    {"uid": resolved_user_id},
+                )
+                db.commit()
+                # rowcount == 0 means the column was already set (or row missing)
+                if getattr(result, "rowcount", 0) == 0:
                     first_time = False
+            except Exception as exc:
+                logger.warning(
+                    "activation: raw UPDATE failed for %s/%s (migration 0070 not applied?): %s",
+                    resolved_user_id, milestone, exc,
+                )
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                # Don't suppress the PostHog event — emit anyway as first_time
 
     # ── Server-side PostHog event ─────────────────────────────────────────────
     # Only emit for first-time events so the funnel doesn't get inflated.

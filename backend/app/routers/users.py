@@ -92,19 +92,33 @@ def get_me(
     )
     effective_plan = resolve_user_plan(db, authorization)
 
-    # Milestone columns are deferred and may not exist if migration 0070
-    # hasn't been applied yet. Tolerate UndefinedColumn / OperationalError
-    # so the profile still loads (and the workspace doesn't appear empty).
-    def _safe_iso(attr: str) -> str | None:
+    # Milestone columns are NOT mapped on the User model — fetch via raw SQL.
+    # If migration 0070 hasn't applied, the SELECT will fail and we just
+    # return None for all four (the profile still loads).
+    milestones: dict[str, str | None] = {
+        "first_dataset_at": None,
+        "first_ai_answer_at": None,
+        "first_pipeline_step_at": None,
+        "first_export_at": None,
+    }
+    try:
+        from sqlalchemy import text as _sql
+        row = db.execute(
+            _sql(
+                "SELECT first_dataset_at, first_ai_answer_at, "
+                "first_pipeline_step_at, first_export_at "
+                "FROM users WHERE id = :uid"
+            ),
+            {"uid": user.id},
+        ).first()
+        if row:
+            for key, value in zip(milestones.keys(), row):
+                milestones[key] = value.isoformat() if value else None
+    except Exception:
         try:
-            v = getattr(user, attr, None)
-            return v.isoformat() if v else None
+            db.rollback()
         except Exception:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            return None
+            pass
 
     return UserProfileOut(
         id=user.id,
@@ -114,10 +128,10 @@ def get_me(
         usage=usage,
         has_completed_onboarding=getattr(user, "has_completed_onboarding", False) or False,
         has_uploaded_first_file=getattr(user, "has_uploaded_first_file", False) or False,
-        first_dataset_at=_safe_iso("first_dataset_at"),
-        first_ai_answer_at=_safe_iso("first_ai_answer_at"),
-        first_pipeline_step_at=_safe_iso("first_pipeline_step_at"),
-        first_export_at=_safe_iso("first_export_at"),
+        first_dataset_at=milestones["first_dataset_at"],
+        first_ai_answer_at=milestones["first_ai_answer_at"],
+        first_pipeline_step_at=milestones["first_pipeline_step_at"],
+        first_export_at=milestones["first_export_at"],
     )
 
 

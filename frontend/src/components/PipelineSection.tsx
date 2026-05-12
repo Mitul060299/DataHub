@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { IconBarChart, IconClock, IconCode, IconDownload, IconEdit, IconFilter, IconGrid, IconMerge, IconPlay, IconPlus, IconSortAsc, IconSparkles, IconTrash, IconUpload, IconX } from "./Icons";
 import { EditStepPanel } from "./EditStepPanel";
 import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
@@ -522,7 +522,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                   : null;
 
               return (
-                <>
+                <Fragment key={step.id}>
                   {/* Phase 2 — branch divider pill */}
                   {isBranchStart ? (
                     <div key={`branch-${step.id}`} style={{ borderBottom: "1px solid var(--bd)", padding: "4px 8px", display: "flex", alignItems: "center", gap: 6, background: "rgba(124,58,237,0.06)" }}>
@@ -539,9 +539,6 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                     background: isActiveStep ? "var(--acl)" : "transparent",
                     // Phase 1: faded styling for "not applied" steps
                     opacity: isNotApplied ? 0.45 : 1,
-                    borderLeft: isNotApplied
-                      ? "2px dashed var(--bd3)"
-                      : `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
                     borderLeft: isNotApplied
                       ? "2px dashed var(--bd3)"
                       : `2px solid ${isActiveStep ? "var(--ac)" : "transparent"}`,
@@ -807,7 +804,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                     </div>
                   ) : null}
                 </div>
-                </>
+                </Fragment>
               );
             })}
           </div>

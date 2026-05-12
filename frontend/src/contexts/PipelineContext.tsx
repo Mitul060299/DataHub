@@ -383,6 +383,9 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   // and also when a new step is added (done in commitStep below).
 
   const commitStep = (step: PipelineStep) => {
+    // Capture fork state NOW (before setSteps) so it's safe to reference
+    // inside the functional updater without calling a setter from within it.
+    const forkParentId = pendingForkParentStepId;
     let resolved: PipelineStep[] = [];
     setSteps((current) => {
       // Dedup strategy (ordered by specificity):
@@ -418,13 +421,18 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
         incoming = { ...incoming, stepNumber: maxNum + 1 };
       }
       // Phase 2: attach parentStepId from pendingForkParentStepId if set.
-      if (pendingForkParentStepId) {
-        incoming = { ...incoming, parentStepId: pendingForkParentStepId };
-        setPendingForkParentStepId(null);
+      // NOTE: forkParentId is captured from the outer closure BEFORE setSteps
+      // runs so it is safe to use here without calling any state setter inside
+      // the updater (which would cause double-invocation in React 18 StrictMode).
+      if (forkParentId) {
+        incoming = { ...incoming, parentStepId: forkParentId };
       }
       resolved = [...current, incoming];
       return resolved;
     });
+    // Clear fork + run-up-to state OUTSIDE the setSteps updater to avoid
+    // double-invocation issues in React 18 StrictMode.
+    if (forkParentId) setPendingForkParentStepId(null);
     // Phase 1: clear "run up to here" when a new step is added.
     setAppliedThroughStepId(null);
     // Structural change — flush to DB immediately using the resolved array

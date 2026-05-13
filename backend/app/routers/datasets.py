@@ -1104,11 +1104,65 @@ def snapshot_preview(
     # Ownership check: verify this exact path is stored against this dataset.
     # This is a strict DB lookup — no substring tricks that an attacker could
     # bypass by embedding the dataset_id inside a crafted path.
-    from ..models_db import PipelineStepDB as _PSdb
-    owned = db.query(_PSdb).filter(
-        _PSdb.dataset_id == dataset_id,
-        _PSdb.snapshot_path == snapshot_path,
-    ).first()
+    #
+    # PipelineStepDB has no direct dataset_id column; rows associate to a
+    # dataset via (user_id, session_id) where session_id == DatasetSessionDB
+    # .chat_session_id for the dataset.  We replicate that join here so the
+    # check matches how steps are read in get_pipeline_steps above.
+    user_id = get_current_user_id(authorization) or "anonymous"
+    from ..models_db import (
+        PipelineStepDB as _PSdb,
+        DatasetSessionDB as _DSess,
+        DatasetMetaDB as _Meta,
+    )
+
+    # Confirm the caller actually owns this dataset before any further lookup.
+    meta = (
+        db.query(_Meta)
+        .filter(_Meta.id == dataset_id, _Meta.user_id == user_id)
+        .first()
+    )
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    ds_session = (
+        db.query(_DSess)
+        .filter(_DSess.dataset_id == dataset_id, _DSess.user_id == user_id)
+        .first()
+    )
+    sess_id = ds_session.chat_session_id if ds_session else None
+
+    owned = None
+    if sess_id:
+        owned = (
+            db.query(_PSdb)
+            .filter(
+                _PSdb.user_id == user_id,
+                _PSdb.session_id == sess_id,
+                _PSdb.snapshot_path == snapshot_path,
+            )
+            .first()
+        )
+
+    # Legacy fallback: older datasets stored snapshot_path inside
+    # dataset_meta.pipeline_steps_json instead of pipeline_steps rows.
+    if not owned:
+        try:
+            row = db.execute(
+                text("SELECT pipeline_steps_json FROM dataset_meta WHERE id = :id AND user_id = :uid"),
+                {"id": dataset_id, "uid": user_id},
+            ).fetchone()
+            raw = row[0] if row else None
+            if raw:
+                legacy_steps = json.loads(raw)
+                if isinstance(legacy_steps, list):
+                    for s in legacy_steps:
+                        if isinstance(s, dict) and s.get("snapshot_path") == snapshot_path:
+                            owned = True
+                            break
+        except Exception:
+            pass
+
     if not owned:
         raise HTTPException(status_code=403, detail="snapshot_path not found for this dataset")
 

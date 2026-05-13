@@ -87,7 +87,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   // Reset timeline when dataset or steps change
   useEffect(() => { setViewingStepIndex(null); setTimelineRows(null); setTimelineCols(null); }, [dataset?.id]);
 
-  const handleTimelineClick = useCallback(async (idx: number) => {
+  const handleTimelineClick = useCallback(async (idx: number, sessionIdOverride?: string) => {
     const step = steps[idx];
     const tableName = step?.output_table
       || (typeof step?.rawConfig?.output_table === "string" ? step.rawConfig.output_table : undefined);
@@ -111,10 +111,13 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         // Session may be dead after refresh — fall back to the persisted
         // chat session id (or a fresh uuid) so the backend can replay the
         // recorded pipeline_steps and serve the preview.
-        const sessionId = liveArtifact?.sessionId
+        // sessionIdOverride takes priority — used by handleForkAtStep to pass
+        // a freshly-set session id and bypass the React closure race.
+        const sessionId = sessionIdOverride
+          || liveArtifact?.sessionId
           || localStorage.getItem(`datahub_chat_session_${dataset.id}`)
           || crypto.randomUUID();
-        if (!liveArtifact?.sessionId) {
+        if (!liveArtifact?.sessionId && !sessionIdOverride) {
           localStorage.setItem(`datahub_chat_session_${dataset.id}`, sessionId);
         }
         data = await fetchStepPreview(dataset.id, sessionId, tableName, 200, 0,
@@ -136,8 +139,18 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         setTimelineRows(data.rows ?? []);
         setTimelineCols(data.columns ?? []);
       }
-    } catch {
-      if (!controller.signal.aborted) { setTimelineRows([]); setTimelineCols([]); }
+    } catch (err: unknown) {
+      if (!controller.signal.aborted) {
+        setTimelineRows([]);
+        setTimelineCols([]);
+        // Surface the failure so the user knows WHY the preview is empty
+        // (was previously swallowed silently — "No data loaded" with no clue).
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+          || (err instanceof Error ? err.message : "Step preview failed");
+        window.dispatchEvent(new CustomEvent("datahub:toast", {
+          detail: { message: `Step preview failed: ${detail}`, tone: "error" },
+        }));
+      }
     } finally {
       if (!controller.signal.aborted) setTimelineLoading(false);
     }
@@ -157,8 +170,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
 
   useEffect(() => {
     function handlePreview(e: Event) {
-      const { stepIndex } = (e as CustomEvent<{ stepIndex: number }>).detail;
-      void handleTimelineClick(stepIndex);
+      const { stepIndex, sessionId } = (e as CustomEvent<{ stepIndex: number; sessionId?: string }>).detail;
+      void handleTimelineClick(stepIndex, sessionId);
     }
     function handleViewSource() {
       handleTimelineReset();

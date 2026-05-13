@@ -361,17 +361,31 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     const stepOutputTable = step.output_table
       || (typeof step.rawConfig?.output_table === "string" ? step.rawConfig.output_table as string : undefined)
       || (typeof step.rawConfig?.session_table_name === "string" ? step.rawConfig.session_table_name as string : undefined);
-    if (stepOutputTable && liveArtifact?.sessionId) {
+
+    // Resolve a stable session id even when no AI chat has run yet today
+    // (covers the "open page → immediately fork" case where liveArtifact is null).
+    const resolvedSessionId = liveArtifact?.sessionId
+      || (activeDataset?.id ? localStorage.getItem(`datahub_chat_session_${activeDataset.id}`) : null)
+      || crypto.randomUUID();
+    if (activeDataset?.id && !localStorage.getItem(`datahub_chat_session_${activeDataset.id}`)) {
+      localStorage.setItem(`datahub_chat_session_${activeDataset.id}`, resolvedSessionId);
+    }
+
+    if (stepOutputTable) {
       setLiveArtifact({
         tableName: stepOutputTable,
-        rowCount: step.row_count_after ?? (Number(step.affectedRows) || liveArtifact.rowCount || 0),
+        rowCount: step.row_count_after ?? (Number(step.affectedRows) || liveArtifact?.rowCount || 0),
         stepLabel: getStepLabel(step),
-        sessionId: liveArtifact.sessionId,
+        sessionId: resolvedSessionId,
       });
     }
 
     // 3. Refresh the Data tab so the preview reflects step N (not trunk leaf).
-    window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex } }));
+    //    Pass the resolved session id explicitly so CanvasPanel doesn't race
+    //    on the React closure of liveArtifact.
+    window.dispatchEvent(new CustomEvent("datahub:preview:step", {
+      detail: { stepIndex, sessionId: resolvedSessionId },
+    }));
 
     // 4. Prime PipelineContext so the next committed step gets parentStepId = step N.
     forkAtStep(stepId);

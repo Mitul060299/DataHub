@@ -364,7 +364,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     if (stepOutputTable && liveArtifact?.sessionId) {
       setLiveArtifact({
         tableName: stepOutputTable,
-        rowCount: step.row_count_after ?? Number(step.affectedRows) || liveArtifact.rowCount || 0,
+        rowCount: step.row_count_after ?? (Number(step.affectedRows) || liveArtifact.rowCount || 0),
         stepLabel: getStepLabel(step),
         sessionId: liveArtifact.sessionId,
       });

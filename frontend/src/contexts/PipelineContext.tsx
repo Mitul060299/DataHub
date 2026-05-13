@@ -82,10 +82,10 @@ interface PipelineContextValue {
   /**
    * Phase 2 — "Fork from here":
    * When non-null, the NEXT step added will have parentStepId = this value.
-   * Cleared after one step is consumed.
+   * Cleared after one step is consumed.  Pass null to cancel a pending fork.
    */
   pendingForkParentStepId: string | null;
-  forkAtStep: (stepId: string) => void;
+  forkAtStep: (stepId: string | null) => void;
 }
 
 const PipelineContext = createContext<PipelineContextValue | undefined>(undefined);
@@ -177,7 +177,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
   const setAppliedThrough = (stepId: string | null) => setAppliedThroughStepId(stepId);
   // Phase 2: Fork state — next step added picks up this parentStepId.
   const [pendingForkParentStepId, setPendingForkParentStepId] = useState<string | null>(null);
-  const forkAtStep = (stepId: string) => setPendingForkParentStepId(stepId);
+  const forkAtStep = (stepId: string | null) => setPendingForkParentStepId(stepId);
   const dbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

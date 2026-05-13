@@ -29,7 +29,7 @@ interface PipelineSectionProps {
 }
 
 export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
-  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, setLiveArtifact, appliedThroughStepId, setAppliedThrough, forkAtStep } = usePipelineContext();
+  const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, liveArtifact, setLiveArtifact, appliedThroughStepId, setAppliedThrough, pendingForkParentStepId, forkAtStep } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
 
   const [open, setOpen] = useState(true);
@@ -333,10 +333,20 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
    * Phase 2 — "Fork from here": sets the active dataset to step N's output
    * and primes PipelineContext so the next step the user adds will branch off
    * step N (parentStepId = step N's id).
+   *
+   * IMPORTANT: most pipeline steps run in the DuckDB session and never
+   * materialise a real outputDataset.id — in that case we must instead
+   * repoint liveArtifact.tableName to step N's output_table so the AI
+   * agent's next transform reads from THAT table, not the trunk leaf.
+   * Without this the fork toast fires but the next step still operates on
+   * the most-recent session table (the bug reported on 2026-05-13).
    */
   const handleForkAtStep = (stepId: string) => {
-    const step = steps.find((s) => s.id === stepId);
-    if (!step) return;
+    const stepIndex = steps.findIndex((s) => s.id === stepId);
+    if (stepIndex < 0) return;
+    const step = steps[stepIndex];
+
+    // 1. Switch the active dataset if the step materialised one.
     if (step.outputDataset?.id) {
       setActiveDataset({
         id: step.outputDataset.id,
@@ -344,7 +354,28 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
         rows: step.outputDataset.rowCount ?? activeDataset?.rows ?? 0,
       });
     }
+
+    // 2. Repoint liveArtifact (the AI agent's input pointer) to step N's
+    //    session output_table.  This is what fixes the "new branch step
+    //    runs on trunk leaf data" bug for session-only pipelines.
+    const stepOutputTable = step.output_table
+      || (typeof step.rawConfig?.output_table === "string" ? step.rawConfig.output_table as string : undefined)
+      || (typeof step.rawConfig?.session_table_name === "string" ? step.rawConfig.session_table_name as string : undefined);
+    if (stepOutputTable && liveArtifact?.sessionId) {
+      setLiveArtifact({
+        tableName: stepOutputTable,
+        rowCount: step.row_count_after ?? Number(step.affectedRows) || liveArtifact.rowCount || 0,
+        stepLabel: getStepLabel(step),
+        sessionId: liveArtifact.sessionId,
+      });
+    }
+
+    // 3. Refresh the Data tab so the preview reflects step N (not trunk leaf).
+    window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex } }));
+
+    // 4. Prime PipelineContext so the next committed step gets parentStepId = step N.
     forkAtStep(stepId);
+
     window.dispatchEvent(new CustomEvent("datahub:toast", {
       detail: {
         message: `Branched off step ${step.stepNumber} — your next action starts a new branch`,
@@ -449,6 +480,26 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       )}
       {open ? (
         <div style={{ flex: 1, overflow: "auto", display: "grid", gap: 8, paddingRight: 4 }}>
+          {/* Phase 2 — Fork-pending banner: shown after ⫰ click, cleared on next step commit or cancel */}
+          {pendingForkParentStepId && steps.some((s) => s.id === pendingForkParentStepId) && (() => {
+            const parent = steps.find((s) => s.id === pendingForkParentStepId);
+            if (!parent) return null;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(124,58,237,0.08)", border: "1px solid var(--accent2)", borderRadius: "var(--r6)", padding: "7px 10px", fontSize: 12 }}>
+                <span style={{ flex: 1, color: "var(--tx1)" }}>
+                  ⫰ Forking from step {parent.stepNumber}. Your next action starts a new branch.
+                </span>
+                <button
+                  className="btn"
+                  style={{ fontSize: 11, padding: "3px 8px" }}
+                  onClick={() => forkAtStep(null)}
+                  title="Cancel fork — next action will continue on the current branch"
+                >
+                  Cancel
+                </button>
+              </div>
+            );
+          })()}
           {/* Phase 1 — "Run up to here" Resume banner */}
           {appliedThroughStepId && steps.some((s) => s.id === appliedThroughStepId) && (() => {
             const idx = steps.findIndex((s) => s.id === appliedThroughStepId);

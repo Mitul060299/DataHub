@@ -268,7 +268,7 @@ interface AIPanelProps {
 }
 
 export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge }: AIPanelProps) {
-  const { addStep, steps, liveArtifact, setLiveArtifact } = usePipelineContext();
+  const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
   const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId, sessionIdRef } = useChatSession();
@@ -943,12 +943,22 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
     setInput("");
 
     try {
+      // Phase 2 fork: if the user just clicked ⫰ on step N, truncate the
+      // pipeline_steps payload to the ancestor chain ending at step N so the
+      // backend agent treats step N's output as the current data state.
+      // Without this the agent sees the trunk leaf and operates on its data.
+      const stepsForBackend = (() => {
+        if (!pendingForkParentStepId) return steps;
+        const idx = steps.findIndex((s) => s.id === pendingForkParentStepId);
+        return idx >= 0 ? steps.slice(0, idx + 1) : steps;
+      })();
+
       await sendMessage({
         message: content,
         dataset_id: dataset.id,
         project_id: projectId,
         conversation_history: [...history, ...(content && !approvePlan ? [{ role: "user" as const, content }] : [])],
-        pipeline_steps: steps.map((step) => ({
+        pipeline_steps: stepsForBackend.map((step) => ({
           step_number: step.stepNumber,
           operation: step.operation,
           description: step.description,

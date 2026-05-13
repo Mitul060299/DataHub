@@ -87,6 +87,32 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   // Reset timeline when dataset or steps change
   useEffect(() => { setViewingStepIndex(null); setTimelineRows(null); setTimelineCols(null); }, [dataset?.id]);
 
+  // When a new step is committed (liveArtifact moves to a different output
+  // table), drop the timeline preview override so the Data tab shows the
+  // freshly produced data instead of staying pinned on the previously
+  // viewed step.  Without this, after Fork → run AI command, the new step
+  // succeeds and liveArtifact advances, but the grid keeps rendering the
+  // forked step's preview rows.
+  const lastLiveTableRef = useRef<string | undefined>(liveArtifact?.tableName);
+  useEffect(() => {
+    const current = liveArtifact?.tableName;
+    if (current && current !== lastLiveTableRef.current) {
+      lastLiveTableRef.current = current;
+      // Only reset if a step was being previewed; do not interfere with
+      // normal live-data rendering.
+      setViewingStepIndex((prev) => {
+        if (prev === null) return prev;
+        timelineAbortRef.current?.abort();
+        setTimelineRows(null);
+        setTimelineCols(null);
+        setTimelineLoading(false);
+        return null;
+      });
+    } else if (current && lastLiveTableRef.current === undefined) {
+      lastLiveTableRef.current = current;
+    }
+  }, [liveArtifact?.tableName]);
+
   const handleTimelineClick = useCallback(async (idx: number, sessionIdOverride?: string) => {
     const step = steps[idx];
     const tableName = step?.output_table

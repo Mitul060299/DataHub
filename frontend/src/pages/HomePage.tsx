@@ -406,6 +406,22 @@ const HOME_FAQ_LD = [
     mainEntity: [
       {
         "@type": "Question",
+        name: "What is DataHub?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "DataHub is an AI-powered data preparation and analysis platform. You upload CSV, Excel, or connect databases like PostgreSQL or Snowflake, ask questions in plain English, and DataHub generates readable SQL transformations you approve before they run. Every step is transparent, replayable, and auditable.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What file types and databases does DataHub support?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "DataHub supports CSV (with auto-delimiter detection), Excel (.xlsx and .xls, including multi-sheet), JSON, and Parquet file uploads. For databases it connects to PostgreSQL, MySQL, MSSQL, Oracle, SQLite (Starter+), Snowflake, BigQuery, Redshift, and Azure Synapse (Team+).",
+        },
+      },
+      {
+        "@type": "Question",
         name: "Is DataHub a black box? Will I know what it is doing to my data?",
         acceptedAnswer: {
           "@type": "Answer",
@@ -442,6 +458,30 @@ const HOME_FAQ_LD = [
         acceptedAnswer: {
           "@type": "Answer",
           text: "DataHub was built for the messy real world. It auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel files out of the box.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Is there a free plan for DataHub?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Yes. The Free plan costs ₹0/month with no credit card required. It includes 50 AI messages per month, 10 pipeline runs, and 500 MB of storage. Paid plans start at ₹999/month with a 15-day free trial.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How is DataHub different from Excel or Power BI?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Excel requires manual work for every transformation — formulas, VBA, or Power Query. Power BI is a visualisation tool, not a data cleaning tool. DataHub automates the entire data preparation pipeline in plain English, saves every step as replayable SQL, and handles messy real-world data issues automatically.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How much cheaper is DataHub compared to Alteryx?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Alteryx Designer costs approximately $5,195 per seat per year. DataHub Team plan at $179/month for 3 seats works out to roughly $716 per seat per year — about 86% cheaper — while covering the same data blending, transformation, and automation workflows.",
         },
       },
     ],
@@ -1144,6 +1184,61 @@ export function HomePage() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* PROOF METRICS */}
+      <section
+        aria-label="Product statistics"
+        style={{
+          borderTop: "1px solid #1e2235",
+          borderBottom: "1px solid #1e2235",
+          padding: "28px 24px",
+          background: "rgba(15,17,26,0.6)",
+        }}
+      >
+        <dl
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "8px 48px",
+            margin: 0,
+            padding: 0,
+            listStyle: "none",
+          }}
+        >
+          {([
+            ["30+", "data transformation operations"],
+            ["10+", "database & file connectors"],
+            ["308", "automated tests in CI"],
+            ["100%", "SQL-transparent — no hidden steps"],
+            ["Free", "plan available, no credit card"],
+          ] as [string, string][]).map(([stat, label]) => (
+            <div key={stat} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <dt
+                style={{
+                  fontSize: "clamp(20px, 3vw, 28px)",
+                  fontWeight: 800,
+                  color: "#5B6AF0",
+                  letterSpacing: "-0.5px",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {stat}
+              </dt>
+              <dd
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: "#64748b",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {label}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       {/* PROBLEMS WE SOLVE */}

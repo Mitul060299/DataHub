@@ -74,32 +74,59 @@ export function BlogPostPage() {
     description: post.excerpt,
     canonical: `https://datahub.org.in/blog/${post.slug}`,
     ogType: "article",
-    structuredData: {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: post.title,
-      description: post.excerpt,
-      datePublished: post.date,
-      dateModified: post.date,
-      author: {
-        "@type": "Organization",
-        name: "DataHub Team",
-        url: "https://datahub.org.in",
-      },
-      publisher: {
-        "@type": "Organization",
-        name: "DataHub",
-        url: "https://datahub.org.in",
-        logo: {
-          "@type": "ImageObject",
-          url: "https://datahub.org.in/logo.png",
+    structuredData: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: post.title,
+        description: post.excerpt,
+        image: "https://datahub.org.in/logo.png",
+        datePublished: post.date,
+        dateModified: post.date,
+        author: {
+          "@type": "Organization",
+          name: "DataHub Team",
+          url: "https://datahub.org.in",
+        },
+        publisher: {
+          "@type": "Organization",
+          name: "DataHub",
+          url: "https://datahub.org.in",
+          logo: {
+            "@type": "ImageObject",
+            url: "https://datahub.org.in/logo.png",
+          },
+        },
+        mainEntityOfPage: {
+          "@type": "WebPage",
+          "@id": `https://datahub.org.in/blog/${post.slug}`,
         },
       },
-      mainEntityOfPage: {
-        "@type": "WebPage",
-        "@id": `https://datahub.org.in/blog/${post.slug}`,
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: "https://datahub.org.in/",
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Blog",
+            item: "https://datahub.org.in/blog",
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: post.title,
+            item: `https://datahub.org.in/blog/${post.slug}`,
+          },
+        ],
       },
-    },
+    ],
   });
 
   return (

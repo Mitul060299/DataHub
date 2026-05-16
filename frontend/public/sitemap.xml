@@ -126,4 +126,12 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- FAQ -->
+  <url>
+    <loc>https://datahub.org.in/faq</loc>
+    <lastmod>2026-05-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>

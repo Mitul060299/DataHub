@@ -512,7 +512,7 @@ export function HomePage() {
   useSEO({
     title: "DataHub – Reliable AI Agent for Data Work",
     description:
-      "DataHub is your reliable AI agent for data work. Describe a task, review the plan, done — or build a visual pipeline once and let it run every week on its own. Every step is transparent SQL you approve. No black boxes.",
+      "DataHub is your reliable AI agent for data work. Tell it what you need in plain English and get trusted results in minutes — or turn any workflow into a visual pipeline that runs itself every week on fresh data, using the exact steps you reviewed and approved.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });
@@ -978,7 +978,7 @@ export function HomePage() {
             Your reliable{" "}
             <span className="hero-gradient-text">AI agent for data work</span>.
             <br />
-            Build pipelines that run themselves.
+            One question answered — or a whole pipeline automated.
           </motion.h1>
 
           <motion.p
@@ -987,9 +987,10 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            Describe a one-off task in plain English and get trusted results in minutes. Or build
-            a visual, reusable pipeline once — and let it run every week on its own. Every step is
-            readable SQL you review and approve. No black boxes. No surprises.
+            Tell DataHub what you need in plain English and get trusted results in minutes.
+            When the same job needs to happen every week, turn it into a visual pipeline — it
+            runs itself on fresh data using the exact steps you already reviewed and approved.
+            No guesswork, no manual effort, nothing hidden.
           </motion.p>
 
           <motion.div

@@ -494,7 +494,8 @@ class TestExportCsvEndpoint(unittest.TestCase):
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
              patch("app.routers.datasets.require_role"), \
              patch("app.routers.datasets.audit_store"), \
-             patch("app.routers.datasets.increment_usage"):
+             patch("app.routers.datasets.increment_usage"), \
+             patch("app.routers.datasets._enforce_api_call"):
             return func(request=mock_request, dataset_id=dataset_id, authorization=None, db=db, **kwargs)
 
     def test_E1_duckdb_path_uses_read_parquet(self):
@@ -572,7 +573,7 @@ class TestExportCsvEndpoint(unittest.TestCase):
              patch("app.routers.datasets.emit_event"):
             response = self._invoke(
                 "ds-1", db,
-                filter_col="name",
+                filter_col="val",
                 filter_op="contains",
                 filter_val="O'Brien",
             )
@@ -609,7 +610,8 @@ class TestPowerBIEndpoint(unittest.TestCase):
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
              patch("app.routers.datasets.require_role"), \
              patch("app.routers.datasets.audit_store"), \
-             patch("app.routers.datasets.increment_usage"):
+             patch("app.routers.datasets.increment_usage"), \
+             patch("app.routers.datasets._enforce_api_call"):
             return func(request=mock_request, dataset_id=dataset_id, authorization=None, db=db)
 
     def test_F1_returns_404_for_unknown_dataset(self):
@@ -674,7 +676,8 @@ class TestTableauEndpoint(unittest.TestCase):
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
              patch("app.routers.datasets.require_role"), \
              patch("app.routers.datasets.audit_store"), \
-             patch("app.routers.datasets.increment_usage"):
+             patch("app.routers.datasets.increment_usage"), \
+             patch("app.routers.datasets._enforce_api_call"):
             return func(request=mock_request, dataset_id=dataset_id, authorization=None, db=db)
 
     def test_G1_returns_404_for_unknown_dataset(self):
@@ -727,7 +730,8 @@ class TestSheetsEndpoint(unittest.TestCase):
         with patch("app.routers.datasets.get_current_role", return_value="admin"), \
              patch("app.routers.datasets.require_role"), \
              patch("app.routers.datasets.audit_store"), \
-             patch("app.routers.datasets.increment_usage"):
+             patch("app.routers.datasets.increment_usage"), \
+             patch("app.routers.datasets._enforce_api_call"):
             return func(request=mock_request, dataset_id=dataset_id, payload=payload, authorization=None, db=db)
 
     def _db_with_meta(self):

@@ -49,7 +49,7 @@ raise unittest.SkipTest("workspace_access and workspace_members modules removed"
         H2. WorkspaceMemberInvite Pydantic model validates email and role
         H3. WorkspaceMemberOut exposes all required fields
 """
-from __future__ import annotations
+# from __future__ import annotations  (kept for reference only — file is skipped above)
 
 import os
 import sys

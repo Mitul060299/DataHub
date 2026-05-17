@@ -20,7 +20,7 @@ const FAQ_SECTIONS: FAQSection[] = [
     items: [
       {
         q: "What is DataHub?",
-        a: "DataHub is an AI-powered data preparation and analysis platform. You upload CSV, Excel, or JSON files, or connect databases like PostgreSQL and Snowflake, then ask questions in plain English. DataHub generates a step-by-step SQL plan you review and approve before anything runs — no black boxes, no guesswork.",
+        a: "DataHub is your reliable AI agent for data work. You upload CSV, Excel, or JSON files, or connect databases like PostgreSQL and Snowflake, then describe what you need in plain English. DataHub generates a step-by-step SQL plan you review and approve before anything runs — and you can save the whole flow as a visual, reusable pipeline that runs itself on a schedule.",
       },
       {
         q: "Who is DataHub for?",
@@ -32,7 +32,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       },
       {
         q: "How is DataHub different from Excel or Power BI?",
-        a: "Excel requires manual work for every transformation — formulas, VBA, or Power Query — and does not scale. Power BI is a visualisation tool, not a data cleaning or transformation tool. DataHub automates the entire data preparation pipeline in plain English, saves every step as replayable SQL, handles messy real-world data automatically, and lets your team collaborate with a full audit log.",
+        a: "Excel requires manual work for every transformation — formulas, VBA, or Power Query — and does not scale. Power BI is a visualisation tool, not a data cleaning or transformation tool. DataHub is the AI agent that handles the work before Excel or Power BI: cleaning, joining, and transforming data in plain English, with every step saved as a replayable visual pipeline you can schedule, share, and audit.",
       },
       {
         q: "How is DataHub different from Alteryx?",
@@ -202,9 +202,9 @@ function AccordionItem({ q, a }: FAQItem) {
 /* ── Page ── */
 export function FAQPage() {
   useSEO({
-    title: "DataHub FAQ – Common Questions Answered",
+    title: "DataHub FAQ – AI Agent for Data Work | Common Questions Answered",
     description:
-      "Answers to the most common questions about DataHub: what it does, how it works, data security, pricing, and how it compares to Excel, Power BI, and Alteryx.",
+      "Answers to common questions about DataHub: how the AI agent works, what visual pipelines do, data security, pricing, and how it compares to Excel, Power BI, and Alteryx.",
     canonical: "https://datahub.org.in/faq",
     structuredData: FAQ_LD,
   });

@@ -424,6 +424,89 @@ async def run_pipeline(
 
         db.commit()
 
+        # ── 10b. Write-back to destination connector (if configured) ──────────
+        # Triggered when the pipeline schedule has write_back_config set.
+        # We load the primary output table's Parquet snapshot and push rows
+        # directly to the configured connector (PostgreSQL, BigQuery, S3, etc.).
+        _wb_rows_written: int | None = None
+        _wb_error: str | None = None
+        try:
+            from ..models_db import PipelineScheduleDB as _SchedDB
+            sched_row = (
+                db.query(_SchedDB)
+                .filter(_SchedDB.pipeline_id == pipeline_id)
+                .first()
+            )
+            _wb_config: dict | None = sched_row.write_back_config if sched_row else None
+            if _wb_config and primary_snapshot_url:
+                _wb_connector_type = _wb_config.get("connector_type", "")
+                _wb_table = _wb_config.get("table_name", "")
+                _wb_mode = _wb_config.get("mode", "append")
+                _wb_cred_id = _wb_config.get("credential_id")
+                _wb_inline_config = _wb_config.get("connector_config") or {}
+
+                if _wb_connector_type and _wb_table:
+                    from .connectors import connector_registry as _cr
+                    from ..security import decrypt_connector_config as _dec
+                    from ..models_db import ConnectorCredentialDB as _CredDB
+                    import duckdb as _ddb
+                    import pandas as _pd
+
+                    # Resolve credentials
+                    if _wb_cred_id:
+                        _cred_row = (
+                            db.query(_CredDB)
+                            .filter(_CredDB.id == _wb_cred_id, _CredDB.user_id == user_id)
+                            .first()
+                        )
+                        _resolved_config = _dec(_cred_row.encrypted_config) if _cred_row else {}
+                    else:
+                        _resolved_config = dict(_wb_inline_config)
+
+                    # Load snapshot into DataFrame
+                    _qpath = StorageService.get_query_path(primary_snapshot_url)
+                    _con_wb = _ddb.connect(database=":memory:")
+                    try:
+                        _df = _con_wb.execute(f"SELECT * FROM read_parquet('{_qpath}')").df()
+                    finally:
+                        _con_wb.close()
+
+                    _connector = _cr.get(_wb_connector_type)
+                    if _connector and hasattr(_connector, "write") and not _df.empty:
+                        _OBJECT_STORAGE = {"s3", "gcs", "azure_blob"}
+                        if _wb_connector_type in _OBJECT_STORAGE:
+                            _wb_rows_written = _connector.write(
+                                config=_resolved_config, df=_df,
+                                key=_wb_table, mode=_wb_mode,
+                            )
+                        else:
+                            _wb_rows_written = _connector.write(
+                                config=_resolved_config, df=_df,
+                                table=_wb_table, mode=_wb_mode,
+                            )
+                        logger.info(
+                            "pipeline_runner: write-back to %s/%s: %s rows",
+                            _wb_connector_type, _wb_table, _wb_rows_written,
+                        )
+        except Exception as _wb_exc:
+            _wb_error = str(_wb_exc)
+            logger.warning(
+                "pipeline_runner: write-back failed for pipeline %s: %s",
+                pipeline_id, _wb_exc,
+            )
+        finally:
+            # Persist write-back outcome into the run record (best-effort)
+            try:
+                _run_upd = db.query(PipelineRunV2DB).filter(PipelineRunV2DB.id == run_id).first()
+                if _run_upd:
+                    _existing_metrics = dict(_run_upd.metrics or {})
+                    _existing_metrics["write_back_rows"] = _wb_rows_written
+                    _existing_metrics["write_back_error"] = _wb_error
+                    _run_upd.metrics = _existing_metrics
+                    db.commit()
+            except Exception:
+                pass
+
         # ── 11. Broadcast refresh_complete to affected dashboards ─────────────
         refresh_ts = datetime.now(timezone.utc).isoformat()
         for dashboard_id in affected_dashboard_ids_set:

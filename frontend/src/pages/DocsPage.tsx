@@ -2062,9 +2062,9 @@ export function DocsPage() {
   }, [page, pageLabel, sectionLabel, docsCanonical]);
 
   useSEO({
-    title: `${pageLabel} – datahub.org.in Documentation`,
+    title: `${pageLabel} – DataHub Documentation`,
     description:
-      "Step-by-step guides to upload data, connect databases, build AI pipelines, and use the datahub.org.in agent. Full API reference and connector documentation.",
+      "Step-by-step guides to upload data, connect databases, work with the AI agent, and build visual reusable pipelines on DataHub. Full API reference and connector documentation.",
     canonical: docsCanonical,
     structuredData: breadcrumbLd,
   });

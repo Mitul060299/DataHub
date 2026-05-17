@@ -8,7 +8,6 @@ import {
   IconDatabase,
   IconFileText,
   IconGrid,
-  IconMessageCircle,
   IconShare,
   IconShield,
   IconTeam,
@@ -39,7 +38,7 @@ const howSteps = [
     icon: <IconBrain size={18} color="#a78bfa" />,
     title: "Describe what you want",
     description:
-      "No SQL. No formulas. Just type what you need in plain English — \"remove duplicates\", \"join with customers\", \"flag outliers in revenue\". The AI understands.",
+      "No SQL. No formulas. Just type what you need in plain English — \"remove duplicates\", \"join with customers\", \"flag outliers in revenue\". Your AI agent understands.",
   },
   {
     step: "03",
@@ -51,11 +50,19 @@ const howSteps = [
   },
   {
     step: "04",
+    color: "#22d3ee",
+    icon: <IconGrid size={18} color="#22d3ee" />,
+    title: "Save as a reusable pipeline",
+    description:
+      "Every transformation becomes a named, replayable step. Save the whole sequence as a visual pipeline. Schedule it daily, weekly, or monthly — it runs itself on fresh data, every time, without you lifting a finger.",
+  },
+  {
+    step: "05",
     color: "#38bdf8",
     icon: <IconShare size={18} color="#38bdf8" />,
     title: "Share clean, trusted results",
     description:
-      "Export clean data, publish a dashboard with one link, or feed results into Power BI or Sheets. Every step is logged and replayable for full audit trail.",
+      "Export clean data, publish a dashboard with one link, or push results into Power BI, Tableau, or Sheets. Every step is logged and replayable for a full audit trail.",
   },
 ];
 
@@ -70,10 +77,10 @@ type Feature = {
 
 const features: Feature[] = [
   {
-    title: "Nothing to download or install",
-    color: "#a78bfa",
-    icon: <IconMessageCircle size={20} color="#a78bfa" />,
-    description: "Open a browser, start working. No 2 GB installer, no admin rights, no IT ticket. Works on Mac, Windows, and Linux — even on a Chromebook.",
+    title: "Build once. Run every week.",
+    color: "#22d3ee",
+    icon: <IconGrid size={20} color="#22d3ee" />,
+    description: "Save any transformation sequence as a visual, reusable pipeline. Schedule it daily, weekly, or monthly — it runs automatically on fresh data with the same approved logic. Change one step and every future run inherits it.",
     span: "lg",
     visual: "browser",
   },
@@ -81,7 +88,7 @@ const features: Feature[] = [
     title: "No setup, no configuration",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
-    description: "Skip the warehouse, the ETL stack, the modelling layer. Drop in a file or paste DB credentials — you're analysing in under a minute.",
+    description: "Skip the warehouse, the ETL stack, the modelling layer. Drop in a file or paste DB credentials — your agent is working in under a minute.",
     span: "md",
     visual: "instant",
   },
@@ -97,7 +104,7 @@ const features: Feature[] = [
     title: "No coding, no SQL to learn",
     color: "#f59e0b",
     icon: <IconDatabase size={20} color="#f59e0b" />,
-    description: "Type what you want in plain English. The AI plans, writes the SQL, and runs it. Analysts and non-technical teammates use the same tool side-by-side.",
+    description: "Type what you want in plain English. Your AI agent plans, writes the SQL, and runs it. Analysts and non-technical teammates use the same tool side-by-side.",
     span: "tall",
     visual: "prompt",
   },
@@ -113,7 +120,7 @@ const features: Feature[] = [
     title: "You stay in control",
     color: "#f87171",
     icon: <IconShield size={20} color="#f87171" />,
-    description: "Review every AI plan before it runs. Approve, edit, or reject. Full audit log of every change.",
+    description: "Review every agent plan before it runs. Approve, edit, or reject. Full audit log of every change.",
     span: "sm",
     visual: "approve",
   },
@@ -309,12 +316,17 @@ const myths = [
   {
     myth: 'The AI will hallucinate results or make up numbers.',
     reality:
-      "DataHub runs real, deterministic SQL on your actual data. The AI writes the query. Your data produces the result. No generation, no guessing, no invented rows.",
+      "DataHub runs real, deterministic SQL on your actual data. The agent writes the query. Your data produces the result. No generation, no guessing, no invented rows.",
+  },
+  {
+    myth: 'We have a recurring process. An AI tool can\u2019t replace a reliable scheduled job.',
+    reality:
+      "DataHub pipelines run on a schedule — daily, weekly, or monthly. Every step is deterministic SQL you already approved. It isn\u2019t the AI guessing each run; it\u2019s your saved logic, running automatically on fresh data.",
   },
   {
     myth: 'I will lose control of my pipeline once the AI builds it.',
     reality:
-      "Every transformation is saved as a labelled, replayable step. You can edit any step inline, delete it, or re-run from any point. The pipeline is yours. The AI is just the author.",
+      "Every transformation is saved as a labelled, replayable step in a visual pipeline. You can edit any step inline, delete it, reorder, or re-run from any point. The pipeline is yours. The agent is just the author.",
   },
   {
     myth: 'My sensitive data is being sent somewhere unsafe.',
@@ -332,8 +344,10 @@ const feedbackTags = ["Feature requests", "Bug reports", "Integration ideas", "G
 
 const DEMO_QUERIES = [
   "Removed 4,200 duplicate rows from a 50,000-row export in 3 seconds",
+  "Built a monthly client reporting pipeline — now it runs itself without me",
   "Reconciled April GL export against bank statement — 12 mismatches found",
   "Standardised column names across 30 supplier files automatically",
+  "Scheduled: reconcile bank vs GL every Monday at 8am, zero manual steps",
   "Filled missing revenue values with column averages, flagged 6 outliers",
   "Joined orders with customers and exported clean CSV for Power BI",
 ];
@@ -363,9 +377,9 @@ const SUPPORT_EMAIL = "mitul.srivastava000@gmail.com";
 const HOME_HOWTO_LD = {
   "@context": "https://schema.org",
   "@type": "HowTo",
-  name: "How to analyse data with DataHub's AI agent",
+  name: "How to work with DataHub — your AI agent for data work",
   description:
-    "Go from a raw CSV, Excel file, or database connection to a trusted, shareable analysis in four reviewable steps.",
+    "Go from a raw CSV, Excel file, or database connection to trusted, shareable results — or save the whole flow as a pipeline that runs itself every week.",
   totalTime: "PT10M",
   step: [
     {
@@ -409,7 +423,7 @@ const HOME_FAQ_LD = [
         name: "What is DataHub?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "DataHub is an AI-powered data preparation and analysis platform. You upload CSV, Excel, or connect databases like PostgreSQL or Snowflake, ask questions in plain English, and DataHub generates readable SQL transformations you approve before they run. Every step is transparent, replayable, and auditable.",
+          text: "DataHub is your reliable AI agent for data work. Upload CSV, Excel, or connect databases like PostgreSQL or Snowflake, describe what you need in plain English, and DataHub generates readable SQL transformations you approve before they run. Save any sequence as a visual reusable pipeline and schedule it to run daily, weekly, or monthly on fresh data — every step transparent, replayable, and audit-logged.",
         },
       },
       {
@@ -473,7 +487,7 @@ const HOME_FAQ_LD = [
         name: "How is DataHub different from Excel or Power BI?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Excel requires manual work for every transformation — formulas, VBA, or Power Query. Power BI is a visualisation tool, not a data cleaning tool. DataHub automates the entire data preparation pipeline in plain English, saves every step as replayable SQL, and handles messy real-world data issues automatically.",
+          text: "Excel requires manual work for every transformation — formulas, VBA, or Power Query. Power BI is a visualisation tool, not a data cleaning tool. DataHub is the AI agent that handles the work before Excel or Power BI — cleaning, joining, and transforming data in plain English, saving every step as a replayable visual pipeline you can schedule to run automatically.",
         },
       },
       {
@@ -496,9 +510,9 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – The Simple and Reliable Way to Prepare & Analyse Your Data",
+    title: "DataHub – Reliable AI Agent for Data Work",
     description:
-      "DataHub cleans, transforms, and analyses your CSV, Excel, and database data in plain English. Every step runs as readable SQL you can review, edit, and replay — so the result is always one you can trust.",
+      "DataHub is your reliable AI agent for data work. Describe a task, review the plan, done — or build a visual pipeline once and let it run every week on its own. Every step is transparent SQL you approve. No black boxes.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });
@@ -961,10 +975,10 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            Stop spending hours{" "}
-            <span className="hero-gradient-text">cleaning the same data</span>
+            Your reliable{" "}
+            <span className="hero-gradient-text">AI agent for data work</span>.
             <br />
-            every week
+            Build pipelines that run themselves.
           </motion.h1>
 
           <motion.p
@@ -973,9 +987,9 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            DataHub is built for analysts, freelancers, and teams who work with messy spreadsheets
-            and databases — and want clean, trusted results in minutes, not hours. Describe the
-            problem in plain English. DataHub writes the SQL, runs it, and shows you every step.
+            Describe a one-off task in plain English and get trusted results in minutes. Or build
+            a visual, reusable pipeline once — and let it run every week on its own. Every step is
+            readable SQL you review and approve. No black boxes. No surprises.
           </motion.p>
 
           <motion.div
@@ -1338,13 +1352,13 @@ export function HomePage() {
               icon: "📈",
               role: "The Analyst",
               description:
-                "You live in Excel and Power BI. You spend the first half of every week cleaning the same files before you can do any actual analysis. DataHub automates the cleaning and prep so you can get to insights faster.",
+                "You live in Excel and Power BI. You spend the first half of every week cleaning the same files before you can do any actual analysis. Let your AI agent handle the clean-up — then save it as a pipeline so next week's files come in already clean.",
             },
             {
               icon: "🧑‍💼",
               role: "The Freelancer / Consultant",
               description:
-                "Every client sends files in a different format. Column names change. Date formats differ. Headers are in row 3. DataHub turns messy client data into clean deliverables without manual wrangling on every project.",
+                "Every client sends files in a different format. Column names change. Date formats differ. Headers are in row 3. Your agent turns messy client data into clean deliverables — and saves the recipe as a pipeline you can reuse on every future engagement.",
             },
             {
               icon: "🏢",
@@ -1386,11 +1400,11 @@ export function HomePage() {
         >
           <p className="section-eyebrow">Workflow</p>
           <h2 className="section-title">
-            From raw data to trusted analysis{" "}
-            <span className="hero-gradient-text">in four steps</span>
+            From raw data to a pipeline{" "}
+            <span className="hero-gradient-text">that runs itself</span>
           </h2>
           <p className="section-subtitle">
-            Every SQL action is transparent, reviewable, and replayable. You stay in control end to end.{" "}
+            Five reviewable steps. Every SQL action is transparent and replayable. Save the whole flow as a pipeline and schedule it to run on its own.{" "}
             <Link to="/docs" style={{ color: "#a78bfa", textDecoration: "underline" }}>Read the full documentation →</Link>
           </p>
         </motion.div>
@@ -1429,11 +1443,11 @@ export function HomePage() {
         >
           <p className="section-eyebrow">Why teams choose DataHub</p>
           <h2 className="section-title">
-            Faster, simpler, and{" "}
-            <span className="hero-gradient-text">far cheaper</span> than the alternatives
+            An AI agent you can trust{" "}
+            <span className="hero-gradient-text">+ pipelines that scale with you</span>
           </h2>
           <p className="section-subtitle">
-            Skip the install, the setup, the SQL, and the six-figure license. Get to insights today — without trading away transparency or control.{" "}
+            Skip the install, the setup, the SQL, and the six-figure license. Get an agent that handles today's task — and a pipeline that handles every Monday from now on.{" "}
             <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "underline" }}>Compare plans →</Link>
           </p>
         </motion.div>

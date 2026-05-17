@@ -47,6 +47,59 @@ class ValidationResult:
     converted_bytes: Optional[bytes] = None  # Set when encoding was converted
 
 
+def _scan_with_clamav(file_bytes: bytes) -> Optional[str]:
+    """
+    Scan file_bytes with a running ClamAV daemon (clamd).
+
+    Returns an error string if a virus is detected, None otherwise.
+    If ClamAV is not configured or the daemon is unreachable, returns None
+    and logs a warning — AV scanning is best-effort and must never block uploads.
+
+    Configuration (via environment / settings):
+      CLAMD_SOCKET  — path to Unix socket (e.g. /var/run/clamav/clamd.ctl)
+      CLAMD_HOST    — TCP host (e.g. localhost), used when socket is empty
+      CLAMD_PORT    — TCP port, default 3310
+    """
+    try:
+        from ..config import settings as _settings
+        import pyclamd  # type: ignore[import]
+    except ImportError:
+        # pyclamd not installed — skip silently
+        return None
+
+    try:
+        if _settings.clamd_socket:
+            cd = pyclamd.ClamdUnixSocket(filename=_settings.clamd_socket)
+        elif _settings.clamd_host:
+            cd = pyclamd.ClamdNetworkSocket(
+                host=_settings.clamd_host,
+                port=_settings.clamd_port,
+            )
+        else:
+            # ClamAV not configured — skip
+            return None
+
+        # Ping first so connection errors surface cleanly
+        cd.ping()
+        result = cd.scan_stream(file_bytes)
+    except Exception as exc:
+        logger.warning("ClamAV scan skipped — daemon unreachable: %s", exc)
+        return None
+
+    if result is None:
+        return None  # clean
+
+    # result is a dict { "stream": ("FOUND", "Eicar-Test-Signature") }
+    for _key, (_status, _virus) in result.items():
+        if _status == "FOUND":
+            logger.warning("ClamAV detected malware in upload: %s", _virus)
+            return (
+                f"Upload rejected: antivirus scan detected a threat ({_virus}). "
+                "Ensure the file is clean and try again."
+            )
+    return None
+
+
 def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
     """Run all 7 validation checks and return a ValidationResult."""
     import os
@@ -68,10 +121,17 @@ def validate_upload(file_bytes: bytes, filename: str) -> ValidationResult:
 
     # ── 2b. Magic-bytes / content-type verification ───────────────────────────
     # A renamed binary file (e.g. malware.exe → data.csv) has wrong magic bytes.
-    # TODO: integrate ClamAV scanning here for full AV coverage.
     _magic_error = _check_magic_bytes(file_bytes, ext)
     if _magic_error:
         result.error = _magic_error
+        return result
+
+    # ── 2c. ClamAV antivirus scan (best-effort) ───────────────────────────────
+    # If CLAMD_SOCKET or CLAMD_HOST is configured, scan the bytes. If ClamAV is
+    # unavailable or not configured the check is skipped (non-blocking).
+    _av_error = _scan_with_clamav(file_bytes)
+    if _av_error:
+        result.error = _av_error
         return result
 
     # ── 5. Excel password protection (before read attempt) ───────────────────

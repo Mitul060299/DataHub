@@ -109,6 +109,7 @@ async def create_or_update_schedule(
         sched.timezone = body.timezone
         sched.is_active = body.is_active
         sched.auto_refresh_on_upload = body.auto_refresh_on_upload
+        sched.write_back_config = body.write_back_config or None
         sched.next_run_at = next_run
     else:
         sched = PipelineScheduleDB(
@@ -119,6 +120,7 @@ async def create_or_update_schedule(
             timezone=body.timezone,
             is_active=body.is_active,
             auto_refresh_on_upload=body.auto_refresh_on_upload,
+            write_back_config=body.write_back_config or None,
             next_run_at=next_run,
         )
         db.add(sched)
@@ -139,6 +141,7 @@ def _sched_to_resp(sched: PipelineScheduleDB) -> PipelineScheduleResponse:
         last_run_at=sched.last_run_at.isoformat() if sched.last_run_at else None,
         next_run_at=sched.next_run_at.isoformat() if sched.next_run_at else None,
         auto_refresh_on_upload=sched.auto_refresh_on_upload,
+        write_back_config=sched.write_back_config or None,
         created_at=sched.created_at.isoformat() if sched.created_at else "",
     )
 

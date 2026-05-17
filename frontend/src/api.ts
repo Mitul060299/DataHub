@@ -620,6 +620,47 @@ export async function exportDatasetTableau(datasetId: string): Promise<Blob> {
   return response.data as Blob;
 }
 
+// ── Connector Credential management (for write-back destinations) ─────────────
+
+export interface ConnectorCredential {
+  id: string;
+  connector_type: string;
+  label: string;
+  created_at: string;
+}
+
+export async function listConnectorCredentials() {
+  const response = await api.get("/connectors/credentials");
+  return response.data as { credentials: ConnectorCredential[] };
+}
+
+export async function saveConnectorCredential(
+  label: string,
+  connectorType: string,
+  config: Record<string, unknown>,
+) {
+  const response = await api.post("/connectors/credentials", {
+    label,
+    connector_type: connectorType,
+    config,
+  });
+  return response.data as ConnectorCredential;
+}
+
+export async function exportDatasetToConnector(
+  datasetId: string,
+  payload: {
+    connector_type: string;
+    table_name: string;
+    mode: "append" | "replace" | "fail";
+    credential_id?: string;
+    connector_config?: Record<string, unknown>;
+  },
+): Promise<{ ok: boolean; rows_written: number; connector_type: string; table: string }> {
+  const response = await api.post(`/datasets/${datasetId}/export/connector`, payload);
+  return response.data as { ok: boolean; rows_written: number; connector_type: string; table: string };
+}
+
 export async function exportDatasetToSheets(
   datasetId: string,
   payload: { spreadsheet_url: string; sheet_name: string; mode: "replace" | "append" }
@@ -631,6 +672,36 @@ export async function exportDatasetToSheets(
 export async function getSheetsExportConfig(): Promise<{ service_account_email: string }> {
   const response = await api.get("/datasets/export/sheets-config");
   return response.data as { service_account_email: string };
+}
+
+export async function pushDatasetToPowerBI(
+  datasetId: string,
+  payload: {
+    workspace_id: string;
+    dataset_id: string;
+    table_name: string;
+    tenant_id: string;
+    client_id: string;
+    client_secret: string;
+  },
+): Promise<{ rows_written: number; workspace_id: string; dataset_id: string; table_name: string }> {
+  const response = await api.post(`/datasets/${datasetId}/export/powerbi-push`, payload);
+  return response.data as { rows_written: number; workspace_id: string; dataset_id: string; table_name: string };
+}
+
+export async function publishDatasetToTableauServer(
+  datasetId: string,
+  payload: {
+    server_url: string;
+    site_id?: string;
+    project_id: string;
+    datasource_name: string;
+    token_name: string;
+    token_value: string;
+  },
+): Promise<{ datasource_id: string; datasource_name: string }> {
+  const response = await api.post(`/datasets/${datasetId}/export/tableau-publish`, payload);
+  return response.data as { datasource_id: string; datasource_name: string };
 }
 
 export async function fetchDatasetPage(

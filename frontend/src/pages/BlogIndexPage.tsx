@@ -4,9 +4,9 @@ import { BLOG_POSTS } from "../data/blogPosts";
 
 export function BlogIndexPage() {
   useSEO({
-    title: "Blog – DataHub | Data Cleaning, Excel & Analyst Guides",
+    title: "Blog – DataHub | Reliable AI Agent for Data Work",
     description:
-      "Practical guides for data analysts: reconcile Excel files, remove CSV duplicates, automate data cleaning, and cut your prep time. No code required.",
+      "Practical guides for data analysts: reconcile Excel files, remove CSV duplicates, build pipelines that run themselves, and cut your prep time. No code required.",
     canonical: "https://datahub.org.in/blog",
     ogType: "website",
     structuredData: {
@@ -15,7 +15,7 @@ export function BlogIndexPage() {
       name: "DataHub Blog",
       url: "https://datahub.org.in/blog",
       description:
-        "Practical guides for data analysts: reconcile Excel files, remove CSV duplicates, automate data cleaning, and cut your prep time.",
+        "Practical guides for data analysts: reconcile Excel files, remove CSV duplicates, build reusable pipelines, and cut your prep time.",
       publisher: {
         "@type": "Organization",
         name: "DataHub",

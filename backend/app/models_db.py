@@ -720,6 +720,11 @@ class PipelineScheduleDB(Base):
     last_run_at = Column(DateTime(timezone=True), nullable=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True)
     auto_refresh_on_upload = Column(Boolean, nullable=False, default=False)
+    # Write-back destination: populated when the user wants the pipeline's
+    # output automatically pushed to a connector after each run.
+    # Shape: {"connector_type": str, "credential_id": str|null,
+    #         "connector_config": dict|null, "table_name": str, "mode": str}
+    write_back_config = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (

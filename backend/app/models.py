@@ -746,6 +746,7 @@ class PipelineScheduleCreate(BaseModel):
     timezone: str = "Asia/Kolkata"
     is_active: bool = False
     auto_refresh_on_upload: bool = False
+    write_back_config: Optional[Dict[str, Any]] = None
 
 
 class PipelineScheduleResponse(BaseModel):
@@ -758,6 +759,7 @@ class PipelineScheduleResponse(BaseModel):
     last_run_at: Optional[str] = None
     next_run_at: Optional[str] = None
     auto_refresh_on_upload: bool
+    write_back_config: Optional[Dict[str, Any]] = None
     created_at: str
 
 

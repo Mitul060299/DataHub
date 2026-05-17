@@ -1,14 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 
+// ── Write-back destination types (mirrors SendToDestinationModal's DESTINATIONS) ──
+const WB_CONNECTOR_OPTIONS = [
+  { id: "postgresql", label: "PostgreSQL" },
+  { id: "mysql", label: "MySQL" },
+  { id: "mssql", label: "SQL Server" },
+  { id: "snowflake", label: "Snowflake" },
+  { id: "bigquery", label: "BigQuery" },
+  { id: "redshift", label: "Redshift" },
+  { id: "s3", label: "Amazon S3" },
+  { id: "gcs", label: "Google Cloud Storage" },
+  { id: "azure_blob", label: "Azure Blob Storage" },
+];
+
+interface WriteBackConfig {
+  connector_type: string;
+  credential_id?: string | null;
+  table_name: string;
+  mode: "append" | "replace";
+}
+
 interface ScheduleConfig {
   id?: string;
   cron_expression: string;
   timezone: string;
   is_active: boolean;
   auto_refresh_on_upload: boolean;
+  write_back_config?: WriteBackConfig | null;
   next_run_at?: string | null;
   last_run_at?: string | null;
+}
+
+interface SavedCredential {
+  id: string;
+  connector_type: string;
+  label: string;
 }
 
 interface RunRecord {
@@ -95,10 +122,19 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
     timezone: "Asia/Kolkata",
     is_active: true,
     auto_refresh_on_upload: false,
+    write_back_config: null,
   });
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  // Write-back state
+  const [wbEnabled, setWbEnabled] = useState(false);
+  const [wbConnectorType, setWbConnectorType] = useState("postgresql");
+  const [wbCredentialId, setWbCredentialId] = useState<string>("");
+  const [wbTableName, setWbTableName] = useState("");
+  const [wbMode, setWbMode] = useState<"append" | "replace">("append");
+  const [savedCreds, setSavedCreds] = useState<SavedCredential[]>([]);
 
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
@@ -111,11 +147,29 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
   useEffect(() => {
     api.get<ScheduleConfig | null>(`/pipelines/${pipelineId}/schedule`)
       .then((res) => {
-        if (res.data) setSchedule(res.data);
+        if (res.data) {
+          setSchedule(res.data);
+          const wb = res.data.write_back_config;
+          if (wb) {
+            setWbEnabled(true);
+            setWbConnectorType(wb.connector_type || "postgresql");
+            setWbCredentialId(wb.credential_id || "");
+            setWbTableName(wb.table_name || "");
+            setWbMode(wb.mode || "append");
+          }
+        }
         setScheduleLoaded(true);
       })
       .catch(() => setScheduleLoaded(true));
   }, [pipelineId]);
+
+  // Load saved credentials when write-back connector changes
+  useEffect(() => {
+    if (!wbEnabled) return;
+    api.get<SavedCredential[]>("/connectors/credentials")
+      .then((res) => setSavedCreds(res.data || []))
+      .catch(() => setSavedCreds([]));
+  }, [wbEnabled, wbConnectorType]);
 
   // Load run history
   const loadRuns = useCallback(() => {
@@ -157,7 +211,18 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
     setSavingSchedule(true);
     setSaveMsg(null);
     try {
-      await api.post(`/pipelines/${pipelineId}/schedule`, schedule);
+      const payload: ScheduleConfig = {
+        ...schedule,
+        write_back_config: wbEnabled && wbConnectorType && wbTableName.trim()
+          ? {
+              connector_type: wbConnectorType,
+              credential_id: wbCredentialId || null,
+              table_name: wbTableName.trim(),
+              mode: wbMode,
+            }
+          : null,
+      };
+      await api.post(`/pipelines/${pipelineId}/schedule`, payload);
       setSaveMsg("Schedule saved.");
     } catch {
       setSaveMsg("Failed to save schedule.");
@@ -328,6 +393,106 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
           </button>
           {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith("Failed") ? "#f87171" : "#4ade80" }}>{saveMsg}</span>}
         </div>
+      </div>
+
+      {/* Write-back destination */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>Auto Write-back</h3>
+            <p style={{ fontSize: 12, color: "var(--tx1)" }}>After each run, push the output table directly to a database or cloud storage.</p>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={wbEnabled} onChange={(e) => setWbEnabled(e.target.checked)} />
+            Enable
+          </label>
+        </div>
+
+        {wbEnabled && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Connector type */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--tx1)", marginBottom: 4 }}>Destination</label>
+                <select
+                  className="input"
+                  value={wbConnectorType}
+                  onChange={(e) => { setWbConnectorType(e.target.value); setWbCredentialId(""); }}
+                  style={{ width: "100%" }}
+                >
+                  {WB_CONNECTOR_OPTIONS.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--tx1)", marginBottom: 4 }}>
+                  {["s3", "gcs", "azure_blob"].includes(wbConnectorType) ? "File path" : "Table name"}
+                  <span style={{ color: "#e06060", marginLeft: 2 }}>*</span>
+                </label>
+                <input
+                  className="input"
+                  value={wbTableName}
+                  onChange={(e) => setWbTableName(e.target.value)}
+                  placeholder={["s3", "gcs", "azure_blob"].includes(wbConnectorType) ? "output/data.parquet" : "cleaned_output"}
+                  style={{ width: "100%" }}
+                />
+              </div>
+            </div>
+
+            {/* Saved credential picker */}
+            {savedCreds.filter((c) => c.connector_type === wbConnectorType).length > 0 && (
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--tx1)", marginBottom: 4 }}>Saved credential</label>
+                <select
+                  className="input"
+                  value={wbCredentialId}
+                  onChange={(e) => setWbCredentialId(e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  <option value="">— none (will use inline config) —</option>
+                  {savedCreds
+                    .filter((c) => c.connector_type === wbConnectorType)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {/* Write mode (SQL only) */}
+            {!["s3", "gcs", "azure_blob"].includes(wbConnectorType) && (
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--tx1)", marginBottom: 4 }}>Write mode</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(["append", "replace"] as const).map((m) => (
+                    <button
+                      key={m}
+                      className="btn"
+                      onClick={() => setWbMode(m)}
+                      style={{
+                        flex: 1,
+                        background: wbMode === m ? "rgba(91,106,240,0.12)" : undefined,
+                        border: wbMode === m ? "1px solid rgba(91,106,240,0.4)" : undefined,
+                        color: wbMode === m ? "var(--ac)" : undefined,
+                        fontSize: 12,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!wbCredentialId && (
+              <p style={{ fontSize: 11, color: "var(--tx2)", margin: 0 }}>
+                No saved credential selected — make sure to save a credential via the &quot;Send to Destination&quot; export first, then select it here.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Run History */}

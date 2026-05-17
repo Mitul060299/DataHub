@@ -390,3 +390,221 @@ class ExportService:
             "spreadsheet_url": spreadsheet_url,
             "sheet_name": sheet_name,
         }
+
+    # ── Power BI Service — push dataset rows ─────────────────────────────────
+
+    @staticmethod
+    def push_to_powerbi(
+        dataset_id: str,
+        workspace_id: str,
+        pbi_dataset_id: str,
+        table_name: str,
+        tenant_id: str,
+        client_id: str,
+        client_secret: str,
+        db,
+        storage_path_override: str | None = None,
+    ) -> dict:
+        """
+        Push dataset rows to an existing Power BI push/streaming dataset via
+        the Power BI REST API (POST /rows).
+
+        Authentication uses the OAuth2 client-credentials flow (Azure AD app-only).
+        The caller must supply:
+          tenant_id    — Azure AD tenant (directory) ID
+          client_id    — Application (client) ID
+          client_secret — App secret value
+          workspace_id  — Power BI workspace (group) ID
+          pbi_dataset_id — Push dataset ID (created in Power BI)
+          table_name   — Table inside the push dataset to write rows into
+
+        Raises ValueError for auth/config errors, RuntimeError for API errors.
+        Returns { "rows_written": int }.
+        """
+        import json
+        import httpx
+
+        if not all([tenant_id, client_id, client_secret, workspace_id, pbi_dataset_id, table_name]):
+            raise ValueError(
+                "tenant_id, client_id, client_secret, workspace_id, "
+                "pbi_dataset_id and table_name are all required."
+            )
+
+        df = ExportService._load_df_for_dataset(dataset_id, db, storage_path_override)
+        if df.empty:
+            raise ValueError("Dataset is empty — nothing to push.")
+
+        # ── 1. Acquire Azure AD token (client credentials) ───────────────────
+        token_url = (
+            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        )
+        token_resp = httpx.post(
+            token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scope": "https://analysis.windows.net/powerbi/api/.default",
+            },
+            timeout=30,
+        )
+        if token_resp.status_code != 200:
+            raise ValueError(
+                f"Azure AD token request failed ({token_resp.status_code}): "
+                f"{token_resp.text[:200]}"
+            )
+        access_token = token_resp.json().get("access_token", "")
+        if not access_token:
+            raise ValueError("Azure AD token response missing access_token.")
+
+        # ── 2. Push rows in batches of 10 000 (Power BI REST limit) ──────────
+        pbi_url = (
+            f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}"
+            f"/datasets/{pbi_dataset_id}/tables/{table_name}/rows"
+        )
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
+        BATCH = 10_000
+        total_rows = len(df)
+        rows_pushed = 0
+
+        # Convert to JSON-safe records (NaN → None, numpy types → Python natives)
+        records = json.loads(df.to_json(orient="records", date_format="iso"))
+
+        for i in range(0, total_rows, BATCH):
+            batch = records[i : i + BATCH]
+            resp = httpx.post(
+                pbi_url,
+                json={"rows": batch},
+                headers=headers,
+                timeout=60,
+            )
+            if resp.status_code not in (200, 201):
+                raise RuntimeError(
+                    f"Power BI API error ({resp.status_code}) "
+                    f"at batch {i // BATCH + 1}: {resp.text[:400]}"
+                )
+            rows_pushed += len(batch)
+
+        return {
+            "rows_written": rows_pushed,
+            "workspace_id": workspace_id,
+            "dataset_id": pbi_dataset_id,
+            "table_name": table_name,
+        }
+
+    # ── Tableau Server — publish datasource ──────────────────────────────────
+
+    @staticmethod
+    def publish_to_tableau_server(
+        dataset_id: str,
+        server_url: str,
+        site_id: str,
+        project_id: str,
+        datasource_name: str,
+        token_name: str,
+        token_value: str,
+        db,
+        storage_path_override: str | None = None,
+    ) -> dict:
+        """
+        Publish a CSV extract to Tableau Server / Tableau Cloud as a new
+        datasource (or overwrite an existing one) using the Tableau REST API.
+
+        Authentication uses Tableau Personal Access Tokens (PAT).
+
+        Args:
+          server_url      — Base URL, e.g. https://10ax.online.tableau.com
+          site_id         — Site content URL (empty string for Default site)
+          project_id      — LUID of the target project
+          datasource_name — Name for the published datasource
+          token_name      — PAT name
+          token_value     — PAT secret
+
+        Returns { "datasource_id": str, "datasource_name": str }.
+        """
+        import io
+        import json
+        import httpx
+
+        if not all([server_url, project_id, datasource_name, token_name, token_value]):
+            raise ValueError(
+                "server_url, project_id, datasource_name, token_name "
+                "and token_value are all required."
+            )
+
+        df = ExportService._load_df_for_dataset(dataset_id, db, storage_path_override)
+        if df.empty:
+            raise ValueError("Dataset is empty — nothing to publish.")
+
+        base = server_url.rstrip("/")
+
+        # ── 1. Sign in ────────────────────────────────────────────────────────
+        signin_url = f"{base}/api/3.19/auth/signin"
+        signin_body = {
+            "credentials": {
+                "personalAccessTokenName": token_name,
+                "personalAccessTokenSecret": token_value,
+                "site": {"contentUrl": site_id},
+            }
+        }
+        signin_resp = httpx.post(signin_url, json=signin_body, timeout=30)
+        if signin_resp.status_code != 200:
+            raise ValueError(
+                f"Tableau sign-in failed ({signin_resp.status_code}): "
+                f"{signin_resp.text[:200]}"
+            )
+        creds = signin_resp.json().get("credentials", {})
+        auth_token = creds.get("token", "")
+        resolved_site_id = creds.get("site", {}).get("id", "")
+        if not auth_token:
+            raise ValueError("Tableau sign-in response missing token.")
+
+        # ── 2. Publish CSV as datasource (multipart) ──────────────────────────
+        publish_url = (
+            f"{base}/api/3.19/sites/{resolved_site_id}/datasources"
+            "?overwrite=true"
+        )
+        csv_bytes = df.to_csv(index=False).encode("utf-8")
+        ds_name_safe = datasource_name.replace('"', "")
+
+        request_payload = json.dumps({
+            "datasource": {
+                "name": ds_name_safe,
+                "project": {"id": project_id},
+            }
+        })
+
+        content = (
+            "--boundary\r\n"
+            'Content-Disposition: name="request_payload"\r\n'
+            "Content-Type: application/json\r\n\r\n"
+            f"{request_payload}\r\n"
+            "--boundary\r\n"
+            f'Content-Disposition: name="file"; filename="{ds_name_safe}.csv"\r\n'
+            "Content-Type: text/csv\r\n\r\n"
+        ).encode("utf-8") + csv_bytes + b"\r\n--boundary--\r\n"
+
+        pub_resp = httpx.post(
+            publish_url,
+            content=content,
+            headers={
+                "x-tableau-auth": auth_token,
+                "Content-Type": "multipart/mixed; boundary=boundary",
+            },
+            timeout=120,
+        )
+        if pub_resp.status_code not in (200, 201):
+            raise RuntimeError(
+                f"Tableau publish failed ({pub_resp.status_code}): "
+                f"{pub_resp.text[:400]}"
+            )
+
+        ds = pub_resp.json().get("datasource", {})
+        return {
+            "datasource_id": ds.get("id", ""),
+            "datasource_name": ds.get("name", ds_name_safe),
+        }

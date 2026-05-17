@@ -19,8 +19,8 @@ export function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
 
   useSEO({
-    title: "Log In – datahub.org.in",
-    description: "Sign in to your datahub.org.in account to access your data pipelines, workspaces, and dashboards.",
+    title: "Log In – DataHub | AI Agent for Data Work",
+    description: "Sign in to your DataHub account to access your AI agent, visual pipelines, workspaces, and dashboards.",
     canonical: "https://datahub.org.in/login",
     noIndex: true,
   });
@@ -115,8 +115,8 @@ export function LoginPage() {
   return (
     <div className="auth-shell">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-title">Welcome back to datahub.org.in</h1>
-        <p className="auth-sub">Sign in to continue your workspace session.</p>
+        <h1 className="auth-title">Welcome back to DataHub</h1>
+        <p className="auth-sub">Sign in to your AI agent and pipelines.</p>
         {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
 
         {/* OAuth first — one-click signin is faster and reduces password-reset traffic. */}

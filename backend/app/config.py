@@ -176,6 +176,12 @@ class Settings(BaseModel):
     # Brevo (Sendinblue) email marketing — used to add new signups to the contact list
     brevo_api_key: str = os.getenv("BREVO_API_KEY", "")
     brevo_list_id: int = int(os.getenv("BREVO_LIST_ID", "0"))
+    # ClamAV antivirus scanning for uploaded files (best-effort, non-blocking)
+    # Set CLAMD_SOCKET (e.g. /var/run/clamav/clamd.ctl) for Unix-socket mode,
+    # or CLAMD_HOST + CLAMD_PORT for TCP mode. Leave both blank to skip AV scanning.
+    clamd_socket: str = os.getenv("CLAMD_SOCKET", "")
+    clamd_host: str = os.getenv("CLAMD_HOST", "")
+    clamd_port: int = int(os.getenv("CLAMD_PORT", "3310"))
 
 
 settings = Settings()

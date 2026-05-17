@@ -120,14 +120,12 @@ const CONNECTORS: ConnectorDef[] = [
       { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: true },
     ],
   },
-  // ── Cloud SQL warehouses — Import or DirectQuery (coming soon) ──────────
+  // ── Cloud SQL warehouses — Import or DirectQuery ──────────────────────
   {
     id: "snowflake",
     label: "Snowflake",
     icon: "❄️",
     description: "Snowflake data warehouse",
-    locked: true,
-    lockedLabel: "coming soon",
     supportsDirectQuery: true,
     fields: [
       { key: "account", label: "Account", type: "text", placeholder: "xy12345.us-east-1", required: true },
@@ -143,8 +141,6 @@ const CONNECTORS: ConnectorDef[] = [
     label: "BigQuery",
     icon: "☁️",
     description: "Google BigQuery",
-    locked: true,
-    lockedLabel: "coming soon",
     supportsDirectQuery: true,
     fields: [
       { key: "project_id", label: "Project ID", type: "text", placeholder: "my-gcp-project", required: true },
@@ -157,8 +153,6 @@ const CONNECTORS: ConnectorDef[] = [
     label: "Redshift",
     icon: "🔴",
     description: "Amazon Redshift",
-    locked: true,
-    lockedLabel: "coming soon",
     supportsDirectQuery: true,
     fields: [
       { key: "host", label: "Host", type: "text", placeholder: "my-cluster.abc123.us-east-1.redshift.amazonaws.com", required: true },
@@ -175,8 +169,6 @@ const CONNECTORS: ConnectorDef[] = [
     label: "Amazon S3",
     icon: "🪣",
     description: "Import CSV, Parquet, or JSON from S3",
-    locked: true,
-    lockedLabel: "coming soon",
     supportsDirectQuery: false,
     fields: [
       { key: "access_key_id", label: "Access Key ID", type: "text", placeholder: "AKIAIOSFODNN7EXAMPLE", required: true },
@@ -191,8 +183,6 @@ const CONNECTORS: ConnectorDef[] = [
     label: "Google Cloud Storage",
     icon: "🗂️",
     description: "Import CSV, Parquet, or JSON from GCS",
-    locked: true,
-    lockedLabel: "coming soon",
     supportsDirectQuery: false,
     fields: [
       { key: "project_id", label: "Project ID", type: "text", placeholder: "my-gcp-project" },
@@ -206,8 +196,6 @@ const CONNECTORS: ConnectorDef[] = [
     label: "Azure Blob Storage",
     icon: "🔷",
     description: "Import CSV, Parquet, or JSON from Azure Blob",
-    locked: true,
-    lockedLabel: "coming soon",
     supportsDirectQuery: false,
     fields: [
       { key: "connection_string", label: "Connection string", type: "password", placeholder: "DefaultEndpointsProtocol=https;AccountName=..." },

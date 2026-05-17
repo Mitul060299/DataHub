@@ -10,6 +10,7 @@ import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { PipelineSection } from "./PipelineSection";
 import { DataVersionHistory } from "./DataVersionHistory";
 import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview } from "../api";
+import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 
 type CanvasTab = "data" | "pipeline" | "canvas" | "schedule" | "history";
 
@@ -76,6 +77,9 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   // ── Export confirmation modal state ───────────────────────────────────────
   const [exportConfirmTarget, setExportConfirmTarget] = useState<"csv" | "powerbi" | "tableau" | null>(null);
   const [exportCheckpoint, setExportCheckpoint] = useState(false);
+
+  // ── Send-to-destination modal state ──────────────────────────────────────
+  const [isSendToDestOpen, setIsSendToDestOpen] = useState(false);
 
   // ── Step-preview state (triggered from PipelineSection 👁 buttons) ────────
   const [viewingStepIndex, setViewingStepIndex] = useState<number | null>(null);
@@ -287,6 +291,14 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
 
   return (
     <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* ── Send to Destination Modal ───────────────────────────────────── */}
+      <SendToDestinationModal
+        open={isSendToDestOpen}
+        onClose={() => setIsSendToDestOpen(false)}
+        datasetId={dataset?.id ?? null}
+        datasetName={dataset?.name ?? null}
+        rowCount={liveArtifact?.rowCount ?? rowCount}
+      />
       {/* ── Export Confirmation Modal ───────────────────────────────────── */}
       {exportConfirmTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -430,6 +442,18 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 accent="#34A853"
                 badge="SYNC"
                 onClick={() => { setIsExportOpen(false); onSheetsExport?.(); }}
+              />
+
+              {/* Divider */}
+              <div style={{ height: 1, background: "var(--bd)", margin: "4px 0" }} />
+
+              {/* Send to destination */}
+              <ExportItem
+                label="Send to database / warehouse"
+                sub="PostgreSQL, BigQuery, Snowflake, S3…"
+                accent="#5B6AF0"
+                badge="DB"
+                onClick={() => { setIsExportOpen(false); setIsSendToDestOpen(true); }}
               />
 
               {/* Divider */}

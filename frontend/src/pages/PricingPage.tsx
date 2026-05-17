@@ -142,9 +142,9 @@ export function PricingPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useSEO({
-    title: "datahub.org.in Pricing – Free, Starter, Pro & Team Plans | AI Data Analysis",
+    title: "DataHub Pricing – Free, Starter, Pro & Team Plans | AI Agent for Data Work",
     description:
-      "Start free forever. Starter from ₹999/month, Professional ₹3,999, Team ₹8,999, Business ₹17,999. All plans include the AI agent, transparent SQL pipelines, and database connectors.",
+      "Start free forever. Starter from ₹999/month, Professional ₹3,999, Team ₹8,999, Business ₹17,999. Every plan includes the AI agent, visual reusable pipelines, and transparent SQL.",
     canonical: "https://datahub.org.in/pricing",
     structuredData: PRICING_LD,
   });

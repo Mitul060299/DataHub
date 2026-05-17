@@ -17,9 +17,9 @@ export function SignupPage() {
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useSEO({
-    title: "Sign Up – Start Analyzing Data with AI | datahub.org.in",
+    title: "Sign Up – Get Your AI Agent for Data Work | DataHub",
     description:
-      "Create your free datahub.org.in account. No credit card required. Connect your data sources and start building AI-powered SQL pipelines in minutes.",
+      "Create your free DataHub account. No credit card required. Get an AI agent for one-off data tasks and a visual pipeline builder for the work you do every week.",
     canonical: "https://datahub.org.in/signup",
   });
 
@@ -95,8 +95,8 @@ export function SignupPage() {
   return (
     <div className="auth-shell">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-title">Create your datahub.org.in account</h1>
-        <p className="auth-sub">1 month free on all paid plans — no credit card needed to get started.</p>
+        <h1 className="auth-title">Get your AI agent for data work</h1>
+        <p className="auth-sub">Free plan included. 15-day trial on all paid plans — no credit card needed.</p>
         <ul className="auth-trust">
           <li>✓ 15-day free trial on any paid plan</li>
           <li>✓ No credit card</li>

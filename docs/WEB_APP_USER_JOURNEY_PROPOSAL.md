@@ -105,3 +105,12 @@ This split should be maintained in stakeholder messaging so commercial narrative
 - Implemented: semantic parity polish between fallback and backend event streams (confirmation/error/success status mapping and action guidance alignment).
 - In hardening: minor UX consistency tuning and cleanup as additional edge cases are discovered.
 - Roadmap: advanced AI memory semantics, intent router sophistication, and enterprise-grade observability/alerting expansion for autonomous and chat orchestration.
+
+### UI / Onboarding Updates (May 8, 2026)
+- Implemented: workspace layout simplified — `ActivityBar` removed (no Explorer/Pipeline toggle buttons); `ExplorerPanel` is now always visible with no toggle.
+- Implemented: `PipelinePanel` sliding overlay removed — pipeline configuration is now inline on the **Pipeline** tab (visual graph on the left, steps list + controls on the right at 300 px).
+- Implemented: AI Agent panel automatically hides when the Pipeline tab is active, giving the pipeline view full horizontal width; restores on all other tabs.
+- Implemented: `WelcomeModal` redesigned from a single-screen sample picker to a 4-slide interactive walkthrough (feature overview → Data tab tips → Pipeline tab tips → sample picker) with animated progress dots and back/next navigation.
+- Implemented: first-time tour updated — removed broken `activity-pipeline` step; added `pipeline-tab` step pointing at the Pipeline tab button; all 8 step descriptions rewritten to be more concrete and action-oriented.
+- Implemented: Getting Started checklist hints updated to reference the current UI (Pipeline tab instead of Pipeline panel; corrected keyboard shortcut for import).
+- Implemented: side panel visual polish — `ExplorerPanel` and `AIPanel` borders upgraded from `--bd` (~5% opacity) to `--bd3` (~15% opacity); panel backgrounds lifted to `--bg2` for stronger separation from the canvas.

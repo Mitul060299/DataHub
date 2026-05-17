@@ -2274,6 +2274,140 @@ def export_dataset_to_sheets(
     return result
 
 
+@router.post("/{dataset_id}/export/powerbi-push")
+@limiter.limit("10/hour")
+def export_dataset_to_powerbi_push(
+    request: Request,
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Push dataset rows to a Power BI Service push/streaming dataset.
+
+    Required payload fields:
+      workspace_id  — Power BI workspace (group) ID
+      dataset_id    — Push dataset ID inside that workspace
+      table_name    — Table within the push dataset
+      tenant_id     — Azure AD tenant ID
+      client_id     — Azure AD application (client) ID
+      client_secret — Azure AD application client secret
+    """
+    from ..services.export_service import ExportService
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    required = ["workspace_id", "dataset_id", "table_name", "tenant_id", "client_id", "client_secret"]
+    missing = [f for f in required if not payload.get(f)]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing required fields: {', '.join(missing)}")
+
+    _user_id = get_current_user_id(authorization) or "anonymous"
+    _snapshot_path = _latest_pipeline_snapshot_path(dataset_id, _user_id, db)
+    try:
+        result = ExportService.push_to_powerbi(
+            dataset_id=dataset_id,
+            workspace_id=payload["workspace_id"],
+            pbi_dataset_id=payload["dataset_id"],
+            table_name=payload["table_name"],
+            tenant_id=payload["tenant_id"],
+            client_id=payload["client_id"],
+            client_secret=payload["client_secret"],
+            db=db,
+            storage_path_override=_snapshot_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Power BI push failed for dataset %s", dataset_id)
+        raise HTTPException(status_code=500, detail="Power BI push failed. Please try again.") from exc
+
+    emit_event("dataset.exported_powerbi_push", {"dataset_id": dataset_id, "rows_written": result.get("rows_written", 0)})
+    audit_store.add(AuditEntry(
+        action="dataset.export",
+        actor=_user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"format": "powerbi_push"},
+    ))
+    _enforce_api_call(_user_id, db)
+    increment_usage(_user_id, "api_calls", db)
+    return result
+
+
+@router.post("/{dataset_id}/export/tableau-publish")
+@limiter.limit("10/hour")
+def export_dataset_to_tableau_server(
+    request: Request,
+    dataset_id: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Publish a dataset to Tableau Server / Tableau Cloud as a CSV datasource.
+
+    Required payload fields:
+      server_url      — Tableau Server base URL (https://...)
+      project_id      — LUID of the target project
+      datasource_name — Name for the published datasource
+      token_name      — Personal Access Token name
+      token_value     — Personal Access Token secret
+
+    Optional:
+      site_id — Site content URL (empty string = Default site)
+    """
+    from ..services.export_service import ExportService
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    if not meta:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    required = ["server_url", "project_id", "datasource_name", "token_name", "token_value"]
+    missing = [f for f in required if not payload.get(f)]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing required fields: {', '.join(missing)}")
+
+    _user_id = get_current_user_id(authorization) or "anonymous"
+    _snapshot_path = _latest_pipeline_snapshot_path(dataset_id, _user_id, db)
+    try:
+        result = ExportService.publish_to_tableau_server(
+            dataset_id=dataset_id,
+            server_url=payload["server_url"],
+            site_id=payload.get("site_id", ""),
+            project_id=payload["project_id"],
+            datasource_name=payload["datasource_name"],
+            token_name=payload["token_name"],
+            token_value=payload["token_value"],
+            db=db,
+            storage_path_override=_snapshot_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Tableau publish failed for dataset %s", dataset_id)
+        raise HTTPException(status_code=500, detail="Tableau publish failed. Please try again.") from exc
+
+    emit_event("dataset.exported_tableau_server", {"dataset_id": dataset_id})
+    audit_store.add(AuditEntry(
+        action="dataset.export",
+        actor=_user_id,
+        target=f"dataset:{dataset_id}",
+        metadata={"format": "tableau_server"},
+    ))
+    _enforce_api_call(_user_id, db)
+    increment_usage(_user_id, "api_calls", db)
+    return result
+
+
 @router.get("/{dataset_id}/schema")
 def get_dataset_schema(
     dataset_id: str,
@@ -2655,11 +2789,25 @@ def export_dataset_to_connector(
             detail="Provide credential_id or connector_config",
         )
 
-    # ── Load dataset rows ────────────────────────────────────────────────────
-    try:
-        df = get_dataset(dataset_id)
-    except KeyError:
-        df = get_dataset_from_db(dataset_id, db, user_id=user_id or "anonymous")
+    # ── Load dataset rows (prefer latest pipeline-step snapshot) ────────────
+    # This ensures the write-back reflects any AI-agent transformations the user
+    # has applied in the current session, not the original raw data.
+    _snap_path = _latest_pipeline_snapshot_path(dataset_id, user_id, db)
+    df = None
+    if _snap_path:
+        try:
+            import duckdb as _ddb
+            _qpath = StorageService.get_query_path(_snap_path)
+            _con = _ddb.connect(database=":memory:")
+            df = _con.execute(f"SELECT * FROM read_parquet('{_qpath}')").df()
+            _con.close()
+        except Exception:
+            df = None
+    if df is None:
+        try:
+            df = get_dataset(dataset_id)
+        except KeyError:
+            df = get_dataset_from_db(dataset_id, db, user_id=user_id or "anonymous")
 
     if df.empty:
         raise HTTPException(status_code=400, detail="Dataset is empty — nothing to write")
@@ -2678,8 +2826,15 @@ def export_dataset_to_connector(
     # Safety: default to 'append' unless the user explicitly chose 'replace'
     mode = payload.mode if payload.mode in ("append", "replace", "fail") else "append"
 
+    # Object-storage connectors (S3, GCS, Azure Blob) use `key=` (file path)
+    # rather than `table=` (SQL table name). Detect by type name.
+    _OBJECT_STORAGE_CONNECTORS = {"s3", "gcs", "azure_blob"}
+
     try:
-        rows_written = connector.write(config=config, df=df, table=payload.table_name, mode=mode)
+        if payload.connector_type in _OBJECT_STORAGE_CONNECTORS:
+            rows_written = connector.write(config=config, df=df, key=payload.table_name, mode=mode)
+        else:
+            rows_written = connector.write(config=config, df=df, table=payload.table_name, mode=mode)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Write-back failed: {exc}") from exc
 

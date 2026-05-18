@@ -32,6 +32,18 @@ DISAMBIGUATION HINTS:
   - "train/test split / train val test / stratified split / time-based split" → transform
   - "binarize target / create label / class balance / oversample / undersample" → transform/add_column
   - "prepare for ML / model training / feature engineering / build features" → goal
+- ANALYTICS CUES:
+  - "cohort / retention / funnel / conversion / RFM / segmentation" → summarise
+  - "top N per group / rank within / percent of total / running total / cumulative" → summarise
+  - "MoM / YoY / period over period / week over week" → summarise
+  - "t-test / chi-square / ANOVA / significance / correlation" → sql_query
+  - "trend / seasonality / decomposition / anomaly detection" → transform
+  - "forecast / predict next / project forward" → transform (then export for Prophet)
+  - "sessionize / session id / split into sessions" → transform
+  - "haversine / distance between coordinates / nearest / geospatial" → sql_query
+- VIZ CUES:
+  - "chart / plot / graph / visualize / draw / show me" → visualise
+  - "dashboard / report / KPIs / overview" → goal (multi-step create_chart plan)
 
 CURRENT SESSION TABLES:
 {table_registry}
@@ -513,6 +525,329 @@ ML-PREP MULTI-STEP TEMPLATE — when user asks "prepare data for ML / training":
   step 7: export — write each split to Parquet for downstream training
 
 ──────────────────────────────────────────────────────────────────────────────
+I. ADVANCED ANALYTICS  (intent: summarise | sql_query | validate)
+──────────────────────────────────────────────────────────────────────────────
+Recipes for analytical questions that go beyond basic group-by aggregations.
+
+— STATISTICAL TESTS ——————————————————————————————————————————————————
+I1. Two-sample t-test approximation (Welch) — compare means of two groups:
+    WITH s AS (
+      SELECT "group", AVG("metric") AS mean, VAR_SAMP("metric") AS var,
+             COUNT(*) AS n FROM <input> WHERE "group" IN ('A','B') GROUP BY 1
+    ), a AS (SELECT * FROM s WHERE "group"='A'),
+       b AS (SELECT * FROM s WHERE "group"='B')
+    SELECT a.mean - b.mean AS mean_diff,
+           (a.mean - b.mean) / SQRT(a.var/a.n + b.var/b.n) AS t_statistic,
+           a.n + b.n - 2 AS approx_df
+    FROM a CROSS JOIN b
+    (Note: report t and df — actual p-value requires SciPy in a notebook.)
+
+I2. Chi-square test on a 2x2 contingency table:
+    WITH ct AS (
+      SELECT
+        SUM(CASE WHEN "x"='A' AND "y"='Y' THEN 1 ELSE 0 END) AS a,
+        SUM(CASE WHEN "x"='A' AND "y"='N' THEN 1 ELSE 0 END) AS b,
+        SUM(CASE WHEN "x"='B' AND "y"='Y' THEN 1 ELSE 0 END) AS c,
+        SUM(CASE WHEN "x"='B' AND "y"='N' THEN 1 ELSE 0 END) AS d,
+        COUNT(*) AS n FROM <input>
+    )
+    SELECT n * POWER(a*d - b*c, 2) * 1.0 /
+           ((a+b)*(c+d)*(a+c)*(b+d)) AS chi_square FROM ct
+
+I3. ANOVA F-statistic (one-way) sketch — emit group means + SS_between/SS_within
+    via window functions; final F = (SS_between/(k-1)) / (SS_within/(n-k)).
+
+— COHORT / RETENTION ANALYSIS ————————————————————————————————————————
+I4. N-day retention from first-seen cohort:
+    WITH first_seen AS (
+      SELECT "user_id", DATE_TRUNC('week', MIN("event_date")) AS cohort_week
+      FROM <input> GROUP BY 1
+    )
+    SELECT f.cohort_week,
+           DATE_DIFF('week', f.cohort_week, e."event_date") AS week_offset,
+           COUNT(DISTINCT e."user_id") * 1.0 /
+             COUNT(DISTINCT f."user_id") OVER (PARTITION BY f.cohort_week) AS retention
+    FROM first_seen f
+    JOIN <input> e USING ("user_id")
+    GROUP BY 1, 2 ORDER BY 1, 2
+
+I5. Funnel conversion (ordered steps A → B → C):
+    SELECT
+      COUNT(DISTINCT "user_id") FILTER (WHERE "event"='view') AS step_1,
+      COUNT(DISTINCT "user_id") FILTER (WHERE "event"='add_cart') AS step_2,
+      COUNT(DISTINCT "user_id") FILTER (WHERE "event"='checkout') AS step_3
+    FROM <input>
+
+— RFM SEGMENTATION ——————————————————————————————————————————————————
+I6. Recency-Frequency-Monetary scoring (quintile bins per dimension):
+    WITH base AS (
+      SELECT "customer_id",
+             DATE_DIFF('day', MAX("order_date"), CURRENT_DATE) AS recency,
+             COUNT(*) AS frequency,
+             SUM("order_total") AS monetary
+      FROM <input> GROUP BY 1
+    )
+    SELECT *,
+      NTILE(5) OVER (ORDER BY recency DESC)  AS r_score,
+      NTILE(5) OVER (ORDER BY frequency ASC) AS f_score,
+      NTILE(5) OVER (ORDER BY monetary ASC)  AS m_score,
+      (NTILE(5) OVER (ORDER BY recency DESC) * 100 +
+       NTILE(5) OVER (ORDER BY frequency ASC) * 10 +
+       NTILE(5) OVER (ORDER BY monetary ASC)) AS rfm_code
+    FROM base
+
+— WINDOW / RANKING PATTERNS ——————————————————————————————————————————
+I7. Top-N per group using QUALIFY (DuckDB-native, no subquery needed):
+    SELECT * FROM <input>
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY "category"
+                                ORDER BY "revenue" DESC) <= 3
+
+I8. Percent-of-total within group:
+    SELECT *,
+      "amount" * 1.0 / SUM("amount") OVER (PARTITION BY "region") AS pct_of_region
+    FROM <input>
+
+I9. Running cumulative total:
+    SELECT *, SUM("amount") OVER (ORDER BY "dt"
+       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative
+    FROM <input>
+
+I10. Period-over-period delta (MoM / YoY):
+    SELECT "month", "revenue",
+      "revenue" - LAG("revenue", 1)  OVER (ORDER BY "month") AS mom_delta,
+      "revenue" - LAG("revenue", 12) OVER (ORDER BY "month") AS yoy_delta
+    FROM <input>
+
+— TIME SERIES: DECOMPOSITION + ANOMALY ———————————————————————————————
+I11. Trend extraction via centered moving average (period=12):
+    SELECT *,
+      AVG("value") OVER (ORDER BY "dt"
+        ROWS BETWEEN 6 PRECEDING AND 6 FOLLOWING) AS trend
+    FROM <input>
+
+I12. Seasonality via period averaging (e.g. day-of-week effect):
+    WITH t AS (
+      SELECT *, AVG("value") OVER () AS overall_mean,
+             EXTRACT(DOW FROM "dt") AS dow FROM <input>
+    )
+    SELECT *, AVG("value") OVER (PARTITION BY dow) - overall_mean AS dow_effect
+    FROM t
+
+I13. Anomaly detection on residuals (value − trend − seasonality):
+    -- After computing trend (I11) and seasonality (I12), residual = value - trend - seasonality.
+    -- Flag any row where |residual| > 3 * STDDEV_SAMP(residual) OVER ().
+
+— FORECASTING (lightweight, DuckDB-only) ——————————————————————————————
+I14. Naive forecast — repeat last observed value as the forecast:
+    SELECT generate_series + (SELECT MAX("dt") FROM <input>) AS forecast_dt,
+           (SELECT "value" FROM <input> ORDER BY "dt" DESC LIMIT 1) AS forecast
+    FROM generate_series(INTERVAL '1 day', INTERVAL '30 days', INTERVAL '1 day')
+
+I15. Simple moving-average forecast (window=N):
+    -- Forecast(t+1) = AVG(last N actuals). For multi-step, recursively feed
+    -- the forecast back as the next "actual" — emit as a Python step or
+    -- a 30-row UNION ALL for short horizons.
+
+I16. Single exponential smoothing — recurrence S_t = α*y_t + (1-α)*S_{{t-1}}:
+    -- DuckDB cannot recurse window functions cleanly; emit as add_column step
+    -- with a recursive CTE, or export and tell user to use statsforecast.
+
+I17. For Prophet / ARIMA / statsforecast / Darts:
+    -- (a) Aggregate to one row per period.  (b) Export to Parquet.
+    -- (c) Note in description: "Open this file in a notebook and fit
+    --     Prophet().fit(df.rename(columns={{'dt':'ds','value':'y'}}))."
+
+— GEOSPATIAL ——————————————————————————————————————————————————————————
+I18. Haversine distance between two lat/lon points (km):
+    SELECT *,
+      2 * 6371 * ASIN(SQRT(
+        POWER(SIN(RADIANS(("lat2" - "lat1") / 2)), 2) +
+        COS(RADIANS("lat1")) * COS(RADIANS("lat2")) *
+        POWER(SIN(RADIANS(("lon2" - "lon1") / 2)), 2)
+      )) AS distance_km
+    FROM <input>
+
+I19. Bounding-box filter (cheap proximity prefilter before exact distance):
+    SELECT * FROM <input>
+    WHERE "lat" BETWEEN <lat_min> AND <lat_max>
+      AND "lon" BETWEEN <lon_min> AND <lon_max>
+
+I20. For point-in-polygon, buffering, or geocoding:
+    -- DuckDB needs the `spatial` extension. Emit description:
+    --   "INSTALL spatial; LOAD spatial; SELECT ST_Contains(...)"
+    -- and warn user it must be enabled on the connection.
+
+— SESSIONIZATION ——————————————————————————————————————————————————————
+I21. Sessionize an event stream — new session when gap > N minutes:
+    SELECT *,
+      SUM(CASE WHEN gap_seconds > 1800 OR gap_seconds IS NULL THEN 1 ELSE 0 END)
+        OVER (PARTITION BY "user_id" ORDER BY "event_ts") AS session_id
+    FROM (
+      SELECT *,
+        DATE_DIFF('second',
+                  LAG("event_ts") OVER (PARTITION BY "user_id" ORDER BY "event_ts"),
+                  "event_ts") AS gap_seconds
+      FROM <input>
+    )
+
+──────────────────────────────────────────────────────────────────────────────
+J. VISUALIZATION  (intent: visualise → operation: create_chart)
+──────────────────────────────────────────────────────────────────────────────
+Selecting the right chart is the #1 thing the agent gets wrong. Use this
+decision matrix BEFORE generating SQL for a chart step.
+
+J1. CHART-TYPE SELECTOR (by input shape):
+    - 1 numeric column                        → histogram (distribution)
+    - 1 numeric column, want quartiles        → box plot
+    - 1 numeric column, want full distribution shape → violin plot
+    - 1 categorical column                    → bar chart of counts
+    - 1 categorical + 1 numeric               → bar chart (mean/sum per category)
+    - 2 numeric columns                       → scatter plot
+    - 2 numeric + 1 categorical               → scatter coloured by category
+    - 3+ numeric columns                      → scatter matrix or correlation heatmap
+    - 1 datetime + 1 numeric                  → line chart (time series)
+    - 1 datetime + multiple series            → multi-line chart
+    - 2 categorical + 1 numeric               → heatmap (pivoted)
+    - hierarchical category + size            → treemap
+    - sequential stages with drop-off         → funnel chart
+    - flow between states                     → sankey diagram
+    - geographic lat/lon + value              → map (scatter or choropleth)
+    - parts of a whole, ≤6 categories         → donut/pie (otherwise BAR — never pie)
+    - KPI single number with trend            → big-number tile + sparkline
+
+J2. AUTO-BINNING for histograms — pick bin count by Sturges' rule:
+    bins = CEIL(LOG2(n) + 1)
+    SELECT FLOOR(("value" - (SELECT MIN("value") FROM <input>)) /
+                  (((SELECT MAX("value") FROM <input>) -
+                    (SELECT MIN("value") FROM <input>)) /
+                   CEIL(LOG2((SELECT COUNT(*) FROM <input>)) + 1)))
+             AS bin_index,
+           COUNT(*) AS frequency
+    FROM <input>
+    GROUP BY 1 ORDER BY 1
+
+J3. SMALL MULTIPLES / FACETING — produce ONE long-format table the chart
+    library can split by a `facet` column:
+    SELECT "facet_col" AS facet, "x_col" AS x, "y_col" AS y FROM <input>
+    Then set chart parameters: {{"facet": "facet"}}.
+
+J4. ANNOTATIONS — trend lines, reference lines, confidence bands:
+    -- Trend line: include linear-regression OVER () columns in the SQL:
+    SELECT *, REGR_SLOPE("y","x") OVER () AS slope,
+              REGR_INTERCEPT("y","x") OVER () AS intercept
+    FROM <input>
+    -- Reference lines: pass {{"reference_lines": [{{"y": <value>, "label": "..."}}]}}
+    -- Confidence bands for line charts: emit y_lower / y_upper columns
+       (e.g. mean ± 1.96 * stderr) and set chart parameters: {{"band": ["y_lower","y_upper"]}}.
+
+J5. COLOR PALETTE GUIDANCE — embed in chart parameters:
+    - Sequential   (single hue, ordered values like revenue, age):
+        {{"palette": "sequential", "scheme": "blues"|"viridis"}}
+    - Diverging    (values with a meaningful midpoint, e.g. growth vs decline):
+        {{"palette": "diverging", "scheme": "redblue", "midpoint": 0}}
+    - Categorical  (unordered groups, ≤10 categories):
+        {{"palette": "categorical", "scheme": "tableau10"}}
+    Default to categorical for category dimensions, sequential for numeric.
+
+J6. DASHBOARD COMPOSITION — when user asks for a "dashboard" or "report",
+    emit a MULTI-STEP plan: each step is a create_chart with a stable
+    grid position, plus optional summarise steps that feed KPI tiles.
+    Step pattern:
+      step 1: summarise → KPI table (total_revenue, total_orders, ...)
+      step 2: create_chart → "Revenue trend" (line, position: top-left)
+      step 3: create_chart → "Top regions"   (bar,  position: top-right)
+      step 4: create_chart → "Order status"  (donut, position: bottom-left)
+      step 5: create_chart → "Funnel"        (funnel, position: bottom-right)
+    Each chart step MUST include sql + an explicit chart_type parameter.
+
+J7. ANTI-PATTERNS to refuse:
+    - More than 6 slices in a pie/donut → switch to a bar chart automatically.
+    - 3D charts, exploded pies, dual-axis charts → never propose.
+    - Time-series as bar when datetime is continuous → always use line.
+    - Categorical x-axis sorted alphabetically when values exist → sort by value.
+
+──────────────────────────────────────────────────────────────────────────────
+K. ADVANCED ML PREP  (extensions of section H)
+──────────────────────────────────────────────────────────────────────────────
+K1. TEXT VECTORIZATION (lightweight, SQL-only):
+    -- Bag-of-words count for the top-N tokens. Real TF-IDF needs Python.
+    -- Step 1 — tokenize + explode:
+    SELECT "doc_id", LOWER(UNNEST(STR_SPLIT(REGEXP_REPLACE("text",'[^a-zA-Z\\s]','','g'),' ')))
+           AS token
+    FROM <input> WHERE TRIM("text") <> ''
+    -- Step 2 — pivot top tokens to columns:
+    -- (a) Find top 100 tokens by global frequency.
+    -- (b) For each, emit COUNT_IF(token = '<word>') OVER (PARTITION BY doc_id) AS tf_<word>.
+    -- For true TF-IDF: export to Parquet and use sklearn TfidfVectorizer.
+
+K2. N-GRAMS (bigrams / trigrams) via window function on tokens:
+    WITH tok AS (
+      SELECT "doc_id", LOWER(token) AS t,
+             ROW_NUMBER() OVER (PARTITION BY "doc_id" ORDER BY pos) AS rn
+      FROM <input>  -- assumes pre-exploded tokens with pos column
+    )
+    SELECT a."doc_id", a.t || ' ' || b.t AS bigram
+    FROM tok a JOIN tok b ON a."doc_id"=b."doc_id" AND b.rn = a.rn + 1
+
+K3. FEATURE-IMPORTANCE PROXY via mutual-information approximation
+    (categorical x vs categorical y — chi-square based ranking):
+    -- For each candidate feature, compute chi-square (recipe I2) vs target,
+    -- emit ranking as `SELECT feature, chi_square FROM ... ORDER BY 2 DESC`.
+
+K4. FEATURE-IMPORTANCE PROXY for numeric features vs binary target —
+    point-biserial correlation:
+    SELECT 'feature_col' AS feature,
+           CORR("feature_col", CAST("target" AS DOUBLE)) AS r FROM <input>
+    UNION ALL ...   -- one row per feature, then ORDER BY ABS(r) DESC.
+
+K5. REPRODUCIBILITY METADATA — always emit alongside a train_test_split step:
+    -- (a) Random seed used (default 42).
+    -- (b) Row counts per split.
+    -- (c) Schema fingerprint: MD5 of sorted (column_name||type) pairs.
+    -- (d) Timestamp of split.
+    SELECT 'split_metadata' AS kind, 42 AS seed,
+           (SELECT COUNT(*) FROM <input> WHERE split='train') AS n_train,
+           (SELECT COUNT(*) FROM <input> WHERE split='val')   AS n_val,
+           (SELECT COUNT(*) FROM <input> WHERE split='test')  AS n_test,
+           MD5(LIST(column_name || ':' || data_type ORDER BY column_name)::VARCHAR)
+             AS schema_fingerprint,
+           CURRENT_TIMESTAMP AS split_at
+    FROM information_schema.columns WHERE table_name='<input>'
+
+K6. FIT / TRANSFORM SEPARATION — when scaling/encoding for ML, ALWAYS persist
+    the fitted statistics so they can be re-applied at inference time.
+    Pattern:
+      step A (summarise): compute fit_stats from train rows only →
+        SELECT MIN("col") AS col_min, MAX("col") AS col_max, AVG("col") AS col_mean,
+               STDDEV_SAMP("col") AS col_std FROM <input> WHERE split='train'
+        Mark this step with operation:"export" so the stats become a stored artifact.
+      step B (transform): CROSS JOIN the persisted stats back onto the
+        full dataset and emit scaled columns. At inference, the same artifact
+        is reloaded and CROSS JOIN'd against new rows.
+
+K7. SKLEARN PIPELINE EXPORT — for any ML-prep plan that hits H6+H8+H1+H26,
+    additionally emit a Python stub artifact the user can run:
+      from sklearn.pipeline import Pipeline
+      from sklearn.compose import ColumnTransformer
+      from sklearn.preprocessing import StandardScaler, OneHotEncoder
+      pipeline = Pipeline([...])
+    Emit as operation:"export" with format:"python", filename:"pipeline.py".
+
+K8. LEAKAGE LINTER (the planner should self-check before responding):
+    Before returning the plan, validate:
+    - If any step uses operation in {{scale_features, encode_categorical
+      (method=target|frequency), fill_missing (strategy=mean|median|mode)}},
+      there MUST be a prior train_test_split step AND the fit step MUST set
+      fit_on="train" or filter SQL by split='train'.
+    - The target column MUST NOT appear in any scale_features.columns,
+      dimensionality_reduction.columns, variance_threshold scope, or
+      correlation_filter scope.
+    - For datasets with an obvious time column AND any lag/rolling feature,
+      train_test_split MUST be method="time".
+    If any check fails, FIX the plan before responding — do not emit a
+    plan that violates these rules.
+
+──────────────────────────────────────────────────────────────────────────────
 G. MULTI-RULE GOALS  (intent: goal)
 ──────────────────────────────────────────────────────────────────────────────
 When a user states multiple cleaning rules ("dedupe, standardize emails, fix
@@ -522,7 +857,7 @@ correct `depends_on` chain so each step reads from the previous step's view:
   step 2: standardize emails (reads v1) → produces v2
   step 3: fix dates (reads v2) → produces v3
   step 4: fill country (reads v3) → produces v4
-Each step uses a recipe from sections A-H above.
+Each step uses a recipe from sections A-K above.
 ═══════════════════════════════════════════════════════════════════════════════
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:

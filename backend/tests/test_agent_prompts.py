@@ -114,6 +114,118 @@ class TestMLPrepCookbook:
         assert "ML-PREP MULTI-STEP TEMPLATE" in PLANNER_SYSTEM_PROMPT
 
 
+class TestAnalyticsCookbook:
+    """Section I — advanced analytics recipes."""
+
+    def test_has_analytics_header(self):
+        assert "ADVANCED ANALYTICS" in PLANNER_SYSTEM_PROMPT
+
+    def test_statistical_tests(self):
+        assert "t-test" in PLANNER_SYSTEM_PROMPT.lower()
+        assert "chi-square" in PLANNER_SYSTEM_PROMPT.lower() or "chi_square" in PLANNER_SYSTEM_PROMPT.lower()
+        assert "ANOVA" in PLANNER_SYSTEM_PROMPT
+
+    def test_cohort_and_funnel(self):
+        assert "COHORT" in PLANNER_SYSTEM_PROMPT.upper()
+        assert "retention" in PLANNER_SYSTEM_PROMPT.lower()
+        assert "Funnel" in PLANNER_SYSTEM_PROMPT
+        assert "FILTER (WHERE" in PLANNER_SYSTEM_PROMPT  # funnel pattern
+
+    def test_rfm_segmentation(self):
+        assert "RFM" in PLANNER_SYSTEM_PROMPT
+        assert "NTILE" in PLANNER_SYSTEM_PROMPT
+        assert "recency" in PLANNER_SYSTEM_PROMPT.lower()
+
+    def test_window_patterns(self):
+        assert "QUALIFY" in PLANNER_SYSTEM_PROMPT  # top-N per group
+        assert "Percent-of-total" in PLANNER_SYSTEM_PROMPT
+        assert "cumulative" in PLANNER_SYSTEM_PROMPT.lower()
+        assert "MoM" in PLANNER_SYSTEM_PROMPT or "YoY" in PLANNER_SYSTEM_PROMPT
+
+    def test_time_series_decomp_and_forecast(self):
+        assert "Trend extraction" in PLANNER_SYSTEM_PROMPT
+        assert "Seasonality" in PLANNER_SYSTEM_PROMPT
+        assert "Anomaly detection" in PLANNER_SYSTEM_PROMPT
+        assert "Naive forecast" in PLANNER_SYSTEM_PROMPT
+        assert "moving-average forecast" in PLANNER_SYSTEM_PROMPT
+        assert "Prophet" in PLANNER_SYSTEM_PROMPT
+
+    def test_geospatial(self):
+        assert "Haversine" in PLANNER_SYSTEM_PROMPT
+        assert "RADIANS" in PLANNER_SYSTEM_PROMPT
+        assert "spatial" in PLANNER_SYSTEM_PROMPT.lower()
+
+    def test_sessionization(self):
+        assert "Sessionize" in PLANNER_SYSTEM_PROMPT
+        assert "gap_seconds" in PLANNER_SYSTEM_PROMPT
+
+
+class TestVisualizationCookbook:
+    """Section J — visualization recipes."""
+
+    def test_has_viz_header(self):
+        assert "VISUALIZATION" in PLANNER_SYSTEM_PROMPT
+        assert "CHART-TYPE SELECTOR" in PLANNER_SYSTEM_PROMPT
+
+    def test_chart_types_covered(self):
+        for ct in (
+            "histogram", "box plot", "violin", "scatter", "heatmap",
+            "treemap", "funnel", "sankey", "donut", "sparkline",
+        ):
+            assert ct in PLANNER_SYSTEM_PROMPT.lower(), f"missing chart: {ct}"
+
+    def test_auto_binning(self):
+        assert "Sturges" in PLANNER_SYSTEM_PROMPT
+        assert "LOG2" in PLANNER_SYSTEM_PROMPT
+
+    def test_faceting_and_annotations(self):
+        assert "SMALL MULTIPLES" in PLANNER_SYSTEM_PROMPT
+        assert "REGR_SLOPE" in PLANNER_SYSTEM_PROMPT  # trend line
+        assert "reference_lines" in PLANNER_SYSTEM_PROMPT
+        assert "confidence" in PLANNER_SYSTEM_PROMPT.lower()
+
+    def test_palette_guidance(self):
+        assert "Sequential" in PLANNER_SYSTEM_PROMPT
+        assert "Diverging" in PLANNER_SYSTEM_PROMPT
+        assert "Categorical" in PLANNER_SYSTEM_PROMPT
+
+    def test_dashboard_composition(self):
+        assert "DASHBOARD COMPOSITION" in PLANNER_SYSTEM_PROMPT
+
+    def test_anti_patterns(self):
+        assert "ANTI-PATTERNS" in PLANNER_SYSTEM_PROMPT
+        # No 3D / exploded pies
+        assert "3D" in PLANNER_SYSTEM_PROMPT
+
+
+class TestAdvancedMLCookbook:
+    """Section K — advanced ML prep (text, importance, reproducibility, linter)."""
+
+    def test_text_vectorization(self):
+        assert "TEXT VECTORIZATION" in PLANNER_SYSTEM_PROMPT
+        assert "TF-IDF" in PLANNER_SYSTEM_PROMPT
+        assert "N-GRAMS" in PLANNER_SYSTEM_PROMPT
+
+    def test_feature_importance(self):
+        assert "FEATURE-IMPORTANCE" in PLANNER_SYSTEM_PROMPT
+        assert "point-biserial" in PLANNER_SYSTEM_PROMPT.lower()
+        assert "mutual-information" in PLANNER_SYSTEM_PROMPT.lower()
+
+    def test_reproducibility_metadata(self):
+        assert "REPRODUCIBILITY METADATA" in PLANNER_SYSTEM_PROMPT
+        assert "schema_fingerprint" in PLANNER_SYSTEM_PROMPT
+
+    def test_fit_transform_separation(self):
+        assert "FIT / TRANSFORM SEPARATION" in PLANNER_SYSTEM_PROMPT
+
+    def test_sklearn_pipeline_export(self):
+        assert "SKLEARN PIPELINE EXPORT" in PLANNER_SYSTEM_PROMPT
+        assert "pipeline.py" in PLANNER_SYSTEM_PROMPT
+
+    def test_leakage_linter_section(self):
+        assert "LEAKAGE LINTER" in PLANNER_SYSTEM_PROMPT
+
+
 class TestReflectPrompt:
     """REFLECT_PROMPT must teach the model to recognize common errors."""
 

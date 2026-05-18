@@ -255,6 +255,28 @@ async def planner(state: AgentState) -> dict:
 
     _logger.info("PLANNER_OUTPUT: steps=%d offset=%d", len(plan), _step_offset)
 
+    # ── Deterministic plan linter (leakage, DAG, schema, anti-patterns) ──
+    try:
+        from ..plan_linter import lint_plan as _lint_plan
+        _lint_report = _lint_plan(
+            plan,
+            schema=state.get("schema"),
+            target_column=state.get("target_column"),
+        )
+        if _lint_report.get("warnings"):
+            _logger.info(
+                "PLAN_LINT_WARNINGS: count=%d details=%s",
+                len(_lint_report["warnings"]), _lint_report["warnings"][:5],
+            )
+        if _lint_report.get("errors"):
+            _logger.warning(
+                "PLAN_LINT_ERRORS: count=%d details=%s",
+                len(_lint_report["errors"]), _lint_report["errors"][:5],
+            )
+    except Exception as _lint_exc:
+        _logger.warning("PLAN_LINT_FAILED: %s", _lint_exc)
+        _lint_report = {"warnings": [], "errors": [], "auto_fixes": [], "ok": True}
+
     # ── Chart type auto-selection (post-processing) ───────────────────────
     table_registry: dict = dict(state.get("table_registry") or {})
     intent: str = str(state.get("intent") or "")

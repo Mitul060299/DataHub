@@ -40,6 +40,36 @@ TRANSFORM:  filter_rows, select_columns, drop_columns, rename_columns, create_co
 AGGREGATE:  group_by, pivot, unpivot, distinct
 JOIN/UNION: join, union
 ANALYTICS:  summarise, validate, reconcile, visualise, export, sql_query
+
+OPERATION SEMANTICS — pick the most specific operation that matches the rule:
+- remove_duplicates : exact-match dedup OR composite-key dedup. Parameters MUST include
+  {"key_columns": [...], "keep": "first"|"last", "order_by": "<ts col>"|null,
+   "matching_policy": "exact"|"case_insensitive"|"trim_insensitive"|"fuzzy",
+   "similarity_threshold": 0.9}  (only when matching_policy="fuzzy")
+- fill_missing : impute null values in EXISTING column. Parameters MUST include
+  {"column": "<col>", "strategy": "constant"|"mean"|"median"|"mode"|"forward_fill"|"drop"|"flag",
+   "value": <constant>|null, "partition_by": "<col>"|null, "order_by": "<col>"|null}
+- remove_outliers : trim values outside IQR or z-score band. Parameters MUST include
+  {"column": "<col>", "method": "iqr"|"zscore"|"percentile",
+   "lower": <n>|null, "upper": <n>|null, "action": "remove"|"clip"|"flag"}
+- trim_whitespace : strip leading/trailing AND collapse internal whitespace.
+- standardize_case : "lower" | "upper" | "title" | "snake_case" (for column names).
+  Parameters: {"columns": [...], "case": "..."}
+- replace_values : map old→new values inside one column. Parameters:
+  {"column": "<col>", "mapping": {"old": "new", ...}, "case_insensitive": true|false}
+- split_column / merge_columns : restructure text columns using a delimiter.
+- change_type : explicit type coercion — always wrap with TRY_CAST in SQL.
+- bin_values : create categorical buckets from a numeric column.
+- join : enrich one table with columns from another via a key column.
+- union : stack rows from multiple tables; if schemas differ, planner must
+  auto-align by listing columns explicitly with NULL fillers for missing ones.
+
+FORMAT-FIXING RECIPES (apply inside fill_missing/replace_values/standardize_case SQL):
+- Date unification: TRY_STRPTIME(col, ['%Y-%m-%d','%m/%d/%Y','%d-%m-%Y','%d-%b-%Y'])
+- Phone normalisation: RIGHT(REGEXP_REPLACE(col,'[^0-9]','','g'), 10)
+- Email normalisation: LOWER(TRIM(col))
+- Currency string → number: TRY_CAST(REGEXP_REPLACE(col,'[^0-9.\\-]','','g') AS DOUBLE)
+- Boolean unification: CASE WHEN LOWER(TRIM(col)) IN ('y','yes','true','t','1') THEN TRUE ... END
 """
 
 # ---------------------------------------------------------------------------

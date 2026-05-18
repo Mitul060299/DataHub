@@ -1,14 +1,14 @@
 INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the user's message into exactly one of these intents:
 
-- clean      : standardise column names, cast types, remove duplicates, trim whitespace, handle nulls, fill/replace null values in existing columns, apply conditional transformations to existing columns
+- clean      : standardise column names, cast types, remove duplicates (exact or fuzzy), trim whitespace, handle nulls, fill/replace null values in existing columns, fix inconsistent formats (dates, phones, emails, currency, case, booleans), apply conditional transformations to existing columns
 - validate   : read-only data quality report (null counts, dupes, outliers, type mismatches) — no changes made
 - filter     : subset rows by one or more conditions (equals, >, <, between, contains, is null)
-- transform  : general data modification not covered by a specific intent above
+- transform  : general data modification not covered by a specific intent above (split column, merge columns, bucketize, derive)
 - add_column : create a brand-new derived column that does NOT yet exist in the dataset at all. ONLY use this when the user explicitly asks to add a new column with a new name. Never use for null-filling, replacing, or modifying any existing column — use 'clean' instead.
 - summarise  : group-by aggregation (sum, count, avg, min, max, count_distinct)
 - pivot      : reshape long to wide format
-- union      : vertically stack two or more tables
-- join       : merge two tables on a key column
+- union      : vertically stack two or more tables OR "merge / combine / append / stack files" when the user wants rows from both
+- join       : merge two tables on a key column (lookup, enrich, bring columns from one into the other)
 - reconcile  : compare two tables on a key to find variances and missing rows
 - sql_query  : run a read-only SQL query or ad-hoc aggregation
 - visualise  : create a chart, graph, or visual summary
@@ -16,6 +16,15 @@ INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the use
 - goal       : the user states multiple data rules, business objectives, or quality targets to achieve in one go (e.g. "remove duplicates, fill nulls, standardise country codes and flag negatives"). Use this when the message contains TWO OR MORE distinct rules/objectives that should all be satisfied together.
 - clarify    : the user's request is too ambiguous to act on — needs one clarifying question
 - converse   : greeting, question about the tool, or anything not data-related
+
+DISAMBIGUATION HINTS:
+- "merge / combine / append / stack the two files/tables" with no key column → union
+- "merge / lookup / enrich / bring in" implying a key column → join
+- "standardize / normalize / fix formats / clean up dates|phones|emails|case" → clean
+- "fill in / impute / replace missing / handle nulls" on an EXISTING column → clean
+- "deduplicate / remove duplicates / collapse duplicates" → clean
+- "find duplicates / show duplicates" without removing → validate
+- "snake_case columns / rename all columns / standardize column names" → clean
 
 CURRENT SESSION TABLES:
 {table_registry}
@@ -124,6 +133,185 @@ RULES:
 24. data_quality: If the user says "check data quality", "profile my data", or "data quality", treat it as validate intent and apply rule 23.
 25. SQL identifier quoting: DuckDB uses ANSI standard double-quote identifiers. ALWAYS quote column names that contain spaces, special characters, or are reserved words using double quotes: "Customer ID", "Transaction Date", "Price Per Unit". NEVER use backticks (`Customer ID`) — backticks are MySQL syntax and will cause a Parser Error in DuckDB. Every column name with a space MUST be wrapped in double quotes in every part of the query (SELECT, WHERE, GROUP BY, ORDER BY, JOIN ON).
 
+═══════════════════════════════════════════════════════════════════════════════
+DATA PREPARATION COOKBOOK — concrete DuckDB recipes for the most common asks
+═══════════════════════════════════════════════════════════════════════════════
+These recipes are the canonical patterns. ALWAYS prefer them over ad-hoc SQL.
+All recipes assume the input table is `<input>` — substitute the actual
+duckdb_name from the SESSION TABLE REGISTRY (highest pipeline_step_number).
+
+──────────────────────────────────────────────────────────────────────────────
+A. FIXING INCONSISTENT FORMATS  (intent: clean | transform)
+──────────────────────────────────────────────────────────────────────────────
+A1. Date format unification — when one column holds mixed date strings
+    ("12/31/2024", "2024-12-31", "31-Dec-2024"):
+    SELECT TRY_STRPTIME("dt", ['%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y',
+            '%d-%b-%Y', '%d/%m/%Y']) AS "dt", * EXCLUDE ("dt") FROM <input>
+    Notes: TRY_STRPTIME returns NULL on parse failure (safe). Always list the
+    most common pattern first. For ISO output, wrap with strftime if needed.
+
+A2. Phone number normalization — strip non-digits, keep last 10:
+    SELECT RIGHT(REGEXP_REPLACE("phone", '[^0-9]', '', 'g'), 10) AS "phone",
+           * EXCLUDE ("phone") FROM <input>
+
+A3. Email normalization — trim + lower:
+    SELECT LOWER(TRIM("email")) AS "email", * EXCLUDE ("email") FROM <input>
+
+A4. Currency / numeric strings ("$1,234.56", "1.234,56 €") → numeric:
+    SELECT TRY_CAST(REGEXP_REPLACE("price", '[^0-9.\\-]', '', 'g') AS DOUBLE)
+              AS "price", * EXCLUDE ("price") FROM <input>
+    For European decimal comma format, first replace ',' with '.'.
+
+A5. Case standardization — proper / upper / lower:
+    SELECT INITCAP(LOWER(TRIM("name"))) AS "name", * EXCLUDE ("name") FROM <input>
+    (use UPPER for codes like country codes, LOWER for emails/usernames)
+
+A6. Boolean unification — Y/N, Yes/No, 1/0, True/False all → BOOLEAN:
+    SELECT CASE WHEN LOWER(TRIM("active")) IN ('y','yes','true','t','1') THEN TRUE
+                WHEN LOWER(TRIM("active")) IN ('n','no','false','f','0') THEN FALSE
+                ELSE NULL END AS "active", * EXCLUDE ("active") FROM <input>
+
+A7. Whitespace + invisible-character cleanup across all text columns:
+    SELECT * REPLACE (TRIM(REGEXP_REPLACE("col", '\\s+', ' ', 'g')) AS "col")
+    FROM <input>
+    (apply per text column; DuckDB's REPLACE clause overwrites in place)
+
+──────────────────────────────────────────────────────────────────────────────
+B. REMOVING DUPLICATES  (intent: clean)
+──────────────────────────────────────────────────────────────────────────────
+B1. Exact duplicates (all columns):
+    SELECT DISTINCT * FROM <input>
+
+B2. Duplicates by key, keep latest by timestamp:
+    SELECT * EXCLUDE (rn) FROM (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY "order_id"
+                                    ORDER BY "updated_at" DESC) AS rn
+      FROM <input>
+    ) WHERE rn = 1
+
+B3. Case/whitespace-insensitive duplicates (treat "  Acme " == "acme"):
+    SELECT DISTINCT * FROM (
+      SELECT *,
+        LOWER(TRIM("name")) AS _name_key
+      FROM <input>
+    ) USING SAMPLE 100% (BERNOULLI)  -- expand: use DISTINCT ON _name_key
+
+B4. Fuzzy/near-duplicates using DuckDB string distance functions:
+    -- Flag candidate duplicate pairs (review before deleting)
+    SELECT a.rowid AS row_a, b.rowid AS row_b, a."name" AS name_a, b."name" AS name_b,
+           jaro_winkler_similarity(LOWER(a."name"), LOWER(b."name")) AS sim
+    FROM <input> a JOIN <input> b ON a.rowid < b.rowid
+    WHERE jaro_winkler_similarity(LOWER(a."name"), LOWER(b."name")) > 0.9
+
+──────────────────────────────────────────────────────────────────────────────
+C. STANDARDIZING COLUMN NAMES  (intent: clean)
+──────────────────────────────────────────────────────────────────────────────
+C1. Bulk snake_case rename — emit one explicit AS per column (do not rely on
+    regex over `*`; DuckDB lacks that). Pattern:
+    SELECT "Customer ID" AS customer_id, "First Name" AS first_name,
+           "Order Date" AS order_date, ... FROM <input>
+    Use lowercase + underscores; strip non-alphanumeric; collapse runs of '_'.
+
+──────────────────────────────────────────────────────────────────────────────
+D. MERGING FILES  (intent: union | join)
+──────────────────────────────────────────────────────────────────────────────
+D1. UNION with mismatched columns — align manually using NULL fillers:
+    SELECT id, name, NULL AS email, created_at FROM <table_a>
+    UNION ALL
+    SELECT id, name, email, NULL AS created_at FROM <table_b>
+    Both branches MUST list columns in the same order with matching types.
+    Use TRY_CAST when types differ: TRY_CAST(id AS BIGINT) AS id.
+
+D2. UNION with column-name drift (legacy snake_case vs new camelCase):
+    SELECT customer_id, order_total FROM <table_a>
+    UNION ALL
+    SELECT "customerId" AS customer_id, "orderTotal" AS order_total FROM <table_b>
+
+D3. Multi-key JOIN with type coercion:
+    SELECT a.*, b."status"
+    FROM <table_a> a
+    LEFT JOIN <table_b> b
+      ON TRY_CAST(a."order_id" AS VARCHAR) = TRY_CAST(b."order_id" AS VARCHAR)
+     AND a."region" = b."region"
+
+D4. ANTI-JOIN — rows in A with no match in B (often what users mean by
+    "find missing records"): use WHERE b.key IS NULL after a LEFT JOIN.
+
+──────────────────────────────────────────────────────────────────────────────
+E. HANDLING MISSING VALUES  (intent: clean)
+──────────────────────────────────────────────────────────────────────────────
+E1. Constant fill (when domain default is known):
+    SELECT COALESCE("country", 'Unknown') AS "country", * EXCLUDE ("country")
+    FROM <input>
+    (Remember rule 13 — the EXCLUDE clause is mandatory.)
+
+E2. Mean / median imputation for numeric columns:
+    SELECT COALESCE("amount",
+             (SELECT AVG("amount") FROM <input>)) AS "amount",
+           * EXCLUDE ("amount") FROM <input>
+    Replace AVG with MEDIAN or QUANTILE_CONT("amount", 0.5) for median.
+
+E3. Mode imputation for categorical columns:
+    SELECT COALESCE("category",
+             (SELECT "category" FROM <input> WHERE "category" IS NOT NULL
+              GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1)) AS "category",
+           * EXCLUDE ("category") FROM <input>
+
+E4. Forward-fill / last-non-null (requires an ordering column):
+    SELECT LAST_VALUE("price" IGNORE NULLS) OVER (
+             PARTITION BY "ticker" ORDER BY "trade_date"
+             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "price",
+           * EXCLUDE ("price") FROM <input>
+
+E5. Drop rows where critical columns are null:
+    SELECT * FROM <input>
+    WHERE "customer_id" IS NOT NULL AND "order_date" IS NOT NULL
+
+E6. Drop rows with too many nulls overall (>50% of columns):
+    -- Use a generated _null_count via CASE expressions for each column
+
+E7. Flag-and-keep pattern (preserve original, add boolean flag):
+    SELECT *, ("email" IS NULL OR TRIM("email") = '') AS is_email_missing
+    FROM <input>
+
+──────────────────────────────────────────────────────────────────────────────
+F. GENERAL TRANSFORMATIONS  (intent: transform)
+──────────────────────────────────────────────────────────────────────────────
+F1. Split a column by delimiter into multiple columns:
+    SELECT STR_SPLIT("full_name", ' ')[1] AS first_name,
+           STR_SPLIT("full_name", ' ')[2] AS last_name,
+           * EXCLUDE ("full_name") FROM <input>
+
+F2. Combine multiple columns into one:
+    SELECT CONCAT_WS(' ', "first_name", "last_name") AS full_name,
+           * EXCLUDE ("first_name", "last_name") FROM <input>
+
+F3. Bucketize a numeric column (e.g. age groups):
+    SELECT CASE WHEN "age" < 18 THEN '<18'
+                WHEN "age" < 35 THEN '18-34'
+                WHEN "age" < 55 THEN '35-54'
+                ELSE '55+' END AS age_group,
+           * EXCLUDE ("age") FROM <input>
+
+F4. Pivot-like wide expansion when DuckDB PIVOT is overkill:
+    SELECT customer_id,
+           SUM(CASE WHEN region='US' THEN amount ELSE 0 END) AS us_amount,
+           SUM(CASE WHEN region='EU' THEN amount ELSE 0 END) AS eu_amount
+    FROM <input> GROUP BY customer_id
+
+──────────────────────────────────────────────────────────────────────────────
+G. MULTI-RULE GOALS  (intent: goal)
+──────────────────────────────────────────────────────────────────────────────
+When a user states multiple cleaning rules ("dedupe, standardize emails, fix
+dates, fill missing country with 'Unknown'"), emit ONE step per rule with
+correct `depends_on` chain so each step reads from the previous step's view:
+  step 1: dedupe → produces v1
+  step 2: standardize emails (reads v1) → produces v2
+  step 3: fix dates (reads v2) → produces v3
+  step 4: fill country (reads v3) → produces v4
+Each step uses a recipe from sections A-F above.
+═══════════════════════════════════════════════════════════════════════════════
+
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:
 {{
   "steps": [
@@ -173,7 +361,22 @@ RULES:
 - The primary input table is always: dataset
 - Cross-session tables can be referenced by their duckdb_name from the registry
 - NEVER use COUNT(DISTINCT *) — invalid DuckDB; replace with a subquery: (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM <table>))
-- NEVER use COLUMNS(*) inside aggregates such as COUNT(DISTINCT COLUMNS(*)) — also invalid"""
+- NEVER use COLUMNS(*) inside aggregates such as COUNT(DISTINCT COLUMNS(*)) — also invalid
+
+COMMON ERROR PATTERNS — apply the matching fix:
+- "Binder Error: Column X referenced ... but cannot be referenced before it is defined":
+  The SELECT redefines column X with the same alias AND has a bare `*`.
+  Fix: replace `*` with `* EXCLUDE ("X")` so the wildcard skips the redefined column.
+- "Parser Error" on backtick identifier (`col name`):
+  DuckDB requires ANSI double quotes. Rewrite `col name` → "col name" everywhere.
+- "Conversion Error" when CAST(... AS DATE/INTEGER) fails on dirty values:
+  Replace CAST with TRY_CAST so failures become NULL instead of aborting.
+- "No function matches strptime / strftime signature":
+  Use STRPTIME (single value) or TRY_STRPTIME (list of patterns) — never `parse_date`.
+- "Table X does not exist": Re-check the SESSION TABLE REGISTRY and use the duckdb_name of the entry with the highest pipeline_step_number for the input.
+- "Referenced column 'rowid' not found": DuckDB's implicit rowid only works on base tables; for views use ROW_NUMBER() OVER () AS rn instead.
+- "ambiguous column reference" in JOIN: prefix every column with its table alias (a.id, b.id).
+- For mixed-format dates in a single column, prefer TRY_STRPTIME with a list of patterns rather than a single CAST."""
 
 
 RESPONDER_TRANSFORM_PROMPT = """You are a friendly data analyst assistant.

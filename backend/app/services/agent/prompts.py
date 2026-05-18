@@ -562,14 +562,24 @@ I4. N-day retention from first-seen cohort:
     WITH first_seen AS (
       SELECT "user_id", DATE_TRUNC('week', MIN("event_date")) AS cohort_week
       FROM <input> GROUP BY 1
+    ),
+    cohort_size AS (
+      SELECT cohort_week, COUNT(DISTINCT "user_id") AS cohort_users
+      FROM first_seen GROUP BY 1
+    ),
+    retained AS (
+      SELECT f.cohort_week,
+             DATE_DIFF('week', f.cohort_week, e."event_date") AS week_offset,
+             COUNT(DISTINCT e."user_id") AS retained_users
+      FROM first_seen f
+      JOIN <input> e USING ("user_id")
+      GROUP BY 1, 2
     )
-    SELECT f.cohort_week,
-           DATE_DIFF('week', f.cohort_week, e."event_date") AS week_offset,
-           COUNT(DISTINCT e."user_id") * 1.0 /
-             COUNT(DISTINCT f."user_id") OVER (PARTITION BY f.cohort_week) AS retention
-    FROM first_seen f
-    JOIN <input> e USING ("user_id")
-    GROUP BY 1, 2 ORDER BY 1, 2
+    SELECT r.cohort_week, r.week_offset,
+           r.retained_users * 1.0 / cs.cohort_users AS retention
+    FROM retained r
+    JOIN cohort_size cs ON r.cohort_week = cs.cohort_week
+    ORDER BY 1, 2
 
 I5. Funnel conversion (ordered steps A → B → C):
     SELECT

@@ -85,9 +85,9 @@ def _sanitize_depends_on(plan: list[dict], logger=None) -> list[dict]:
 _llm_cache: dict[str, ChatGroq] = {}
 
 
-def _get_llm() -> ChatGroq:
+def _get_llm(goal: str = "") -> ChatGroq:
     from ..model_router import select_model
-    model = select_model("plan")
+    model = select_model("plan", goal=goal)
     cached = _llm_cache.get(model)
     if cached is None:
         cached = ChatGroq(
@@ -148,9 +148,9 @@ async def planner(state: AgentState) -> dict:
         _planner_user_id: str = state.get("user_id", "")
         _planner_session_id: str = state.get("session_id", "")
         from ..model_router import select_model as _sel
-        _planner_model: str = _sel("plan")
+        _planner_model: str = _sel("plan", goal=user_goal)
         response = await asyncio.wait_for(
-            _get_llm().ainvoke(
+            _get_llm(user_goal).ainvoke(
                 [
                     SystemMessage(content=system_prompt),
                     HumanMessage(content=human_content),

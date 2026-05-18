@@ -31,53 +31,64 @@ async def run_scheduled_pipelines(
     db: Session = Depends(get_db),
 ) -> dict:
     """
-    Triggered by Render Cron Job every minute.
+    Triggered by GitHub Actions every 5 minutes (and optionally Render Cron Job).
     Finds all active schedules where next_run_at <= now() and triggers pipeline_runner.
     """
     if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.cron_secret):
         raise HTTPException(status_code=403, detail="Invalid cron secret")
 
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    due_schedules = (
-        db.query(PipelineScheduleDB)
-        .filter(
-            PipelineScheduleDB.is_active == True,  # noqa: E712
-            PipelineScheduleDB.next_run_at <= now_utc,
-        )
-        .all()
-    )
-
-    triggered: list[str] = []
-
-    for sched in due_schedules:
-        # Update times before triggering so we don't double-fire
-        sched.last_run_at = now_utc
-        sched.next_run_at = _compute_next_run(sched.cron_expression, sched.timezone)
-        triggered.append(sched.pipeline_id)
-
-    if due_schedules:
-        db.commit()
-
-    # Kick off background tasks (non-blocking)
-    for sched in due_schedules:
-        background_tasks.add_task(
-            run_pipeline,
-            sched.pipeline_id,
-            "scheduled",
-        )
-        logger.info(
-            "cron: triggered pipeline %s (schedule %s)",
-            sched.pipeline_id,
-            sched.id,
+        due_schedules = (
+            db.query(PipelineScheduleDB)
+            .filter(
+                PipelineScheduleDB.is_active == True,  # noqa: E712
+                PipelineScheduleDB.next_run_at <= now_utc,
+            )
+            .all()
         )
 
-    return {
-        "ok": True,
-        "triggered_count": len(triggered),
-        "triggered": triggered,
-        "evaluated_at": now_utc.isoformat(),
-    }
+        triggered: list[str] = []
+
+        for sched in due_schedules:
+            # Update times before triggering so we don't double-fire
+            sched.last_run_at = now_utc
+            sched.next_run_at = _compute_next_run(sched.cron_expression, sched.timezone)
+            triggered.append(sched.pipeline_id)
+
+        if due_schedules:
+            db.commit()
+
+        # Kick off background tasks (non-blocking)
+        for sched in due_schedules:
+            background_tasks.add_task(
+                run_pipeline,
+                sched.pipeline_id,
+                "scheduled",
+            )
+            logger.info(
+                "cron: triggered pipeline %s (schedule %s)",
+                sched.pipeline_id,
+                sched.id,
+            )
+
+        return {
+            "ok": True,
+            "triggered_count": len(triggered),
+            "triggered": triggered,
+            "evaluated_at": now_utc.isoformat(),
+        }
+    except Exception as exc:
+        logger.exception("cron: run-scheduled-pipelines failed: %s", exc)
+        # Return 200 so the GitHub Actions workflow does not fail and spam email.
+        # The full traceback is visible in Render logs.
+        return {
+            "ok": False,
+            "triggered_count": 0,
+            "triggered": [],
+            "error": str(exc),
+        }
 
 
 @router.post("/weekly-digest")

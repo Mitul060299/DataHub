@@ -20,11 +20,11 @@ jobs:
 
     steps:
       - name: Trigger scheduled pipelines
+        continue-on-error: true   # prevents email spam on transient network/server errors
         env:
           API_URL: ${{ vars.DATAHUB_API_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -e
           echo "Calling $API_URL/api/cron/run-scheduled-pipelines"
 
           RESPONSE=$(curl --silent --show-error --fail \

@@ -897,26 +897,31 @@ export async function addDashboardTile(payload: {
   dataset_id?: string;
   title: string;
   chart_type: string;
+  tile_type?: string;
   query_spec?: Record<string, unknown>;
   layout?: Record<string, unknown>;
+  echarts_config?: Record<string, unknown> | null;
+  metric_value?: string;
+  metric_label?: string;
+  metric_trend?: string;
+  metric_threshold?: Record<string, unknown>;
+  source_table?: string;
 }) {
   const response = await api.post(`/dashboards/${payload.dashboard_id}/tiles`, {
     dataset_id: payload.dataset_id,
     title: payload.title,
     chart_type: payload.chart_type,
+    tile_type: payload.tile_type ?? "chart",
     query_spec: payload.query_spec ?? {},
     layout: payload.layout ?? {},
+    echarts_config: payload.echarts_config,
+    metric_value: payload.metric_value,
+    metric_label: payload.metric_label,
+    metric_trend: payload.metric_trend,
+    metric_threshold: payload.metric_threshold,
+    source_table: payload.source_table,
   });
-  return response.data as {
-    id: string;
-    dashboard_id: string;
-    dataset_id?: string | null;
-    title: string;
-    chart_type: string;
-    query_spec: Record<string, unknown>;
-    layout: Record<string, unknown>;
-    created_at: string;
-  };
+  return response.data as import("./types").DashboardV2Tile;
 }
 
 export async function publishDashboardV2(dashboardId: string, expiresInHours?: number) {
@@ -964,6 +969,21 @@ export async function updateDashboardTile(dashboardId: string, tileId: string, p
 }) {
   const response = await api.patch(`/dashboards/${dashboardId}/tiles/${tileId}`, payload);
   return response.data as import("./types").DashboardV2Tile;
+}
+
+export async function refreshDashboardTile(dashboardId: string, tileId: string) {
+  const response = await api.post(`/dashboards/${dashboardId}/tiles/${tileId}/refresh`);
+  return response.data as import("./types").DashboardV2Tile;
+}
+
+export async function applyDashboardTemplate(dashboardId: string, template: string) {
+  const response = await api.post(`/dashboards/${dashboardId}/apply-template`, { template });
+  return response.data as import("./types").DashboardV2;
+}
+
+export async function autoArrangeDashboard(dashboardId: string) {
+  const response = await api.post(`/dashboards/${dashboardId}/auto-arrange`);
+  return response.data as import("./types").DashboardV2;
 }
 
 export async function postDashboardView(dashboardId: string) {

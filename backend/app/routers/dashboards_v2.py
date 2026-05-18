@@ -14,7 +14,7 @@ from ..security import get_current_role, get_current_subject, require_role
 from ..services.dashboards_v2_service import DashboardsV2Service
 from ..services.rate_limit import FixedWindowRateLimiter
 from ..db import get_db
-from ..models_db import DashboardViewDB, DashboardCommentDB
+from ..models_db import DashboardViewDB, DashboardCommentDB, DatasetMetaDB
 from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
 from ..services.project_access import list_visible_owner_user_ids
 
@@ -100,6 +100,237 @@ def add_tile(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class GenerateLayoutRequest(BaseModel):
+    description: str
+    screenshot_base64: str | None = None
+    dataset_id: str | None = None
+
+
+class ApplyTemplateRequest(BaseModel):
+    template: str
+
+
+@router.post("/{dashboard_id}/apply-template", response_model=DashboardV2Out)
+def apply_template(
+    dashboard_id: str,
+    payload: ApplyTemplateRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DashboardV2Out:
+    """Stamp a pre-built template onto a dashboard (creates tiles, no LLM call)."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_subject(authorization)
+
+    dashboard = DashboardsV2Service.get_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if dashboard is None:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+
+    from ..services.dashboard_ai_service import get_template_specs
+    try:
+        tile_specs = get_template_specs(payload.template)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    dataset_id = dashboard.dataset_id if dashboard.dataset_id else None
+    for spec in tile_specs:
+        tile_type = spec["tile_type"]
+        query_spec: dict = {}
+        if tile_type == "heading":
+            query_spec = {"text": spec.get("text", spec["title"]), "level": spec.get("level", 1)}
+        elif tile_type == "text":
+            query_spec = {"text": spec.get("text", "")}
+        elif tile_type in ("chart", "metric"):
+            query_spec = {"query_hint": spec.get("query_hint", "")}
+            if tile_type == "metric":
+                query_spec["metric_label"] = spec.get("metric_label", spec["title"])
+        layout_entry = {"w": spec.get("w", 6), "h": spec.get("h", 6)}
+        try:
+            DashboardsV2Service.add_tile(
+                user_id=user_id,
+                dashboard_id=dashboard_id,
+                dataset_id=dataset_id,
+                title=spec["title"],
+                chart_type=spec.get("chart_type", "none"),
+                query_spec=query_spec,
+                layout=layout_entry,
+                tile_type=tile_type,
+                metric_label=spec.get("metric_label") if tile_type == "metric" else None,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("apply_template: add_tile failed: %s", exc)
+
+    updated = DashboardsV2Service.get_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Dashboard not found after template application")
+    return updated
+
+
+@router.post("/{dashboard_id}/auto-arrange", response_model=DashboardV2Out)
+def auto_arrange(
+    dashboard_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DashboardV2Out:
+    """Ask the AI to compute an optimal RGL layout for the current tiles."""
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_subject(authorization)
+
+    dashboard = DashboardsV2Service.get_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if dashboard is None:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+
+    tile_infos = [
+        {"id": str(t.id), "title": t.title, "tile_type": t.tile_type}
+        for t in (dashboard.tiles or [])
+    ]
+    if not tile_infos:
+        raise HTTPException(status_code=400, detail="Dashboard has no tiles to arrange")
+
+    from ..services.dashboard_ai_service import auto_arrange_layout
+    try:
+        new_rgl = auto_arrange_layout(tile_infos, user_id=user_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    existing_layout: dict = {}
+    if isinstance(dashboard.layout, dict):
+        existing_layout = dict(dashboard.layout)
+    existing_layout["rgl"] = new_rgl
+
+    DashboardsV2Service.update_dashboard(
+        user_id=user_id,
+        dashboard_id=dashboard_id,
+        updates={"layout": existing_layout},
+    )
+
+    updated = DashboardsV2Service.get_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Dashboard not found after auto-arrange")
+    return updated
+
+
+@router.post("/{dashboard_id}/generate", response_model=DashboardV2Out)
+def generate_dashboard_layout(
+    dashboard_id: str,
+    payload: GenerateLayoutRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DashboardV2Out:
+    """Use AI to generate a set of tiles on an existing dashboard.
+
+    Accepts a plain-text description (and optionally a reference screenshot encoded
+    as base64). Returns the dashboard with the newly created tiles appended.
+    """
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_subject(authorization)
+
+    # Verify the dashboard belongs to this user
+    dashboard = DashboardsV2Service.get_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if dashboard is None:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+
+    # Collect dataset names for context
+    dataset_names: list[str] = []
+    if payload.dataset_id:
+        meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == payload.dataset_id).first()
+        if meta and meta.name:
+            dataset_names.append(str(meta.name))
+    else:
+        rows = (
+            db.query(DatasetMetaDB.name)
+            .filter(DatasetMetaDB.user_id == user_id)
+            .limit(10)
+            .all()
+        )
+        dataset_names = [r.name for r in rows if r.name]
+
+    # Call the AI service
+    from ..services.dashboard_ai_service import generate_layout, layout_from_screenshot
+
+    try:
+        if payload.screenshot_base64:
+            tile_specs = layout_from_screenshot(
+                image_base64=payload.screenshot_base64,
+                dataset_names=dataset_names,
+                user_id=user_id,
+            )
+        else:
+            if not payload.description.strip():
+                raise HTTPException(status_code=400, detail="description is required when no screenshot is provided")
+            tile_specs = generate_layout(
+                description=payload.description.strip(),
+                dataset_names=dataset_names,
+                user_id=user_id,
+            )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Create tiles from the specs
+    dataset_id = payload.dataset_id or (dashboard.dataset_id if dashboard.dataset_id else None)
+    for spec in tile_specs:
+        tile_type = spec["tile_type"]
+        chart_type = spec.get("chart_type", "none")
+        query_spec: dict = {}
+
+        if tile_type == "heading":
+            query_spec = {"text": spec.get("text", spec["title"]), "level": spec.get("level", 1)}
+        elif tile_type == "text":
+            query_spec = {"text": spec.get("text", "")}
+        elif tile_type in ("chart", "metric"):
+            query_spec = {"query_hint": spec.get("query_hint", "")}
+            if tile_type == "metric":
+                query_spec["metric_label"] = spec.get("metric_label", spec["title"])
+
+        layout_entry = {"w": spec.get("w", 6), "h": spec.get("h", 6)}
+
+        try:
+            DashboardsV2Service.add_tile(
+                user_id=user_id,
+                dashboard_id=dashboard_id,
+                dataset_id=dataset_id,
+                title=spec["title"],
+                chart_type=chart_type,
+                query_spec=query_spec,
+                layout=layout_entry,
+                tile_type=tile_type,
+                metric_label=spec.get("metric_label") if tile_type == "metric" else None,
+            )
+        except Exception as exc:
+            # Log but continue — don't fail the whole request for one bad tile
+            import logging
+            logging.getLogger(__name__).warning("generate_dashboard: add_tile failed: %s", exc)
+
+    # Return the updated dashboard
+    updated = DashboardsV2Service.get_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Dashboard not found after generation")
+    return updated
+
+
+@router.post("/{dashboard_id}/tiles/{tile_id}/refresh", response_model=DashboardTileOut)
+def refresh_tile(
+    dashboard_id: str,
+    tile_id: str,
+    authorization: str | None = Header(default=None),
+) -> DashboardTileOut:
+    """Re-fetch a single tile from the database (ensures frontend is in sync)."""
+    role = get_current_role(authorization)
+    require_role("viewer", role)
+    user_id = get_current_subject(authorization)
+    tile = DashboardsV2Service.get_tile(
+        user_id=user_id,
+        dashboard_id=dashboard_id,
+        tile_id=tile_id,
+    )
+    if tile is None:
+        raise HTTPException(status_code=404, detail="Tile not found")
+    return tile
 
 
 @router.patch("/{dashboard_id}", response_model=DashboardV2Out)

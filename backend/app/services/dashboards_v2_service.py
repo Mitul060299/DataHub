@@ -256,6 +256,35 @@ class DashboardsV2Service:
             db.close()
 
     @classmethod
+    def get_tile(
+        cls,
+        user_id: str,
+        dashboard_id: str,
+        tile_id: str,
+    ) -> DashboardTileOut | None:
+        db = SessionLocal()
+        try:
+            dashboard = (
+                db.query(DashboardV2DB)
+                .filter(DashboardV2DB.id == dashboard_id)
+                .filter(DashboardV2DB.user_id == user_id)
+                .first()
+            )
+            if not dashboard:
+                return None
+            tile = (
+                db.query(DashboardTileDB)
+                .filter(DashboardTileDB.id == tile_id)
+                .filter(DashboardTileDB.dashboard_id == dashboard_id)
+                .first()
+            )
+            if not tile:
+                return None
+            return cls._tile_out(tile)
+        finally:
+            db.close()
+
+    @classmethod
     def update_tile(
         cls,
         user_id: str,

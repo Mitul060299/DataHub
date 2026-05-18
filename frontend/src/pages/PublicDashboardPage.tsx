@@ -91,6 +91,33 @@ export function PublicDashboardPage() {
                       }
                       style={{ height: "100%", borderRadius: 0, border: "none" }}
                     />
+                  ) : tileType === "heading" ? (
+                    <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", height: "100%" }}>
+                      <span
+                        style={{
+                          fontSize:
+                            Number((tile.query_spec as Record<string, unknown>).level ?? 1) === 1 ? 26
+                            : Number((tile.query_spec as Record<string, unknown>).level ?? 1) === 2 ? 20 : 16,
+                          fontWeight: 700,
+                          color: "#E2E8F0",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {String((tile.query_spec as Record<string, unknown>).text ?? tile.title)}
+                      </span>
+                    </div>
+                  ) : tileType === "image" ? (
+                    <div style={{ padding: 8, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      <img
+                        src={String((tile.query_spec as Record<string, unknown>).url ?? "")}
+                        alt={tile.title}
+                        style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6 }}
+                      />
+                    </div>
+                  ) : tileType === "divider" ? (
+                    <div style={{ padding: "0 16px", display: "flex", alignItems: "center", height: "100%" }}>
+                      <hr style={{ width: "100%", border: "none", borderTop: "1px solid #334155" }} />
+                    </div>
                   ) : tileType === "text" ? (
                     <div style={{ padding: 16, fontSize: 13, color: "#94A3B8", lineHeight: 1.6 }}>
                       {String((tile.query_spec as Record<string, unknown>).text ?? "")}

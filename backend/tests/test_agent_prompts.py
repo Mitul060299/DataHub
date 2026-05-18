@@ -55,6 +55,65 @@ class TestPlannerCookbook:
         assert "depends_on" in PLANNER_SYSTEM_PROMPT
 
 
+class TestMLPrepCookbook:
+    """Section H must cover the ML / AI preparation steps."""
+
+    def test_has_ml_prep_header(self):
+        assert "ML / AI PREPARATION" in PLANNER_SYSTEM_PROMPT
+
+    def test_scaling_recipes(self):
+        # Z-score, min-max, robust, log, sqrt
+        assert "STDDEV_SAMP" in PLANNER_SYSTEM_PROMPT  # z-score
+        assert "Min-max scaling" in PLANNER_SYSTEM_PROMPT
+        assert "Robust scaling" in PLANNER_SYSTEM_PROMPT
+        assert "QUANTILE_CONT" in PLANNER_SYSTEM_PROMPT
+        assert "LN(" in PLANNER_SYSTEM_PROMPT  # log transform
+        assert "SQRT(" in PLANNER_SYSTEM_PROMPT
+
+    def test_encoding_recipes(self):
+        # Label, ordinal, one-hot, frequency, target, hash
+        assert "Label encoding" in PLANNER_SYSTEM_PROMPT
+        assert "DENSE_RANK" in PLANNER_SYSTEM_PROMPT
+        assert "Ordinal encoding" in PLANNER_SYSTEM_PROMPT
+        assert "One-hot encoding" in PLANNER_SYSTEM_PROMPT
+        assert "Frequency / count encoding" in PLANNER_SYSTEM_PROMPT
+        assert "Target / mean encoding" in PLANNER_SYSTEM_PROMPT
+        assert "leakage" in PLANNER_SYSTEM_PROMPT.lower()
+
+    def test_feature_engineering_recipes(self):
+        assert "Date-part features" in PLANNER_SYSTEM_PROMPT
+        assert "Cyclical encoding" in PLANNER_SYSTEM_PROMPT
+        assert "Lag / lead" in PLANNER_SYSTEM_PROMPT
+        assert "Rolling window" in PLANNER_SYSTEM_PROMPT
+        assert "Interaction / polynomial" in PLANNER_SYSTEM_PROMPT
+
+    def test_dimensionality_reduction(self):
+        assert "PCA" in PLANNER_SYSTEM_PROMPT
+        assert "Variance threshold" in PLANNER_SYSTEM_PROMPT
+        assert "Correlation filter" in PLANNER_SYSTEM_PROMPT
+
+    def test_label_target_prep(self):
+        assert "Binarize" in PLANNER_SYSTEM_PROMPT
+        assert "Multi-class labelling" in PLANNER_SYSTEM_PROMPT
+        assert "Class balance check" in PLANNER_SYSTEM_PROMPT
+        assert "undersampling" in PLANNER_SYSTEM_PROMPT.lower()
+
+    def test_train_test_split(self):
+        assert "TRAIN / VALIDATION / TEST SPLIT" in PLANNER_SYSTEM_PROMPT
+        assert "Deterministic random split" in PLANNER_SYSTEM_PROMPT
+        assert "Time-based split" in PLANNER_SYSTEM_PROMPT
+        assert "Stratified split" in PLANNER_SYSTEM_PROMPT
+        # Anti-pattern guardrail
+        assert "NEVER use RANDOM()" in PLANNER_SYSTEM_PROMPT
+
+    def test_leakage_guardrails(self):
+        assert "LEAKAGE GUARDRAILS" in PLANNER_SYSTEM_PROMPT
+        assert "TRAIN ONLY" in PLANNER_SYSTEM_PROMPT
+
+    def test_ml_multi_step_template(self):
+        assert "ML-PREP MULTI-STEP TEMPLATE" in PLANNER_SYSTEM_PROMPT
+
+
 class TestReflectPrompt:
     """REFLECT_PROMPT must teach the model to recognize common errors."""
 
@@ -99,6 +158,31 @@ class TestAutoSupportedOps:
     def test_documents_format_recipes(self):
         assert "FORMAT-FIXING RECIPES" in _SUPPORTED_OPERATIONS
         assert "TRY_STRPTIME" in _SUPPORTED_OPERATIONS
+
+    def test_documents_ml_prep_ops(self):
+        for op in (
+            "scale_features", "encode_categorical", "engineer_datetime",
+            "engineer_cyclical", "lag_features", "rolling_window",
+            "polynomial_features", "dimensionality_reduction",
+            "variance_threshold", "correlation_filter", "binarize_target",
+            "balance_classes", "train_test_split",
+        ):
+            assert op in _SUPPORTED_OPERATIONS, f"missing ML op: {op}"
+
+    def test_documents_scaling_methods(self):
+        for m in ("zscore", "minmax", "robust", "log", "sqrt"):
+            assert m in _SUPPORTED_OPERATIONS, f"missing scaling: {m}"
+
+    def test_documents_encoding_methods(self):
+        for m in ("label", "ordinal", "onehot", "frequency", "target", "hash"):
+            assert m in _SUPPORTED_OPERATIONS, f"missing encoding: {m}"
+
+    def test_documents_split_methods(self):
+        for m in ("random", "time", "stratified"):
+            assert m in _SUPPORTED_OPERATIONS, f"missing split method: {m}"
+
+    def test_documents_leakage_guardrails(self):
+        assert "LEAKAGE GUARDRAILS" in _SUPPORTED_OPERATIONS
 
 
 class TestPromptFormatable:

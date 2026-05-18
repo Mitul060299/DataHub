@@ -39,6 +39,9 @@ TRANSFORM:  filter_rows, select_columns, drop_columns, rename_columns, create_co
             merge_columns, change_type, sort, sample, bin_values
 AGGREGATE:  group_by, pivot, unpivot, distinct
 JOIN/UNION: join, union
+ML PREP:    scale_features, encode_categorical, engineer_datetime, engineer_cyclical, lag_features,
+            rolling_window, polynomial_features, dimensionality_reduction, variance_threshold,
+            correlation_filter, binarize_target, balance_classes, train_test_split
 ANALYTICS:  summarise, validate, reconcile, visualise, export, sql_query
 
 OPERATION SEMANTICS — pick the most specific operation that matches the rule:
@@ -63,6 +66,60 @@ OPERATION SEMANTICS — pick the most specific operation that matches the rule:
 - join : enrich one table with columns from another via a key column.
 - union : stack rows from multiple tables; if schemas differ, planner must
   auto-align by listing columns explicitly with NULL fillers for missing ones.
+
+ML-PREP OPERATION PARAMETERS:
+- scale_features : standardize numeric features for ML. Parameters:
+  {"columns": [...], "method": "zscore"|"minmax"|"robust"|"log"|"sqrt",
+   "fit_on": "all"|"train", "split_column": "<col>"|null}
+  (When fit_on="train", compute statistics WHERE split_column='train' only,
+   then CROSS JOIN those stats back to the full table — prevents leakage.)
+- encode_categorical : convert string/category columns to numeric. Parameters:
+  {"column": "<col>", "method": "label"|"ordinal"|"onehot"|"frequency"|"target"|"hash",
+   "ordering": [...]    (required for "ordinal"),
+   "target_column": "<col>"  (required for "target", MUST be on train split only),
+   "max_categories": 20  (cap for one-hot to avoid blowup),
+   "handle_unknown": "ignore"|"error"|"as_new"}
+- engineer_datetime : extract calendar parts. Parameters:
+  {"column": "<dt_col>", "parts": ["year","month","day","dow","hour","is_weekend"]}
+- engineer_cyclical : sin/cos encoding for periodic features. Parameters:
+  {"column": "<col>", "period": 12|24|7|365}
+- lag_features : create lag(N) features for time series. Parameters:
+  {"column": "<col>", "lags": [1,7,30], "partition_by": "<entity_col>",
+   "order_by": "<time_col>"}
+- rolling_window : moving aggregates. Parameters:
+  {"column": "<col>", "window": 7, "agg": "avg"|"sum"|"min"|"max"|"std",
+   "partition_by": "<col>", "order_by": "<time_col>"}
+- polynomial_features : interaction / power terms. Parameters:
+  {"columns": [...], "degree": 2, "include_interactions": true|false}
+- dimensionality_reduction : PCA preparation only (DuckDB cannot run PCA itself).
+  Parameters: {"columns": [...], "n_components": 2, "export_path": "<path>"}
+  ALWAYS combine with scale_features(zscore) BEFORE export.
+- variance_threshold : drop near-constant columns. Parameters:
+  {"min_variance": 0.01, "exclude_columns": [...]}
+- correlation_filter : drop one column from highly correlated pairs. Parameters:
+  {"threshold": 0.95, "method": "pearson", "keep": "first"|"last"}
+- binarize_target : convert continuous label to binary class. Parameters:
+  {"column": "<target>", "threshold": <n>, "above_label": 1, "below_label": 0,
+   "output_column": "<new_target>"}
+- balance_classes : address class imbalance. Parameters:
+  {"target_column": "<col>", "method": "undersample"|"oversample"|"smote_sql",
+   "ratio": 1.0}  (smote_sql is a simplified SQL approximation, not true SMOTE)
+- train_test_split : add a 'split' column. Parameters:
+  {"method": "random"|"time"|"stratified",
+   "ratios": {"train": 0.7, "val": 0.15, "test": 0.15},
+   "id_column": "<stable_id>"      (required for "random" and "stratified"),
+   "time_column": "<ts>", "cutoffs": ["2024-01-01","2024-07-01"]  (required for "time"),
+   "stratify_by": "<label_col>"    (required for "stratified"),
+   "seed": 42}
+
+LEAKAGE GUARDRAILS — enforce in every ML-prep plan:
+- When the user has set up scaling, encoding (target/frequency), or imputation
+  AND a train_test_split step exists, the split MUST come BEFORE the fit-needing
+  step, and the fit-needing step MUST set fit_on="train" / split_column accordingly.
+- Never include the target column in scale_features, dimensionality_reduction,
+  variance_threshold, or correlation_filter parameters.
+- For time-series datasets (presence of a date column + lag/rolling ops), the
+  split MUST be method="time" — never "random".
 
 FORMAT-FIXING RECIPES (apply inside fill_missing/replace_values/standardize_case SQL):
 - Date unification: TRY_STRPTIME(col, ['%Y-%m-%d','%m/%d/%Y','%d-%m-%Y','%d-%b-%Y'])

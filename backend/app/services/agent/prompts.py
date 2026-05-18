@@ -25,6 +25,13 @@ DISAMBIGUATION HINTS:
 - "deduplicate / remove duplicates / collapse duplicates" → clean
 - "find duplicates / show duplicates" without removing → validate
 - "snake_case columns / rename all columns / standardize column names" → clean
+- ML PREP CUES (route to goal when 2+ steps requested, else transform/add_column):
+  - "scale / normalize / standardize numeric features / z-score / min-max / robust scale" → transform
+  - "one-hot / label encode / ordinal encode / target encode / frequency encode" → transform
+  - "PCA / dimensionality reduction / variance threshold / correlation filter" → transform
+  - "train/test split / train val test / stratified split / time-based split" → transform
+  - "binarize target / create label / class balance / oversample / undersample" → transform/add_column
+  - "prepare for ML / model training / feature engineering / build features" → goal
 
 CURRENT SESSION TABLES:
 {table_registry}
@@ -300,6 +307,212 @@ F4. Pivot-like wide expansion when DuckDB PIVOT is overkill:
     FROM <input> GROUP BY customer_id
 
 ──────────────────────────────────────────────────────────────────────────────
+H. ML / AI PREPARATION  (intent: transform | add_column)
+──────────────────────────────────────────────────────────────────────────────
+Recipes for the steps users run BEFORE training a model. All use pure DuckDB
+SQL so they are reproducible inside the pipeline. Always materialise the
+training table after these steps so the same transform is applied to test data.
+
+— SCALING / NORMALIZATION ————————————————————————————————————————————
+H1. Z-score standardization (mean=0, std=1) — best for linear models / NN / PCA:
+    SELECT *,
+      ("amount" - AVG("amount") OVER ()) / NULLIF(STDDEV_SAMP("amount") OVER (), 0)
+        AS amount_zscore
+    FROM <input>
+    (Overwrite in place by combining with `* EXCLUDE ("amount")` and aliasing
+    the new expression AS "amount" — same EXCLUDE rule as section E.)
+
+H2. Min-max scaling to [0, 1] — best for tree-free models needing bounded inputs:
+    SELECT *,
+      ("amount" - MIN("amount") OVER ()) /
+        NULLIF(MAX("amount") OVER () - MIN("amount") OVER (), 0) AS amount_scaled
+    FROM <input>
+
+H3. Robust scaling (median + IQR) — best when outliers are present:
+    WITH s AS (
+      SELECT QUANTILE_CONT("amount", 0.5) AS med,
+             QUANTILE_CONT("amount", 0.75) - QUANTILE_CONT("amount", 0.25) AS iqr
+      FROM <input>
+    )
+    SELECT t.*, (t."amount" - s.med) / NULLIF(s.iqr, 0) AS amount_robust
+    FROM <input> t CROSS JOIN s
+
+H4. Log / log1p transform — for right-skewed numeric features:
+    SELECT *, LN("revenue" + 1) AS revenue_log FROM <input>
+
+H5. Square-root / Box-Cox approximation for moderate skew:
+    SELECT *, SQRT(GREATEST("count", 0)) AS count_sqrt FROM <input>
+
+— ENCODING CATEGORICAL VARIABLES ————————————————————————————————————
+H6. Label encoding (integer per distinct category, deterministic by name):
+    SELECT t.*, c.label_id AS category_label
+    FROM <input> t
+    LEFT JOIN (
+      SELECT "category", DENSE_RANK() OVER (ORDER BY "category") - 1 AS label_id
+      FROM (SELECT DISTINCT "category" FROM <input> WHERE "category" IS NOT NULL)
+    ) c USING ("category")
+
+H7. Ordinal encoding (caller-supplied order):
+    SELECT *, CASE "tier"
+             WHEN 'bronze' THEN 0 WHEN 'silver' THEN 1
+             WHEN 'gold' THEN 2 WHEN 'platinum' THEN 3
+             ELSE NULL END AS tier_ord
+    FROM <input>
+
+H8. One-hot encoding — emit one boolean (0/1) column per distinct value.
+    First list distinct values via: SELECT DISTINCT "color" FROM <input>;
+    then template:
+    SELECT *,
+      CAST("color" = 'red'   AS INTEGER) AS color_red,
+      CAST("color" = 'green' AS INTEGER) AS color_green,
+      CAST("color" = 'blue'  AS INTEGER) AS color_blue
+    FROM <input>
+    For high-cardinality columns (>20 distinct), prefer H9 frequency encoding
+    or H10 target encoding instead — never one-hot more than ~20 categories.
+
+H9. Frequency / count encoding — replace category with its training-set count:
+    SELECT t.*, f.freq AS category_freq
+    FROM <input> t
+    LEFT JOIN (SELECT "category", COUNT(*) AS freq FROM <input> GROUP BY 1) f
+    USING ("category")
+
+H10. Target / mean encoding — replace category with mean of label per category
+     (WARNING: leakage risk — only run AFTER train/test split, on TRAIN only):
+    SELECT t.*, m.target_mean AS category_te
+    FROM <train_split> t
+    LEFT JOIN (SELECT "category", AVG("label"::DOUBLE) AS target_mean
+               FROM <train_split> GROUP BY 1) m USING ("category")
+
+H11. Binary encoding for high-cardinality IDs — hash to a few buckets:
+    SELECT *, hash("user_id") % 256 AS user_bucket FROM <input>
+
+— FEATURE ENGINEERING ————————————————————————————————————————————————
+H12. Date-part features:
+    SELECT *,
+      EXTRACT(YEAR  FROM "order_date") AS order_year,
+      EXTRACT(MONTH FROM "order_date") AS order_month,
+      EXTRACT(DOW   FROM "order_date") AS order_dow,
+      EXTRACT(HOUR  FROM "order_date") AS order_hour,
+      CAST(EXTRACT(DOW FROM "order_date") IN (0, 6) AS INTEGER) AS is_weekend
+    FROM <input>
+
+H13. Cyclical encoding (preserves periodicity — better than raw month/hour):
+    SELECT *,
+      SIN(2 * PI() * EXTRACT(MONTH FROM "dt") / 12) AS month_sin,
+      COS(2 * PI() * EXTRACT(MONTH FROM "dt") / 12) AS month_cos
+    FROM <input>
+
+H14. Lag / lead features for time series:
+    SELECT *,
+      LAG("price", 1) OVER (PARTITION BY "ticker" ORDER BY "dt") AS price_lag1,
+      LAG("price", 7) OVER (PARTITION BY "ticker" ORDER BY "dt") AS price_lag7
+    FROM <input>
+
+H15. Rolling window aggregates (moving averages, rolling std):
+    SELECT *,
+      AVG("price") OVER (PARTITION BY "ticker" ORDER BY "dt"
+                          ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS price_ma7
+    FROM <input>
+
+H16. Interaction / polynomial features:
+    SELECT *,
+      "price" * "quantity" AS revenue,
+      "price" * "price"    AS price_sq,
+      "age" / NULLIF("income", 0) AS age_income_ratio
+    FROM <input>
+
+H17. Text length / token-count features (cheap NLP basics):
+    SELECT *,
+      LENGTH("review")                              AS review_chars,
+      LENGTH("review") - LENGTH(REPLACE("review",' ','')) + 1 AS review_words
+    FROM <input>
+
+— DIMENSIONALITY REDUCTION ——————————————————————————————————————————
+H18. PCA / SVD are NOT native DuckDB ops. Pre-PCA preparation steps:
+       (a) Select only numeric columns: SELECT col_a, col_b, ... FROM <input>
+       (b) Drop nulls or impute (recipes E1-E4)
+       (c) Z-score standardize every input column (recipe H1) — REQUIRED
+       (d) Export the prepared matrix to Parquet (operation: export, format: parquet)
+       (e) Note in the step description that the user should run PCA in a
+           Python notebook on the exported file using sklearn.decomposition.PCA.
+       Always emit these as a multi-step plan, not a single "do PCA" step.
+
+H19. Variance threshold — drop near-constant columns before training:
+    -- Profile first; manually drop columns where COUNT(DISTINCT col) <= 1
+    -- or STDDEV(col)/AVG(col) < 0.01 (coefficient of variation).
+
+H20. Correlation filter — find highly correlated pairs to drop one of:
+    SELECT 'col_a' AS x, 'col_b' AS y, CORR("col_a", "col_b") AS r FROM <input>
+    UNION ALL ...   -- emit one row per pair, then drop |r| > 0.95.
+
+— LABEL / TARGET PREPARATION ——————————————————————————————————————————
+H21. Binarize a continuous target (regression → classification):
+    SELECT *, CAST("amount" > 100 AS INTEGER) AS is_high_value FROM <input>
+
+H22. Multi-class labelling from thresholds:
+    SELECT *,
+      CASE WHEN "score" >= 0.8 THEN 'A'
+           WHEN "score" >= 0.6 THEN 'B'
+           WHEN "score" >= 0.4 THEN 'C' ELSE 'D' END AS grade
+    FROM <input>
+
+H23. Class balance check (always run before training):
+    SELECT "label", COUNT(*) AS n, COUNT(*) * 1.0 / SUM(COUNT(*)) OVER () AS pct
+    FROM <input> GROUP BY "label" ORDER BY n DESC
+
+H24. Stratified undersampling for class imbalance (downsample majority):
+    SELECT * EXCLUDE (rn) FROM (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY "label" ORDER BY RANDOM()) AS rn
+      FROM <input>
+    ) WHERE rn <= (SELECT MIN(c) FROM (SELECT COUNT(*) AS c FROM <input> GROUP BY "label"))
+
+H25. Upsample minority via random replication (simple oversampling):
+    -- Use CROSS JOIN with a generated series sized to the desired ratio.
+
+— TRAIN / VALIDATION / TEST SPLIT ——————————————————————————————————————
+H26. Deterministic random split (70/15/15) using hash for reproducibility:
+    SELECT *,
+      CASE WHEN ABS(hash(CAST("id" AS VARCHAR))) % 100 < 70 THEN 'train'
+           WHEN ABS(hash(CAST("id" AS VARCHAR))) % 100 < 85 THEN 'val'
+           ELSE 'test' END AS split
+    FROM <input>
+    (Always hash a stable ID column — NEVER use RANDOM() because it gives
+    different splits across runs.)
+
+H27. Time-based split (mandatory for time-series — no future leakage):
+    SELECT *,
+      CASE WHEN "dt" < DATE '2024-01-01' THEN 'train'
+           WHEN "dt" < DATE '2024-07-01' THEN 'val'
+           ELSE 'test' END AS split
+    FROM <input>
+
+H28. Stratified split — preserve class ratio per split:
+    SELECT *,
+      CASE WHEN ROW_NUMBER() OVER (PARTITION BY "label" ORDER BY hash(CAST("id" AS VARCHAR)))
+                * 1.0 / COUNT(*) OVER (PARTITION BY "label") < 0.7 THEN 'train'
+           WHEN ROW_NUMBER() OVER (PARTITION BY "label" ORDER BY hash(CAST("id" AS VARCHAR)))
+                * 1.0 / COUNT(*) OVER (PARTITION BY "label") < 0.85 THEN 'val'
+           ELSE 'test' END AS split
+    FROM <input>
+
+LEAKAGE GUARDRAILS (apply to every ML-prep plan):
+- Fit scalers / encoders / imputers on TRAIN ONLY, then apply to val/test.
+  In SQL terms: compute statistics in a CTE filtered to split='train', then
+  CROSS JOIN those statistics back to the full table for the transform.
+- Never include the target column in feature scaling / PCA inputs.
+- Never use future rows for feature engineering on time-series — use only
+  LAG / window frames with ROWS BETWEEN N PRECEDING AND CURRENT ROW.
+
+ML-PREP MULTI-STEP TEMPLATE — when user asks "prepare data for ML / training":
+  step 1: clean — dedupe + null-handling (recipes B + E)
+  step 2: transform — encode categoricals (recipe H6 / H8 / H9 depending on cardinality)
+  step 3: transform — engineer features (recipes H12-H17 as relevant)
+  step 4: transform — scale numeric features (recipe H1 or H3)
+  step 5: add_column — create or binarize the target label (recipe H21 / H22)
+  step 6: transform — train/val/test split (recipe H26 / H27 / H28)
+  step 7: export — write each split to Parquet for downstream training
+
+──────────────────────────────────────────────────────────────────────────────
 G. MULTI-RULE GOALS  (intent: goal)
 ──────────────────────────────────────────────────────────────────────────────
 When a user states multiple cleaning rules ("dedupe, standardize emails, fix
@@ -309,7 +522,7 @@ correct `depends_on` chain so each step reads from the previous step's view:
   step 2: standardize emails (reads v1) → produces v2
   step 3: fix dates (reads v2) → produces v3
   step 4: fill country (reads v3) → produces v4
-Each step uses a recipe from sections A-F above.
+Each step uses a recipe from sections A-H above.
 ═══════════════════════════════════════════════════════════════════════════════
 
 Respond ONLY with this JSON — no preamble, no markdown fences, no explanation:

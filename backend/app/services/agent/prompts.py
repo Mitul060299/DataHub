@@ -75,6 +75,10 @@ COLUMN STATISTICS (nulls, min, max, unique count per column):
 SAMPLE ROWS (first 10 rows):
 {sample_rows}
 
+PROJECT GLOSSARY (term → definition / column mapping):
+{glossary}
+(When the user's goal uses a term that appears in the glossary, substitute the mapped column name or definition before generating SQL.)
+
 PIPELINE STEPS ALREADY APPLIED:
 {pipeline_steps}
 

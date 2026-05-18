@@ -85,6 +85,26 @@ def _sanitize_depends_on(plan: list[dict], logger=None) -> list[dict]:
 _llm_cache: dict[str, ChatGroq] = {}
 
 
+def _load_glossary(project_id: str) -> dict:
+    """Load project glossary from Context table; best-effort, returns {} on any failure."""
+    if not project_id:
+        return {}
+    try:
+        from ....db import SessionLocal
+        from ....models_db import Context
+        db = SessionLocal()
+        try:
+            ctx = db.query(Context).filter(Context.workspace_id == project_id).first()
+            if ctx and ctx.glossary:
+                return dict(ctx.glossary)
+            return {}
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        _logger.debug("_load_glossary failed (non-fatal): %s", exc)
+        return {}
+
+
 def _get_llm(goal: str = "") -> ChatGroq:
     from ..model_router import select_model
     model = select_model("plan", goal=goal)
@@ -117,10 +137,12 @@ async def planner(state: AgentState) -> dict:
         existing_plan and state.get("plan_pending_modification", False)
     )
 
+    _glossary = _load_glossary(state.get("project_id", ""))
     system_prompt = PLANNER_SYSTEM_PROMPT.format(
         schema=_dumps(state.get("schema", {})),
         stats=_dumps(state.get("stats", {})),
         sample_rows=_dumps(state.get("sample_rows", [])[:10]),
+        glossary=_dumps(_glossary) if _glossary else "(none)",
         pipeline_steps=_dumps(_ps),
         available_templates=_dumps(state.get("available_templates", [])),
         calculated_columns=_dumps(state.get("calculated_columns", [])),
@@ -273,6 +295,109 @@ async def planner(state: AgentState) -> dict:
                 "PLAN_LINT_ERRORS: count=%d details=%s",
                 len(_lint_report["errors"]), _lint_report["errors"][:5],
             )
+            # ── Lint-error retry (one shot) ───────────────────────────────
+            # If the LLM produced a plan that violates deterministic rules,
+            # re-invoke with the errors injected so it can self-correct.
+            # This is non-blocking: if the retry also fails, the original
+            # plan is returned with a warning.
+            try:
+                _err_msgs = [
+                    f"  Step {e.get('step_number','?')}: [{e['code']}] {e['message']}"
+                    for e in _lint_report["errors"]
+                ]
+                _retry_human = (
+                    human_content
+                    + "\n\nIMPORTANT — your previous plan had the following validation errors. "
+                    "Fix ALL of them in the revised plan:\n"
+                    + "\n".join(_err_msgs)
+                    + "\n\nReturn a corrected JSON plan that resolves every error above."
+                )
+                _logger.info(
+                    "PLAN_LINT_RETRY: errors=%d",
+                    len(_lint_report["errors"]),
+                )
+                _retry_response = await asyncio.wait_for(
+                    _get_llm(user_goal).ainvoke(
+                        [
+                            SystemMessage(content=system_prompt),
+                            HumanMessage(content=_retry_human),
+                        ]
+                    ),
+                    timeout=30,
+                )
+                _retry_raw = str(_retry_response.content).strip()
+                _um2 = getattr(_retry_response, "usage_metadata", None) or {}
+                _log_call(
+                    user_id=_planner_user_id, session_id=_planner_session_id,
+                    model_used=_planner_model, query_type="plan_retry",
+                    input_tokens=_um2.get("input_tokens", 0),
+                    output_tokens=_um2.get("output_tokens", 0),
+                )
+                # Parse retry response
+                if _retry_raw.startswith("```"):
+                    _retry_raw = _retry_raw.split("```")[1]
+                    if _retry_raw.startswith("json"):
+                        _retry_raw = _retry_raw[4:]
+                _retry_raw = _retry_raw.strip()
+                _retry_parsed = None
+                try:
+                    _retry_parsed = json.loads(_retry_raw)
+                except json.JSONDecodeError:
+                    _jm = _re.search(r'\{[\s\S]*\}', _retry_raw)
+                    if _jm:
+                        try:
+                            _retry_parsed = json.loads(_jm.group())
+                        except json.JSONDecodeError:
+                            pass
+                if _retry_parsed is not None:
+                    _retry_steps = _retry_parsed.get("steps", []) if isinstance(_retry_parsed, dict) else []
+                    _retry_plan: list[PlanStep] = []
+                    for _ri, _rs in enumerate(_retry_steps, start=1):
+                        if not isinstance(_rs, dict):
+                            continue
+                        _retry_plan.append({
+                            "step_number": int(_rs.get("step_number", _ri)),
+                            "operation": str(_rs.get("operation") or "transform"),
+                            "description": str(_rs.get("description") or "Execute transformation step"),
+                            "parameters": _rs.get("parameters") if isinstance(_rs.get("parameters"), dict) else {},
+                            "sql": str(
+                                _rs.get("sql")
+                                or (_rs.get("parameters", {}).get("sql")
+                                    if isinstance(_rs.get("parameters"), dict) else "")
+                                or ""
+                            ),
+                            "template_id": str(_rs.get("template_id")) if _rs.get("template_id") else None,
+                            "estimated_rows": str(_rs.get("estimated_rows") or "Estimated rows unavailable"),
+                            "reversible": bool(_rs.get("reversible", True)),
+                            "depends_on": [int(d) for d in _rs.get("depends_on", [])] if _rs.get("depends_on") else [],
+                        })
+                    if _step_offset and _retry_plan:
+                        for _rs2 in _retry_plan:
+                            _on = _rs2["step_number"]
+                            _rs2["step_number"] = _on + _step_offset
+                            if _rs2.get("depends_on"):
+                                _rs2["depends_on"] = [d + _step_offset for d in _rs2["depends_on"]]
+                    _retry_plan = _sanitize_depends_on(_retry_plan, logger=_logger)
+                    # Re-lint the retry plan; if it's cleaner, adopt it
+                    _retry_lint = _lint_plan(
+                        _retry_plan,
+                        schema=state.get("schema"),
+                        target_column=state.get("target_column"),
+                    )
+                    if len(_retry_lint.get("errors", [])) < len(_lint_report["errors"]):
+                        _logger.info(
+                            "PLAN_LINT_RETRY_ACCEPTED: original_errors=%d retry_errors=%d",
+                            len(_lint_report["errors"]), len(_retry_lint.get("errors", [])),
+                        )
+                        plan = _retry_plan
+                        _lint_report = _retry_lint
+                    else:
+                        _logger.info(
+                            "PLAN_LINT_RETRY_REJECTED: original_errors=%d retry_errors=%d (kept original)",
+                            len(_lint_report["errors"]), len(_retry_lint.get("errors", [])),
+                        )
+            except Exception as _retry_exc:  # noqa: BLE001
+                _logger.warning("PLAN_LINT_RETRY_FAILED: %s", _retry_exc)
     except Exception as _lint_exc:
         _logger.warning("PLAN_LINT_FAILED: %s", _lint_exc)
         _lint_report = {"warnings": [], "errors": [], "auto_fixes": [], "ok": True}

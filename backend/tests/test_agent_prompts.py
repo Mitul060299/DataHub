@@ -313,6 +313,7 @@ class TestPromptFormatable:
                 secondary_datasets="{}",
                 table_registry="{}",
                 user_goal="dedupe and fix dates",
+                glossary="(none)",
             )
         except KeyError as e:
             pytest.fail(f"PLANNER_SYSTEM_PROMPT has unescaped placeholder: {e}")

@@ -578,6 +578,312 @@ def _build_table(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Analysis-specific chart builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_correlation_heatmap(
+    corr_rows: list[dict[str, Any]],
+    title: str = "Correlation Matrix",
+) -> dict[str, Any]:
+    """Build a symmetric N×N correlation heatmap from correlation_matrix() output.
+
+    corr_rows: list of {col1, col2, correlation} dicts (includes diagonal + both
+    (A,B) and (B,A) entries as returned by analysis_service.correlation_matrix).
+
+    Color scale: red (−1) → white (0) → indigo (+1).
+    """
+    # Collect ordered column list, preserving first-seen order
+    seen: set[str] = set()
+    cols: list[str] = []
+    for r in corr_rows:
+        for k in ("col1", "col2"):
+            c = str(r.get(k, ""))
+            if c and c not in seen:
+                seen.add(c)
+                cols.append(c)
+    if not cols:
+        return _base(title)
+
+    col_idx = {c: i for i, c in enumerate(cols)}
+    n = len(cols)
+
+    # Build [xi, yi, val] triples; y is reversed so the matrix reads
+    # top-left → bottom-right (col[0] diagonal at top-left).
+    data: list[list[Any]] = []
+    for r in corr_rows:
+        c1, c2 = str(r.get("col1", "")), str(r.get("col2", ""))
+        if c1 not in col_idx or c2 not in col_idx:
+            continue
+        val = r.get("correlation")
+        if val is None:
+            continue
+        xi = col_idx[c1]
+        yi = n - 1 - col_idx[c2]   # reversed y so (0,0) is top-left
+        data.append([xi, yi, round(float(val), 4)])
+
+    cfg = _base(title)
+    cfg["tooltip"] = {
+        "trigger": "item",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+    }
+    cfg["grid"] = {"top": 60, "bottom": 90, "left": 100, "right": 100, "containLabel": True}
+    cfg["xAxis"] = {
+        "type": "category",
+        "data": cols,
+        "axisLabel": {
+            "color": _SUBTEXT,
+            "rotate": 35 if n > 4 else 0,
+            "interval": 0,
+        },
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+        "splitArea": {"show": True, "areaStyle": {"color": ["rgba(255,255,255,0.02)", "transparent"]}},
+    }
+    cfg["yAxis"] = {
+        "type": "category",
+        "data": list(reversed(cols)),
+        "axisLabel": {"color": _SUBTEXT, "interval": 0},
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+        "splitArea": {"show": True, "areaStyle": {"color": ["rgba(255,255,255,0.02)", "transparent"]}},
+    }
+    cfg["visualMap"] = {
+        "min": -1,
+        "max": 1,
+        "calculable": True,
+        "orient": "horizontal",
+        "left": "center",
+        "bottom": 10,
+        "inRange": {"color": [_RED, "#FFFFFF", _PRIMARY]},
+        "textStyle": {"color": _TEXT},
+        "precision": 2,
+    }
+    cfg["series"] = [{
+        "type": "heatmap",
+        "data": data,
+        "label": {
+            "show": True,
+            "fontSize": 10 if n <= 8 else 8,
+            "color": "#1A202C",
+            "formatter": "{c}",
+        },
+        "emphasis": {"itemStyle": {"shadowBlur": 8, "shadowColor": "rgba(0,0,0,0.3)"}},
+    }]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def build_box_plot(
+    desc_rows: list[dict[str, Any]],
+    title: str = "Distribution (Box Plot)",
+) -> dict[str, Any]:
+    """Build a box plot from descriptive_stats() output.
+
+    Each column becomes one box: whiskers at P5/P95, box at P25/P75, line at median.
+    Columns with errors are skipped.
+    """
+    clean = [r for r in desc_rows if "error" not in r and r.get("column_name")]
+    if not clean:
+        return _base(title)
+
+    cols = [r["column_name"] for r in clean]
+    # ECharts boxplot data item: [lower_whisker, Q1, median, Q3, upper_whisker]
+    box_data = [
+        [r.get("p5"), r.get("p25"), r.get("median"), r.get("p75"), r.get("p95")]
+        for r in clean
+    ]
+
+    cfg = _base(title)
+    cfg["tooltip"] = {
+        "trigger": "item",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+    }
+    cfg["grid"] = {"top": 70, "bottom": 50, "left": 60, "right": 20, "containLabel": True}
+    cfg["xAxis"] = {
+        "type": "category",
+        "data": cols,
+        "boundaryGap": True,
+        "axisLabel": {"color": _SUBTEXT, "rotate": 30 if len(cols) > 4 else 0},
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+    }
+    cfg["yAxis"] = {
+        "type": "value",
+        "axisLabel": {"color": _SUBTEXT},
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+        "splitLine": {"lineStyle": {"color": _GRID_LINE}},
+    }
+    cfg["series"] = [{
+        "name": "Distribution",
+        "type": "boxplot",
+        "data": box_data,
+        "itemStyle": {"color": _ACCENT2, "borderColor": _PRIMARY, "borderWidth": 2},
+        "emphasis": {"itemStyle": {"borderColor": _PRIMARY, "shadowBlur": 8, "shadowColor": "rgba(91,106,240,0.4)"}},
+    }]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def build_regression_chart(
+    points: list[dict[str, Any]],
+    x_col: str,
+    y_col: str,
+    r2: float | None = None,
+    title: str = "Linear Regression",
+) -> dict[str, Any]:
+    """Scatter chart (actual data) + regression line overlay.
+
+    ``points`` should be the ``points`` list from ``prediction_service.linear_regression``,
+    each item containing ``x_col``, ``y_col``, and ``predicted`` keys.
+    """
+    actual: list[list[Any]] = []
+    fitted: list[list[Any]] = []
+    for r in points:
+        x = r.get(x_col)
+        y = r.get(y_col)
+        pred = r.get("predicted")
+        if x is not None and y is not None:
+            actual.append([x, y])
+        if x is not None and pred is not None:
+            fitted.append([x, pred])
+
+    r2_label = f"  (R² = {r2:.3f})" if r2 is not None else ""
+    subtitle = f"Fitted line vs actual values{r2_label}"
+
+    cfg = _base(title, subtitle)
+    cfg["tooltip"] = {
+        "trigger": "item",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+    }
+    cfg["legend"] = {
+        "data": ["Actual", "Fitted"],
+        "textStyle": {"color": _TEXT},
+        "top": 42,
+    }
+    cfg["grid"] = {"top": 80, "bottom": 50, "left": 60, "right": 20, "containLabel": True}
+    cfg["xAxis"] = {
+        "type": "value",
+        "name": x_col,
+        "nameTextStyle": {"color": _SUBTEXT},
+        "axisLabel": {"color": _SUBTEXT},
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+        "splitLine": {"lineStyle": {"color": _GRID_LINE}},
+    }
+    cfg["yAxis"] = {
+        "type": "value",
+        "name": y_col,
+        "nameTextStyle": {"color": _SUBTEXT},
+        "axisLabel": {"color": _SUBTEXT},
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+        "splitLine": {"lineStyle": {"color": _GRID_LINE}},
+    }
+    cfg["series"] = [
+        {
+            "name": "Actual",
+            "type": "scatter",
+            "data": actual,
+            "symbolSize": 6,
+            "itemStyle": {"color": _ACCENT2, "opacity": 0.7},
+        },
+        {
+            "name": "Fitted",
+            "type": "line",
+            "data": sorted(fitted, key=lambda p: p[0]),
+            "smooth": False,
+            "showSymbol": False,
+            "lineStyle": {"color": _PRIMARY, "width": 2},
+        },
+    ]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def build_forecast_chart(
+    rows: list[dict[str, Any]],
+    x_col: str,
+    actual_col: str,
+    predicted_col: str = "predicted",
+    title: str = "Forecast",
+) -> dict[str, Any]:
+    """Dual-line chart: actual values + trend/forecast overlay.
+
+    Works for both moving-average rows ({x_col, actual_col, moving_avg})
+    and forecast rows ({x_col, actual_col, predicted, is_forecast}).
+
+    Forecast rows (is_forecast=True) are rendered with a dashed line so the
+    projected zone is visually distinct.
+    """
+    x_labels: list[str] = [str(r.get(x_col, "")) for r in rows]
+    actual_data: list[Any] = [r.get(actual_col) for r in rows]
+    pred_data: list[Any] = [r.get(predicted_col) for r in rows]
+
+    # Check if any rows are flagged as forecast
+    has_forecast = any(r.get("is_forecast") for r in rows)
+    pred_label = "Forecast" if has_forecast else "Trend (MA)"
+
+    cfg = _base(title)
+    cfg["tooltip"] = {
+        "trigger": "axis",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+    }
+    cfg["legend"] = {
+        "data": ["Actual", pred_label],
+        "textStyle": {"color": _TEXT},
+        "top": 35,
+    }
+    cfg["grid"] = {"top": 75, "bottom": 50, "left": 60, "right": 20, "containLabel": True}
+    cfg["xAxis"] = {
+        "type": "category",
+        "data": x_labels,
+        "boundaryGap": False,
+        "axisLabel": {
+            "color": _SUBTEXT,
+            "rotate": 30 if len(x_labels) > 10 else 0,
+            "interval": max(0, len(x_labels) // 12 - 1),
+        },
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+    }
+    cfg["yAxis"] = {
+        "type": "value",
+        "axisLabel": {"color": _SUBTEXT},
+        "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+        "splitLine": {"lineStyle": {"color": _GRID_LINE}},
+    }
+    cfg["series"] = [
+        {
+            "name": "Actual",
+            "type": "line",
+            "data": actual_data,
+            "smooth": False,
+            "showSymbol": False,
+            "lineStyle": {"color": _ACCENT2, "width": 2},
+            "areaStyle": {"color": "rgba(129,140,248,0.08)"},
+            "connectNulls": False,
+        },
+        {
+            "name": pred_label,
+            "type": "line",
+            "data": pred_data,
+            "smooth": True,
+            "showSymbol": False,
+            "lineStyle": {
+                "color": _PRIMARY,
+                "width": 2,
+                "type": "dashed" if has_forecast else "solid",
+            },
+            "connectNulls": True,
+        },
+    ]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Chart type inference
 # ─────────────────────────────────────────────────────────────────────────────
 

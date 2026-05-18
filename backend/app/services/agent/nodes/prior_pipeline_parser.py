@@ -19,11 +19,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..auto_prompts import PRIOR_PIPELINE_PARSER_SYSTEM, PRIOR_PIPELINE_PARSER_USER
 from ..auto_types import ColumnExpectation, PriorPipeline, ReferenceStep
@@ -33,12 +33,8 @@ from ...token_tracking_service import log_call as _log_call
 _logger = logging.getLogger(__name__)
 
 
-def _get_llm() -> ChatGroq:
-    return ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0,
-        groq_api_key=os.getenv("GROQ_API_KEY"),
-    )
+def _get_llm():
+    return get_chat_model(model="llama-3.3-70b-versatile", temperature=0)
 
 
 def _dumps(obj: Any) -> str:

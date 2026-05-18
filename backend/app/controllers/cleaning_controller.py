@@ -439,14 +439,19 @@ class CleaningController:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_groq import ChatGroq
+        from app.services.llm_provider import get_chat_model
+        from app.config import settings as _cfg
 
-        groq_api_key = os.getenv("GROQ_API_KEY", "")
-        if not groq_api_key:
-            raise HTTPException(status_code=503, detail="LLM is not configured (GROQ_API_KEY missing).")
+        provider = _cfg.llm_provider.lower()
+        api_key = (
+            _cfg.groq_api_key if provider == "groq"
+            else _cfg.openai_api_key if provider == "openai"
+            else _cfg.anthropic_api_key
+        )
+        if not api_key:
+            raise HTTPException(status_code=503, detail="LLM is not configured (API key missing).")
 
-        model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-        llm = ChatGroq(model=model, temperature=0.1, groq_api_key=groq_api_key)
+        llm = get_chat_model(temperature=0.1)
 
         columns_str = ", ".join(columns) if columns else "(unknown — use column names from the existing SQL)"
 

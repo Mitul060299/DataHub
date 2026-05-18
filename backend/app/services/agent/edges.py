@@ -40,6 +40,10 @@ def route_intent(state: AgentState) -> str:
     intent = state.get("intent", "converse")
     if intent == "clarify":
         return "clarify_step"
+    if intent == "analyse":
+        return "analyse"
+    if intent == "predict":
+        return "predict"
     if intent in _PLANNING_INTENTS:
         return "planner"
     return "responder"

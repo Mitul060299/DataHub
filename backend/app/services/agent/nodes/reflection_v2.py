@@ -27,12 +27,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from copy import deepcopy
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..auto_prompts import REFLECTION_V2_SYSTEM, REFLECTION_V2_USER
 from ..auto_types import AutoPlanStep, DriftReport, StepValidationResult
@@ -43,12 +43,8 @@ _logger = logging.getLogger(__name__)
 _MAX_TIERS = 3
 
 
-def _get_llm() -> ChatGroq:
-    return ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0.2,
-        groq_api_key=os.getenv("GROQ_API_KEY"),
-    )
+def _get_llm():
+    return get_chat_model(model="llama-3.3-70b-versatile", temperature=0.2)
 
 
 def _dumps(obj: Any) -> str:

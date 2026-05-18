@@ -37,6 +37,9 @@ def _patch_create_method(resource_cls: type) -> None:
 
 
 def apply_groq_compat_patches() -> None:
+    from app.config import settings
+    if settings.llm_provider.lower() != "groq":
+        return
     try:
         from groq.resources.chat.completions import AsyncCompletions, Completions
     except Exception:

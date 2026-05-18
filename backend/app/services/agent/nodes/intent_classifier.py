@@ -1,10 +1,10 @@
 import asyncio
 import json
 import logging
-import os
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..model_router import select_model
 from ..prompts import INTENT_CLASSIFIER_PROMPT
@@ -14,18 +14,14 @@ from ...token_tracking_service import log_call as _log_call
 
 _logger = logging.getLogger(__name__)
 
-_llm_cache: dict[str, ChatGroq] = {}
+_llm_cache: dict = {}
 
 
-def _get_llm() -> ChatGroq:
+def _get_llm():
     model = select_model("classify")
     cached = _llm_cache.get(model)
     if cached is None:
-        cached = ChatGroq(
-            model=model,
-            temperature=0,
-            groq_api_key=os.getenv("GROQ_API_KEY"),
-        )
+        cached = get_chat_model(model=model, temperature=0)
         _llm_cache[model] = cached
     return cached
 
@@ -33,7 +29,7 @@ VALID_INTENTS = {
     "clean", "validate", "filter", "transform", "add_column",
     "summarise", "pivot", "union", "join", "reconcile",
     "sql_query", "visualise", "export", "converse", "clarify",
-    "goal",
+    "goal", "analyse", "predict",
 }
 
 

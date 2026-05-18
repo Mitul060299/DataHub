@@ -294,6 +294,71 @@ class AgentGraphService:
                         "intent": "clarify",
                     }
 
+                elif node_name == "analyse":
+                    output = data.get("output", {})
+                    # Stream query results table (if any)
+                    qr = output.get("query_results")
+                    if isinstance(qr, list) and qr:
+                        yield {
+                            "type": "agent.query_results",
+                            "results": qr,
+                            "step": 0,
+                            "operation": "analyse",
+                        }
+                    # Stream chart tile (if generated)
+                    tile = output.get("chart_config")
+                    if isinstance(tile, dict):
+                        yield {
+                            "type": "tile_created",
+                            "tile": {
+                                "id": tile.get("chart_id"),
+                                "title": tile.get("title", "Analysis Chart"),
+                                "chart_type": tile.get("chart_type", "heatmap"),
+                                "echarts_config": tile.get("echarts_config"),
+                                "saveable": tile.get("saveable", True),
+                            },
+                        }
+                    # Final text response
+                    out_messages = output.get("messages", [])
+                    response_text = out_messages[-1].content if out_messages else output.get("final_response", "")
+                    yield {
+                        "type": "agent.done",
+                        "response": response_text,
+                        "intent": "analyse",
+                    }
+
+                elif node_name == "predict":
+                    output = data.get("output", {})
+                    # Stream raw prediction rows
+                    qr = output.get("query_results")
+                    if isinstance(qr, list) and qr:
+                        yield {
+                            "type": "agent.query_results",
+                            "results": qr,
+                            "step": 0,
+                            "operation": "predict",
+                        }
+                    # Stream chart tile
+                    tile = output.get("chart_config")
+                    if isinstance(tile, dict):
+                        yield {
+                            "type": "tile_created",
+                            "tile": {
+                                "id": tile.get("chart_id"),
+                                "title": tile.get("title", "Prediction Chart"),
+                                "chart_type": tile.get("chart_type", "line"),
+                                "echarts_config": tile.get("echarts_config"),
+                                "saveable": True,
+                            },
+                        }
+                    out_messages = output.get("messages", [])
+                    response_text = out_messages[-1].content if out_messages else output.get("final_response", "")
+                    yield {
+                        "type": "agent.done",
+                        "response": response_text,
+                        "intent": "predict",
+                    }
+
                 elif node_name == "execute_step":
                     output = data.get("output", {})
                     results = output.get("execution_results", [])

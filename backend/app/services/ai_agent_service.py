@@ -5,12 +5,12 @@ import re
 import uuid
 from typing import Any
 
-import httpx
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..services.duckdb_service import DuckDBService
+from ..services.llm_provider import complete_sync, get_default_model
 from ..services.data_conversion import DataConversionService
 from ..models_db import DatasetMetaDB, DatasetChunkDB, DatasetDataDB
 from ..services.token_tracking_service import log_call
@@ -46,15 +46,15 @@ class AIAgentService:
             table_name=table_name,
             client_pipeline_steps=client_pipeline_steps,
         )
-        provider, api_key, model = AIAgentService._provider_config()
-        if not provider or not api_key:
+        model = get_default_model()
+        if not AIAgentService._is_llm_configured():
             return {
                 "issues": [],
                 "suggestions": [],
                 "data_profile": AIAgentService._compute_data_profile(context),
                 "used_session_data": bool(context.get("usedSessionData")),
                 "session_fallback_reason": context.get("sessionFallbackReason"),
-                "error": "Groq is not configured. Set LLM_PROVIDER=groq and GROQ_API_KEY.",
+                "error": "LLM provider is not configured. Set LLM_PROVIDER and the corresponding API key.",
             }
 
         system_prompt = (
@@ -116,28 +116,19 @@ class AIAgentService:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                provider=provider,
-                api_key=api_key,
                 model=model,
                 response_format={"type": "json_object"},
-            )
-        except Exception as exc:
-            log_call(
                 user_id=user_id,
-                session_id=session_id or "",
-                model_used=model,
-                query_type="insights",
-                input_tokens=0,
-                output_tokens=0,
                 dataset_rows=context.get("rowCount", 0),
             )
+        except Exception as exc:
             return {
                 "issues": [],
                 "suggestions": [],
                 "data_profile": AIAgentService._compute_data_profile(context),
                 "used_session_data": bool(context.get("usedSessionData")),
                 "session_fallback_reason": context.get("sessionFallbackReason"),
-                "error": f"Groq request failed: {str(exc)}",
+                "error": f"LLM request failed: {str(exc)}",
             }
         log_call(
             user_id=user_id,
@@ -265,10 +256,10 @@ class AIAgentService:
         session_id: str = "",
     ) -> dict[str, Any]:
         context = AIAgentService._get_dataset_context(dataset_id, db)
-        provider, api_key, model = AIAgentService._provider_config()
-        if not provider or not api_key:
+        model = get_default_model()
+        if not AIAgentService._is_llm_configured():
             return {
-                "response": "Groq is not configured. Please set LLM_PROVIDER=groq and GROQ_API_KEY.",
+                "response": "LLM provider is not configured. Set LLM_PROVIDER and the corresponding API key.",
                 "transformation": None,
                 "needsConfirmation": False,
             }
@@ -379,22 +370,13 @@ class AIAgentService:
         try:
             response, _usage2 = AIAgentService._call_llm(
                 messages,
-                provider=provider,
-                api_key=api_key,
                 model=model,
                 response_format={"type": "json_object"},
+                user_id=user_id,
             )
         except Exception as exc:
-            log_call(
-                user_id=user_id,
-                session_id=session_id,
-                model_used=model,
-                query_type="execute",
-                input_tokens=0,
-                output_tokens=0,
-            )
             return {
-                "response": f"Groq request failed: {str(exc)}. Verify GROQ_API_KEY and GROQ_MODEL.",
+                "response": f"LLM request failed: {str(exc)}.",
                 "transformation": None,
                 "needsConfirmation": False,
             }
@@ -431,35 +413,27 @@ class AIAgentService:
     @staticmethod
     def _call_llm(
         messages: list[dict[str, str]],
-        provider: str,
-        api_key: str,
         model: str,
         response_format: dict[str, Any] | None = None,
+        user_id: str = "",
+        dataset_rows: int = 0,
     ) -> tuple[str, dict[str, Any]]:
-        """Call the LLM and return (content, usage_dict).
+        """Call the LLM via the provider-agnostic llm_provider gateway.
 
-        usage_dict has keys prompt_tokens, completion_tokens, total_tokens
-        (same as Groq's response.usage object).
+        Returns (content, usage_dict) where usage_dict has keys
+        prompt_tokens, completion_tokens, total_tokens.
         """
-        base_url = AIAgentService._provider_base_url(provider)
-        resolved_model = AIAgentService._resolve_model_name(model)
-        body: dict[str, Any] = {
-            "model": resolved_model,
-            "messages": messages,
-            "temperature": 0.3,
-        }
-        if response_format:
-            body["response_format"] = response_format
-        response = httpx.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json=body,
-            timeout=30.0,
+        json_mode = bool(response_format and response_format.get("type") == "json_object")
+        content, in_tok, out_tok = complete_sync(
+            messages,
+            model=model,
+            temperature=0.3,
+            json_mode=json_mode,
+            call_type="insights",
+            user_id=user_id,
+            dataset_rows=dataset_rows,
         )
-        response.raise_for_status()
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        usage = data.get("usage") or {}
+        usage = {"prompt_tokens": in_tok, "completion_tokens": out_tok, "total_tokens": in_tok + out_tok}
         return content, usage
 
     @staticmethod
@@ -489,17 +463,16 @@ class AIAgentService:
         return cleaned[:max_len]
 
     @staticmethod
-    def _provider_config() -> tuple[str, str, str]:
-        provider = settings.llm_provider.lower()
-        if provider == "groq" and settings.groq_api_key:
-            return provider, settings.groq_api_key, settings.groq_model
-        return "", "", ""
-
-    @staticmethod
-    def _provider_base_url(provider: str) -> str:
-        if provider == "groq":
-            return settings.groq_base_url
-        return ""
+    def _is_llm_configured() -> bool:
+        """Return True if the active LLM provider has an API key configured."""
+        p = settings.llm_provider.lower()
+        if p == "groq":
+            return bool(settings.groq_api_key)
+        if p == "openai":
+            return bool(settings.openai_api_key)
+        if p == "anthropic":
+            return bool(settings.anthropic_api_key)
+        return False
 
     @staticmethod
     def _safe_json(raw: str) -> Any:

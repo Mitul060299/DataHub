@@ -1,11 +1,11 @@
 import asyncio
 import json
 import logging
-import os
 import re as _re
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..prompts import PLANNER_SYSTEM_PROMPT
 from ..state import AgentState, PlanStep
@@ -82,7 +82,7 @@ def _sanitize_depends_on(plan: list[dict], logger=None) -> list[dict]:
         step["depends_on"] = cleaned
     return plan
 
-_llm_cache: dict[str, ChatGroq] = {}
+_llm_cache: dict = {}
 
 
 def _load_glossary(project_id: str) -> dict:
@@ -105,16 +105,12 @@ def _load_glossary(project_id: str) -> dict:
         return {}
 
 
-def _get_llm(goal: str = "") -> ChatGroq:
+def _get_llm(goal: str = ""):
     from ..model_router import select_model
     model = select_model("plan", goal=goal)
     cached = _llm_cache.get(model)
     if cached is None:
-        cached = ChatGroq(
-            model=model,
-            temperature=0.1,
-            groq_api_key=os.getenv("GROQ_API_KEY"),
-        )
+        cached = get_chat_model(model=model, temperature=0.1)
         _llm_cache[model] = cached
     return cached
 

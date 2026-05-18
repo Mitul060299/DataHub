@@ -1,10 +1,10 @@
 import asyncio
 import json
 import logging
-import os
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..model_router import select_model
 from ..prompts import RESPONDER_CONVERSE_PROMPT, RESPONDER_TRANSFORM_PROMPT
@@ -12,11 +12,11 @@ from ..state import AgentState
 
 logger = logging.getLogger(__name__)
 
-_llm_cache: dict[str, ChatGroq] = {}
+_llm_cache: dict = {}
 
 
-def _get_llm(kind: str = "transform") -> ChatGroq:
-    """Return a (cached) ChatGroq instance for the given call kind.
+def _get_llm(kind: str = "transform"):
+    """Return a (cached) chat model instance for the given call kind.
 
     When LLM_ROUTER_ENABLED=true, ``kind="converse"`` resolves to the cheaper
     fast model; everything else stays on the versatile default.
@@ -24,11 +24,7 @@ def _get_llm(kind: str = "transform") -> ChatGroq:
     model = select_model(kind)  # type: ignore[arg-type]
     cached = _llm_cache.get(model)
     if cached is None:
-        cached = ChatGroq(
-            model=model,
-            temperature=0.3,
-            groq_api_key=os.getenv("GROQ_API_KEY"),
-        )
+        cached = get_chat_model(model=model, temperature=0.3)
         _llm_cache[model] = cached
     return cached
 

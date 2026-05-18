@@ -17,10 +17,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..auto_prompts import GOAL_PARSER_SYSTEM, GOAL_PARSER_USER
 from ..auto_types import AutoGoal, AutoRule
@@ -29,18 +29,14 @@ from ...token_tracking_service import log_call as _log_call
 
 _logger = logging.getLogger(__name__)
 
-_llm_cache: dict[str, ChatGroq] = {}
+_llm_cache: dict = {}
 
 
-def _get_llm() -> ChatGroq:
+def _get_llm():
     model = "llama-3.3-70b-versatile"
     cached = _llm_cache.get(model)
     if not cached:
-        cached = ChatGroq(
-            model=model,
-            temperature=0,
-            groq_api_key=os.getenv("GROQ_API_KEY"),
-        )
+        cached = get_chat_model(model=model, temperature=0)
         _llm_cache[model] = cached
     return cached
 

@@ -1,27 +1,23 @@
 import asyncio
 import json
-import os
 
 from langchain_core.messages import HumanMessage
-from langchain_groq import ChatGroq
+
+from ...llm_provider import get_chat_model
 
 from ..model_router import select_model
 from ..prompts import REFLECT_PROMPT
 from ..state import AgentState
 from .planner import _dumps
 
-_llm_cache: dict[str, ChatGroq] = {}
+_llm_cache: dict = {}
 
 
-def _get_llm() -> ChatGroq:
+def _get_llm():
     model = select_model("reflect")
     cached = _llm_cache.get(model)
     if cached is None:
-        cached = ChatGroq(
-            model=model,
-            temperature=0.2,
-            groq_api_key=os.getenv("GROQ_API_KEY"),
-        )
+        cached = get_chat_model(model=model, temperature=0.2)
         _llm_cache[model] = cached
     return cached
 

@@ -30,18 +30,9 @@ class DataService:
 
 
 def _get_client():
-    """Get LLM client based on configuration"""
-    from app.config import settings
-
-    if settings.llm_provider.lower() != "groq":
-        raise RuntimeError("Unsupported LLM_PROVIDER. Only 'groq' is supported.")
-    if not settings.groq_api_key:
-        raise RuntimeError("GROQ_API_KEY is not configured.")
-    try:
-        from groq import Groq
-    except Exception as exc:
-        raise RuntimeError("Groq SDK is not installed. Add 'groq' to backend requirements.") from exc
-    return Groq(api_key=settings.groq_api_key)
+    # Kept for backward compatibility — no longer used internally.
+    # All LLM calls now go through llm_provider.complete_with_tools().
+    pass
 
 
 @dataclass
@@ -542,13 +533,12 @@ Guidelines:
     ]
 
     def __init__(self, user_id: str, dataset_id: str, df: pd.DataFrame, max_iterations: int = 10, allowed_tools: Optional[List[str]] = None):
-        from app.config import settings
+        from app.services.llm_provider import get_default_model
         self.user_id = user_id
         self.dataset_id = dataset_id
         self.df = df
         self.executor = ToolExecutor(user_id, dataset_id, df)
-        self.client = _get_client()
-        self.model = settings.groq_model
+        self.model = get_default_model()
         self.iteration = 0
         self.max_iterations = max(1, int(max_iterations))
         self.allowed_tools = set(allowed_tools or [
@@ -597,23 +587,24 @@ Guidelines:
 
             try:
                 # Call LLM with function calling
-                response = self.client.chat.completions.create(
-                    model=self.model,
+                from app.services.llm_provider import complete_with_tools
+                response_msg = await complete_with_tools(
                     messages=messages,
                     tools=self.agent_tools,
-                    tool_choice='auto',
+                    model=self.model,
                     temperature=0.7,
                     max_tokens=2000,
+                    user_id=self.user_id,
                 )
 
-                response_msg = response.choices[0].message
+                tool_calls = response_msg.get("tool_calls") or []
 
                 # Check if we're done (no tool calls)
-                if not response_msg.tool_calls:
+                if not tool_calls:
                     # Agent decided to stop
                     yield AgentEvent(
                         type='message',
-                        content=response_msg.content or 'Analysis complete'
+                        content=response_msg.get("content") or 'Analysis complete'
                     )
                     yield AgentEvent(
                         type='done',
@@ -621,13 +612,13 @@ Guidelines:
                     )
                     break
 
-                # Add assistant response to messages
+                # Add assistant response to messages (dict, not SDK object)
                 messages.append(response_msg)
 
                 # Process tool calls
-                for tool_call in response_msg.tool_calls:
-                    tool_name = tool_call.function.name
-                    tool_args = json.loads(tool_call.function.arguments)
+                for tool_call in tool_calls:
+                    tool_name = tool_call["function"]["name"]
+                    tool_args = json.loads(tool_call["function"]["arguments"])
 
                     yield AgentEvent(
                         type='step_start',
@@ -649,7 +640,7 @@ Guidelines:
                         # Add to conversation
                         messages.append({
                             'role': 'tool',
-                            'tool_call_id': tool_call.id,
+                            'tool_call_id': tool_call["id"],
                             'name': tool_name,
                             'content': json.dumps(result)
                         })
@@ -686,7 +677,7 @@ Guidelines:
                         )
                         messages.append({
                             'role': 'tool',
-                            'tool_call_id': tool_call.id,
+                            'tool_call_id': tool_call["id"],
                             'name': tool_name,
                             'content': f'Error: {error_msg}'
                         })

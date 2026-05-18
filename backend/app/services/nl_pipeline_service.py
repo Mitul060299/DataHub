@@ -23,9 +23,7 @@ import json
 import logging
 from typing import Any
 
-import httpx
-
-from ..config import settings
+from .llm_provider import complete_sync
 
 logger = logging.getLogger(__name__)
 
@@ -138,17 +136,6 @@ def nl_edit_pipeline(
 
     On failure returns {"error": "...", "steps": None}.
     """
-    provider = settings.llm_provider.lower()
-    api_key = settings.groq_api_key if provider == "groq" else ""
-    model = settings.groq_model
-    base_url = settings.groq_base_url
-
-    if not api_key:
-        return {
-            "error": "LLM not configured — set GROQ_API_KEY.",
-            "steps": None,
-        }
-
     steps_json = json.dumps(current_steps, indent=2)
 
     # Build the schema context block injected into the user message
@@ -186,28 +173,21 @@ def nl_edit_pipeline(
     ]
 
     try:
-        response = httpx.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": model,
-                "messages": messages,
-                "temperature": 0.2,
-                "response_format": {"type": "json_object"},
-            },
+        raw, _, _ = complete_sync(
+            messages,
+            temperature=0.2,
+            json_mode=True,
             timeout=40.0,
+            call_type="nl_pipeline",
         )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
         parsed = json.loads(raw)
         steps = parsed.get("steps")
         summary = parsed.get("change_summary", "Pipeline updated.")
         if not isinstance(steps, list):
             return {"error": "LLM returned no 'steps' array.", "steps": None}
         return {"steps": steps, "change_summary": summary}
-    except httpx.HTTPStatusError as exc:
-        logger.warning("nl_edit_pipeline LLM HTTP error: %s", exc)
-        return {"error": f"LLM request failed: {exc.response.status_code}", "steps": None}
+    except json.JSONDecodeError:
+        return {"error": "LLM returned invalid JSON.", "steps": None}
     except Exception as exc:
         logger.warning("nl_edit_pipeline error: %s", exc)
         return {"error": str(exc), "steps": None}

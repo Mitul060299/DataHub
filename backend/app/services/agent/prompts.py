@@ -12,6 +12,8 @@ INTENT_CLASSIFIER_PROMPT = """You are a data analyst assistant. Classify the use
 - reconcile  : compare two tables on a key to find variances and missing rows
 - sql_query  : run a read-only SQL query or ad-hoc aggregation
 - visualise  : create a chart, graph, or visual summary
+- analyse    : statistical deep-dive — descriptive stats (mean/median/std/skewness/kurtosis/percentiles), correlation matrix (Pearson or Spearman), value frequency distribution, IQR-based outlier detection. Use when the user asks to "describe the data", "show me statistics", "correlate X and Y", "distribution of X", "detect outliers", "skewness", "kurtosis", or "percentiles". NOT for group-by aggregations (use summarise), NOT for data quality reports (use validate).
+- predict    : machine-learning-free prediction using DuckDB — linear regression ("regress Y on X", "fit a line", "predict Y from X"), moving average / smoothing ("rolling average", "moving average", "smooth the trend"), or time-series extrapolation ("forecast next N", "project forward", "what will revenue be next month"). Use when the user wants to model, predict, or forecast numeric values. NOT for group-by (use summarise).
 - export     : save a table as an artifact (CSV / Excel / Parquet) and get a download link
 - goal       : the user states multiple data rules, business objectives, or quality targets to achieve in one go (e.g. "remove duplicates, fill nulls, standardise country codes and flag negatives"). Use this when the message contains TWO OR MORE distinct rules/objectives that should all be satisfied together.
 - clarify    : the user's request is too ambiguous to act on — needs one clarifying question
@@ -36,9 +38,16 @@ DISAMBIGUATION HINTS:
   - "cohort / retention / funnel / conversion / RFM / segmentation" → summarise
   - "top N per group / rank within / percent of total / running total / cumulative" → summarise
   - "MoM / YoY / period over period / week over week" → summarise
-  - "t-test / chi-square / ANOVA / significance / correlation" → sql_query
+  - "t-test / chi-square / ANOVA / significance" → sql_query
+  - "correlation / correlate / pearson / spearman / pairwise correlation" → analyse
+  - "descriptive stats / describe the data / summary statistics / mean median std" → analyse
+  - "distribution / frequency / value counts / how many unique" → analyse (single-column) or summarise (group-by)
+  - "outlier detection / find outliers / IQR / z-score outliers" → analyse
+  - "skewness / kurtosis / percentile / quartile" → analyse
   - "trend / seasonality / decomposition / anomaly detection" → transform
-  - "forecast / predict next / project forward" → transform (then export for Prophet)
+  - "forecast / predict next / project forward / extrapolate" → predict
+  - "regress / linear regression / fit a line / predict Y from X" → predict
+  - "moving average / rolling average / smooth / MA(7)" → predict
   - "sessionize / session id / split into sessions" → transform
   - "haversine / distance between coordinates / nearest / geospatial" → sql_query
 - VIZ CUES:

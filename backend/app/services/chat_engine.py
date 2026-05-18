@@ -21,6 +21,7 @@ from app.models_db import (
     ChatSessionSnapshotDB,
 )
 from app.config import settings
+from app.services.llm_provider import get_default_model
 from app.services.ai_operating_controls import get_ai_operating_controls, classify_intent
 from app.services.agent_graph import AgentGraphService
 from app.services.data_transformation_service import DataTransformationService
@@ -139,7 +140,7 @@ class ChatEngine:
             messages=[],
             execution_context={
                 'llm_provider': settings.llm_provider,
-                'llm_model': settings.groq_model,
+                'llm_model': get_default_model(),
                 'user_plan': self.user_plan,
                 'user_id': str(self.user_id),
             }

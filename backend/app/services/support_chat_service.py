@@ -15,8 +15,6 @@ import re
 import uuid as _uuid_mod
 from typing import AsyncIterator
 
-import httpx
-
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -209,49 +207,23 @@ async def stream_response(
     from sqlalchemy.orm import Session as _Session
     from datetime import datetime, timezone
 
-    if not settings.groq_api_key:
+    if not settings.groq_api_key and not settings.openai_api_key and not settings.anthropic_api_key:
         yield "data: " + _sse_json("DataHub's support chat is not configured. Please email us directly.") + "\n\n"
         return
 
+    from .llm_provider import stream_complete
     full_response: list[str] = []
 
     try:
-        headers = {
-            "Authorization": f"Bearer {settings.groq_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": settings.groq_model,
-            "messages": messages,
-            "stream": True,
-            "temperature": 0.3,
-            "max_tokens": 600,
-        }
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            async with client.stream(
-                "POST",
-                f"{settings.groq_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    raw = line[6:].strip()
-                    if raw == "[DONE]":
-                        break
-                    try:
-                        import json as _json
-                        chunk = _json.loads(raw)
-                        delta = chunk["choices"][0]["delta"].get("content", "")
-                        if delta:
-                            delta = _sanitise_output(delta)
-                            full_response.append(delta)
-                            yield "data: " + _sse_json(delta) + "\n\n"
-                    except Exception:
-                        continue
+        async for delta in stream_complete(
+            messages,
+            temperature=0.3,
+            max_tokens=600,
+            timeout=30.0,
+        ):
+            delta = _sanitise_output(delta)
+            full_response.append(delta)
+            yield "data: " + _sse_json(delta) + "\n\n"
 
     except Exception:
         logger.exception("Support chat LLM call failed for session %s", session_id)

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import json
 from typing import List, Tuple
-import httpx
 import pandas as pd
 
-from ..config import settings
 from ..models import TransformationStep
 from .agent_heuristics import suggest_steps
-from .token_tracking_service import log_call as _log_call
+from .llm_provider import complete_sync
 
 
 SYSTEM_PROMPT = """
@@ -57,61 +55,26 @@ def _parse_steps(raw: str) -> List[TransformationStep]:
         return []
 
 
-def _provider_config() -> tuple[str, str, str]:
-    provider = settings.llm_provider.lower()
-    if provider != "groq":
-        raise RuntimeError("Unsupported LLM_PROVIDER. Only 'groq' is supported.")
-    if not settings.groq_api_key:
-        raise RuntimeError("GROQ_API_KEY is not configured.")
-    return provider, settings.groq_api_key, settings.groq_model
-
-
-def _provider_base_url(provider: str) -> str:
-    if provider != "groq":
-        raise RuntimeError("Unsupported LLM provider.")
-    return settings.groq_base_url
-
-
 def suggest_steps_llm(df: pd.DataFrame, context_text: str) -> Tuple[List[TransformationStep], List[str]]:
-    try:
-        provider, api_key, model = _provider_config()
-    except RuntimeError as exc:
-        return [], [str(exc)]
-
     prompt = _build_payload(df, context_text)
-
-    request_body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-    }
-
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
     try:
-        response = httpx.post(
-            f"{_provider_base_url(provider)}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json=request_body,
+        content, _, _ = complete_sync(
+            messages,
+            temperature=0.2,
+            json_mode=True,
             timeout=15.0,
+            call_type="suggest",
+            dataset_rows=int(df.shape[0]),
         )
-        response.raise_for_status()
-        _d = response.json()
-        content = _d["choices"][0]["message"]["content"]
-        _u = _d.get("usage") or {}
-        _log_call(user_id="", model_used=model, query_type="suggest",
-                  input_tokens=_u.get("prompt_tokens", 0),
-                  output_tokens=_u.get("completion_tokens", 0),
-                  dataset_rows=int(df.shape[0]))
         steps = _parse_steps(content)
         if not steps:
             return suggest_steps(df), ["LLM response was invalid; used fallback suggestions."]
         return steps, ["LLM-generated suggestions."]
     except Exception:
-        _log_call(user_id="", model_used=model, query_type="suggest",
-                  input_tokens=0, output_tokens=0)
         return suggest_steps(df), ["LLM call failed; used fallback suggestions."]
 
 
@@ -148,57 +111,38 @@ def chat_with_dataset(
     message: str,
     history: List[dict],
 ) -> Tuple[str, List[str]]:
-    try:
-        provider, api_key, model = _provider_config()
-    except RuntimeError as exc:
-        return f"Groq configuration error: {str(exc)}", [str(exc)]
-
     summary = _dataset_summary(df)
-    request_body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": CHAT_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {
-                        "context": context_text,
-                        "dataset_summary": summary,
-                        "instructions": "Use the dataset summary to answer questions.",
-                    }
-                ),
-            },
-        ],
-        "temperature": 0.2,
-    }
-
+    messages = [
+        {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "context": context_text,
+                    "dataset_summary": summary,
+                    "instructions": "Use the dataset summary to answer questions.",
+                }
+            ),
+        },
+    ]
     trimmed_history = history[-6:] if len(history) > 6 else history
     for item in trimmed_history:
         role = item.get("role")
         content = item.get("content")
         if role in {"user", "assistant"} and content:
-            request_body["messages"].append({"role": role, "content": content})
-    request_body["messages"].append({"role": "user", "content": message})
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": message})
 
     try:
-        response = httpx.post(
-            f"{_provider_base_url(provider)}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json=request_body,
+        content, _, _ = complete_sync(
+            messages,
+            temperature=0.2,
             timeout=20.0,
+            call_type="chat",
+            dataset_rows=int(df.shape[0]),
         )
-        response.raise_for_status()
-        _d2 = response.json()
-        content = _d2["choices"][0]["message"]["content"]
-        _u2 = _d2.get("usage") or {}
-        _log_call(user_id="", model_used=model, query_type="chat",
-                  input_tokens=_u2.get("prompt_tokens", 0),
-                  output_tokens=_u2.get("completion_tokens", 0),
-                  dataset_rows=int(df.shape[0]))
         return content, ["LLM-generated response."]
     except Exception:
-        _log_call(user_id="", model_used=model, query_type="chat",
-                  input_tokens=0, output_tokens=0)
         return _fallback_chat_response(df, message), ["LLM call failed; used fallback responses."]
 
 
@@ -208,35 +152,23 @@ def generate_insight_narrative(
     recommendations: List[str],
     context_text: str = "",
 ) -> str | None:
-    provider, api_key, model = _provider_config()
-
     payload = {
         "highlights": highlights,
         "anomalies": anomalies,
         "recommendations": recommendations,
         "context": context_text,
     }
-    request_body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": INSIGHT_SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        "temperature": 0.2,
-    }
+    messages = [
+        {"role": "system", "content": INSIGHT_SYSTEM_PROMPT},
+        {"role": "user", "content": json.dumps(payload)},
+    ]
     try:
-        response = httpx.post(
-            f"{_provider_base_url(provider)}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json=request_body,
+        content, _, _ = complete_sync(
+            messages,
+            temperature=0.2,
             timeout=15.0,
+            call_type="insights",
         )
-        response.raise_for_status()
-        _d3 = response.json()
-        _u3 = _d3.get("usage") or {}
-        _log_call(user_id="", model_used=model, query_type="insights",
-                  input_tokens=_u3.get("prompt_tokens", 0),
-                  output_tokens=_u3.get("completion_tokens", 0))
-        return _d3["choices"][0]["message"]["content"]
+        return content
     except Exception:
         return None

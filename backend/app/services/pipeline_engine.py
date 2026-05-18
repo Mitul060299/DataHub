@@ -406,19 +406,14 @@ def _apply_pipeline_operation(
                 )
                 texts: list = df[input_col].fillna("").astype(str).tolist()
 
-                # ── Attempt LLM-based sentiment (Groq) ────────────────────────
+                # ── Attempt LLM-based sentiment ────────────────────────────────
                 scores: list[float] | None = None
                 labels: list[str] | None = None
                 try:
-                    import httpx as _httpx
+                    from app.services.llm_provider import complete_sync as _complete_sync
                     from app.config import settings as _settings
 
-                    _api_key = (
-                        _settings.groq_api_key
-                        if _settings.llm_provider.lower() == "groq"
-                        else ""
-                    )
-                    if _api_key:
+                    if _settings.groq_api_key or _settings.openai_api_key or _settings.anthropic_api_key:
                         _BATCH = 60  # stay well within token limits
                         all_scores: list[float] = []
                         all_labels: list[str] = []
@@ -434,24 +429,17 @@ def _apply_pipeline_operation(
                                 "Analyse the sentiment of each text below and return the JSON array.\n\n"
                                 + "\n".join(f"{j+1}. {t[:500]}" for j, t in enumerate(batch))
                             )
-                            _resp = _httpx.post(
-                                f"{_settings.groq_base_url}/chat/completions",
-                                headers={"Authorization": f"Bearer {_api_key}"},
-                                json={
-                                    "model": _settings.groq_model,
-                                    "messages": [
-                                        {"role": "system", "content": _system},
-                                        {"role": "user", "content": _user},
-                                    ],
-                                    "temperature": 0.0,
-                                    "response_format": {"type": "json_object"},
-                                },
+                            _content, _, _ = _complete_sync(
+                                [
+                                    {"role": "system", "content": _system},
+                                    {"role": "user", "content": _user},
+                                ],
+                                temperature=0.0,
+                                json_mode=True,
                                 timeout=60.0,
+                                call_type="sentiment",
                             )
-                            _resp.raise_for_status()
-                            _parsed = json.loads(
-                                _resp.json()["choices"][0]["message"]["content"]
-                            )
+                            _parsed = json.loads(_content)
                             _results = _parsed.get("results", [])
                             for r in _results:
                                 all_scores.append(float(r.get("score", 0.0)))

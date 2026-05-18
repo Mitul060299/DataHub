@@ -175,23 +175,21 @@ class TestNlEditPipelinePromptBuilding(unittest.TestCase):
     _STEPS = [{"operation": "trim_whitespace", "config": {}}]
 
     def _call(self, schema=None, sample_rows=None, prior_error=None) -> tuple[str, str]:
-        """Return (user_content, system_content) of the messages sent to httpx."""
-        captured: list[dict] = []
+        """Return (user_content, system_content) of the messages sent to complete_sync."""
+        captured: list[list[dict]] = []
 
-        def _fake_post(url, **kwargs):
-            captured.append(kwargs.get("json", {}))
-            return _make_httpx_response({
-                "steps": self._STEPS,
-                "change_summary": "ok",
-            })
+        def _fake_complete_sync(messages, **kwargs):
+            captured.append(messages)
+            return (
+                json.dumps({"steps": self._STEPS, "change_summary": "ok"}),
+                0,
+                0,
+            )
 
-        with patch("app.services.nl_pipeline_service.httpx.post", side_effect=_fake_post), \
-             patch("app.services.nl_pipeline_service.settings") as mock_settings:
-            mock_settings.llm_provider = "groq"
-            mock_settings.groq_api_key = "test-key"
-            mock_settings.groq_model = "mixtral-8x7b"
-            mock_settings.groq_base_url = "https://api.groq.com/openai/v1"
-
+        with patch(
+            "app.services.nl_pipeline_service.complete_sync",
+            side_effect=_fake_complete_sync,
+        ):
             from app.services.nl_pipeline_service import nl_edit_pipeline
             nl_edit_pipeline(
                 current_steps=self._STEPS,
@@ -201,7 +199,7 @@ class TestNlEditPipelinePromptBuilding(unittest.TestCase):
                 prior_error=prior_error,
             )
 
-        messages = captured[0]["messages"]
+        messages = captured[0]
         system_msg = next(m["content"] for m in messages if m["role"] == "system")
         user_msg = next(m["content"] for m in messages if m["role"] == "user")
         return user_msg, system_msg
@@ -235,12 +233,11 @@ class TestNlEditPipelinePromptBuilding(unittest.TestCase):
         self.assertNotIn("NOTE: A previous attempt", user_msg)
 
     def test_no_llm_key_returns_error_dict(self) -> None:
-        with patch("app.services.nl_pipeline_service.settings") as mock_settings:
-            mock_settings.llm_provider = "groq"
-            mock_settings.groq_api_key = ""
-            mock_settings.groq_model = "mixtral-8x7b"
-            mock_settings.groq_base_url = "https://api.groq.com/openai/v1"
-
+        # Simulate misconfigured provider: complete_sync raises
+        with patch(
+            "app.services.nl_pipeline_service.complete_sync",
+            side_effect=RuntimeError("No LLM provider configured"),
+        ):
             from app.services.nl_pipeline_service import nl_edit_pipeline
             result = nl_edit_pipeline(current_steps=[], user_prompt="foo")
 
@@ -511,7 +508,7 @@ class TestAnalyzeDatasetAlwaysIncludesProfile(unittest.TestCase):
     def test_data_profile_present_when_groq_not_configured(self) -> None:
         from app.services.ai_agent_service import AIAgentService
 
-        with patch.object(AIAgentService, "_provider_config", return_value=(None, None, None)), \
+        with patch.object(AIAgentService, "_is_llm_configured", return_value=False), \
              patch.object(AIAgentService, "_get_dataset_context", return_value=self._fake_context()):
             result = AIAgentService.analyze_dataset("ds-1", self._make_db())
 
@@ -524,9 +521,9 @@ class TestAnalyzeDatasetAlwaysIncludesProfile(unittest.TestCase):
 
         llm_payload = {"issues": [], "suggestions": []}
 
-        with patch.object(AIAgentService, "_provider_config", return_value=("groq", "key", "model")), \
+        with patch.object(AIAgentService, "_is_llm_configured", return_value=True), \
              patch.object(AIAgentService, "_get_dataset_context", return_value=self._fake_context()), \
-             patch.object(AIAgentService, "_call_llm", return_value=json.dumps(llm_payload)), \
+             patch.object(AIAgentService, "_call_llm", return_value=(json.dumps(llm_payload), {})), \
              patch.object(AIAgentService, "_safe_json", return_value={"issues": [], "suggestions": []}):
             result = AIAgentService.analyze_dataset("ds-1", self._make_db())
 
@@ -536,7 +533,7 @@ class TestAnalyzeDatasetAlwaysIncludesProfile(unittest.TestCase):
     def test_data_profile_present_when_llm_throws(self) -> None:
         from app.services.ai_agent_service import AIAgentService
 
-        with patch.object(AIAgentService, "_provider_config", return_value=("groq", "key", "model")), \
+        with patch.object(AIAgentService, "_is_llm_configured", return_value=True), \
              patch.object(AIAgentService, "_get_dataset_context", return_value=self._fake_context()), \
              patch.object(AIAgentService, "_call_llm", side_effect=Exception("timeout")):
             result = AIAgentService.analyze_dataset("ds-1", self._make_db())

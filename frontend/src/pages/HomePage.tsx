@@ -28,41 +28,36 @@ const howSteps = [
     step: "01",
     color: "#22c55e",
     icon: <IconUpload size={18} color="#22c55e" />,
-    title: "Upload your data",
-    description:
-      "Drop in a CSV, Excel, JSON, or Parquet file. Or connect a database — PostgreSQL, Snowflake, BigQuery, Redshift, and more. Ready in under a minute.",
+    title: "Upload or connect",
+    description: "CSV, Excel, JSON, Parquet, or a live database. Ready in under a minute.",
   },
   {
     step: "02",
     color: "#a78bfa",
     icon: <IconBrain size={18} color="#a78bfa" />,
-    title: "Describe what you want",
-    description:
-      "No SQL. No formulas. Just type what you need in plain English — \"remove duplicates\", \"join with customers\", \"flag outliers in revenue\". Your AI agent understands.",
+    title: "Ask in plain English",
+    description: "\"Remove duplicates.\" \"Join with customers.\" \"Flag outliers.\" No SQL needed.",
   },
   {
     step: "03",
     color: "#facc15",
     icon: <IconCheck size={18} color="#facc15" />,
-    title: "See every step before it runs",
-    description:
-      "DataHub shows you exactly what it will do — as readable SQL — before executing anything. Approve, adjust, or reject. Nothing runs without your sign-off.",
+    title: "Review before it runs",
+    description: "See the exact SQL. Approve, edit, or reject. Nothing runs without your OK.",
   },
   {
     step: "04",
     color: "#22d3ee",
     icon: <IconGrid size={18} color="#22d3ee" />,
-    title: "Save as a reusable pipeline",
-    description:
-      "Every transformation becomes a named, replayable step. Save the whole sequence as a visual pipeline. Schedule it daily, weekly, or monthly — it runs itself on fresh data, every time, without you lifting a finger.",
+    title: "Save as a pipeline",
+    description: "Schedule it daily, weekly, or monthly. Same approved logic runs itself on new data.",
   },
   {
     step: "05",
     color: "#38bdf8",
     icon: <IconShare size={18} color="#38bdf8" />,
-    title: "Share clean, trusted results",
-    description:
-      "Export clean data, publish a dashboard with one link, or push results into Power BI, Tableau, or Sheets. Every step is logged and replayable for a full audit trail.",
+    title: "Share the results",
+    description: "Publish a dashboard, push to Power BI / Tableau / Sheets, or export clean files.",
   },
 ];
 
@@ -80,7 +75,7 @@ const features: Feature[] = [
     title: "Build once. Run every week.",
     color: "#22d3ee",
     icon: <IconGrid size={20} color="#22d3ee" />,
-    description: "Save any transformation sequence as a visual, reusable pipeline. Schedule it daily, weekly, or monthly — it runs automatically on fresh data with the same approved logic. Change one step and every future run inherits it.",
+    description: "Save any sequence as a visual pipeline. Schedule it. It re-runs on new data with the same logic you already approved.",
     span: "lg",
     visual: "browser",
   },
@@ -88,7 +83,7 @@ const features: Feature[] = [
     title: "No setup, no configuration",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
-    description: "Skip the warehouse, the ETL stack, the modelling layer. Drop in a file or paste DB credentials — your agent is working in under a minute.",
+    description: "No warehouse, no ETL stack. Drop a file or paste DB credentials — working in under a minute.",
     span: "md",
     visual: "instant",
   },
@@ -96,23 +91,23 @@ const features: Feature[] = [
     title: "A fraction of the cost",
     color: "#38bdf8",
     icon: <IconGrid size={20} color="#38bdf8" />,
-    description: "Replace three or four separate tools with one. Free tier covers small teams. No per-seat pricing, no surprise overages.",
+    description: "One tool replaces three or four. Free tier for small teams. No per-seat fees, no overage bills.",
     span: "md",
     visual: "cost",
   },
   {
-    title: "No coding, no SQL to learn",
+    title: "No SQL to learn",
     color: "#f59e0b",
     icon: <IconDatabase size={20} color="#f59e0b" />,
-    description: "Type what you want in plain English. Your AI agent plans, writes the SQL, and runs it. Analysts and non-technical teammates use the same tool side-by-side.",
+    description: "Type what you want. The agent writes the SQL and runs it. Works for analysts and non-technical teammates alike.",
     span: "tall",
     visual: "prompt",
   },
   {
-    title: "No black box \u2014 full transparency",
+    title: "No black box",
     color: "#ec4899",
     icon: <IconTeam size={20} color="#ec4899" />,
-    description: "Every step is readable, editable SQL you can inspect and replay. Nothing hidden behind a model.",
+    description: "Every step is readable SQL you can inspect, edit, and replay.",
     span: "sm",
     visual: "sql",
   },
@@ -120,7 +115,7 @@ const features: Feature[] = [
     title: "You stay in control",
     color: "#f87171",
     icon: <IconShield size={20} color="#f87171" />,
-    description: "Review every agent plan before it runs. Approve, edit, or reject. Full audit log of every change.",
+    description: "Approve, edit, or reject every step. Full audit log of every change.",
     span: "sm",
     visual: "approve",
   },
@@ -311,32 +306,32 @@ const myths = [
   {
     myth: 'It is a black box. I have no idea what it is doing to my data.',
     reality:
-      "Every action is a named step shown to you before it runs. You see the exact SQL or operation, then choose Approve, Edit, or Reject. Nothing executes without your go-ahead.",
+      "You see the exact SQL before it runs. Approve, edit, or reject. Nothing executes without your OK.",
   },
   {
     myth: 'The AI will hallucinate results or make up numbers.',
     reality:
-      "DataHub runs real, deterministic SQL on your actual data. The agent writes the query. Your data produces the result. No generation, no guessing, no invented rows.",
+      "The agent writes SQL. Your data produces the result. No generated rows, no guessing.",
   },
   {
-    myth: 'We have a recurring process. An AI tool can\u2019t replace a reliable scheduled job.',
+    myth: 'An AI tool can\u2019t replace a reliable scheduled job.',
     reality:
-      "DataHub pipelines run on a schedule — daily, weekly, or monthly. Every step is deterministic SQL you already approved. It isn\u2019t the AI guessing each run; it\u2019s your saved logic, running automatically on fresh data.",
+      "Pipelines run on a schedule using the SQL you already approved. Not the AI re-guessing — your saved logic, on fresh data.",
   },
   {
-    myth: 'I will lose control of my pipeline once the AI builds it.',
+    myth: 'I will lose control once the AI builds it.',
     reality:
-      "Every transformation is saved as a labelled, replayable step in a visual pipeline. You can edit any step inline, delete it, reorder, or re-run from any point. The pipeline is yours. The agent is just the author.",
+      "Every step is a named, editable node in a visual pipeline. Edit, delete, reorder, or re-run from any point. The pipeline is yours.",
   },
   {
     myth: 'My sensitive data is being sent somewhere unsafe.',
     reality:
-      "Your data is stored in our encrypted, isolated cloud storage, never shared between accounts. We never use your data to train our AI. Full audit logs record every access.",
+      "Encrypted, isolated cloud storage. Never used to train AI. Full audit logs of every access.",
   },
   {
     myth: 'It only works on clean, nicely formatted CSVs.',
     reality:
-      "DataHub was built for the messy real world. Auto-detects delimiters, fixes broken encodings, handles nulls, outliers, duplicates, type mismatches, and multi-sheet Excel out of the box.",
+      "Built for messy data. Handles delimiters, encodings, nulls, outliers, duplicates, type mismatches, and multi-sheet Excel.",
   },
 ];
 
@@ -975,10 +970,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            Your reliable{" "}
-            <span className="hero-gradient-text">AI agent for data work</span>.
-            <br />
-            One question answered — or a whole pipeline automated.
+            AI-assisted data preparation{" "}
+            <span className="hero-gradient-text">you can trust</span>.
           </motion.h1>
 
           <motion.p
@@ -987,10 +980,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            Tell DataHub what you need in plain English and get trusted results in minutes.
-            When the same job needs to happen every week, turn it into a visual pipeline — it
-            runs itself on fresh data using the exact steps you already reviewed and approved.
-            No guesswork, no manual effort, nothing hidden.
+            DataHub helps analysts and data teams clean and transform messy data faster
+            using plain English commands, transparent SQL, and visual reusable pipelines.
           </motion.p>
 
           <motion.div
@@ -1267,49 +1258,49 @@ export function HomePage() {
         >
           <p className="section-eyebrow">What DataHub solves</p>
           <h2 className="section-title">
-            Recognise any of{" "}
-            <span className="hero-gradient-text">these problems?</span>
+            Sound{" "}
+            <span className="hero-gradient-text">familiar?</span>
           </h2>
           <p className="section-subtitle">
-            These are the exact workflows DataHub was built for. Click any card to see how it works.
+            Click any card to see how DataHub handles it.
           </p>
         </motion.div>
         <div className="problems-grid">
           {[
             {
               emoji: "🔁",
-              title: "Reconciling two Excel files manually",
-              body: "Copy-pasting between sheets, running VLOOKUP, hunting for mismatches. DataHub joins them on a key column and flags every difference in seconds.",
+              title: "Reconciling two Excel files",
+              body: "Skip the VLOOKUP. Join on a key and flag every mismatch in seconds.",
               slug: "reconcile-excel-files-automatically",
             },
             {
               emoji: "🗑️",
               title: "Removing duplicates from a CSV",
-              body: "Thousands of rows, some duplicated exactly, some just slightly different. DataHub removes exact and near-duplicate rows without you writing a single formula.",
+              body: "Exact and near-duplicates, gone. No formulas required.",
               slug: "remove-duplicates-csv-without-code",
             },
             {
               emoji: "📊",
-              title: "Cleaning data before Power BI",
-              body: "Raw exports break every import — wrong column names, blank rows, date formats Power BI won't accept. DataHub cleans it all in one reusable pipeline.",
+              title: "Cleaning data for Power BI",
+              body: "Fix names, blanks, and dates before import. Save it once as a pipeline.",
               slug: "prepare-raw-data-for-power-bi",
             },
             {
               emoji: "🔤",
-              title: "Inconsistent column names across files",
-              body: "\"Customer ID\", \"CustomerID\", \"cust_id\" — all the same thing, all different files. DataHub standardises every name to snake_case automatically.",
+              title: "Inconsistent column names",
+              body: "\"Customer ID\", \"CustomerID\", \"cust_id\" — all standardised to snake_case automatically.",
               slug: "standardise-column-names-excel",
             },
             {
               emoji: "⏱️",
-              title: "Redoing the same clean-up every month",
-              body: "Same steps, new file, every reporting cycle. Save the steps as a named pipeline and re-run it on any new file in one click.",
+              title: "Same clean-up every month",
+              body: "Save the steps once. Re-run on next month's file in one click.",
               slug: "automate-repetitive-data-cleaning-workflows",
             },
             {
               emoji: "💸",
-              title: "Paying enterprise prices for analyst work",
-              body: "Legacy desktop ETL tools cost thousands per seat per year. DataHub covers the same core workflows — dedup, join, clean, validate — at a fraction of the price.",
+              title: "Enterprise prices for basic work",
+              body: "Dedup, join, clean, validate — at a fraction of legacy ETL pricing.",
               slug: "alteryx-alternative-cheaper",
             },
           ].map((item, i) => (
@@ -1353,25 +1344,25 @@ export function HomePage() {
               icon: "📈",
               role: "The Analyst",
               description:
-                "You live in Excel and Power BI. You spend the first half of every week cleaning the same files before you can do any actual analysis. Let your AI agent handle the clean-up — then save it as a pipeline so next week's files come in already clean.",
+                "Stop spending half your week cleaning the same files. Save the steps once, re-run next week in one click.",
             },
             {
               icon: "🧑‍💼",
               role: "The Freelancer / Consultant",
               description:
-                "Every client sends files in a different format. Column names change. Date formats differ. Headers are in row 3. Your agent turns messy client data into clean deliverables — and saves the recipe as a pipeline you can reuse on every future engagement.",
+                "Every client sends a different format. Turn messy data into clean deliverables — and reuse the recipe on every engagement.",
             },
             {
               icon: "🏢",
               role: "The Small Team",
               description:
-                "You don't have a data engineer. You can't spin up a data warehouse. But you have CSVs, a database, and questions to answer. DataHub gives everyone on the team self-serve data prep without writing a single query.",
+                "No data engineer, no warehouse. Self-serve data prep for everyone, no SQL required.",
             },
             {
               icon: "✅",
               role: "The Manager",
               description:
-                "You just need the numbers to be right before you share them. DataHub shows every transformation step in plain language — no black box, no guessing — so you can trust what you sign off on.",
+                "Every step in plain language before it runs. Trust the numbers you sign off on.",
             },
           ].map((p, i) => (
             <motion.div
@@ -1512,9 +1503,9 @@ export function HomePage() {
           transition={{ duration: 0.5 }}
         >
           <p className="section-eyebrow">Why DataHub is different</p>
-          <h2 className="section-title">Common concerns about AI data tools &amp; SQL automation</h2>
+          <h2 className="section-title">Common concerns, answered</h2>
           <p className="section-subtitle">
-            We built DataHub specifically to address every one of these.
+            We built DataHub to address every one of these.
           </p>
         </motion.div>
 

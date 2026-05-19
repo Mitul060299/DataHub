@@ -961,7 +961,7 @@ export function HomePage() {
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
             <span className="hero-badge-dot" />
-            Free plan available · No credit card required
+            Beta live · Try free, no signup
           </motion.div>
 
           <motion.h1
@@ -1400,53 +1400,7 @@ export function HomePage() {
         </motion.div>
       </section>
 
-      {/* DETAILS LIVE ELSEWHERE — pricing, FAQ, features moved off this page
-          to keep the path from landing to interactive demo as short as
-          possible. Anything a visitor wants is one click away below. */}
-      <section
-        aria-label="Learn more"
-        style={{
-          padding: "48px 24px 64px",
-          textAlign: "center",
-          borderTop: "1px solid #1e2235",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 18px",
-            fontSize: 13,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#64748b",
-          }}
-        >
-          Want the details?
-        </p>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            gap: 28,
-            fontSize: 15,
-          }}
-        >
-          <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "none" }}>
-            Pricing &amp; plans →
-          </Link>
-          <Link to="/docs" style={{ color: "#a78bfa", textDecoration: "none" }}>
-            Documentation →
-          </Link>
-          <Link to="/docs#faq" style={{ color: "#a78bfa", textDecoration: "none" }}>
-            FAQ →
-          </Link>
-          <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: "#a78bfa", textDecoration: "none" }}>
-            Talk to us →
-          </a>
-        </div>
-      </section>
-
-      {/* SECTIONS BELOW REMOVED — features bento, pricing, myths, reviews, feedback. */}
+      {/* SECTIONS BELOW REMOVED — features bento, pricing, myths, reviews, feedback, details links. */}
 
       {/* CTA */}
       <section className="section section-cta">

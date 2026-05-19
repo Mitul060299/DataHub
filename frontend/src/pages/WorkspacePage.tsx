@@ -40,7 +40,7 @@ export function WorkspacePage() {
   const [resizingExplorer, setResizingExplorer] = useState(false);
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
-  const [canvasTab, setCanvasTab] = useState<string>("data");
+  const [panelTab, setPanelTab] = useState<string>("data");
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(
     () => localStorage.getItem("datahub_onboarding_dismissed") === "1",
@@ -246,7 +246,7 @@ export function WorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionPreview, replayingPipeline, steps.length]);
 
-  // ── Sample loader shortcut from canvas empty state ──
+  // ── Sample loader shortcut from panel empty state ──
   useEffect(() => {
     function handleSampleLoad(e: Event) {
       const detail = (e as CustomEvent<{ url: string }>).detail;
@@ -468,9 +468,9 @@ export function WorkspacePage() {
         replayingPipeline={replayingPipeline}
         replayError={replayError}
         onClearReplayError={() => setReplayError(null)}
-        onTabChange={setCanvasTab}
+        onTabChange={setPanelTab}
       />
-      {canvasTab !== "pipeline" && (
+      {panelTab !== "pipeline" && (
         <>
           {/* AI panel drag handle */}
           <div

@@ -1084,27 +1084,6 @@ class VisualizationDB(Base):
     )
 
 
-class CanvasLayoutDB(Base):
-    """Drag-and-drop canvas dashboards — each project builds its own arrangement of saved charts."""
-    __tablename__ = "canvas_layouts"
-
-    id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=False)
-    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
-    name = Column(String, nullable=False, default="Untitled Dashboard")
-    # Array of layout items: {id, viz_id, x, y, w, h, z, type, text_content, echarts_config, chart_type, title}
-    layout = Column(JSONB, nullable=False, default=list)
-    is_public = Column(Boolean, nullable=False, default=False)
-    public_token = Column(Text, nullable=True, unique=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_canvas_layouts_user", "user_id"),
-        Index("idx_canvas_layouts_project", "project_id"),
-    )
-
-
 class WaitlistEntryDB(Base):
     __tablename__ = "waitlist_entries"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))

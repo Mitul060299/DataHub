@@ -74,7 +74,6 @@ from .routers.organization_members import router as organization_members_router,
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
 from .routers.saved_visualizations import router as saved_visualizations_router
-from .routers.canvas import router as canvas_router
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine
 from . import models_db
@@ -282,20 +281,6 @@ def _apply_startup_ddl() -> None:
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_visualizations_user ON visualizations (user_id)",
-        # 0037 — canvas layouts (drag-drop dashboards per project)
-        """CREATE TABLE IF NOT EXISTS canvas_layouts (
-            id              TEXT PRIMARY KEY,
-            user_id         TEXT NOT NULL,
-            project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
-            name            TEXT NOT NULL DEFAULT 'Untitled Dashboard',
-            layout          JSONB NOT NULL DEFAULT '[]',
-            is_public       BOOLEAN NOT NULL DEFAULT false,
-            public_token    TEXT UNIQUE,
-            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-        )""",
-        "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_user ON canvas_layouts (user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_canvas_layouts_project ON canvas_layouts (project_id)",
         # 0040 — connector_credentials table (encrypted config store for fold/write-back/live)
         """CREATE TABLE IF NOT EXISTS connector_credentials (
             id              TEXT PRIMARY KEY,
@@ -513,7 +498,6 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE pipeline_events      DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE chat_templates       DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE visualizations       DROP COLUMN IF EXISTS workspace_id",
-        "ALTER TABLE canvas_layouts       DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE data_sources         DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE artifacts            DROP COLUMN IF EXISTS workspace_id",
         # 0068 — organizations + organization_members (org-account tier).
@@ -791,7 +775,6 @@ app.include_router(projects_router)
 app.include_router(workspace_recent_router)
 app.include_router(artifacts_router)
 app.include_router(saved_visualizations_router)
-app.include_router(canvas_router)
 app.include_router(waitlist.router)
 app.include_router(project_members_router)
 app.include_router(project_invite_router)

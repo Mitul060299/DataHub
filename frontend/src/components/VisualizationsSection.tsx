@@ -79,7 +79,7 @@ function PreviewPopover({ viz, anchorRect, onClose }: PreviewPopoverProps) {
         <EChartsRenderer config={viz.echarts_config} height={220} />
       </ErrorBoundary>
       <p style={{ margin: "8px 0 0", fontSize: 10, color: "var(--tx1)" }}>
-        {chartTypeLabel(viz.chart_type)} · Drag onto Canvas to add
+        {chartTypeLabel(viz.chart_type)}
       </p>
     </div>
   );
@@ -421,7 +421,7 @@ export function VisualizationsSection({ projectId }: VisualizationsSectionProps)
               Delete visualization?
             </p>
             <p style={{ margin: "0 0 20px", fontSize: 12, color: "var(--tx1)" }}>
-              This cannot be undone. The chart will be removed from all canvases that use it.
+              This cannot be undone.
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button

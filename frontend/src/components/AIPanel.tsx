@@ -86,7 +86,7 @@ function buildFollowUpChips(
   if (intent === "visualise") {
     return [
       `Show me a different chart type for ${name}`,
-      `Save this chart to my Canvas`,
+      `Pin this chart to a Dashboard`,
       `What are the top 5 values?`,
     ];
   }

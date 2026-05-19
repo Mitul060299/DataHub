@@ -244,9 +244,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     loadSession();
 
+    // Track whether we've ever observed a real (non-null) Supabase session.
+    // onAuthStateChange fires with INITIAL_SESSION=null on mount; treating
+    // that like a sign-out would race with loadSession's awaited bootstrap
+    // and prematurely flip loading=false before the anon JWT arrives.
+    let hadRealSession = false;
+
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (nextSession?.access_token) {
+        hadRealSession = true;
         setAuthToken(nextSession.access_token);
         // Drop anon credentials once the user is on a real account.
         const hadAnon = !!localStorage.getItem(ANON_TOKEN_KEY);
@@ -262,18 +269,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAnonSession(null);
         setUserType("registered");
         identifyFromSession(nextSession);
-      } else {
+        setLoading(false);
+      } else if (hadRealSession) {
+        // Real sign-out: clear creds and bootstrap a fresh anon session.
         clearAuthToken();
         reset();
         clearSentryUser();
-        // Scrub per-user state from localStorage so a subsequent user on a shared
-        // computer doesn't inherit the previous tenant's workspace/dataset context.
         wipeUnscopedTenantState();
-        // Sign-out completed — fall back to a brand new anon session so the
-        // visitor isn't kicked out of the app entirely.
+        hadRealSession = false;
         void ensureAnonymousSession();
+        setLoading(false);
       }
-      setLoading(false);
+      // Initial INITIAL_SESSION=null is a no-op here — loadSession() owns
+      // the initial anonymous bootstrap and will flip loading=false when done.
     });
 
     return () => {

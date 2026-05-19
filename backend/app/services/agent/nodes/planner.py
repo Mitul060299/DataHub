@@ -141,7 +141,14 @@ def _build_system_prompt(state: "AgentState", glossary: dict, trim_level: int = 
     elif trim_level == 1:
         sample_rows = sample_rows[:3]
         if isinstance(stats, dict):
-            stats = {col: {"null_count": v.get("null_count", 0)} for col, v in stats.items()}
+            _trimmed: dict = {}
+            for col, v in stats.items():
+                if isinstance(v, dict):
+                    _trimmed[col] = {"null_count": v.get("null_count", 0)}
+                else:
+                    # stats value may be a scalar (e.g. null_count int) — keep as-is
+                    _trimmed[col] = {"null_count": v} if isinstance(v, int) else {}
+            stats = _trimmed
         else:
             stats = {}
     else:

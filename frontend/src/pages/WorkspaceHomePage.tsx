@@ -46,7 +46,7 @@ function relativeTime(iso?: string | null): string {
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
   const { projects, projectsLoading, setActiveProject, refreshProjects, createProject, lastProjectId } = useWorkspaceContext();
-  const { isAnonymous } = useAuth();
+  const { isAnonymous, loading: authLoading } = useAuth();
   const { hasCompletedOnboarding } = useUser();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -103,6 +103,7 @@ export function WorkspaceHomePage() {
   //     the lifetime of the account (survives tab close, unlike sessionStorage).
   useEffect(() => {
     if (quickstarting) return;
+    if (authLoading) return;
     if (projectsLoading) return;
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     // Always redirect anonymous guests to their project — never leave them
@@ -140,7 +141,7 @@ export function WorkspaceHomePage() {
       void handleQuickstartSample(demoIntent?.sample ?? "/samples/customers.csv", /* skipModal */ true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, isAnonymous]);
+  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, isAnonymous, authLoading]);
 
   // Returning signed-in users: if they have a remembered "last project" and
   // it still exists, deep-link them straight into it so refreshing /workspace

@@ -77,7 +77,7 @@ function toProject(raw: ProjectOut): Project {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
+  const { session, isAnonymous } = useAuth();
   // User-scoped key so two accounts on the same browser don't clobber each
   // other's "last project" memory, and an anon visitor's last project can't
   // hijack a signed-in user's view.
@@ -146,7 +146,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [members, setMembers] = useState<Member[]>([]);
 
   const refreshProjects = useCallback(async () => {
-    if (!session) {
+    // Allow both real sessions and anonymous guest sessions to load projects.
+    // Anonymous users have a valid JWT set via setAuthToken() — the API works;
+    // only the Supabase `session` object is null for them.
+    if (!session && !isAnonymous) {
       setProjectsLoading(false);
       return;
     }
@@ -172,9 +175,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setProjectsLoading(false);
     }
-  }, [session]);
+  }, [session, isAnonymous]);
 
-  // Load projects when session becomes available
+  // Load projects when session (real or anon) becomes available
   useEffect(() => {
     void refreshProjects();
   }, [refreshProjects]);

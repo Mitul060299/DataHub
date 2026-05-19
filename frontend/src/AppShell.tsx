@@ -9,7 +9,7 @@ import { billingEnabled } from "./utils/featureFlags";
 const PUBLIC_PATHS = ["/home", "/marketplace", "/pricing", "/docs"];
 
 export function AppShell() {
-  const { isAuthenticated, isAnonymous, loading, session } = useAuth();
+  const { isAuthenticated, isAnonymous, loading, session, anonUserId } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
@@ -84,14 +84,27 @@ export function AppShell() {
           <TopBar />
           {upgradeMessage ? (
             <div style={{ borderBottom: "1px solid var(--bd2)", background: "var(--bg2)", padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <span style={{ color: "var(--tx1)", fontSize: 12 }}>{upgradeMessage}</span>
+              <span style={{ color: "var(--tx1)", fontSize: 12 }}>
+                {isAnonymous
+                  ? "You've hit the guest limit for this action."
+                  : upgradeMessage}
+              </span>
               <div style={{ display: "inline-flex", gap: 8 }}>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => navigate(billingEnabled ? "/settings/billing" : "/pricing")}
-                >
-                  View Plans
-                </button>
+                {isAnonymous ? (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => { navigate("/signup"); setUpgradeMessage(null); }}
+                  >
+                    Sign up free →
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => navigate(billingEnabled ? "/settings/billing" : "/pricing")}
+                  >
+                    View Plans
+                  </button>
+                )}
                 <button className="btn" onClick={() => setUpgradeMessage(null)}>Dismiss</button>
               </div>
             </div>

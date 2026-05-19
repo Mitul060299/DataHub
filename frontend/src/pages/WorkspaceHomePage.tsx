@@ -107,8 +107,11 @@ export function WorkspaceHomePage() {
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     if (alreadyShown) return;
 
-    const fromDemo = demoIntent !== null && isAnonymous;
-    const brandNew = projects.length === 0 && !hasCompletedOnboarding;
+    // Any anonymous guest should be taken straight into a demo project —
+    // regardless of whether they arrived via a specific demo-intent link.
+    // Signed-in users only get auto-redirected if they are brand new (no projects).
+    const fromDemo = isAnonymous;
+    const brandNew = !isAnonymous && projects.length === 0 && !hasCompletedOnboarding;
 
     if (fromDemo && projects.length > 0) {
       // Fast path: existing project → navigate without any API call

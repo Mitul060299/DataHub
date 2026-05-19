@@ -1019,6 +1019,7 @@ export function HomePage() {
               className="btn-primary-lg"
               onClick={() => {
                 capture("homepage_try_demo_clicked", { surface: "hero_primary" });
+                sessionStorage.setItem("datahub_signup_intent", JSON.stringify({ source: "demo", sample: "/samples/customers.csv" }));
                 navigate("/workspace");
               }}
               whileHover={{ scale: 1.04 }}
@@ -1387,6 +1388,7 @@ export function HomePage() {
             className="btn-primary-lg"
             onClick={() => {
               capture("homepage_try_demo_clicked", { surface: "mid_page_how" });
+              sessionStorage.setItem("datahub_signup_intent", JSON.stringify({ source: "demo", sample: "/samples/customers.csv" }));
               navigate("/workspace");
             }}
             whileHover={{ scale: 1.04 }}

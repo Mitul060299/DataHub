@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
-import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconGrid, IconRefresh, IconTable } from "./Icons";
+import { IconClock, IconDownload, IconGitBranch, IconGrid, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
-import { CanvasView } from "./CanvasView";
+
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { PipelineSection } from "./PipelineSection";
@@ -13,7 +13,7 @@ import { DataVersionHistory } from "./DataVersionHistory";
 import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 
-type CanvasTab = "data" | "pipeline" | "canvas" | "dashboards" | "schedule" | "history";
+type CanvasTab = "data" | "pipeline" | "dashboards" | "schedule" | "history";
 
 interface CanvasPanelProps {
   workspaceId?: string;
@@ -106,14 +106,18 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       .finally(() => setDashLoading(false));
   }, [tab]);
 
+  const [dashError, setDashError] = useState<string | null>(null);
+
   const handleNewDashboard = async () => {
     if (dashCreating) return;
     setDashCreating(true);
+    setDashError(null);
     try {
       const dash = await createDashboardV2({ name: "Untitled Dashboard" });
       navigate(`/dashboard/${dash.id}`);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("[CanvasPanel] createDashboardV2 failed:", err);
+      setDashError("Failed to create dashboard. Check your connection and try again.");
     } finally {
       setDashCreating(false);
     }
@@ -392,7 +396,6 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         <div style={{ display: "inline-flex", gap: 3 }}>          {([
             { key: "data",       icon: <IconTable size={16} />,     label: "Data" },
             { key: "pipeline",   icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
-            { key: "canvas",     icon: <IconBarChart size={16} />,  label: "Canvas",     tourTarget: "canvas-tab" },
             { key: "dashboards", icon: <IconGrid size={16} />,      label: "Dashboards", badge: dashboards.length > 0 ? dashboards.length : null, tourTarget: "dashboards-tab" },
             ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),
             ...(dataset?.id  ? [{ key: "history",  icon: <IconRefresh size={16} />, label: "History"  }] : []),
@@ -750,6 +753,13 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               </button>
             </div>
 
+            {dashError && (
+              <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span>{dashError}</span>
+                <button onClick={() => setDashError(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>✕</button>
+              </div>
+            )}
+
             {dashLoading ? (
               /* Skeleton rows */
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -836,9 +846,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               </div>
             )}
           </div>
-        ) : (
-          <CanvasView workspaceId={workspaceId} projectId={projectId} />
-        )}
+        ) : null}
       </div>
     </section>
   );

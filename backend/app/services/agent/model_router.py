@@ -78,7 +78,10 @@ def select_model(kind: CallKind, goal: str = "") -> str:
     a short, keyword-free goal is routed to the fast model to save cost.
     """
     versatile = os.getenv(_VERSATILE_MODEL_ENV, _VERSATILE_DEFAULT)
-    fast = os.getenv(_FAST_MODEL_ENV, _FAST_DEFAULT)
+    # If GROQ_FAST_MODEL is not explicitly set, fall back to the versatile model
+    # rather than the hardcoded 8b-instant default which has a 6K token TPM limit
+    # that simple prompts + schema context can easily exceed.
+    fast = os.getenv(_FAST_MODEL_ENV) or versatile
     if not _router_enabled():
         return versatile
     if kind in _FAST_KINDS:

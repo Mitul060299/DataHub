@@ -7,9 +7,7 @@ import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
-import { OnboardingProgress } from "../components/OnboardingProgress";
 import { TourTooltip, STEPS } from "../components/TourTooltip";
-import { AhaCelebration } from "../components/AhaCelebration";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -43,14 +41,10 @@ export function WorkspacePage() {
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
   const [panelTab, setPanelTab] = useState<string>("data");
-  const [onboardingDismissed, setOnboardingDismissed] = useState(
-    () => localStorage.getItem("datahub_onboarding_dismissed") === "1",
-  );
   const [demoBannerDismissed, setDemoBannerDismissed] = useState(
     () => sessionStorage.getItem("datahub_demo_banner_dismissed") === "1",
   );
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
-  const [showAhaCelebration, setShowAhaCelebration] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
   // Onboarding nudges: pulse on dataset row after import, then pulse AI input after first select
   const [showDatasetNudge, setShowDatasetNudge] = useState(false);
@@ -160,8 +154,6 @@ export function WorkspacePage() {
   };
 
   // Record workspace_first_visit milestone on first open.
-  // We no longer auto-open the WelcomeModal here — new users are guided by the
-  // OnboardingProgress panel + dataset/AI nudges instead.
   useEffect(() => {
     const visitedKey = "datahub_workspace_first_visit_recorded";
     if (!localStorage.getItem(visitedKey)) {
@@ -212,9 +204,7 @@ export function WorkspacePage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  // Auto-start tooltip tour for signed-in first-time visitors after their aha
-  // moment. Skip for anonymous users — the AhaCelebration signup prompt is
-  // already displayed at that moment and a backdrop tour would compete with it.
+  // Auto-start tooltip tour for signed-in first-time visitors after their aha moment.
   useEffect(() => {
     if (!firstAiAnswerAt) return;
     if (isAnonymous) return;
@@ -598,11 +588,6 @@ export function WorkspacePage() {
             }}
             onFirstAiAnswer={(meta) => {
               ctxRecordMilestone("aha_first_ai_answer");
-              // Only celebrate genuine successes — if the agent run errored
-              // (e.g. SQL binder error), don't show confetti, which confuses
-              // the user about whether their query actually worked.
-              if (meta?.hadError) return;
-              if (!firstAiAnswerAt) setShowAhaCelebration(true);
             }}
           />
         </>
@@ -614,38 +599,6 @@ export function WorkspacePage() {
           datasetName={activeDataset.name}
           onClose={() => setSheetsExportOpen(false)}
         />
-      )}
-      {showAhaCelebration && (
-        <AhaCelebration
-          isAnonymous={isAnonymous}
-          onDismiss={() => setShowAhaCelebration(false)}
-          onSignUp={() => {
-            capture("aha_signup_cta_clicked");
-            navigate("/signup");
-          }}
-        />
-      )}
-      {/* Anon users always see the checklist (non-dismissible).
-          Signed-in users can dismiss it once they choose.
-          Positioned at the true bottom-left corner over the Explorer panel
-          (which has empty space below the dataset list) so it never overlaps
-          the data table or AI panel. */}
-      {(!onboardingDismissed || isAnonymous) && (
-        <div style={{ position: "fixed", bottom: 16, left: 16, zIndex: 900, width: Math.min(explorerWidth - 32, 248) }}>
-          <OnboardingProgress
-            hasUploadedFirstFile={hasUploadedFirstFile}
-            hasCompletedOnboarding={hasCompletedOnboarding}
-            hasAskedFirstQuestion={hasAskedFirstQuestion}
-            firstAiAnswerAt={firstAiAnswerAt}
-            isAnonymous={isAnonymous}
-            onDismiss={isAnonymous ? undefined : () => {
-              setOnboardingDismissed(true);
-              localStorage.setItem("datahub_onboarding_dismissed", "1");
-              capture("onboarding_progress_dismissed");
-            }}
-            onStartTour={!isAnonymous && !tourActive ? startTour : undefined}
-          />
-        </div>
       )}
       {tourActive && (
         <TourTooltip

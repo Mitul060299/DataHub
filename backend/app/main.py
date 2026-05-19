@@ -485,6 +485,12 @@ def _apply_startup_ddl() -> None:
         "DROP POLICY IF EXISTS context_versions_insert  ON context_versions",
         "DROP POLICY IF EXISTS context_versions_update  ON context_versions",
         "DROP POLICY IF EXISTS context_versions_delete  ON context_versions",
+        # import_connections RLS policies reference workspace_id on both
+        # dataset_meta and import_connections — drop them before dropping columns.
+        "DROP POLICY IF EXISTS import_connections_select ON import_connections",
+        "DROP POLICY IF EXISTS import_connections_insert ON import_connections",
+        "DROP POLICY IF EXISTS import_connections_update ON import_connections",
+        "DROP POLICY IF EXISTS import_connections_delete ON import_connections",
         "ALTER TABLE projects             DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE dataset_meta         DROP COLUMN IF EXISTS workspace_id",
         "ALTER TABLE connector_credentials DROP COLUMN IF EXISTS workspace_id",

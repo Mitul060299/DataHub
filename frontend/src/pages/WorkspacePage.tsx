@@ -596,14 +596,18 @@ export function WorkspacePage() {
                 }));
               }
             }}
-            onFirstAiAnswer={() => {
+            onFirstAiAnswer={(meta) => {
               ctxRecordMilestone("aha_first_ai_answer");
+              // Only celebrate genuine successes — if the agent run errored
+              // (e.g. SQL binder error), don't show confetti, which confuses
+              // the user about whether their query actually worked.
+              if (meta?.hadError) return;
               if (!firstAiAnswerAt) setShowAhaCelebration(true);
             }}
           />
         </>
       )}
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); }} preloadUrl={sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } }} preloadUrl={sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
@@ -622,9 +626,12 @@ export function WorkspacePage() {
         />
       )}
       {/* Anon users always see the checklist (non-dismissible).
-          Signed-in users can dismiss it once they choose. */}
+          Signed-in users can dismiss it once they choose.
+          Positioned at the true bottom-left corner over the Explorer panel
+          (which has empty space below the dataset list) so it never overlaps
+          the data table or AI panel. */}
       {(!onboardingDismissed || isAnonymous) && (
-        <div style={{ position: "fixed", bottom: 16, left: explorerWidth + 12, zIndex: 900, width: 264 }}>
+        <div style={{ position: "fixed", bottom: 16, left: 16, zIndex: 900, width: Math.min(explorerWidth - 32, 248) }}>
           <OnboardingProgress
             hasUploadedFirstFile={hasUploadedFirstFile}
             hasCompletedOnboarding={hasCompletedOnboarding}

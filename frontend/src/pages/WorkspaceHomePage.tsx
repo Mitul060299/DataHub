@@ -107,11 +107,13 @@ export function WorkspaceHomePage() {
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     if (alreadyShown) return;
 
-    // Any anonymous guest should be taken straight into a demo project —
-    // regardless of whether they arrived via a specific demo-intent link.
-    // Signed-in users only get auto-redirected if they are brand new (no projects).
+    // Any anonymous guest should be taken straight into their Starter project.
+    // First visit imports the sample CSV; subsequent visits skip the import
+    // (tracked via localStorage flag) so we don't accumulate duplicate datasets
+    // and trigger the Free-plan dataset limit on the 4th visit.
     const fromDemo = isAnonymous;
     const brandNew = !isAnonymous && projects.length === 0 && !hasCompletedOnboarding;
+    const starterProvisioned = localStorage.getItem("datahub_anon_starter_provisioned") === "1";
 
     if (fromDemo && projects.length > 0) {
       // Fast path: existing project → navigate without any API call
@@ -119,9 +121,15 @@ export function WorkspaceHomePage() {
       capture("onboarding_auto_quickstart", { surface: "workspace_home", from_demo: true, fast: true });
       const project = projects[0];
       setActiveProject(project);
-      const sample = demoIntent?.sample ?? "/samples/customers.csv";
-      const params = new URLSearchParams({ sample, from: "demo" });
-      navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
+      // If we've already imported the sample on a prior visit, just open the
+      // project. Don't re-trigger ImportModal which would create a duplicate.
+      if (starterProvisioned) {
+        navigate(`/workspace/project/${project.id}/pipeline/new`);
+      } else {
+        const sample = demoIntent?.sample ?? "/samples/customers.csv";
+        const params = new URLSearchParams({ sample, from: "demo" });
+        navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
+      }
     } else if (fromDemo || brandNew) {
       // Need to create a project first — do it silently (no modal)
       sessionStorage.setItem("datahub_welcome_home_shown", "1");
@@ -180,8 +188,8 @@ export function WorkspaceHomePage() {
       let project = projects[0];
       if (!project) {
         project = await createProject({
-          name: "Quickstart",
-          description: "Started from a sample dataset",
+          name: "Starter",
+          description: "Your guided starter project — sample data + a few transforms.",
         });
         capture("project_created", { project_id: project.id, surface: "quickstart_sample" });
       }

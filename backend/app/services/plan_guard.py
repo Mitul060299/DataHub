@@ -484,7 +484,10 @@ def enforce_file_constraints(
 
     dataset_count = (
         db.query(DatasetMetaDB)
-        .filter(DatasetMetaDB.user_id == billing_user_id)
+        .filter(
+            DatasetMetaDB.user_id == billing_user_id,
+            DatasetMetaDB.deleted_at.is_(None),
+        )
         .count()
     )
     if limits.max_datasets > 0 and dataset_count >= limits.max_datasets:
@@ -495,7 +498,10 @@ def enforce_file_constraints(
 
     storage_rows = (
         db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
-        .filter(DatasetMetaDB.user_id == billing_user_id)
+        .filter(
+            DatasetMetaDB.user_id == billing_user_id,
+            DatasetMetaDB.deleted_at.is_(None),
+        )
         .all()
     )
     current_storage = sum((row[0] or row[1] or 0) for row in storage_rows)

@@ -260,7 +260,7 @@ interface AIPanelProps {
   /** Opens the import/upload modal (wired from WorkspacePage) */
   onUploadClick?: () => void;
   /** Fired once when the user receives their first AI answer (activation aha moment) */
-  onFirstAiAnswer?: () => void;
+  onFirstAiAnswer?: (meta?: { hadError: boolean }) => void;
   /** Fired once when the user submits their first AI prompt */
   onFirstPrompt?: () => void;
   /** When true, pulses the chat input to guide user to type their first question */
@@ -622,7 +622,14 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         // Fire aha milestone once per component lifetime
         if (!firstAiAnswerFiredRef.current && onFirstAiAnswer) {
           firstAiAnswerFiredRef.current = true;
-          onFirstAiAnswer();
+          // Detect whether any executed step failed so the caller can suppress
+          // the celebration overlay on errors (e.g. SQL binder error).
+          const hadError = executionResults.some((r) => {
+            const ok = (r as { success?: unknown }).success;
+            const err = (r as { error?: unknown }).error;
+            return ok === false || (typeof err === "string" && err.trim().length > 0);
+          });
+          onFirstAiAnswer({ hadError });
         }
         break;
       }

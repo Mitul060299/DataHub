@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { deleteProject, fetchProjectDetail } from "../api";
+import { createDashboardV2, deleteProject, fetchProjectDetail } from "../api";
 import type { ProjectDetailOut, ProjectDashboardOut, ProjectPipelineOut, ProjectSourceOut } from "../api";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { ProjectMemberSettings } from "../components/ProjectMemberSettings";
@@ -75,6 +75,20 @@ export function ProjectHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [creatingDashboard, setCreatingDashboard] = useState(false);
+
+  const handleNewDashboard = async () => {
+    if (!projectId || creatingDashboard) return;
+    setCreatingDashboard(true);
+    try {
+      const dash = await createDashboardV2({ name: "Untitled Dashboard" });
+      navigate(`/dashboard/${dash.id}`);
+    } catch {
+      alert("Failed to create dashboard.");
+    } finally {
+      setCreatingDashboard(false);
+    }
+  };
 
   useEffect(() => {
     if (!projectId) return;
@@ -229,7 +243,17 @@ export function ProjectHomePage() {
 
         {/* ── Dashboards ────────────────────────────────────── */}
         <section>
-          <SectionHeader title="Dashboards" count={dashboards.length} />
+          <SectionHeader
+            title="Dashboards"
+            count={dashboards.length}
+            action={
+              <ActionBtn
+                label={creatingDashboard ? "Creating…" : "+ New Dashboard"}
+                variant="primary"
+                onClick={() => void handleNewDashboard()}
+              />
+            }
+          />
           {dashboards.length === 0 ? (
             <EmptyState icon="📊" message="No dashboards in this project." />
           ) : (

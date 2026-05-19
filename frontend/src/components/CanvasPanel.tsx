@@ -1,18 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
-import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconRefresh, IconTable } from "./Icons";
+import { IconBarChart, IconClock, IconDownload, IconGitBranch, IconGrid, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import { CanvasView } from "./CanvasView";
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { PipelineSection } from "./PipelineSection";
 import { DataVersionHistory } from "./DataVersionHistory";
-import { api, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview } from "../api";
+import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 
-type CanvasTab = "data" | "pipeline" | "canvas" | "schedule" | "history";
+type CanvasTab = "data" | "pipeline" | "canvas" | "dashboards" | "schedule" | "history";
 
 interface CanvasPanelProps {
   workspaceId?: string;
@@ -67,12 +68,41 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError, onTabChange }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const { exportPipeline } = usePipeline();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<CanvasTab>("data");
 
   const switchTab = (next: CanvasTab) => { setTab(next); onTabChange?.(next); };
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Dashboards tab state ──────────────────────────────────────────────────
+  type DashItem = { id: string; name: string; tile_count?: number; updated_at?: string };
+  const [dashboards, setDashboards] = useState<DashItem[]>([]);
+  const [dashLoading, setDashLoading] = useState(false);
+  const [dashCreating, setDashCreating] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "dashboards") return;
+    setDashLoading(true);
+    listDashboardsV2()
+      .then((list) => setDashboards(list.map((d) => ({ id: d.id, name: d.name, tile_count: d.tiles?.length, updated_at: d.created_at }))))
+      .catch(() => {})
+      .finally(() => setDashLoading(false));
+  }, [tab]);
+
+  const handleNewDashboard = async () => {
+    if (dashCreating) return;
+    setDashCreating(true);
+    try {
+      const dash = await createDashboardV2({ name: "Untitled Dashboard" });
+      navigate(`/dashboard/${dash.id}`);
+    } catch {
+      // ignore
+    } finally {
+      setDashCreating(false);
+    }
+  };
 
   // ── Export confirmation modal state ───────────────────────────────────────
   const [exportConfirmTarget, setExportConfirmTarget] = useState<"csv" | "powerbi" | "tableau" | null>(null);
@@ -345,9 +375,10 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       )}
       <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
         <div style={{ display: "inline-flex", gap: 3 }}>          {([
-            { key: "data",     icon: <IconTable size={16} />,     label: "Data" },
-            { key: "pipeline", icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
-            { key: "canvas",   icon: <IconBarChart size={16} />,  label: "Canvas",   tourTarget: "canvas-tab" },
+            { key: "data",       icon: <IconTable size={16} />,     label: "Data" },
+            { key: "pipeline",   icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
+            { key: "canvas",     icon: <IconBarChart size={16} />,  label: "Canvas",     tourTarget: "canvas-tab" },
+            { key: "dashboards", icon: <IconGrid size={16} />,      label: "Dashboards", tourTarget: "dashboards-tab" },
             ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),
             ...(dataset?.id  ? [{ key: "history",  icon: <IconRefresh size={16} />, label: "History"  }] : []),
           ] as { key: string; icon: React.ReactNode; label: string; badge?: number | null; tourTarget?: string }[]).map(({ key, icon, label, badge, tourTarget }) => {
@@ -681,6 +712,57 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               />
             </>
           )
+        ) : tab === "dashboards" ? (
+          /* ── Dashboards v2 list ────────────────────────────────────── */
+          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tx0)" }}>Dashboards</span>
+              <button
+                className="btn"
+                disabled={dashCreating}
+                onClick={() => void handleNewDashboard()}
+                style={{ background: "var(--ac)", color: "#fff", borderColor: "var(--ac)", fontSize: 12 }}
+              >
+                {dashCreating ? "Creating…" : "+ New Dashboard"}
+              </button>
+            </div>
+            {dashLoading ? (
+              <p style={{ fontSize: 12, color: "var(--tx2)" }}>Loading…</p>
+            ) : dashboards.length === 0 ? (
+              <div style={{ border: "1px dashed var(--bd2)", borderRadius: 10, padding: "28px 16px", textAlign: "center", color: "var(--tx1)", fontSize: 13 }}>
+                <div style={{ fontSize: 26, marginBottom: 8 }}>📊</div>
+                <p style={{ margin: "0 0 14px" }}>No dashboards yet. Create one to get started.</p>
+                <button
+                  className="btn"
+                  disabled={dashCreating}
+                  onClick={() => void handleNewDashboard()}
+                  style={{ background: "var(--ac)", color: "#fff", borderColor: "var(--ac)", fontSize: 12 }}
+                >
+                  {dashCreating ? "Creating…" : "+ New Dashboard"}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {dashboards.map((d) => (
+                  <div
+                    key={d.id}
+                    onClick={() => navigate(`/dashboard/${d.id}`)}
+                    style={{ background: "var(--bg2)", border: "1px solid var(--bd)", borderRadius: 10, padding: "10px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg3)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg2)"; }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--tx0)" }}>{d.name}</div>
+                      {d.tile_count !== undefined && (
+                        <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>{d.tile_count} tile{d.tile_count !== 1 ? "s" : ""}</div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--ac)", fontWeight: 600 }}>Open →</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <CanvasView workspaceId={workspaceId} projectId={projectId} />
         )}

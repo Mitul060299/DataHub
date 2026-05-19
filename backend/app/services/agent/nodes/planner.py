@@ -115,62 +115,6 @@ def _get_llm(goal: str = ""):
     return cached
 
 
-def _is_413(exc: Exception) -> bool:
-    """Return True if the exception is a Groq TPM/request-too-large (413) error."""
-    s = str(exc)
-    return any(p in s for p in (
-        "413", "Request too large", "please reduce",
-        "rate_limit_exceeded", "tokens per minute",
-    ))
-
-
-def _build_system_prompt(state: "AgentState", glossary: dict, trim_level: int = 0) -> str:
-    """Build the planner system prompt with progressive context reduction.
-
-    trim_level 0 — full context (10 sample rows, all stats)
-    trim_level 1 — reduced: 3 sample rows, null-count-only stats
-    trim_level 2 — minimal: no sample rows, no stats
-    """
-    schema = state.get("schema", {})
-    stats = state.get("stats", {})
-    sample_rows = list(state.get("sample_rows", []))
-
-    if trim_level >= 2:
-        stats = {}
-        sample_rows = []
-    elif trim_level == 1:
-        sample_rows = sample_rows[:3]
-        if isinstance(stats, dict):
-            _trimmed: dict = {}
-            for col, v in stats.items():
-                if isinstance(v, dict):
-                    _trimmed[col] = {"null_count": v.get("null_count", 0)}
-                else:
-                    # stats value may be a scalar (e.g. null_count int) — keep as-is
-                    _trimmed[col] = {"null_count": v} if isinstance(v, int) else {}
-            stats = _trimmed
-        else:
-            stats = {}
-    else:
-        sample_rows = sample_rows[:10]
-
-    return PLANNER_SYSTEM_PROMPT.format(
-        schema=_dumps(schema),
-        stats=_dumps(stats),
-        sample_rows=_dumps(sample_rows),
-        glossary=_dumps(glossary) if glossary else "(none)",
-        pipeline_steps=_dumps(state.get("pipeline_steps", [])),
-        available_templates=_dumps(state.get("available_templates", [])),
-        calculated_columns=_dumps(state.get("calculated_columns", [])),
-        dashboards=_dumps(state.get("dashboards", [])),
-        secondary_datasets=_dumps(state.get("secondary_schemas", {})),
-        table_registry=_dumps(state.get("table_registry", {})),
-        user_goal=(state.get("messages") or [""])[-1].content
-        if state.get("messages")
-        else "",
-    )
-
-
 async def planner(state: AgentState) -> dict:
     messages = state.get("messages", [])
     user_goal = messages[-1].content if messages else ""
@@ -190,6 +134,19 @@ async def planner(state: AgentState) -> dict:
     )
 
     _glossary = _load_glossary(state.get("project_id", ""))
+    system_prompt = PLANNER_SYSTEM_PROMPT.format(
+        schema=_dumps(state.get("schema", {})),
+        stats=_dumps(state.get("stats", {})),
+        sample_rows=_dumps(state.get("sample_rows", [])[:10]),
+        glossary=_dumps(_glossary) if _glossary else "(none)",
+        pipeline_steps=_dumps(_ps),
+        available_templates=_dumps(state.get("available_templates", [])),
+        calculated_columns=_dumps(state.get("calculated_columns", [])),
+        dashboards=_dumps(state.get("dashboards", [])),
+        secondary_datasets=_dumps(state.get("secondary_schemas", {})),
+        table_registry=_dumps(_tr),
+        user_goal=user_goal,
+    )
 
     if is_modification:
         modification_prompt = (
@@ -204,67 +161,43 @@ async def planner(state: AgentState) -> dict:
     else:
         human_content = f"Generate the execution plan for: {user_goal}"
 
-    _planner_input_tok = _planner_output_tok = 0
-    _planner_user_id: str = state.get("user_id", "")
-    _planner_session_id: str = state.get("session_id", "")
-    from ..model_router import select_model as _sel
-    _planner_model: str = _sel("plan", goal=user_goal)
-
-    response = None
-    _last_exc: Exception | None = None
-    for _trim_level in (0, 1, 2):
-        system_prompt = _build_system_prompt(state, _glossary, trim_level=_trim_level)
-        if _trim_level > 0:
-            _logger.warning(
-                "planner: retrying with trim_level=%d (413 on previous attempt)", _trim_level
-            )
-        try:
-            response = await asyncio.wait_for(
-                _get_llm(user_goal).ainvoke(
-                    [
-                        SystemMessage(content=system_prompt),
-                        HumanMessage(content=human_content),
-                    ]
-                ),
-                timeout=30,
-            )
-            _last_exc = None
-            _um = getattr(response, "usage_metadata", None) or {}
-            _planner_input_tok = _um.get("input_tokens", 0)
-            _planner_output_tok = _um.get("output_tokens", 0)
-            break  # success
-        except asyncio.TimeoutError:
-            _log_call(user_id=_planner_user_id, session_id=_planner_session_id,
-                      model_used=_planner_model, query_type="plan",
-                      input_tokens=0, output_tokens=0)
-            _logger.error("planner LLM timed out after 30s")
-            raise RuntimeError("AI service timed out while building plan. Please try again.")
-        except Exception as exc:
-            if _is_413(exc) and _trim_level < 2:
-                _last_exc = exc
-                continue  # retry with less context
-            _log_call(user_id=_planner_user_id, session_id=_planner_session_id,
-                      model_used=_planner_model, query_type="plan",
-                      input_tokens=0, output_tokens=0)
-            _logger.error("planner LLM error: %s", exc)
-            raise RuntimeError(f"AI service error while building plan: {exc}") from exc
-
-    if _last_exc is not None:
-        # All trim levels exhausted — still 413
+    try:
+        _planner_input_tok = _planner_output_tok = 0
+        _planner_user_id: str = state.get("user_id", "")
+        _planner_session_id: str = state.get("session_id", "")
+        from ..model_router import select_model as _sel
+        _planner_model: str = _sel("plan", goal=user_goal)
+        response = await asyncio.wait_for(
+            _get_llm(user_goal).ainvoke(
+                [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=human_content),
+                ]
+            ),
+            timeout=30,
+        )
+        raw = str(response.content).strip()
+        _um = getattr(response, "usage_metadata", None) or {}
+        _planner_input_tok = _um.get("input_tokens", 0)
+        _planner_output_tok = _um.get("output_tokens", 0)
+    except asyncio.TimeoutError:
         _log_call(user_id=_planner_user_id, session_id=_planner_session_id,
                   model_used=_planner_model, query_type="plan",
                   input_tokens=0, output_tokens=0)
-        _logger.error("planner LLM error after all retries: %s", _last_exc)
-        raise RuntimeError(
-            f"AI service error while building plan: {_last_exc}"
-        ) from _last_exc
+        _logger.error("planner LLM timed out after 30s")
+        raise RuntimeError("AI service timed out while building plan. Please try again.")
+    except Exception as exc:
+        _log_call(user_id=_planner_user_id, session_id=_planner_session_id,
+                  model_used=_planner_model, query_type="plan",
+                  input_tokens=0, output_tokens=0)
+        _logger.error("planner LLM error: %s", exc)
+        raise RuntimeError(f"AI service error while building plan: {exc}") from exc
     _log_call(
         user_id=_planner_user_id, session_id=_planner_session_id,
         model_used=_planner_model, query_type="plan",
         input_tokens=_planner_input_tok, output_tokens=_planner_output_tok,
     )
 
-    raw = str(response.content).strip()
     _logger.info("PLANNER_RAW_RESPONSE: len=%d first200=%s", len(raw), raw[:200])
 
     if raw.startswith("```"):

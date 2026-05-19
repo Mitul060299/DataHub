@@ -122,10 +122,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return anonBootstrapRef.current;
     }
     const doBootstrap = async () => {
-      try {
+      // Helper: POST /auth/anonymous with one automatic retry on transient failures.
+      // On 429, waits for the Retry-After window then retries once.
+      const postAnon = async (): Promise<{ access_token: string; user_id: string }> => {
         const res = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
+        if (res.status === 429) {
+          // Read Retry-After (seconds) from header; default to 10 s.
+          const retryAfter = parseInt(res.headers.get("Retry-After") ?? "10", 10);
+          const waitMs = Math.min((isNaN(retryAfter) ? 10 : retryAfter) * 1000, 30_000);
+          await new Promise((r) => setTimeout(r, waitMs));
+          const retry = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
+          if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
+          return retry.json() as Promise<{ access_token: string; user_id: string }>;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as { access_token: string; user_id: string };
+        return res.json() as Promise<{ access_token: string; user_id: string }>;
+      };
+      try {
+        const data = await postAnon();
         localStorage.setItem(ANON_TOKEN_KEY, data.access_token);
         localStorage.setItem(ANON_USER_ID_KEY, data.user_id);
         const synth: AnonSession = {
@@ -141,14 +155,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (firstErr) {
         console.warn("Failed to bootstrap anonymous session (attempt 1)", firstErr);
         // Retry once after a delay — handles cold-start backend latency.
-        // Only retry on non-429 errors to avoid hammering the rate limiter.
-        const is429 = firstErr instanceof Error && firstErr.message.includes("429");
-        if (!is429) {
-          try {
-            await new Promise((r) => setTimeout(r, 2000));
-            const retry = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
-            if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
-            const data2 = (await retry.json()) as { access_token: string; user_id: string };
+        try {
+          await new Promise((r) => setTimeout(r, 2000));
+          const data2 = await postAnon();
             localStorage.setItem(ANON_TOKEN_KEY, data2.access_token);
             localStorage.setItem(ANON_USER_ID_KEY, data2.user_id);
             const synth2: AnonSession = {
@@ -161,9 +170,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             identify(data2.user_id, { is_anonymous: true });
             setUserType("anonymous");
             capture("anon_session_created", { user_id: data2.user_id });
-          } catch (retryErr) {
-            console.warn("Failed to bootstrap anonymous session (attempt 2)", retryErr);
-          }
+        } catch (retryErr) {
+          console.warn("Failed to bootstrap anonymous session (attempt 2)", retryErr);
         }
       } finally {
         anonBootstrapRef.current = null;

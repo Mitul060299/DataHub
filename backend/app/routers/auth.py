@@ -194,7 +194,7 @@ class AnonymousResponse(BaseModel):
 
 
 @router.post("/anonymous", response_model=AnonymousResponse)
-@limiter.limit("10/minute")
+@limiter.limit("120/minute")
 def create_anonymous_account(
     request: Request,
     db: Session = Depends(get_db),

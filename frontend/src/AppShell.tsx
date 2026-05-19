@@ -56,22 +56,9 @@ export function AppShell() {
   if (!isAuthenticated) {
     // /workspace supports anonymous sessions — never hard-redirect to /login.
     // If the anon-session bootstrap failed (e.g. backend cold start), show a
-    // friendly retry instead of a confusing auth wall.
+    // friendly retry that polls in the background instead of an auth wall.
     if (location.pathname.startsWith("/workspace")) {
-      return (
-        <div style={{ height: "100%", display: "grid", placeItems: "center", textAlign: "center", gap: 12 }}>
-          <div>
-            <p style={{ color: "var(--tx2, #94a3b8)", marginBottom: 16 }}>Having trouble connecting…</p>
-            <button
-              type="button"
-              className="btn-primary-lg"
-              onClick={() => window.location.reload()}
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      );
+      return <WorkspaceConnectionRetry />;
     }
     // All other private routes do require a real auth session.
     return <Navigate to="/login" replace state={{ from: location }} />;
@@ -113,5 +100,67 @@ export function AppShell() {
         </div>
       </PipelineProvider>
     </WorkspaceProvider>
+  );
+}
+
+/**
+ * Shown when an anonymous workspace visitor's /auth/anonymous bootstrap has
+ * failed (cold-start, rate limit, transient network). Polls in the background
+ * with exponential backoff so the user gets in as soon as the backend recovers,
+ * without having to click Try again.
+ */
+function WorkspaceConnectionRetry() {
+  const { ensureAnonymousSession } = useAuth();
+  const [attempts, setAttempts] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        await ensureAnonymousSession();
+      } catch {
+        /* AuthContext logs failures; we just keep polling */
+      }
+      if (cancelled) return;
+      setAttempts((n) => {
+        const next = n + 1;
+        // Exponential backoff: 3s, 5s, 8s, 13s, 21s, then cap at 30s
+        const delay = Math.min(3000 + n * 2000 + Math.pow(1.5, n) * 500, 30_000);
+        timer = setTimeout(tick, delay);
+        return next;
+      });
+    };
+
+    // Kick off first retry quickly (1s after mount)
+    timer = setTimeout(tick, 1000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [ensureAnonymousSession]);
+
+  return (
+    <div style={{ height: "100%", display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}>
+      <div>
+        <p style={{ color: "var(--tx2, #94a3b8)", marginBottom: 8 }}>
+          Connecting to your workspace…
+        </p>
+        <p style={{ color: "var(--tx3, #64748b)", fontSize: 12, marginBottom: 16 }}>
+          {attempts === 0
+            ? "This usually takes a moment."
+            : `Still trying… (attempt ${attempts + 1}). The server may be waking up.`}
+        </p>
+        <button
+          type="button"
+          className="btn-primary-lg"
+          onClick={() => window.location.reload()}
+        >
+          Reload now
+        </button>
+      </div>
+    </div>
   );
 }

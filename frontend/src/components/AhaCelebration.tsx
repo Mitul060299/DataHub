@@ -17,6 +17,9 @@ import { recordMilestone } from "../lib/activation";
 interface AhaCelebrationProps {
   onDismiss: () => void;
   onShare?: () => void;
+  /** When true, replaces the Share CTA with a "Save my work" sign-up prompt. */
+  isAnonymous?: boolean;
+  onSignUp?: () => void;
 }
 
 /** Tiny canvas-based confetti burst — no external dependency. */
@@ -98,15 +101,23 @@ function ConfettiCanvas() {
   );
 }
 
-export function AhaCelebration({ onDismiss, onShare }: AhaCelebrationProps) {
+export function AhaCelebration({ onDismiss, onShare, isAnonymous, onSignUp }: AhaCelebrationProps) {
+  // For signed-in users auto-dismiss after 7 s. For anon users keep the
+  // sign-up prompt on screen a bit longer so they have time to read + act.
   useEffect(() => {
-    const id = setTimeout(onDismiss, 7000);
+    const id = setTimeout(onDismiss, isAnonymous ? 14000 : 7000);
     return () => clearTimeout(id);
-  }, [onDismiss]);
+  }, [onDismiss, isAnonymous]);
 
   const handleShare = () => {
     recordMilestone("result_exported");
     onShare?.();
+    onDismiss();
+  };
+
+  const handleSignUp = () => {
+    recordMilestone("result_exported");
+    onSignUp?.();
     onDismiss();
   };
 
@@ -123,27 +134,60 @@ export function AhaCelebration({ onDismiss, onShare }: AhaCelebrationProps) {
           transform: "translateX(-50%)",
           zIndex: 9999,
           background: "var(--bg1, #0f0f18)",
-          border: "1px solid var(--acl, #5B6AF0)",
+          border: `1px solid ${isAnonymous ? "#6366f1" : "var(--acl, #5B6AF0)"}`,
           borderRadius: 12,
           padding: "14px 20px",
           display: "flex",
           alignItems: "center",
           gap: 12,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          boxShadow: isAnonymous
+            ? "0 8px 40px rgba(99,102,241,0.35)"
+            : "0 8px 32px rgba(0,0,0,0.5)",
           animation: "fadeInUp 0.35s ease",
-          maxWidth: 420,
+          maxWidth: isAnonymous ? 480 : 420,
         }}
       >
-        <span style={{ fontSize: 22 }}>✨</span>
+        <span style={{ fontSize: 22 }}>{isAnonymous ? "🎉" : "✨"}</span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: "var(--tx0, #e8e8f0)" }}>
-            Your first AI insight!
-          </div>
-          <div style={{ fontSize: 12, color: "var(--tx1, #aaa)", marginTop: 2 }}>
-            Ready to share your analysis?
-          </div>
+          {isAnonymous ? (
+            <>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--tx0, #e8e8f0)" }}>
+                You just got your first AI insight!
+              </div>
+              <div style={{ fontSize: 12, color: "var(--tx1, #aaa)", marginTop: 3, lineHeight: 1.4 }}>
+                Sign up free to save this pipeline and run it on your own data.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--tx0, #e8e8f0)" }}>
+                Your first AI insight!
+              </div>
+              <div style={{ fontSize: 12, color: "var(--tx1, #aaa)", marginTop: 2 }}>
+                Ready to share your analysis?
+              </div>
+            </>
+          )}
         </div>
-        {onShare && (
+        {isAnonymous ? (
+          <button
+            onClick={handleSignUp}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              border: "none",
+              background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            Save my work →
+          </button>
+        ) : onShare ? (
           <button
             onClick={handleShare}
             style={{
@@ -160,7 +204,7 @@ export function AhaCelebration({ onDismiss, onShare }: AhaCelebrationProps) {
           >
             Share
           </button>
-        )}
+        ) : null}
         <button
           onClick={onDismiss}
           aria-label="Dismiss"

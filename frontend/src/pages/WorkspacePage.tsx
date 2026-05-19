@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { api, fetchStepPreview } from "../api";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
@@ -7,12 +7,12 @@ import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
-import { WelcomeModal } from "../components/WelcomeModal";
 import { OnboardingProgress } from "../components/OnboardingProgress";
 import { TourTooltip, STEPS } from "../components/TourTooltip";
 import { AhaCelebration } from "../components/AhaCelebration";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
+import { useAuth } from "../contexts/AuthContext";
 import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
 import { useTour } from "../hooks/useTour";
@@ -23,6 +23,8 @@ import { recordMilestone } from "../lib/activation";
 export function WorkspacePage() {
   const { projectId, pipelineId } = useParams<{ projectId?: string; pipelineId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { isAnonymous } = useAuth();
   const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects } = useWorkspaceContext();
 
   // Resolve project from URL param or fall back to activeProject
@@ -41,9 +43,11 @@ export function WorkspacePage() {
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
   const [panelTab, setPanelTab] = useState<string>("data");
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(
     () => localStorage.getItem("datahub_onboarding_dismissed") === "1",
+  );
+  const [demoBannerDismissed, setDemoBannerDismissed] = useState(
+    () => sessionStorage.getItem("datahub_demo_banner_dismissed") === "1",
   );
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
   const [showAhaCelebration, setShowAhaCelebration] = useState(false);
@@ -175,7 +179,15 @@ export function WorkspacePage() {
     if (!prevId && newId) {
       setShowDatasetNudge(false);
       setShowAiNudge(true);
-      const t = setTimeout(() => setShowAiNudge(false), 8000);
+      // Keep the AI nudge pulsing longer for anon users — they need more time
+      // to notice and act on it.
+      const nudgeDuration = isAnonymous ? 24000 : 8000;
+      const t = setTimeout(() => setShowAiNudge(false), nudgeDuration);
+      if (isAnonymous) {
+        window.dispatchEvent(new CustomEvent("datahub:toast", {
+          detail: { message: "🎉 Data loaded! Type a question in the AI panel →", tone: "success", duration: 5000 },
+        }));
+      }
       return () => clearTimeout(t);
     }
     prevActiveDatasetIdRef.current = newId;
@@ -200,17 +212,18 @@ export function WorkspacePage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  // Auto-start tooltip tour for first-time visitors (1 s delay so layout settles)
-  // Tour now starts AFTER aha (first AI answer) so it teaches Pipeline/Export
-  // rather than competing with the value moment.
+  // Auto-start tooltip tour for signed-in first-time visitors after their aha
+  // moment. Skip for anonymous users — the AhaCelebration signup prompt is
+  // already displayed at that moment and a backdrop tour would compete with it.
   useEffect(() => {
     if (!firstAiAnswerAt) return;
+    if (isAnonymous) return;
     const id = setTimeout(() => {
       if (!isTourDone()) startTour();
     }, 1500);
     return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firstAiAnswerAt]);
+  }, [firstAiAnswerAt, isAnonymous]);
 
   // Mark onboarding complete when all steps done
   useEffect(() => {
@@ -393,6 +406,74 @@ export function WorkspacePage() {
   return (
     <>
       <Breadcrumb segments={breadcrumbSegments} />
+      {/* ── Demo-mode banner (anon users only) ──────────────────────────── */}
+      {isAnonymous && !demoBannerDismissed && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "7px 16px",
+            background: "linear-gradient(90deg,rgba(99,102,241,0.15),rgba(139,92,246,0.12))",
+            borderBottom: "1px solid rgba(99,102,241,0.3)",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 13, color: "#c7d2fe" }}>
+            <span
+              style={{
+                display: "inline-block",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#f59e0b",
+                marginRight: 6,
+                verticalAlign: "middle",
+              }}
+            />
+            Guest mode — your pipeline won't be saved when you leave.
+          </span>
+          <button
+            className="btn btn-primary"
+            type="button"
+            style={{
+              height: 26,
+              fontSize: 11,
+              padding: "0 12px",
+              background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+              border: "none",
+            }}
+            onClick={() => {
+              capture("demo_banner_signup_clicked");
+              navigate("/signup");
+            }}
+          >
+            Sign up free →
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => {
+              sessionStorage.setItem("datahub_demo_banner_dismissed", "1");
+              setDemoBannerDismissed(true);
+              capture("demo_banner_dismissed");
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--tx2, #888)",
+              fontSize: 16,
+              cursor: "pointer",
+              padding: "0 4px",
+              lineHeight: 1,
+              marginLeft: 2,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {/* ── Dataset Lane HUD ───────────────────────────────────────── */}
       {activeLanes.length > 0 && (
         <div style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 100, display: "flex", gap: 6, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", background: "rgba(13,13,17,0.7)", borderRadius: 10, padding: 4, border: "1px solid var(--bd)" }}>
@@ -491,6 +572,11 @@ export function WorkspacePage() {
             onStepApplied={() => {
               setDatasetRefreshNonce((value) => value + 1);
               void refetch();
+              if (isAnonymous) {
+                window.dispatchEvent(new CustomEvent("datahub:toast", {
+                  detail: { message: "✅ Transform saved to your pipeline! Sign up to keep it →", tone: "success", duration: 5000 },
+                }));
+              }
             }}
             onDatasetMutated={() => {
               setDatasetRefreshNonce((value) => value + 1);
@@ -504,6 +590,11 @@ export function WorkspacePage() {
               setHasAskedFirstQuestion(true);
               setShowAiNudge(false);
               ctxRecordMilestone("ai_prompt_submitted");
+              if (isAnonymous) {
+                window.dispatchEvent(new CustomEvent("datahub:toast", {
+                  detail: { message: "🤖 AI is working on your question…", tone: "info", duration: 3500 },
+                }));
+              }
             }}
             onFirstAiAnswer={() => {
               ctxRecordMilestone("aha_first_ai_answer");
@@ -520,34 +611,32 @@ export function WorkspacePage() {
           onClose={() => setSheetsExportOpen(false)}
         />
       )}
-      {welcomeOpen && (
-        <WelcomeModal
-          onClose={() => { setWelcomeOpen(false); }}
-          onUploadSample={(url) => {
-            setWelcomeOpen(false);
-            setSampleUrl(url);
-            setImportOpen(true);
+      {showAhaCelebration && (
+        <AhaCelebration
+          isAnonymous={isAnonymous}
+          onDismiss={() => setShowAhaCelebration(false)}
+          onSignUp={() => {
+            capture("aha_signup_cta_clicked");
+            navigate("/signup");
           }}
         />
       )}
-      {showAhaCelebration && (
-        <AhaCelebration
-          onDismiss={() => setShowAhaCelebration(false)}
-        />
-      )}
-      {!onboardingDismissed && (
-        <div style={{ position: "fixed", bottom: 16, left: explorerWidth + 12, zIndex: 900, width: 260 }}>
+      {/* Anon users always see the checklist (non-dismissible).
+          Signed-in users can dismiss it once they choose. */}
+      {(!onboardingDismissed || isAnonymous) && (
+        <div style={{ position: "fixed", bottom: 16, left: explorerWidth + 12, zIndex: 900, width: 264 }}>
           <OnboardingProgress
             hasUploadedFirstFile={hasUploadedFirstFile}
             hasCompletedOnboarding={hasCompletedOnboarding}
             hasAskedFirstQuestion={hasAskedFirstQuestion}
             firstAiAnswerAt={firstAiAnswerAt}
-            onDismiss={() => {
+            isAnonymous={isAnonymous}
+            onDismiss={isAnonymous ? undefined : () => {
               setOnboardingDismissed(true);
               localStorage.setItem("datahub_onboarding_dismissed", "1");
               capture("onboarding_progress_dismissed");
             }}
-            onStartTour={!tourActive ? startTour : undefined}
+            onStartTour={!isAnonymous && !tourActive ? startTour : undefined}
           />
         </div>
       )}

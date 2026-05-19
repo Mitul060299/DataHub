@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
-import { WelcomeModal } from "../components/WelcomeModal";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
+import { useAuth } from "../contexts/AuthContext";
 import { useUser } from "../contexts/UserContext";
 import { capture } from "../lib/posthog";
 
@@ -45,7 +45,8 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects, createProject } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects, createProject, lastProjectId } = useWorkspaceContext();
+  const { isAnonymous } = useAuth();
   const { hasCompletedOnboarding } = useUser();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -54,7 +55,6 @@ export function WorkspaceHomePage() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
   const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [demoIntent, setDemoIntent] = useState<{ sample?: string } | null>(null);
   const [quickstarting, setQuickstarting] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -86,24 +86,29 @@ export function WorkspaceHomePage() {
 
   // Auto-quickstart for demo visitors and brand-new users.
   //
-  // For demo users (came from the public /try flow):
+  // For demo users (came from the public /try flow): they must currently be
+  //   anonymous — otherwise the demo-intent flag is stale from an old session
+  //   and we'd hijack a signed-in user's tab.
   //   • If they already have a project, navigate immediately — no API call, no modal.
   //   • If they have no projects, create one then navigate (same path as brand-new).
   // For brand-new users (no projects, onboarding incomplete):
   //   • Auto-quickstart with the Customers sample — no query picker modal.
   //
-  // We intentionally skip the WelcomeModal query-picker here: it confused users
-  // (looked like "ask AI a question" but actually just loaded the dataset).
-  // The workspace itself now guides them with the dataset-nudge + AI-input nudge.
+  // For signed-in returning users with at least one project: do NOTHING.
+  //   Refreshing /workspace must show the project list, not silently create a
+  //   Quickstart project or jump to a sample CSV.
   //
-  // Once-per-session guard via sessionStorage prevents re-triggering on back-nav.
+  // Guards:
+  //   • per-user localStorage flag so the auto-redirect only fires once for
+  //     the lifetime of the account (survives tab close, unlike sessionStorage).
   useEffect(() => {
-    if (welcomeOpen || quickstarting) return;
+    if (quickstarting) return;
+    if (projectsLoading) return;
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     if (alreadyShown) return;
 
-    const fromDemo = demoIntent !== null;
-    const brandNew = !projectsLoading && projects.length === 0 && !hasCompletedOnboarding;
+    const fromDemo = demoIntent !== null && isAnonymous;
+    const brandNew = projects.length === 0 && !hasCompletedOnboarding;
 
     if (fromDemo && projects.length > 0) {
       // Fast path: existing project → navigate without any API call
@@ -114,14 +119,33 @@ export function WorkspaceHomePage() {
       const sample = demoIntent?.sample ?? "/samples/customers.csv";
       const params = new URLSearchParams({ sample, from: "demo" });
       navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
-    } else if ((fromDemo && !projectsLoading) || brandNew) {
+    } else if (fromDemo || brandNew) {
       // Need to create a project first — do it silently (no modal)
       sessionStorage.setItem("datahub_welcome_home_shown", "1");
       capture("onboarding_auto_quickstart", { surface: "workspace_home", from_demo: fromDemo });
       void handleQuickstartSample(demoIntent?.sample ?? "/samples/customers.csv", /* skipModal */ true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding]);
+  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, isAnonymous]);
+
+  // Returning signed-in users: if they have a remembered "last project" and
+  // it still exists, deep-link them straight into it so refreshing /workspace
+  // brings them back to their real project instead of a generic project list.
+  // Only fires once per tab visit and never for anonymous demo visitors.
+  const lastProjectRedirected = useRef(false);
+  useEffect(() => {
+    if (lastProjectRedirected.current) return;
+    if (isAnonymous || projectsLoading) return;
+    if (quickstarting) return;
+    if (demoIntent) return; // demo path handles its own navigation
+    if (!lastProjectId) return;
+    const match = projects.find((p) => p.id === lastProjectId);
+    if (!match) return;
+    lastProjectRedirected.current = true;
+    setActiveProject(match);
+    navigate(`/workspace/project/${match.id}/pipeline/new`, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAnonymous, projectsLoading, lastProjectId, projects.length, demoIntent]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).
@@ -168,7 +192,6 @@ export function WorkspaceHomePage() {
       if (!skipModal) window.alert("Could not open the sample. Please try creating a project manually.");
     } finally {
       setQuickstarting(false);
-      if (!skipModal) setWelcomeOpen(false);
     }
   };
 
@@ -472,16 +495,6 @@ export function WorkspaceHomePage() {
         onClose={() => setNewProjectOpen(false)}
         onCreated={handleProjectCreated}
       />
-
-      {welcomeOpen && (
-        <WelcomeModal
-          onClose={() => {
-            setWelcomeOpen(false);
-            capture("onboarding_modal_dismissed", { surface: "workspace_home" });
-          }}
-          onUploadSample={(url) => { void handleQuickstartSample(url); }}
-        />
-      )}
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </div>

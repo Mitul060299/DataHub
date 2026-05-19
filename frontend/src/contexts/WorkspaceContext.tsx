@@ -52,6 +52,9 @@ export interface WorkspaceContextValue {
   removeLane: (datasetId: string) => void;
   members: Member[];
   setMembers: (members: Member[]) => void;
+  /** Last project id the user explicitly opened in this account; persists
+   * across reloads so a refresh on /workspace can deep-link back to it. */
+  lastProjectId: string | null;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
@@ -75,11 +78,43 @@ function toProject(raw: ProjectOut): Project {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
+  // User-scoped key so two accounts on the same browser don't clobber each
+  // other's "last project" memory, and an anon visitor's last project can't
+  // hijack a signed-in user's view.
+  const lastProjectStorageKey = session?.user?.id
+    ? `datahub_last_project_${session.user.id}`
+    : null;
+  const readLastProjectId = useCallback((): string | null => {
+    if (!lastProjectStorageKey) return null;
+    try { return localStorage.getItem(lastProjectStorageKey); } catch { return null; }
+  }, [lastProjectStorageKey]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
-  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [activeProject, setActiveProjectState] = useState<Project | null>(null);
   const [activeDataset, setActiveDatasetState] = useState<Dataset | null>(null);
   const [activeLanes, setActiveLanes] = useState<Dataset[]>([]);
+  const [lastProjectId, setLastProjectId] = useState<string | null>(() => {
+    // Initial peek (may be null if session not yet hydrated; reconciled below).
+    try {
+      const uid = session?.user?.id;
+      return uid ? localStorage.getItem(`datahub_last_project_${uid}`) : null;
+    } catch { return null; }
+  });
+
+  // Re-read once the session resolves (AuthContext is async on cold start).
+  useEffect(() => {
+    setLastProjectId(readLastProjectId());
+  }, [readLastProjectId]);
+
+  const setActiveProject = useCallback((project: Project) => {
+    setActiveProjectState(project);
+    if (lastProjectStorageKey) {
+      try {
+        localStorage.setItem(lastProjectStorageKey, project.id);
+        setLastProjectId(project.id);
+      } catch { /* ignore quota */ }
+    }
+  }, [lastProjectStorageKey]);
 
   const addLane = useCallback((dataset: Dataset) => {
     setActiveLanes((prev) => {
@@ -120,14 +155,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const data = await fetchProjects();
       const mapped = data.map(toProject);
       setProjects(mapped);
-      // If activeProject not loaded yet, default to first
-      setActiveProject((prev) => {
+      // If activeProject not loaded yet, prefer the user's last opened
+      // project (persisted in localStorage) so refresh returns them to where
+      // they were. Fall back to first.
+      setActiveProjectState((prev) => {
         if (prev) {
-          // Refresh active project data in case counts changed
           const updated = mapped.find((p) => p.id === prev.id);
           return updated ?? prev;
         }
-        return mapped[0] ?? null;
+        const lastId = readLastProjectId();
+        const restored = lastId ? mapped.find((p) => p.id === lastId) : undefined;
+        return restored ?? mapped[0] ?? null;
       });
     } catch {
       // swallow — components handle their own loading states
@@ -183,8 +221,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       removeLane,
       members,
       setMembers,
+      lastProjectId,
     }),
-    [projects, projectsLoading, refreshProjects, createProject, activeProject, activeDataset, activeLanes, addLane, removeLane, members],
+    [projects, projectsLoading, refreshProjects, createProject, activeProject, setActiveProject, activeDataset, setActiveDataset, activeLanes, addLane, removeLane, members, lastProjectId],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

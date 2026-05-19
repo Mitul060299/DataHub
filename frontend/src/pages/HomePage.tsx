@@ -1011,15 +1011,21 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.28, ease: "easeOut" }}
           >
+            {/* Primary CTA goes straight to the interactive demo workspace
+                — no signup wall. Conversion happens inside the workspace via
+                the persistent demo banner + aha-celebration sign-up prompt. */}
             <motion.button
               type="button"
               className="btn-primary-lg"
-              onClick={handleGetStarted}
+              onClick={() => {
+                capture("homepage_try_demo_clicked", { surface: "hero_primary" });
+                navigate("/workspace");
+              }}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
             >
               <span className="btn-shine" />
-              Get started free
+              ▶ Try it now — no signup
             </motion.button>
             <motion.button
               type="button"
@@ -1038,17 +1044,20 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.36, ease: "easeOut" }}
           >
-            <button
-              type="button"
-              className="hero-try-link"
-              onClick={() => {
-                capture("homepage_try_demo_clicked");
-                navigate("/workspace");
-              }}
-            >
-              ▶ Try it free — no signup required
-            </button>
-            <p className="hero-demo-subtext">Full workspace, no email needed. Sign up later to save your work.</p>
+            <p className="hero-demo-subtext">
+              Full workspace, no email needed. Already have an account?{" "}
+              <button
+                type="button"
+                className="hero-try-link"
+                style={{ display: "inline", padding: 0, fontSize: "inherit" }}
+                onClick={() => {
+                  capture("homepage_signin_clicked", { surface: "hero" });
+                  navigate("/login");
+                }}
+              >
+                Sign in
+              </button>
+            </p>
           </motion.div>
 
           <motion.div
@@ -1323,64 +1332,6 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* WHO IT'S FOR */}
-      <section className="section section-personas">
-        <motion.div
-          className="section-header"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <p className="section-eyebrow">Who it's for</p>
-          <h2 className="section-title">
-            Built for people who{" "}
-            <span className="hero-gradient-text">work with data every day</span>
-          </h2>
-        </motion.div>
-        <div className="personas-grid">
-          {[
-            {
-              icon: "📈",
-              role: "The Analyst",
-              description:
-                "Stop spending half your week cleaning the same files. Save the steps once, re-run next week in one click.",
-            },
-            {
-              icon: "🧑‍💼",
-              role: "The Freelancer / Consultant",
-              description:
-                "Every client sends a different format. Turn messy data into clean deliverables — and reuse the recipe on every engagement.",
-            },
-            {
-              icon: "🏢",
-              role: "The Small Team",
-              description:
-                "No data engineer, no warehouse. Self-serve data prep for everyone, no SQL required.",
-            },
-            {
-              icon: "✅",
-              role: "The Manager",
-              description:
-                "Every step in plain language before it runs. Trust the numbers you sign off on.",
-            },
-          ].map((p, i) => (
-            <motion.div
-              key={p.role}
-              className="persona-card"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.4, delay: i * 0.09 }}
-            >
-              <span className="persona-icon">{p.icon}</span>
-              <h3 className="persona-role">{p.role}</h3>
-              <p className="persona-desc">{p.description}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
       {/* HOW */}
       <section id="how" className="section section-how">
         <motion.div
@@ -1422,289 +1373,78 @@ export function HomePage() {
             </motion.article>
           ))}
         </div>
+
+        {/* Inline mid-page CTA — keep the demo one click away even after scrolling */}
+        <motion.div
+          style={{ display: "flex", justifyContent: "center", marginTop: 48 }}
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.4 }}
+        >
+          <motion.button
+            type="button"
+            className="btn-primary-lg"
+            onClick={() => {
+              capture("homepage_try_demo_clicked", { surface: "mid_page_how" });
+              navigate("/workspace");
+            }}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            <span className="btn-shine" />
+            ▶ Try it now — no signup
+          </motion.button>
+        </motion.div>
       </section>
 
-      {/* FEATURES BENTO */}
-      <section className="section section-features">
-        <motion.div
-          className="section-header"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
+      {/* DETAILS LIVE ELSEWHERE — pricing, FAQ, features moved off this page
+          to keep the path from landing to interactive demo as short as
+          possible. Anything a visitor wants is one click away below. */}
+      <section
+        aria-label="Learn more"
+        style={{
+          padding: "48px 24px 64px",
+          textAlign: "center",
+          borderTop: "1px solid #1e2235",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 18px",
+            fontSize: 13,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: "#64748b",
+          }}
         >
-          <p className="section-eyebrow">Why teams choose DataHub</p>
-          <h2 className="section-title">
-            An AI agent you can trust{" "}
-            <span className="hero-gradient-text">+ pipelines that scale with you</span>
-          </h2>
-          <p className="section-subtitle">
-            Skip the install, the setup, the SQL, and the six-figure license. Get an agent that handles today's task — and a pipeline that handles every Monday from now on.{" "}
-            <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "underline" }}>Compare plans →</Link>
-          </p>
-        </motion.div>
-
-        <div className="bento-grid">
-          {features.map((f, i) => (
-            <motion.article
-              key={f.title}
-              className={`bento-card bento-${f.span}`}
-              style={{ "--feat-color": f.color } as CSSProperties}
-              initial={{ opacity: 0, y: 32 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.5, delay: i * 0.08, ease: "easeOut" }}
-              whileHover={{ y: -6 }}
-              onMouseMove={handleMagneticMove}
-            >
-              <div className="card-glow" />
-              <div className="bento-content">
-                <div className="feature-icon">{f.icon}</div>
-                <h3 className="feature-title">{f.title}</h3>
-                <p className="feature-description">{f.description}</p>
-              </div>
-              {renderFeatureVisual(f.visual)}
-            </motion.article>
-          ))}
+          Want the details?
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: 28,
+            fontSize: 15,
+          }}
+        >
+          <Link to="/pricing" style={{ color: "#a78bfa", textDecoration: "none" }}>
+            Pricing &amp; plans →
+          </Link>
+          <Link to="/docs" style={{ color: "#a78bfa", textDecoration: "none" }}>
+            Documentation →
+          </Link>
+          <Link to="/docs#faq" style={{ color: "#a78bfa", textDecoration: "none" }}>
+            FAQ →
+          </Link>
+          <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: "#a78bfa", textDecoration: "none" }}>
+            Talk to us →
+          </a>
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" className="section section-pricing">
-        <motion.div
-          className="section-header"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <p className="section-eyebrow">Pricing</p>
-          <h2 className="section-title">
-            Simple,{" "}
-            <span className="hero-gradient-text">transparent</span> pricing
-          </h2>
-          <p className="section-subtitle">
-            Every paid plan includes a <strong>15-day free trial</strong> — no credit card required. Upgrade when your team is ready.
-          </p>
-        </motion.div>
-
-        <div className="pricing-grid">
-          {plans.map((plan, idx) => renderPricingCard(plan, idx))}
-        </div>
-      </section>
-
-      {/* MYTHS */}
-      <section className="section section-myths">
-        <motion.div
-          className="section-header"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <p className="section-eyebrow">Why DataHub is different</p>
-          <h2 className="section-title">Common concerns, answered</h2>
-          <p className="section-subtitle">
-            We built DataHub to address every one of these.
-          </p>
-        </motion.div>
-
-        <div className="myths-list">
-          {myths.map((m, i) => (
-            <motion.div
-              key={i}
-              className={`myth-item${openMyth === i ? " open" : ""}`}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
-            >
-              <button
-                type="button"
-                className="myth-q"
-                onClick={() => setOpenMyth(openMyth === i ? null : i)}
-                aria-expanded={openMyth === i}
-              >
-                <span>{m.myth}</span>
-                <span className="myth-toggle">{openMyth === i ? "-" : "+"}</span>
-              </button>
-              {openMyth === i && <p className="myth-a">{m.reality}</p>}
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* REVIEWS */}
-      <section className="section section-reviews">
-        <motion.div
-          className="section-header"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <p className="section-eyebrow">Reviews</p>
-          <h2 className="section-title">What early users are saying</h2>
-        </motion.div>
-
-        {approvedReviews.length > 0 ? (
-          <div className="reviews-grid">
-            {approvedReviews.slice(0, 6).map((r, i) => (
-              <motion.article
-                key={r.id}
-                className="review-card"
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.4, delay: i * 0.05 }}
-                whileHover={{ y: -4 }}
-                onMouseMove={handleMagneticMove}
-              >
-                <div className="card-glow" />
-                <div className="review-stars">
-                  {Array.from({ length: 5 }).map((_, k) => (
-                    <span key={k} className={k < r.rating ? "star filled" : "star"}>
-                      *
-                    </span>
-                  ))}
-                </div>
-                <p className="review-body">&quot;{r.body}&quot;</p>
-                <p className="review-author">
-                  <strong>{r.name}</strong>
-                  {r.role ? <span className="review-role"> &middot; {r.role}</span> : null}
-                </p>
-              </motion.article>
-            ))}
-          </div>
-        ) : (
-          <p className="reviews-empty">Be the first to share a review below.</p>
-        )}
-
-        <div className="review-form-wrap">
-          <h3 className="review-form-title">Share your experience</h3>
-          {reviewSuccess ? (
-            <div className="form-success">
-              Thank you. Your review has been submitted for moderation.
-            </div>
-          ) : (
-            <form className="review-form" onSubmit={handleReviewSubmit}>
-              <div className="form-row">
-                <input
-                  className="form-input"
-                  placeholder="Your name"
-                  value={reviewerName}
-                  onChange={(e) => setReviewerName(e.target.value)}
-                  required
-                />
-                <input
-                  className="form-input"
-                  placeholder="Role (optional)"
-                  value={reviewerRole}
-                  onChange={(e) => setReviewerRole(e.target.value)}
-                />
-              </div>
-              <div className="rating-row">
-                <span className="rating-label">Rating:</span>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    className={`rating-star${n <= reviewRating ? " active" : ""}`}
-                    onClick={() => setReviewRating(n)}
-                    aria-label={`${n} star${n > 1 ? "s" : ""}`}
-                  >
-                    *
-                  </button>
-                ))}
-              </div>
-              <textarea
-                className="form-textarea"
-                placeholder="Tell us what worked, what did not, what you would love to see..."
-                rows={4}
-                value={reviewBody}
-                onChange={(e) => setReviewBody(e.target.value)}
-                required
-              />
-              {reviewError ? <div className="form-error">{reviewError}</div> : null}
-              <button type="submit" className="btn-primary-lg" disabled={reviewSubmitting}>
-                <span className="btn-shine" />
-                {reviewSubmitting ? "Submitting..." : "Submit review"}
-              </button>
-            </form>
-          )}
-        </div>
-      </section>
-
-      {/* FEEDBACK */}
-      <section id="feedback" className="section section-feedback">
-        <motion.div
-          className="section-header"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <p className="section-eyebrow">Get in touch</p>
-          <h2 className="section-title">Have feedback or a question?</h2>
-          <p className="section-subtitle">
-            We read everything. Tell us what you need: feature, bug, integration, or anything else.
-          </p>
-        </motion.div>
-
-        <div className="feedback-card">
-          {successName ? (
-            <div className="form-success">
-              Thanks, {successName}. We will get back to you shortly.
-            </div>
-          ) : (
-            <form className="feedback-form" onSubmit={handleFeedbackSubmit}>
-              <div className="form-row">
-                <input
-                  className="form-input"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-                <input
-                  className="form-input"
-                  type="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="tag-row">
-                {feedbackTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className={`tag-chip${subject === tag ? " active" : ""}`}
-                    onClick={() => setSubject(subject === tag ? "" : tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                className="form-textarea"
-                placeholder="Your message..."
-                rows={5}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                required
-              />
-              {validationError ? <div className="form-error">{validationError}</div> : null}
-              {requestError ? <div className="form-error">{requestError}</div> : null}
-              <button type="submit" className="btn-primary-lg" disabled={isSubmitting}>
-                <span className="btn-shine" />
-                {isSubmitting ? "Sending..." : "Send message"}
-              </button>
-            </form>
-          )}
-        </div>
-      </section>
+      {/* SECTIONS BELOW REMOVED — features bento, pricing, myths, reviews, feedback. */}
 
       {/* CTA */}
       <section className="section section-cta">

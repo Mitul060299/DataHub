@@ -10,6 +10,47 @@ const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8000";
 const ANON_TOKEN_KEY = "datahub_anon_token";
 const ANON_USER_ID_KEY = "datahub_anon_user_id";
+// Set transiently by claimAnonymous() so the auth-state listener knows the
+// migration is in flight and must NOT wipe per-tenant localStorage (the
+// pipeline / dataset state still belongs to the now-authed user).
+const CLAIM_IN_FLIGHT_KEY = "datahub_claim_in_flight";
+
+// Unscoped per-tenant keys written by anon (and legacy authed) sessions.
+// When an anonymous visitor signs in to (or signs up into) a DIFFERENT real
+// account WITHOUT going through claim, these keys would otherwise leak the
+// demo's dataset / pipeline / chat / onboarding state into the real account's
+// first page render. We scrub them on every anon -> authed transition that
+// isn't an explicit claim.
+const UNSCOPED_TENANT_KEYS = [
+  "activeWorkspaceId",
+  "activeDatasetId",
+  "activeProjectId",
+  "datahub_onboarding_dismissed",
+  "datahub_workspace_first_visit_recorded",
+];
+const UNSCOPED_TENANT_PREFIXES = [
+  "datahub_chat_session_",
+  "datahub_steps_v2_",
+  "datahub_live_artifact_",
+];
+
+function wipeUnscopedTenantState() {
+  try {
+    for (const k of UNSCOPED_TENANT_KEYS) {
+      localStorage.removeItem(k);
+    }
+    sessionStorage.removeItem("datahub_welcome_home_shown");
+    sessionStorage.removeItem("datahub_signup_intent");
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key && UNSCOPED_TENANT_PREFIXES.some((p) => key.startsWith(p))) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // ignore quota / disabled storage errors
+  }
+}
 
 // Synthetic session shape for anonymous users so the rest of the app can keep
 // reading `session?.user?.id`/`user?.email` without branching everywhere.
@@ -129,8 +170,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
         // Real session present — clear any leftover anon credentials.
+        const hadAnon = !!localStorage.getItem(ANON_TOKEN_KEY);
         localStorage.removeItem(ANON_TOKEN_KEY);
         localStorage.removeItem(ANON_USER_ID_KEY);
+        // If the previous tab state was an anonymous demo session and this is
+        // NOT a claim-migration (which keeps the data), scrub leaked demo
+        // pipeline / dataset / chat / onboarding state so it doesn't render
+        // inside the now-authed account.
+        const claimInFlight = sessionStorage.getItem(CLAIM_IN_FLIGHT_KEY) === "1";
+        if (hadAnon && !claimInFlight) {
+          wipeUnscopedTenantState();
+        }
+        sessionStorage.removeItem(CLAIM_IN_FLIGHT_KEY);
         setAnonSession(null);
         setUserType("registered");
         identifyFromSession(nextSession);
@@ -149,9 +200,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (nextSession?.access_token) {
         setAuthToken(nextSession.access_token);
         // Drop anon credentials once the user is on a real account.
+        const hadAnon = !!localStorage.getItem(ANON_TOKEN_KEY);
         localStorage.removeItem(ANON_TOKEN_KEY);
         localStorage.removeItem(ANON_USER_ID_KEY);
+        const claimInFlight = sessionStorage.getItem(CLAIM_IN_FLIGHT_KEY) === "1";
+        if (hadAnon && !claimInFlight) {
+          // Anon -> authed without an explicit claim migration: scrub demo
+          // state so it can't leak into the real account.
+          wipeUnscopedTenantState();
+        }
+        sessionStorage.removeItem(CLAIM_IN_FLIGHT_KEY);
         setAnonSession(null);
+        setUserType("registered");
         identifyFromSession(nextSession);
       } else {
         clearAuthToken();
@@ -159,26 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         clearSentryUser();
         // Scrub per-user state from localStorage so a subsequent user on a shared
         // computer doesn't inherit the previous tenant's workspace/dataset context.
-        try {
-          const keysToClear = [
-            "activeWorkspaceId",
-            "activeDatasetId",
-            "activeProjectId",
-            "datahub_onboarding_dismissed",
-          ];
-          for (const k of keysToClear) {
-            localStorage.removeItem(k);
-          }
-          // Per-dataset chat sessions: enumerate and drop any datahub_chat_session_*
-          for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith("datahub_chat_session_")) {
-              localStorage.removeItem(key);
-            }
-          }
-        } catch {
-          // ignore quota / disabled storage errors
-        }
+        wipeUnscopedTenantState();
         // Sign-out completed — fall back to a brand new anon session so the
         // visitor isn't kicked out of the app entirely.
         void ensureAnonymousSession();
@@ -264,6 +305,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!anonTok) {
       return { ok: true, migrated: false };
     }
+    // Tell the auth-state listener NOT to wipe per-tenant localStorage when
+    // the supabase session lands — the backend is migrating the anon's rows
+    // to the new account, so the cached pipeline/dataset state is still valid.
+    try { sessionStorage.setItem(CLAIM_IN_FLIGHT_KEY, "1"); } catch { /* ignore */ }
     try {
       const res = await fetch(`${API_BASE}/auth/claim`, {
         method: "POST",
@@ -276,6 +321,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.warn("Anon claim failed", data);
+        // Claim failed -> the listener should treat this like an unmigrated
+        // anon->authed transition and wipe demo state on the next session.
+        try { sessionStorage.removeItem(CLAIM_IN_FLIGHT_KEY); } catch { /* ignore */ }
         return { ok: false };
       }
       // Drop the anon token so future requests use the real Supabase JWT.
@@ -288,6 +336,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { ok: true, migrated };
     } catch (e) {
       console.warn("Anon claim error", e);
+      try { sessionStorage.removeItem(CLAIM_IN_FLIGHT_KEY); } catch { /* ignore */ }
       capture("anon_claim_failed");
       return { ok: false };
     }

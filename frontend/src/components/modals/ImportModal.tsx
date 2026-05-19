@@ -10,6 +10,10 @@ interface ImportModalProps {
   onClose: () => void;
   onImported: () => void;
   preloadUrl?: string;
+  /** When true AND preloadUrl is set, the file is imported automatically once
+   * validation succeeds — no user click required. Used for the anonymous demo
+   * flow to give a seamless "data already loaded" experience. */
+  autoImport?: boolean;
 }
 
 type FileType = "csv" | "excel" | "json" | "parquet";
@@ -32,7 +36,7 @@ interface FilePreview {
 }
 
 
-export function ImportModal({ open, workspaceId, projectId, onClose, onImported, preloadUrl }: ImportModalProps) {
+export function ImportModal({ open, workspaceId, projectId, onClose, onImported, preloadUrl, autoImport }: ImportModalProps) {
   // One hidden <input> per file type so accept filter changes correctly
   const csvRef     = useRef<HTMLInputElement>(null);
   const excelRef   = useRef<HTMLInputElement>(null);
@@ -50,6 +54,9 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
   const [filePreview, setFilePreview]     = useState<FilePreview | null>(null);
   const [customDelimiter, setCustomDelimiter] = useState("");
   const [isDragOver, setIsDragOver]       = useState(false);
+  // Stable ref to the upload function so the auto-import setTimeout can call
+  // the latest closure without capturing a stale one.
+  const uploadFileRef = useRef<(() => void) | null>(null);
 
   // Auto-load a sample file when preloadUrl is provided
   useEffect(() => {
@@ -80,6 +87,11 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
         try {
           const preview = await validateFile(file);
           setFilePreview(preview);
+          // Auto-import: trigger upload immediately after validation succeeds
+          if (autoImport) {
+            // Let React flush the state update before calling uploadFile
+            setTimeout(() => uploadFileRef.current?.(), 0);
+          }
         } catch (err: unknown) {
           const maybeErr = err as { response?: { data?: { detail?: { message?: string } | string } } };
           const raw = maybeErr?.response?.data?.detail;
@@ -94,9 +106,12 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preloadUrl, open]);
+  }, [preloadUrl, open, autoImport]);
 
   if (!open) return null;
+
+  // Keep the ref current so the autoImport timeout always calls the latest closure.
+  uploadFileRef.current = uploadFile;
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);

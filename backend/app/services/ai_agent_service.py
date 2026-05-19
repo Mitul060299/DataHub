@@ -358,25 +358,46 @@ class AIAgentService:
             "If no transformation is required, set transformation to null and needsConfirmation to false."
         )
 
-        messages = [{"role": "system", "content": system_prompt}]
-        for item in conversation_history[-6:]:
-            role = item.get("role")
-            content = item.get("content")
-            if role in {"user", "assistant"} and content:
-                messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": user_message})
-
+        # Retry with progressively shorter history on 413 (context-window overflow).
+        # Small/free-tier models (e.g. llama-3.1-8b-instant) have ≤6K token windows
+        # that are easily exceeded when conversation history accumulates.
         _usage2: dict[str, Any] = {}
-        try:
-            response, _usage2 = AIAgentService._call_llm(
-                messages,
-                model=model,
-                response_format={"type": "json_object"},
-                user_id=user_id,
-            )
-        except Exception as exc:
+        _last_exc: Exception | None = None
+        response: str = ""
+        for _history_len in (6, 2, 0):
+            _slice = conversation_history[-_history_len:] if _history_len > 0 else []
+            messages = [{"role": "system", "content": system_prompt}]
+            for item in _slice:
+                role = item.get("role")
+                content = item.get("content")
+                if role in {"user", "assistant"} and content:
+                    messages.append({"role": role, "content": content})
+            messages.append({"role": "user", "content": user_message})
+            try:
+                response, _usage2 = AIAgentService._call_llm(
+                    messages,
+                    model=model,
+                    response_format={"type": "json_object"},
+                    user_id=user_id,
+                )
+                _last_exc = None
+                break
+            except Exception as exc:
+                _last_exc = exc
+                err_str = str(exc)
+                is_context_overflow = (
+                    "413" in err_str
+                    or "Request too large" in err_str
+                    or "please reduce" in err_str.lower()
+                    or "context_length_exceeded" in err_str
+                )
+                if is_context_overflow and _history_len > 0:
+                    continue  # try again with fewer messages
+                break  # non-413 or already at minimum — surface immediately
+
+        if _last_exc is not None:
             return {
-                "response": f"LLM request failed: {str(exc)}.",
+                "response": f"LLM request failed: {str(_last_exc)}.",
                 "transformation": None,
                 "needsConfirmation": False,
             }

@@ -215,6 +215,17 @@ export function WorkspacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstAiAnswerAt, isAnonymous]);
 
+  // For anonymous guests, start the tour once they have a dataset selected —
+  // this is the earliest meaningful moment to guide them.
+  useEffect(() => {
+    if (!isAnonymous || !activeDataset?.id) return;
+    const id = setTimeout(() => {
+      if (!isTourDone()) startTour();
+    }, 1800);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAnonymous, activeDataset?.id]);
+
   // Mark onboarding complete when all steps done
   useEffect(() => {
     if (hasUploadedFirstFile && hasAskedFirstQuestion && !hasCompletedOnboarding) {

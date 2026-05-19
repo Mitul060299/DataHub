@@ -105,7 +105,10 @@ export function WorkspaceHomePage() {
     if (quickstarting) return;
     if (projectsLoading) return;
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
-    if (alreadyShown) return;
+    // Always redirect anonymous guests to their project — never leave them
+    // stranded on the project-list page since they can't meaningfully manage
+    // multiple projects without an account.
+    if (alreadyShown && !isAnonymous) return;
 
     // Any anonymous guest should be taken straight into their Starter project.
     // First visit imports the sample CSV; subsequent visits skip the import

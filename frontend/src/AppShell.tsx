@@ -54,7 +54,26 @@ export function AppShell() {
   }
 
   if (!isAuthenticated) {
-    // No anon bootstrap yet (likely API down) — send to login as a fallback.
+    // /workspace supports anonymous sessions — never hard-redirect to /login.
+    // If the anon-session bootstrap failed (e.g. backend cold start), show a
+    // friendly retry instead of a confusing auth wall.
+    if (location.pathname.startsWith("/workspace")) {
+      return (
+        <div style={{ height: "100%", display: "grid", placeItems: "center", textAlign: "center", gap: 12 }}>
+          <div>
+            <p style={{ color: "var(--tx2, #94a3b8)", marginBottom: 16 }}>Having trouble connecting…</p>
+            <button
+              type="button"
+              className="btn-primary-lg"
+              onClick={() => window.location.reload()}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    // All other private routes do require a real auth session.
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

@@ -127,8 +127,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       identify(data.user_id, { is_anonymous: true });
       setUserType("anonymous");
       capture("anon_session_created", { user_id: data.user_id });
-    } catch (e) {
-      console.warn("Failed to bootstrap anonymous session", e);
+    } catch (firstErr) {
+      console.warn("Failed to bootstrap anonymous session (attempt 1)", firstErr);
+      // Retry once after a short delay — handles cold-start backend latency
+      // and transient network hiccups that would otherwise dump the user at
+      // the /login page the first time they ever click "Try it now".
+      try {
+        await new Promise((r) => setTimeout(r, 1800));
+        const retry = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
+        if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
+        const data2 = (await retry.json()) as { access_token: string; user_id: string };
+        localStorage.setItem(ANON_TOKEN_KEY, data2.access_token);
+        localStorage.setItem(ANON_USER_ID_KEY, data2.user_id);
+        const synth2: AnonSession = {
+          isAnonymous: true,
+          user: { id: data2.user_id, email: data2.user_id },
+          access_token: data2.access_token,
+        };
+        setAnonSession(synth2);
+        setAuthToken(data2.access_token);
+        identify(data2.user_id, { is_anonymous: true });
+        setUserType("anonymous");
+        capture("anon_session_created", { user_id: data2.user_id });
+      } catch (retryErr) {
+        console.warn("Failed to bootstrap anonymous session (attempt 2)", retryErr);
+        // Both attempts failed. AppShell will show a retry page for /workspace
+        // paths instead of redirecting to /login.
+      }
     }
   }, []);
 

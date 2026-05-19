@@ -16,7 +16,7 @@ from ..db import get_db
 from ..dependencies import get_current_user
 from ..models_db import User, VisualizationDB
 
-router = APIRouter(prefix="/api/visualizations/saved", tags=["saved-visualizations"])
+router = APIRouter(prefix="/visualizations/saved", tags=["saved-visualizations"])
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────

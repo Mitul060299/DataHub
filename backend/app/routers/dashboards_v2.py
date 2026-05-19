@@ -18,8 +18,8 @@ from ..models_db import DashboardViewDB, DashboardCommentDB, DatasetMetaDB
 from ..services.plan_guard import resolve_user_plan, enforce_dashboard_sharing
 from ..services.project_access import list_visible_owner_user_ids
 
-router = APIRouter(prefix="/api/dashboards", tags=["dashboards-v2"])
-public_router = APIRouter(prefix="/api/public/dashboards", tags=["dashboards-public"])
+router = APIRouter(prefix="/dashboards", tags=["dashboards-v2"])
+public_router = APIRouter(prefix="/public/dashboards", tags=["dashboards-public"])
 _public_limiter = FixedWindowRateLimiter(settings.shared_rate_limit_per_minute)
 
 

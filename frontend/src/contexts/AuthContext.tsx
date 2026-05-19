@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
@@ -91,6 +91,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [anonSession, setAnonSession] = useState<AnonSession | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // In-flight guard: concurrent callers (loadSession + onAuthStateChange both
+  // fire on mount) share the same bootstrap promise instead of each minting a
+  // separate anon account and hammering the rate limiter.
+  const anonBootstrapRef = useRef<Promise<void> | null>(null);
+
   // Bootstrap (or restore) an anonymous account.  Idempotent: returns existing
   // anon session from localStorage if present, otherwise mints one server-side.
   const ensureAnonymousSession = useCallback(async () => {
@@ -110,51 +115,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       capture("anon_session_restored", { user_id: existingId });
       return;
     }
-    try {
-      const res = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { access_token: string; user_id: string };
-      localStorage.setItem(ANON_TOKEN_KEY, data.access_token);
-      localStorage.setItem(ANON_USER_ID_KEY, data.user_id);
-      const synth: AnonSession = {
-        isAnonymous: true,
-        user: { id: data.user_id, email: data.user_id },
-        access_token: data.access_token,
-      };
-      setAnonSession(synth);
-      setAuthToken(data.access_token);
-      // Identify new guest in PostHog so all subsequent events are linked.
-      identify(data.user_id, { is_anonymous: true });
-      setUserType("anonymous");
-      capture("anon_session_created", { user_id: data.user_id });
-    } catch (firstErr) {
-      console.warn("Failed to bootstrap anonymous session (attempt 1)", firstErr);
-      // Retry once after a short delay — handles cold-start backend latency
-      // and transient network hiccups that would otherwise dump the user at
-      // the /login page the first time they ever click "Try it now".
-      try {
-        await new Promise((r) => setTimeout(r, 1800));
-        const retry = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
-        if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
-        const data2 = (await retry.json()) as { access_token: string; user_id: string };
-        localStorage.setItem(ANON_TOKEN_KEY, data2.access_token);
-        localStorage.setItem(ANON_USER_ID_KEY, data2.user_id);
-        const synth2: AnonSession = {
-          isAnonymous: true,
-          user: { id: data2.user_id, email: data2.user_id },
-          access_token: data2.access_token,
-        };
-        setAnonSession(synth2);
-        setAuthToken(data2.access_token);
-        identify(data2.user_id, { is_anonymous: true });
-        setUserType("anonymous");
-        capture("anon_session_created", { user_id: data2.user_id });
-      } catch (retryErr) {
-        console.warn("Failed to bootstrap anonymous session (attempt 2)", retryErr);
-        // Both attempts failed. AppShell will show a retry page for /workspace
-        // paths instead of redirecting to /login.
-      }
+    // If a bootstrap POST is already in-flight (e.g. loadSession and
+    // onAuthStateChange fired concurrently), join that promise instead of
+    // firing a duplicate request that would hit the rate limiter.
+    if (anonBootstrapRef.current) {
+      return anonBootstrapRef.current;
     }
+    const doBootstrap = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { access_token: string; user_id: string };
+        localStorage.setItem(ANON_TOKEN_KEY, data.access_token);
+        localStorage.setItem(ANON_USER_ID_KEY, data.user_id);
+        const synth: AnonSession = {
+          isAnonymous: true,
+          user: { id: data.user_id, email: data.user_id },
+          access_token: data.access_token,
+        };
+        setAnonSession(synth);
+        setAuthToken(data.access_token);
+        identify(data.user_id, { is_anonymous: true });
+        setUserType("anonymous");
+        capture("anon_session_created", { user_id: data.user_id });
+      } catch (firstErr) {
+        console.warn("Failed to bootstrap anonymous session (attempt 1)", firstErr);
+        // Retry once after a delay — handles cold-start backend latency.
+        // Only retry on non-429 errors to avoid hammering the rate limiter.
+        const is429 = firstErr instanceof Error && firstErr.message.includes("429");
+        if (!is429) {
+          try {
+            await new Promise((r) => setTimeout(r, 2000));
+            const retry = await fetch(`${API_BASE}/auth/anonymous`, { method: "POST" });
+            if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
+            const data2 = (await retry.json()) as { access_token: string; user_id: string };
+            localStorage.setItem(ANON_TOKEN_KEY, data2.access_token);
+            localStorage.setItem(ANON_USER_ID_KEY, data2.user_id);
+            const synth2: AnonSession = {
+              isAnonymous: true,
+              user: { id: data2.user_id, email: data2.user_id },
+              access_token: data2.access_token,
+            };
+            setAnonSession(synth2);
+            setAuthToken(data2.access_token);
+            identify(data2.user_id, { is_anonymous: true });
+            setUserType("anonymous");
+            capture("anon_session_created", { user_id: data2.user_id });
+          } catch (retryErr) {
+            console.warn("Failed to bootstrap anonymous session (attempt 2)", retryErr);
+          }
+        }
+      } finally {
+        anonBootstrapRef.current = null;
+      }
+    };
+    anonBootstrapRef.current = doBootstrap();
+    return anonBootstrapRef.current;
   }, []);
 
   useEffect(() => {

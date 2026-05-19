@@ -860,7 +860,9 @@ export async function listDashboardsV2() {
       layout: Record<string, unknown>;
       created_at: string;
     }>;
+    is_published?: boolean;
     created_at: string;
+    updated_at?: string;
   }>;
 }
 

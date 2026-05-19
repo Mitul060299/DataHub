@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import GridLayout, { WidthProvider, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -490,6 +490,7 @@ const primaryBtnStyle: CSSProperties = {
 
 export function DashboardPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [dashboard, setDashboard] = useState<DashboardV2 | null>(null);
   const [tiles, setTiles] = useState<DashboardV2Tile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -687,20 +688,33 @@ export function DashboardPage() {
         <header
           className="no-print"
           style={{
-            padding: "12px 20px",
+            padding: "8px 16px",
             borderBottom: "1px solid #1E293B",
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: 10,
             flexShrink: 0,
           }}
         >
+          {/* Back to workspace */}
+          <button
+            onClick={() => navigate(-1)}
+            title="Back to workspace"
+            style={{ background: "transparent", border: "none", color: "#475569", cursor: "pointer", padding: "4px 6px", borderRadius: 6, fontSize: 16, lineHeight: 1, flexShrink: 0, display: "flex", alignItems: "center" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#94A3B8"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; }}
+          >
+            ←
+          </button>
+
+          <div style={{ width: 1, height: 20, background: "#1E293B", flexShrink: 0 }} />
+
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#E2E8F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <h1 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#E2E8F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {dashboard.name}
             </h1>
             {dashboard.description && (
-              <p style={{ margin: 0, fontSize: 12, color: "#64748B", marginTop: 2 }}>{dashboard.description}</p>
+              <p style={{ margin: 0, fontSize: 11, color: "#64748B", marginTop: 1 }}>{dashboard.description}</p>
             )}
           </div>
 
@@ -795,14 +809,55 @@ export function DashboardPage() {
         {/* Tiles grid */}
         <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
           {tiles.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#475569", padding: 64, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-              <div>No tiles yet — ask the AI agent to visualise something and pin it here.</div>
+            <div style={{ maxWidth: 480, margin: "60px auto 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+              {/* Empty illustration */}
+              <div style={{ width: 72, height: 72, borderRadius: 20, background: "rgba(91,106,240,0.1)", border: "1px solid rgba(91,106,240,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
+                📊
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#E2E8F0" }}>
+                  Dashboard is empty
+                </p>
+                <p style={{ margin: 0, fontSize: 13, color: "#64748B", lineHeight: 1.6 }}>
+                  Generate a full layout with AI, pick a template, or add individual tiles manually.
+                </p>
+              </div>
+              {/* Primary CTA */}
               <button
                 onClick={() => setShowGenerateModal(true)}
-                style={{ border: "1px solid rgba(129,140,248,0.4)", borderRadius: 10, background: "rgba(91,106,240,0.08)", color: "#818CF8", padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                style={{
+                  border: "1px solid rgba(129,140,248,0.4)",
+                  borderRadius: 12,
+                  background: "rgba(91,106,240,0.1)",
+                  color: "#818CF8",
+                  padding: "12px 28px",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
               >
-                ✦ Generate layout with AI
+                ✦ Generate with AI
               </button>
+              {/* Secondary options */}
+              <div style={{ display: "flex", gap: 10, width: "100%" }}>
+                <button
+                  onClick={() => { setEditMode(true); setShowContentEditor(true); }}
+                  style={{ flex: 1, border: "1px solid #1E293B", borderRadius: 10, background: "transparent", color: "#94A3B8", padding: "9px 0", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
+                >
+                  + Add content tile
+                </button>
+                <button
+                  onClick={() => setEditMode(true)}
+                  style={{ flex: 1, border: "1px solid #1E293B", borderRadius: 10, background: "transparent", color: "#94A3B8", padding: "9px 0", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
+                >
+                  ✎ Edit mode
+                </button>
+              </div>
             </div>
           ) : (
             <ResponsiveGridLayout

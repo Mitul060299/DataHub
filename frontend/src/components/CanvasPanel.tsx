@@ -65,6 +65,15 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   }, 1500);
 }
 
+function relTime(iso?: string | null): string {
+  if (!iso) return "";
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError, onTabChange }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const { exportPipeline } = usePipeline();
@@ -77,7 +86,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Dashboards tab state ──────────────────────────────────────────────────
-  type DashItem = { id: string; name: string; tile_count?: number; updated_at?: string };
+  type DashItem = { id: string; name: string; tile_count: number; updated_at: string; is_published: boolean };
   const [dashboards, setDashboards] = useState<DashItem[]>([]);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashCreating, setDashCreating] = useState(false);
@@ -86,7 +95,13 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
     if (tab !== "dashboards") return;
     setDashLoading(true);
     listDashboardsV2()
-      .then((list) => setDashboards(list.map((d) => ({ id: d.id, name: d.name, tile_count: d.tiles?.length, updated_at: d.created_at }))))
+      .then((list) => setDashboards(list.map((d) => ({
+        id: d.id,
+        name: d.name,
+        tile_count: d.tiles?.length ?? 0,
+        updated_at: d.updated_at ?? d.created_at,
+        is_published: d.is_published ?? false,
+      }))))
       .catch(() => {})
       .finally(() => setDashLoading(false));
   }, [tab]);
@@ -378,7 +393,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             { key: "data",       icon: <IconTable size={16} />,     label: "Data" },
             { key: "pipeline",   icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
             { key: "canvas",     icon: <IconBarChart size={16} />,  label: "Canvas",     tourTarget: "canvas-tab" },
-            { key: "dashboards", icon: <IconGrid size={16} />,      label: "Dashboards", tourTarget: "dashboards-tab" },
+            { key: "dashboards", icon: <IconGrid size={16} />,      label: "Dashboards", badge: dashboards.length > 0 ? dashboards.length : null, tourTarget: "dashboards-tab" },
             ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),
             ...(dataset?.id  ? [{ key: "history",  icon: <IconRefresh size={16} />, label: "History"  }] : []),
           ] as { key: string; icon: React.ReactNode; label: string; badge?: number | null; tourTarget?: string }[]).map(({ key, icon, label, badge, tourTarget }) => {
@@ -714,24 +729,43 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           )
         ) : tab === "dashboards" ? (
           /* ── Dashboards v2 list ────────────────────────────────────── */
-          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tx0)" }}>Dashboards</span>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px 20px" }}>
+            {/* Header row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--tx0)" }}>Dashboards</span>
+                {dashboards.length > 0 && (
+                  <span style={{ marginLeft: 6, fontSize: 11, color: "var(--tx2)" }}>
+                    {dashboards.length} total
+                  </span>
+                )}
+              </div>
               <button
                 className="btn"
                 disabled={dashCreating}
                 onClick={() => void handleNewDashboard()}
-                style={{ background: "var(--ac)", color: "#fff", borderColor: "var(--ac)", fontSize: 12 }}
+                style={{ background: "var(--ac)", color: "#fff", borderColor: "var(--ac)", fontSize: 11, padding: "5px 10px" }}
               >
-                {dashCreating ? "Creating…" : "+ New Dashboard"}
+                {dashCreating ? "Creating…" : "+ New"}
               </button>
             </div>
+
             {dashLoading ? (
-              <p style={{ fontSize: 12, color: "var(--tx2)" }}>Loading…</p>
+              /* Skeleton rows */
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ height: 56, borderRadius: 10, background: "var(--bg2)", animation: "pulse 1.4s ease-in-out infinite", opacity: 0.6 }} />
+                ))}
+                <style>{`@keyframes pulse{0%,100%{opacity:.6}50%{opacity:.3}}`}</style>
+              </div>
             ) : dashboards.length === 0 ? (
-              <div style={{ border: "1px dashed var(--bd2)", borderRadius: 10, padding: "28px 16px", textAlign: "center", color: "var(--tx1)", fontSize: 13 }}>
-                <div style={{ fontSize: 26, marginBottom: 8 }}>📊</div>
-                <p style={{ margin: "0 0 14px" }}>No dashboards yet. Create one to get started.</p>
+              /* Empty state */
+              <div style={{ border: "1px dashed var(--bd2)", borderRadius: 12, padding: "32px 16px", textAlign: "center", color: "var(--tx1)" }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>📊</div>
+                <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "var(--tx0)" }}>No dashboards yet</p>
+                <p style={{ margin: "0 0 16px", fontSize: 11, color: "var(--tx2)", lineHeight: 1.5 }}>
+                  Create a blank dashboard or let AI build one from your data.
+                </p>
                 <button
                   className="btn"
                   disabled={dashCreating}
@@ -742,22 +776,61 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 </button>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              /* Dashboard cards */
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {dashboards.map((d) => (
                   <div
                     key={d.id}
                     onClick={() => navigate(`/dashboard/${d.id}`)}
-                    style={{ background: "var(--bg2)", border: "1px solid var(--bd)", borderRadius: 10, padding: "10px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg3)"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg2)"; }}
+                    style={{
+                      background: "var(--bg2)",
+                      border: "1px solid var(--bd)",
+                      borderRadius: 10,
+                      padding: "9px 12px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      transition: "border-color 0.12s, background 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = "var(--bg3)";
+                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(91,106,240,0.35)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = "var(--bg2)";
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--bd)";
+                    }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--tx0)" }}>{d.name}</div>
-                      {d.tile_count !== undefined && (
-                        <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>{d.tile_count} tile{d.tile_count !== 1 ? "s" : ""}</div>
-                      )}
+                    {/* Icon */}
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(91,106,240,0.12)", border: "1px solid rgba(91,106,240,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>
+                      📊
                     </div>
-                    <span style={{ fontSize: 11, color: "var(--ac)", fontWeight: 600 }}>Open →</span>
+
+                    {/* Name + meta */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 2, alignItems: "center" }}>
+                        <span style={{ fontSize: 10, color: "var(--tx2)" }}>
+                          {d.tile_count === 0 ? "Empty" : `${d.tile_count} tile${d.tile_count !== 1 ? "s" : ""}`}
+                        </span>
+                        {d.updated_at && (
+                          <>
+                            <span style={{ fontSize: 10, color: "var(--bd2)" }}>·</span>
+                            <span style={{ fontSize: 10, color: "var(--tx2)" }}>{relTime(d.updated_at)}</span>
+                          </>
+                        )}
+                        {d.is_published && (
+                          <>
+                            <span style={{ fontSize: 10, color: "var(--bd2)" }}>·</span>
+                            <span style={{ fontSize: 10, color: "#10b981", fontWeight: 600 }}>Live</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <span style={{ fontSize: 13, color: "var(--tx2)", flexShrink: 0 }}>›</span>
                   </div>
                 ))}
               </div>

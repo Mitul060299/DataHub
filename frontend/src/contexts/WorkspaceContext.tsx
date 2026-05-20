@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { createProject as apiCreateProject, fetchProjects } from "../api";
+import { createProject as apiCreateProject, fetchProjects, provisionQuickstart } from "../api";
 import type { ProjectOut } from "../api";
 import { useAuth } from "./AuthContext";
 
@@ -158,7 +158,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setProjectsLoading(true);
     try {
         const data = await fetchProjects();
-      const mapped = data.map(toProject);
+      let mapped = data.map(toProject);
+
+      // For anonymous users: if the project list is empty and we haven't
+      // provisioned the quickstart project yet, do it now and re-fetch.
+      // This prevents the race where refreshProjects() fires before
+      // AuthContext finishes calling provisionQuickstart().
+      if (isAnonymous && mapped.length === 0 && !localStorage.getItem("datahub_qs_provisioned")) {
+        try {
+          await provisionQuickstart();
+          localStorage.setItem("datahub_qs_provisioned", "1");
+          const data2 = await fetchProjects();
+          mapped = data2.map(toProject);
+        } catch {
+          // Non-fatal — fall through with empty list
+        }
+      }
+
       setProjects(mapped);
       // If activeProject not loaded yet, prefer the user's last opened
       // project (persisted in localStorage) so refresh returns them to where

@@ -580,6 +580,8 @@ def _apply_startup_ddl() -> None:
         "CREATE INDEX IF NOT EXISTS idx_support_chat_messages_cap_req ON support_chat_messages (is_capability_request)",
         # 0073 — pipeline schedule write-back destination config
         "ALTER TABLE pipeline_schedules ADD COLUMN IF NOT EXISTS write_back_config JSONB",
+        # 0076 — quickstart project flag (quota-exempt onboarding project)
+        "ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_quickstart BOOLEAN NOT NULL DEFAULT false",
     ]
     try:
         from sqlalchemy import text as _text

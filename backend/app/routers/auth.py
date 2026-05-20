@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Header, Depends, Request
 import logging
 import uuid
 import httpx
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from sqlalchemy import text as sql_text
 from ..security import (
@@ -16,7 +17,7 @@ from ..services.plan_guard import resolve_user_plan, enforce_sso
 from ..services.oidc import build_auth_url, exchange_code, fetch_userinfo, verify_id_token, register_state, consume_state
 from ..config import settings
 from ..models import AuthToken, AuditEntry
-from ..models_db import User
+from ..models_db import User, ProjectDB
 from ..services.audit import audit_store
 from ..services.rate_limiter import limiter
 from ..dependencies import get_current_user, CurrentUser
@@ -213,6 +214,26 @@ def create_anonymous_account(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create anonymous account")
+
+    # Auto-provision a Starter project so the workspace tab is never empty.
+    # is_sample=True marks it as quota-exempt (datasets don't count toward limits).
+    try:
+        now = datetime.now(timezone.utc)
+        starter = ProjectDB(
+            id=uuid.uuid4().hex,
+            user_id=anon_id,
+            name="Starter",
+            description="Your guided starter project — sample data + a few transforms.",
+            colour="#5b6af0",
+            icon="folder",
+            is_sample=True,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(starter)
+        db.commit()
+    except Exception:
+        db.rollback()  # Non-fatal — frontend can still create it manually
 
     token = create_access_token(anon_id, role="editor", expires_minutes=60 * 24 * 30)  # 30 days
     try:

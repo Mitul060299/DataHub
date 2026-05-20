@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
+import { deleteProject, fetchWorkspaceRecent, provisionStarter, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import type { Project } from "../contexts/WorkspaceContext";
@@ -45,7 +45,7 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects, createProject, lastProjectId } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects, lastProjectId } = useWorkspaceContext();
   const { isAnonymous, loading: authLoading } = useAuth();
   const { hasCompletedOnboarding } = useUser();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
@@ -191,16 +191,16 @@ export function WorkspaceHomePage() {
     setQuickstartFailed(false);
     capture("welcome_sample_picked", { url, surface: "workspace_home", from_demo: !!demoIntent });
     try {
-      // Reuse the most recent project if one exists; otherwise create a
-      // dedicated Quickstart project so the user has a clean home for the
-      // sample.
+      // Reuse the most recent project if one exists; otherwise call the
+      // idempotent backend endpoint to provision the Starter project.
+      // The backend already creates it during /auth/anonymous so this is
+      // normally a no-op (returns the pre-existing project), but acts as a
+      // safety-net for signed-in new users or any transient provisioning failures.
       let project = projects[0];
       if (!project) {
-        project = await createProject({
-          name: "Starter",
-          description: "Your guided starter project — sample data + a few transforms.",
-        });
-        capture("project_created", { project_id: project.id, surface: "quickstart_sample" });
+        const provisioned = await provisionStarter();
+        await refreshProjects(); // sync context with the newly provisioned project
+        project = provisioned;
       }
       setActiveProject(project);
       const params = new URLSearchParams();

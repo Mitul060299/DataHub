@@ -64,6 +64,9 @@ class ProjectDB(Base):
     description = Column(Text, nullable=True)
     colour = Column(String, nullable=False, default="#5B6AF0")
     icon = Column(String, nullable=False, default="📁")
+    # When True the project is quota-exempt (datasets don't count toward plan limits).
+    # Used for the auto-provisioned Starter / sample project.
+    is_sample = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

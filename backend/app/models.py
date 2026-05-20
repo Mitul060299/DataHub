@@ -821,6 +821,7 @@ class ProjectOut(BaseModel):
     pipeline_count: int = 0
     dashboard_count: int = 0
     source_count: int = 0
+    is_sample: bool = False
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

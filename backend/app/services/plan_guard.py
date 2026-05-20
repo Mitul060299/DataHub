@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Tuple
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -484,9 +485,15 @@ def enforce_file_constraints(
 
     dataset_count = (
         db.query(DatasetMetaDB)
+        .outerjoin(ProjectDB, DatasetMetaDB.project_id == ProjectDB.id)
         .filter(
             DatasetMetaDB.user_id == billing_user_id,
             DatasetMetaDB.deleted_at.is_(None),
+            # Exclude datasets inside sample/starter projects from quota
+            or_(
+                DatasetMetaDB.project_id.is_(None),
+                ProjectDB.is_sample.is_(False),
+            ),
         )
         .count()
     )
@@ -498,9 +505,15 @@ def enforce_file_constraints(
 
     storage_rows = (
         db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
+        .outerjoin(ProjectDB, DatasetMetaDB.project_id == ProjectDB.id)
         .filter(
             DatasetMetaDB.user_id == billing_user_id,
             DatasetMetaDB.deleted_at.is_(None),
+            # Exclude datasets inside sample/starter projects from quota
+            or_(
+                DatasetMetaDB.project_id.is_(None),
+                ProjectDB.is_sample.is_(False),
+            ),
         )
         .all()
     )

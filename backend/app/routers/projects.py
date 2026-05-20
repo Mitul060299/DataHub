@@ -91,6 +91,7 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
         pipeline_count=pipeline_count,
         dashboard_count=dashboard_count,
         source_count=source_count,
+        is_sample=bool(getattr(project, "is_sample", False)),
         created_at=_fmt(project.created_at),
         updated_at=_fmt(project.updated_at),
     )
@@ -417,6 +418,60 @@ def delete_project(
 # ──────────────────────────────────────────────────────────────────────────────
 # Workspace recent feed
 # ──────────────────────────────────────────────────────────────────────────────
+
+# ── Idempotent starter-project provisioning ──────────────────────────────────
+
+@recent_router.post("/provision-starter", response_model=ProjectOut, status_code=200)
+def provision_starter_project(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProjectOut:
+    """
+    Idempotent endpoint that ensures every new user has a Starter project.
+
+    - Returns the existing sample project if one exists.
+    - Creates a new sample project if none exists AND the user has no real projects.
+    - If the user already has real (non-sample) projects, returns the most recent one.
+
+    Projects created here have is_sample=True so their datasets don't count toward plan limits.
+    """
+    # Return existing sample project (idempotent)
+    existing_sample = (
+        db.query(ProjectDB)
+        .filter(ProjectDB.user_id == current_user.id, ProjectDB.is_sample.is_(True))
+        .first()
+    )
+    if existing_sample:
+        return _project_out(existing_sample, db)
+
+    # If user already has real projects, return the most recent one instead of creating another sample
+    real_project = (
+        db.query(ProjectDB)
+        .filter(ProjectDB.user_id == current_user.id, ProjectDB.is_sample.is_(False))
+        .order_by(ProjectDB.created_at.asc())
+        .first()
+    )
+    if real_project:
+        return _project_out(real_project, db)
+
+    # Create a new sample project
+    now = datetime.now(timezone.utc)
+    starter = ProjectDB(
+        id=uuid.uuid4().hex,
+        user_id=current_user.id,
+        name="Starter",
+        description="Your guided starter project — sample data + a few transforms.",
+        colour="#5b6af0",
+        icon="folder",
+        is_sample=True,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(starter)
+    db.commit()
+    db.refresh(starter)
+    return _project_out(starter, db)
+
 
 @recent_router.get("/recent", response_model=WorkspaceRecentOut)
 def workspace_recent(

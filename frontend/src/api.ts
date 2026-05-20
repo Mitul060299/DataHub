@@ -1370,6 +1370,7 @@ export interface ProjectOut {
   pipeline_count: number;
   dashboard_count: number;
   source_count: number;
+  is_sample?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -1469,6 +1470,16 @@ export async function fetchProjectDetail(id: string): Promise<ProjectDetailOut> 
 
 export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
   const response = await api.get("/workspace/recent");
+  return response.data;
+}
+
+/**
+ * Idempotent: ensures a Starter project exists for new users.
+ * The backend returns the existing sample project or creates one.
+ * is_sample=True projects are quota-exempt on the backend.
+ */
+export async function provisionStarter(): Promise<ProjectOut> {
+  const response = await api.post("/workspace/provision-starter");
   return response.data;
 }
 

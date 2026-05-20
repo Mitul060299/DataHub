@@ -80,8 +80,10 @@ export const setUserType = (type: "anonymous" | "registered"): void => {
 export const markAsRealUser = (): void => {
   try {
     if (!key) return;
-    // setPersonProperties persists directly to the PostHog person profile.
-    posthog.setPersonProperties({ is_real_user: true });
+    // Capture a dedicated event and attach $set so PostHog writes the person
+    // property in the same network request. setPersonProperties() alone doesn't
+    // flush until the next event, so the property never appears in the UI.
+    posthog.capture("user_became_real", { $set: { is_real_user: true } });
   } catch {
     // never throw
   }

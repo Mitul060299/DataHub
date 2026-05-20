@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteProject, fetchWorkspaceRecent, provisionStarter, updateProject } from "../api";
+import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
-import { useUser } from "../contexts/UserContext";
 import { capture } from "../lib/posthog";
 
 function Skeleton({ width, height = 14, style }: { width: string | number; height?: number; style?: React.CSSProperties }) {
@@ -70,83 +69,6 @@ export function WorkspaceHomePage() {
       .finally(() => setRecentLoading(false));
   }, []);
 
-  // Pick up a "came from /try and just signed up" hint so we can auto-open
-  // the welcome flow with their sample preselected. Read once on mount.
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("datahub_signup_intent");
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { source?: string; sample?: string };
-      if (parsed?.source === "demo") {
-        setDemoIntent({ sample: parsed.sample });
-        capture("workspace_home_demo_resume", { sample: parsed.sample });
-      }
-      sessionStorage.removeItem("datahub_signup_intent");
-    } catch {
-      /* ignore — non-fatal */
-    }
-  }, []);
-
-  // Auto-quickstart for demo visitors and brand-new users.
-  //
-  // For demo users (came from the public /try flow): they must currently be
-  //   anonymous — otherwise the demo-intent flag is stale from an old session
-  //   and we'd hijack a signed-in user's tab.
-  //   • If they already have a project, navigate immediately — no API call, no modal.
-  //   • If they have no projects, create one then navigate (same path as brand-new).
-  // For brand-new users (no projects, onboarding incomplete):
-  //   • Auto-quickstart with the Customers sample — no query picker modal.
-  //
-  // For signed-in returning users with at least one project: do NOTHING.
-  //   Refreshing /workspace must show the project list, not silently create a
-  //   Quickstart project or jump to a sample CSV.
-  //
-  // Guards:
-  //   • per-user localStorage flag so the auto-redirect only fires once for
-  //     the lifetime of the account (survives tab close, unlike sessionStorage).
-  useEffect(() => {
-    if (quickstarting) return;
-    if (authLoading) return;
-    if (projectsLoading) return;
-    setQuickstartFailed(false);
-    const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
-    // Always redirect anonymous guests to their project — never leave them
-    // stranded on the project-list page since they can't meaningfully manage
-    // multiple projects without an account.
-    if (alreadyShown && !isAnonymous) return;
-
-    // Any anonymous guest should be taken straight into their Starter project.
-    // First visit imports the sample CSV; subsequent visits skip the import
-    // (tracked via localStorage flag) so we don't accumulate duplicate datasets
-    // and trigger the Free-plan dataset limit on the 4th visit.
-    const fromDemo = isAnonymous;
-    const brandNew = !isAnonymous && projects.length === 0 && !hasCompletedOnboarding;
-    const starterProvisioned = localStorage.getItem("datahub_anon_starter_provisioned") === "1";
-
-    if (fromDemo && projects.length > 0) {
-      // Fast path: existing project → navigate without any API call
-      sessionStorage.setItem("datahub_welcome_home_shown", "1");
-      capture("onboarding_auto_quickstart", { surface: "workspace_home", from_demo: true, fast: true });
-      const project = projects[0];
-      setActiveProject(project);
-      // If we've already imported the sample on a prior visit, just open the
-      // project. Don't re-trigger ImportModal which would create a duplicate.
-      if (starterProvisioned) {
-        navigate(`/workspace/project/${project.id}/pipeline/new`);
-      } else {
-        const sample = demoIntent?.sample ?? "/samples/customers.csv";
-        const params = new URLSearchParams({ sample, from: "demo" });
-        navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
-      }
-    } else if (fromDemo || brandNew) {
-      // Need to create a project first — do it silently (no modal)
-      sessionStorage.setItem("datahub_welcome_home_shown", "1");
-      capture("onboarding_auto_quickstart", { surface: "workspace_home", from_demo: fromDemo });
-      void handleQuickstartSample(demoIntent?.sample ?? "/samples/customers.csv", /* skipModal */ true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, isAnonymous, authLoading, quickstartRetry]);
-
   // Returning signed-in users: if they have a remembered "last project" and
   // it still exists, deep-link them straight into it so refreshing /workspace
   // brings them back to their real project instead of a generic project list.
@@ -155,16 +77,16 @@ export function WorkspaceHomePage() {
   useEffect(() => {
     if (lastProjectRedirected.current) return;
     if (isAnonymous || projectsLoading) return;
-    if (quickstarting) return;
-    if (demoIntent) return; // demo path handles its own navigation
     if (!lastProjectId) return;
     const match = projects.find((p) => p.id === lastProjectId);
     if (!match) return;
+    // Never auto-navigate into a sample/starter project — let the user click it.
+    if (match.is_sample) return;
     lastProjectRedirected.current = true;
     setActiveProject(match);
     navigate(`/workspace/project/${match.id}/pipeline/new`, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAnonymous, projectsLoading, lastProjectId, projects.length, demoIntent]);
+  }, [isAnonymous, projectsLoading, lastProjectId, projects.length]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).
@@ -181,47 +103,6 @@ export function WorkspaceHomePage() {
     capture("project_created", { project_id: project.id, surface: "workspace_home" });
     setActiveProject(project);
     navigate(`/workspace/project/${project.id}/pipeline/new`);
-  };
-
-  // Welcome-modal sample picker. Ensures a project exists, then jumps into
-  // its pipeline view with `?sample=<url>` so WorkspacePage auto-imports it.
-  const handleQuickstartSample = async (url: string, skipModal = false) => {
-    if (quickstarting) return;
-    setQuickstarting(true);
-    setQuickstartFailed(false);
-    capture("welcome_sample_picked", { url, surface: "workspace_home", from_demo: !!demoIntent });
-    try {
-      // Reuse the most recent project if one exists; otherwise call the
-      // idempotent backend endpoint to provision the Starter project.
-      // The backend already creates it during /auth/anonymous so this is
-      // normally a no-op (returns the pre-existing project), but acts as a
-      // safety-net for signed-in new users or any transient provisioning failures.
-      let project = projects[0];
-      if (!project) {
-        const provisioned = await provisionStarter();
-        await refreshProjects(); // sync context with the newly provisioned project
-        project = provisioned;
-      }
-      setActiveProject(project);
-      const params = new URLSearchParams();
-      params.set("sample", url);
-      params.set("from", demoIntent ? "demo" : "welcome");
-      navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
-    } catch (err) {
-      console.error("Failed to start quickstart sample", err);
-      if (skipModal) {
-        // Auto-quickstart failed (anonymous / brand-new user path).
-        // Make the failure visible so the user can retry.
-        setQuickstartFailed(true);
-        window.dispatchEvent(new CustomEvent("datahub:toast", {
-          detail: { message: "Could not set up your workspace. Please try again.", tone: "error", duration: 5000 },
-        }));
-      } else {
-        window.alert("Could not open the sample. Please try creating a project manually.");
-      }
-    } finally {
-      setQuickstarting(false);
-    }
   };
 
   const handleDeleteProject = async (project: Project) => {
@@ -323,28 +204,7 @@ export function WorkspaceHomePage() {
             </div>
           ) : filteredProjects.length === 0 ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--tx1)", fontSize: 14 }}>
-              {search ? (
-                "No projects match your search."
-              ) : quickstarting || (!authLoading && !projectsLoading && isAnonymous) ? (
-                // Anonymous user — quickstart is in-progress or about to fire.
-                // Show a friendly loading state instead of the raw "No projects yet."
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 24, height: 24, border: "3px solid var(--bd)", borderTopColor: "var(--ac)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                  <span>Setting up your workspace…</span>
-                  {quickstartFailed && (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      style={{ marginTop: 8, padding: "8px 20px", borderRadius: 8, fontSize: 13 }}
-                      onClick={() => { setQuickstartRetry((n) => n + 1); }}
-                    >
-                      Retry
-                    </button>
-                  )}
-                </div>
-              ) : (
-                "No projects yet."
-              )}
+              {search ? "No projects match your search." : "No projects yet."}
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>

@@ -14,6 +14,7 @@ export interface Project {
   color: string;
   initial: string;
   description?: string | null;
+  is_quickstart?: boolean;
   pipelineCount: number;
   dashboardCount: number;
   sourceCount: number;
@@ -69,6 +70,7 @@ function toProject(raw: ProjectOut): Project {
     initial: raw.name.charAt(0).toUpperCase(),
     
     description: raw.description,
+    is_quickstart: raw.is_quickstart ?? false,
     pipelineCount: raw.pipeline_count,
     dashboardCount: raw.dashboard_count,
     sourceCount: raw.source_count,

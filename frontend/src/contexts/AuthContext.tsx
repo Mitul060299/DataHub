@@ -318,6 +318,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const anonSessionRef = useRef<AnonSession | null>(null);
   useEffect(() => { anonSessionRef.current = anonSession; }, [anonSession]);
 
+  // After a fresh anonymous session is established, provision the Quickstart
+  // project (idempotent — backend returns existing one if already created).
+  // We track whether we've already attempted this in localStorage to avoid
+  // re-firing on every page load for returning users.
+  useEffect(() => {
+    if (!anonSession) return;
+    const LS_QS_PROVISIONED = "datahub_qs_provisioned";
+    if (localStorage.getItem(LS_QS_PROVISIONED)) return;
+    // Fire-and-forget — failures are non-fatal.
+    const doProvision = async () => {
+      try {
+        const { provisionQuickstart } = await import("../api");
+        await provisionQuickstart();
+        localStorage.setItem(LS_QS_PROVISIONED, "1");
+      } catch (e) {
+        // Swallow — the user can still use the app without the quickstart project.
+        console.warn("Quickstart provision failed (non-fatal):", e);
+      }
+    };
+    void doProvision();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anonSession?.user.id]);
+
   // React to expired/invalid sessions surfaced by the axios interceptor.
   useEffect(() => {
     const handler = () => {

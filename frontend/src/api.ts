@@ -1367,6 +1367,7 @@ export interface ProjectOut {
   colour: string;
   icon: string;
   user_id?: string | null;
+  is_quickstart?: boolean;
   pipeline_count: number;
   dashboard_count: number;
   source_count: number;
@@ -1460,6 +1461,11 @@ export async function updateProject(
 
 export async function deleteProject(id: string): Promise<void> {
   await api.delete(`/projects/${id}`);
+}
+
+export async function provisionQuickstart(): Promise<ProjectOut> {
+  const response = await api.post("/auth/provision-quickstart");
+  return response.data;
 }
 
 export async function fetchProjectDetail(id: string): Promise<ProjectDetailOut> {

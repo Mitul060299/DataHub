@@ -327,3 +327,62 @@ def claim_anonymous_account(
         pass
 
     return {"ok": True, "migrated": True, "user_id": sb_id}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Quickstart project provisioning
+# ──────────────────────────────────────────────────────────────────────────────
+
+from ..models_db import ProjectDB  # noqa: E402 – placed here to avoid circular import
+from ..models import ProjectOut
+
+
+@router.post("/provision-quickstart", response_model=ProjectOut, status_code=200)
+@limiter.limit("30/minute")
+def provision_quickstart(
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProjectOut:
+    """
+    Idempotent: returns the existing Quickstart project for this user if one
+    already exists, otherwise creates a new one.  The project is flagged
+    `is_quickstart=True` so that datasets inside it are excluded from the
+    user's quota calculation.
+    """
+    user_id: str = current_user.id
+
+    # Check for existing quickstart project
+    existing = (
+        db.query(ProjectDB)
+        .filter(
+            ProjectDB.user_id == user_id,
+            ProjectDB.is_quickstart.is_(True),
+        )
+        .first()
+    )
+    if existing:
+        from ..routers.projects import _project_out  # avoid top-level circular
+        return _project_out(existing, db)
+
+    # Create a new quickstart project
+    project = ProjectDB(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        name="Quickstart",
+        description="Your guided introduction to DataHub. Upload a dataset and ask the AI a question.",
+        colour="#6366f1",
+        icon="🚀",
+        is_quickstart=True,
+    )
+    db.add(project)
+    try:
+        db.commit()
+        db.refresh(project)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to provision quickstart project: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to provision quickstart project")
+
+    from ..routers.projects import _project_out  # avoid top-level circular
+    return _project_out(project, db)

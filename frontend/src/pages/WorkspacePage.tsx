@@ -8,6 +8,7 @@ import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
 import { TourTooltip, STEPS } from "../components/TourTooltip";
+import { QuickstartTour, markQuickstartStep1Done, markQuickstartStep2Done, markQuickstartStep3Done } from "../components/QuickstartTour";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -57,6 +58,12 @@ export function WorkspacePage() {
   const [toast, setToast] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
+
+  // Quickstart tour: show when the active project is flagged is_quickstart
+  // and the user hasn't completed or dismissed it yet.
+  const [showQsTour, setShowQsTour] = useState(() => {
+    return localStorage.getItem("datahub_qs_done") !== "1";
+  });
 
   // When agent.done sets sessionPreview/liveArtifact AND switches the active
   // dataset in the same React batch, the clearing useEffect on activeDataset?.id
@@ -550,7 +557,10 @@ export function WorkspacePage() {
         replayingPipeline={replayingPipeline}
         replayError={replayError}
         onClearReplayError={() => setReplayError(null)}
-        onTabChange={setPanelTab}
+        onTabChange={(tab) => {
+          setPanelTab(tab);
+          if (tab === "pipeline") markQuickstartStep3Done();
+        }}
       />
       {panelTab !== "pipeline" && (
         <>
@@ -600,11 +610,12 @@ export function WorkspacePage() {
             }}
             onFirstAiAnswer={(meta) => {
               ctxRecordMilestone("aha_first_ai_answer");
+              markQuickstartStep2Done();
             }}
           />
         </>
       )}
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } markQuickstartStep1Done(); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
@@ -618,6 +629,9 @@ export function WorkspacePage() {
           onNext={() => nextStep(STEPS.length)}
           onSkip={skipTour}
         />
+      )}
+      {showQsTour && resolvedProject?.is_quickstart && (
+        <QuickstartTour onDone={() => setShowQsTour(false)} />
       )}
       {toast && (
         <div

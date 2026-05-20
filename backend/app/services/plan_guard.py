@@ -482,28 +482,68 @@ def enforce_file_constraints(
             },
         )
 
-    dataset_count = (
-        db.query(DatasetMetaDB)
-        .filter(
-            DatasetMetaDB.user_id == billing_user_id,
-            DatasetMetaDB.deleted_at.is_(None),
+    # Safely fetch quickstart project IDs so their datasets are quota-exempt.
+    # Wrapped in try/except so that if the migration hasn't run yet the guard
+    # still works — it just treats all datasets as billable.
+    quickstart_ids: set[str] = set()
+    try:
+        rows = (
+            db.query(ProjectDB.id)
+            .filter(
+                ProjectDB.user_id == billing_user_id,
+                ProjectDB.is_quickstart.is_(True),
+            )
+            .all()
         )
-        .count()
-    )
+        quickstart_ids = {row[0] for row in rows}
+    except Exception:
+        db.rollback()
+        quickstart_ids = set()
+
+    if quickstart_ids:
+        dataset_count = (
+            db.query(DatasetMetaDB)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+                DatasetMetaDB.project_id.not_in(quickstart_ids),
+            )
+            .count()
+        )
+    else:
+        dataset_count = (
+            db.query(DatasetMetaDB)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+            )
+            .count()
+        )
     if limits.max_datasets > 0 and dataset_count >= limits.max_datasets:
         raise HTTPException(
             status_code=403,
             detail=f"Dataset limit reached for {normalize_plan(plan)} plan.",
         )
 
-    storage_rows = (
-        db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
-        .filter(
-            DatasetMetaDB.user_id == billing_user_id,
-            DatasetMetaDB.deleted_at.is_(None),
+    if quickstart_ids:
+        storage_rows = (
+            db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+                DatasetMetaDB.project_id.not_in(quickstart_ids),
+            )
+            .all()
         )
-        .all()
-    )
+    else:
+        storage_rows = (
+            db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+            )
+            .all()
+        )
     current_storage = sum((row[0] or row[1] or 0) for row in storage_rows)
     projected_storage = current_storage + max(upload_size_bytes, 0)
     if limits.max_storage_bytes > 0 and projected_storage > limits.max_storage_bytes:

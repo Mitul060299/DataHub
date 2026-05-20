@@ -818,6 +818,7 @@ class ProjectOut(BaseModel):
     colour: str = "#5b6af0"
     icon: str = "folder"
     user_id: Optional[str] = None
+    is_quickstart: bool = False
     pipeline_count: int = 0
     dashboard_count: int = 0
     source_count: int = 0

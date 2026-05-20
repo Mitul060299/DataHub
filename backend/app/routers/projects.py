@@ -88,6 +88,7 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
         colour=project.colour or "#5b6af0",
         icon=project.icon or "folder",
         user_id=project.user_id,
+        is_quickstart=bool(getattr(project, "is_quickstart", False)),
         pipeline_count=pipeline_count,
         dashboard_count=dashboard_count,
         source_count=source_count,

@@ -97,23 +97,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const anonBootstrapRef = useRef<Promise<void> | null>(null);
 
   // Bootstrap (or restore) an anonymous account.  Idempotent: returns existing
-  // anon session from localStorage if present, otherwise mints one server-side.
+  // anon session from localStorage if present (and not expired), otherwise mints one server-side.
   const ensureAnonymousSession = useCallback(async () => {
     const existingTok = localStorage.getItem(ANON_TOKEN_KEY);
     const existingId = localStorage.getItem(ANON_USER_ID_KEY);
     if (existingTok && existingId) {
-      const synth: AnonSession = {
-        isAnonymous: true,
-        user: { id: existingId, email: existingId },
-        access_token: existingTok,
-      };
-      setAnonSession(synth);
-      setAuthToken(existingTok);
-      // Restore PostHog identity for returning guest so events stay linked.
-      identify(existingId, { is_anonymous: true });
-      setUserType("anonymous");
-      capture("anon_session_restored", { user_id: existingId });
-      return;
+      // Validate the token hasn't expired (or is within 7 days of expiry).
+      // If it has, fall through to mint a fresh token.
+      let tokenValid = true;
+      try {
+        const parts = existingTok.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number };
+          const now = Math.floor(Date.now() / 1000);
+          const sevenDays = 7 * 24 * 60 * 60;
+          if (payload.exp && payload.exp < now + sevenDays) {
+            tokenValid = false;
+          }
+        }
+      } catch {
+        // If we can't parse the token, assume it's invalid
+        tokenValid = false;
+      }
+      if (tokenValid) {
+        const synth: AnonSession = {
+          isAnonymous: true,
+          user: { id: existingId, email: existingId },
+          access_token: existingTok,
+        };
+        setAnonSession(synth);
+        setAuthToken(existingTok);
+        // Restore PostHog identity for returning guest so events stay linked.
+        identify(existingId, { is_anonymous: true });
+        setUserType("anonymous");
+        capture("anon_session_restored", { user_id: existingId });
+        return;
+      }
+      // Token expired or near-expiry — clear it and mint a fresh one.
+      localStorage.removeItem(ANON_TOKEN_KEY);
+      localStorage.removeItem(ANON_USER_ID_KEY);
     }
     // If a bootstrap POST is already in-flight (e.g. loadSession and
     // onAuthStateChange fired concurrently), join that promise instead of
@@ -291,9 +313,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Ref to the current anonymous session so the session-expired handler
+  // (which closes over nothing) can check auth state without stale closure.
+  const anonSessionRef = useRef<AnonSession | null>(null);
+  useEffect(() => { anonSessionRef.current = anonSession; }, [anonSession]);
+
   // React to expired/invalid sessions surfaced by the axios interceptor.
   useEffect(() => {
     const handler = () => {
+      // If the user is anonymous, clear the stale token and bootstrap a fresh
+      // session — don't redirect to /login (they were never "signed in").
+      if (anonSessionRef.current) {
+        localStorage.removeItem(ANON_TOKEN_KEY);
+        localStorage.removeItem(ANON_USER_ID_KEY);
+        setAnonSession(null);
+        void ensureAnonymousSession();
+        return;
+      }
       void supabase.auth.signOut().finally(() => {
         if (typeof window !== "undefined") {
           const path = window.location.pathname || "";
@@ -306,7 +342,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
     window.addEventListener("datahub:session-expired", handler);
     return () => window.removeEventListener("datahub:session-expired", handler);
-  }, []);
+  }, [ensureAnonymousSession]);
 
   const signInWithPassword = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

@@ -27,14 +27,6 @@ export function AppShell() {
 
   const isPublic = location.pathname === "/" || PUBLIC_PATHS.some((p) => location.pathname.startsWith(p));
 
-  // Signed-in (real, non-anonymous) users landing on the marketing root
-  // shouldn't see the demo / landing preview — that confused them into
-  // thinking the demo workspace had replaced their real project. Send them
-  // straight to their workspace instead.
-  if (!loading && session && !isAnonymous && location.pathname === "/") {
-    return <Navigate to="/workspace" replace />;
-  }
-
   // Public pages render immediately — auth resolves in the background so the
   // hero / landing content paints without waiting for a server round-trip.
   // This is the primary fix for high LCP on connections far from the backend.

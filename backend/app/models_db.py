@@ -1,7 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
 from sqlalchemy import DateTime, JSON
-from sqlalchemy.orm import deferred
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from .db import Base
@@ -65,11 +64,6 @@ class ProjectDB(Base):
     description = Column(Text, nullable=True)
     colour = Column(String, nullable=False, default="#5B6AF0")
     icon = Column(String, nullable=False, default="📁")
-    # When True the project is quota-exempt (datasets don't count toward plan limits).
-    # Used for the auto-provisioned Starter / sample project.
-    # deferred() so the column is excluded from default SELECTs — this keeps
-    # list_projects working even if the 0074 migration hasn't run yet.
-    is_sample = deferred(Column(Boolean, nullable=True, server_default="false", default=False))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

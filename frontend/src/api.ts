@@ -1370,7 +1370,6 @@ export interface ProjectOut {
   pipeline_count: number;
   dashboard_count: number;
   source_count: number;
-  is_sample?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }

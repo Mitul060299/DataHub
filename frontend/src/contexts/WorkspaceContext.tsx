@@ -17,7 +17,6 @@ export interface Project {
   pipelineCount: number;
   dashboardCount: number;
   sourceCount: number;
-  is_sample?: boolean;
   updatedAt?: string | null;
 }
 
@@ -73,7 +72,6 @@ function toProject(raw: ProjectOut): Project {
     pipelineCount: raw.pipeline_count,
     dashboardCount: raw.dashboard_count,
     sourceCount: raw.source_count,
-    is_sample: raw.is_sample ?? false,
     updatedAt: raw.updated_at,
   };
 }

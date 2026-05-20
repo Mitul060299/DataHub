@@ -81,11 +81,6 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
     pipeline_count = _safe_count(db, PipelineV2DB, project.id)
     dashboard_count = _safe_count(db, DashboardV2DB, project.id)
     source_count = _safe_count(db, DataSourceDB, project.id)
-    # is_sample is a deferred column — lazy load may fail if migration hasn't run.
-    try:
-        is_sample_val = bool(project.is_sample)
-    except Exception:
-        is_sample_val = False
     return ProjectOut(
         id=project.id,
         name=project.name,
@@ -96,7 +91,6 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
         pipeline_count=pipeline_count,
         dashboard_count=dashboard_count,
         source_count=source_count,
-        is_sample=is_sample_val,
         created_at=_fmt(project.created_at),
         updated_at=_fmt(project.updated_at),
     )

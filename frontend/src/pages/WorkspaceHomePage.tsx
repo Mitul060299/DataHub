@@ -45,8 +45,7 @@ function relativeTime(iso?: string | null): string {
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
   const { projects, projectsLoading, setActiveProject, refreshProjects, lastProjectId } = useWorkspaceContext();
-  const { isAnonymous, loading: authLoading } = useAuth();
-  const { hasCompletedOnboarding } = useUser();
+  const { isAnonymous } = useAuth();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");

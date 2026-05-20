@@ -243,7 +243,9 @@ async def seat_usage(user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/verify")
+@limiter.limit("20/minute")
 async def verify_payment(
+    request: Request,
     payload: VerifyPaymentRequest,
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -324,6 +326,7 @@ async def invoice_pdf(invoice_id: str, user: CurrentUser = Depends(get_current_u
 
 
 @router.post("/webhook/razorpay")
+@limiter.limit("60/minute")
 async def razorpay_webhook(
     request: Request,
     x_razorpay_signature: str | None = Header(default=None),

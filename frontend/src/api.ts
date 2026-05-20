@@ -1473,16 +1473,6 @@ export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
   return response.data;
 }
 
-/**
- * Idempotent: ensures a Starter project exists for new users.
- * The backend returns the existing sample project or creates one.
- * is_sample=True projects are quota-exempt on the backend.
- */
-export async function provisionStarter(): Promise<ProjectOut> {
-  const response = await api.post("/workspace/provision-starter");
-  return response.data;
-}
-
 // ── Workspace Members ────────────────────────────────────────────────────────
 
 export interface WorkspaceMemberOut {

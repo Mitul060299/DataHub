@@ -5,7 +5,6 @@ import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
-import { useAuth } from "../contexts/AuthContext";
 import { capture } from "../lib/posthog";
 
 function Skeleton({ width, height = 14, style }: { width: string | number; height?: number; style?: React.CSSProperties }) {
@@ -44,8 +43,7 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects, lastProjectId } = useWorkspaceContext();
-  const { isAnonymous } = useAuth();
+  const { projects, projectsLoading, setActiveProject, refreshProjects } = useWorkspaceContext();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -62,25 +60,6 @@ export function WorkspaceHomePage() {
       .catch(() => setRecent(null))
       .finally(() => setRecentLoading(false));
   }, []);
-
-  // Returning signed-in users: if they have a remembered "last project" and
-  // it still exists, deep-link them straight into it so refreshing /workspace
-  // brings them back to their real project instead of a generic project list.
-  // Only fires once per tab visit and never for anonymous demo visitors.
-  const lastProjectRedirected = useRef(false);
-  useEffect(() => {
-    if (lastProjectRedirected.current) return;
-    if (isAnonymous || projectsLoading) return;
-    if (!lastProjectId) return;
-    const match = projects.find((p) => p.id === lastProjectId);
-    if (!match) return;
-    // Never auto-navigate into a sample/starter project — let the user click it.
-    if (match.is_sample) return;
-    lastProjectRedirected.current = true;
-    setActiveProject(match);
-    navigate(`/workspace/project/${match.id}/pipeline/new`, { replace: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAnonymous, projectsLoading, lastProjectId, projects.length]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).

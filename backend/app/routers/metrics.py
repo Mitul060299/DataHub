@@ -1,3 +1,5 @@
+import hmac
+
 from fastapi import APIRouter, Response, Header, HTTPException
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from ..security import get_current_role, require_role
@@ -9,7 +11,8 @@ router = APIRouter(tags=["metrics"])
 def _require_metrics_access(authorization: str | None) -> None:
     if settings.metrics_bearer_token:
         expected = f"Bearer {settings.metrics_bearer_token}"
-        if authorization != expected:
+        # Use constant-time comparison to prevent timing-based token enumeration
+        if not hmac.compare_digest(authorization or "", expected):
             raise HTTPException(status_code=401, detail="Unauthorized")
         return
     role = get_current_role(authorization)

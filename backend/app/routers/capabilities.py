@@ -210,18 +210,13 @@ _CAPABILITIES: dict = {
         ],
     },
     "model_routing": {
-        "enabled_env_var": "LLM_ROUTER_ENABLED",
         "tiers": [
             {
                 "tier": "fast",
-                "default_model": "llama-3.1-8b-instant",
-                "env_var": "GROQ_FAST_MODEL",
                 "used_for": ["classify", "converse", "simple_plan"],
             },
             {
                 "tier": "versatile",
-                "default_model": "llama-3.3-70b-versatile",
-                "env_var": "GROQ_MODEL",
                 "used_for": ["plan", "reflect", "transform", "complex_plan"],
             },
         ],

@@ -80,8 +80,8 @@ export const setUserType = (type: "anonymous" | "registered"): void => {
 export const markAsRealUser = (): void => {
   try {
     if (!key) return;
-    // $set persists to the PostHog person profile and is retroactive.
-    posthog.capture("$set", { $set: { is_real_user: true } });
+    // setPersonProperties persists directly to the PostHog person profile.
+    posthog.setPersonProperties({ is_real_user: true });
   } catch {
     // never throw
   }

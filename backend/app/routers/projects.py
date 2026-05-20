@@ -81,6 +81,11 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
     pipeline_count = _safe_count(db, PipelineV2DB, project.id)
     dashboard_count = _safe_count(db, DashboardV2DB, project.id)
     source_count = _safe_count(db, DataSourceDB, project.id)
+    # is_sample is a deferred column — lazy load may fail if migration hasn't run.
+    try:
+        is_sample_val = bool(project.is_sample)
+    except Exception:
+        is_sample_val = False
     return ProjectOut(
         id=project.id,
         name=project.name,
@@ -91,7 +96,7 @@ def _project_out(project: ProjectDB, db: Session) -> ProjectOut:
         pipeline_count=pipeline_count,
         dashboard_count=dashboard_count,
         source_count=source_count,
-        is_sample=bool(getattr(project, "is_sample", False)),
+        is_sample=is_sample_val,
         created_at=_fmt(project.created_at),
         updated_at=_fmt(project.updated_at),
     )
@@ -435,24 +440,35 @@ def provision_starter_project(
 
     Projects created here have is_sample=True so their datasets don't count toward plan limits.
     """
-    # Return existing sample project (idempotent)
-    existing_sample = (
-        db.query(ProjectDB)
-        .filter(ProjectDB.user_id == current_user.id, ProjectDB.is_sample.is_(True))
-        .first()
-    )
-    if existing_sample:
-        return _project_out(existing_sample, db)
+    # is_sample column may not exist yet if migration hasn't run — fall back gracefully.
+    try:
+        existing_sample = (
+            db.query(ProjectDB)
+            .filter(ProjectDB.user_id == current_user.id, ProjectDB.is_sample.is_(True))
+            .first()
+        )
+        if existing_sample:
+            return _project_out(existing_sample, db)
 
-    # If user already has real projects, return the most recent one instead of creating another sample
-    real_project = (
-        db.query(ProjectDB)
-        .filter(ProjectDB.user_id == current_user.id, ProjectDB.is_sample.is_(False))
-        .order_by(ProjectDB.created_at.asc())
-        .first()
-    )
-    if real_project:
-        return _project_out(real_project, db)
+        real_project = (
+            db.query(ProjectDB)
+            .filter(ProjectDB.user_id == current_user.id, ProjectDB.is_sample.is_(False))
+            .order_by(ProjectDB.created_at.asc())
+            .first()
+        )
+        if real_project:
+            return _project_out(real_project, db)
+    except Exception:
+        db.rollback()
+        # Column doesn't exist yet — just return the first project if any
+        first = (
+            db.query(ProjectDB)
+            .filter(ProjectDB.user_id == current_user.id)
+            .order_by(ProjectDB.created_at.asc())
+            .first()
+        )
+        if first:
+            return _project_out(first, db)
 
     # Create a new sample project
     now = datetime.now(timezone.utc)

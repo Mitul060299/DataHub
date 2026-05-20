@@ -53,11 +53,6 @@ export function WorkspaceHomePage() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
   const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [demoIntent, setDemoIntent] = useState<{ sample?: string } | null>(null);
-  const [quickstarting, setQuickstarting] = useState(false);
-  const [quickstartFailed, setQuickstartFailed] = useState(false);
-  // Incremented to re-trigger the auto-quickstart effect after a failed attempt.
-  const [quickstartRetry, setQuickstartRetry] = useState(0);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

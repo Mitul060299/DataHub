@@ -483,40 +483,64 @@ def enforce_file_constraints(
             },
         )
 
-    dataset_count = (
-        db.query(DatasetMetaDB)
-        .outerjoin(ProjectDB, DatasetMetaDB.project_id == ProjectDB.id)
-        .filter(
-            DatasetMetaDB.user_id == billing_user_id,
-            DatasetMetaDB.deleted_at.is_(None),
-            # Exclude datasets inside sample/starter projects from quota
-            or_(
-                DatasetMetaDB.project_id.is_(None),
-                ProjectDB.is_sample.is_(False),
-            ),
+    try:
+        dataset_count = (
+            db.query(DatasetMetaDB)
+            .outerjoin(ProjectDB, DatasetMetaDB.project_id == ProjectDB.id)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+                # Exclude datasets inside sample/starter projects from quota
+                or_(
+                    DatasetMetaDB.project_id.is_(None),
+                    ProjectDB.is_sample.is_(False),
+                ),
+            )
+            .count()
         )
-        .count()
-    )
+    except Exception:
+        db.rollback()
+        # is_sample column doesn't exist yet — count all datasets (safe fallback)
+        dataset_count = (
+            db.query(DatasetMetaDB)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+            )
+            .count()
+        )
     if limits.max_datasets > 0 and dataset_count >= limits.max_datasets:
         raise HTTPException(
             status_code=403,
             detail=f"Dataset limit reached for {normalize_plan(plan)} plan.",
         )
 
-    storage_rows = (
-        db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
-        .outerjoin(ProjectDB, DatasetMetaDB.project_id == ProjectDB.id)
-        .filter(
-            DatasetMetaDB.user_id == billing_user_id,
-            DatasetMetaDB.deleted_at.is_(None),
-            # Exclude datasets inside sample/starter projects from quota
-            or_(
-                DatasetMetaDB.project_id.is_(None),
-                ProjectDB.is_sample.is_(False),
-            ),
+    try:
+        storage_rows = (
+            db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
+            .outerjoin(ProjectDB, DatasetMetaDB.project_id == ProjectDB.id)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+                # Exclude datasets inside sample/starter projects from quota
+                or_(
+                    DatasetMetaDB.project_id.is_(None),
+                    ProjectDB.is_sample.is_(False),
+                ),
+            )
+            .all()
         )
-        .all()
-    )
+    except Exception:
+        db.rollback()
+        # Fallback without is_sample filter
+        storage_rows = (
+            db.query(DatasetMetaDB.file_size_bytes, DatasetMetaDB.compressed_size_bytes)
+            .filter(
+                DatasetMetaDB.user_id == billing_user_id,
+                DatasetMetaDB.deleted_at.is_(None),
+            )
+            .all()
+        )
     current_storage = sum((row[0] or row[1] or 0) for row in storage_rows)
     projected_storage = current_storage + max(upload_size_bytes, 0)
     if limits.max_storage_bytes > 0 and projected_storage > limits.max_storage_bytes:

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { api, validateFile } from "../../api";
-import { capture } from "../../lib/posthog";
+import { capture, markAsRealUser } from "../../lib/posthog";
 import { useUser } from "../../contexts/UserContext";
 
 interface ImportModalProps {
@@ -266,6 +266,9 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
         workspace_id: workspaceId,
         presigned: selectedFile.size > PRESIGN_THRESHOLD,
       });
+      // Only mark as a real user for deliberate uploads — not the auto-imported
+      // sample CSV that loads automatically for anonymous demo visitors.
+      if (!autoImport) markAsRealUser();
       markFirstUpload();
       onImported();
       onClose();

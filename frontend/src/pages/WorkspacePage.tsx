@@ -14,7 +14,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
 import { useTour } from "../hooks/useTour";
-import { capture } from "../lib/posthog";
+import { capture, markAsRealUser } from "../lib/posthog";
 import { recordMilestone } from "../lib/activation";
 
 
@@ -591,6 +591,7 @@ export function WorkspacePage() {
               setHasAskedFirstQuestion(true);
               setShowAiNudge(false);
               ctxRecordMilestone("ai_prompt_submitted");
+              markAsRealUser();
               if (isAnonymous) {
                 window.dispatchEvent(new CustomEvent("datahub:toast", {
                   detail: { message: "🤖 AI is working on your question…", tone: "info", duration: 3500 },

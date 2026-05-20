@@ -64,4 +64,27 @@ export const setUserType = (type: "anonymous" | "registered"): void => {
   }
 };
 
+/**
+ * Mark the current person as a real active user — someone who has signed in,
+ * uploaded their own data, or performed meaningful work in DataHub.
+ *
+ * Sets the person property `is_real_user: true` permanently so PostHog
+ * "Weekly Active Users" insights can be filtered to exclude passive visitors
+ * who merely browse the landing page.
+ *
+ * Call this from:
+ *   - successful sign-in or sign-up (registered session)
+ *   - manual file upload (not the auto-imported sample)
+ *   - first AI prompt submitted
+ */
+export const markAsRealUser = (): void => {
+  try {
+    if (!key) return;
+    // $set persists to the PostHog person profile and is retroactive.
+    posthog.capture("$set", { $set: { is_real_user: true } });
+  } catch {
+    // never throw
+  }
+};
+
 export default posthog;

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { clearAuthToken, setAuthToken } from "../utils/auth";
-import { capture, identify, reset, setUserType } from "../lib/posthog";
+import { capture, identify, reset, setUserType, markAsRealUser } from "../lib/posthog";
 import { setSentryUser, clearSentryUser } from "../lib/sentry";
 
 const API_BASE =
@@ -205,6 +205,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         traits.$name = name;
       }
       identify(u.id, traits);
+      markAsRealUser();
       setSentryUser(u.id, email);
     };
 

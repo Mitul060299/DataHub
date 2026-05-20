@@ -57,6 +57,9 @@ export function WorkspaceHomePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [demoIntent, setDemoIntent] = useState<{ sample?: string } | null>(null);
   const [quickstarting, setQuickstarting] = useState(false);
+  const [quickstartFailed, setQuickstartFailed] = useState(false);
+  // Incremented to re-trigger the auto-quickstart effect after a failed attempt.
+  const [quickstartRetry, setQuickstartRetry] = useState(0);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -105,6 +108,7 @@ export function WorkspaceHomePage() {
     if (quickstarting) return;
     if (authLoading) return;
     if (projectsLoading) return;
+    setQuickstartFailed(false);
     const alreadyShown = sessionStorage.getItem("datahub_welcome_home_shown") === "1";
     // Always redirect anonymous guests to their project — never leave them
     // stranded on the project-list page since they can't meaningfully manage
@@ -141,7 +145,7 @@ export function WorkspaceHomePage() {
       void handleQuickstartSample(demoIntent?.sample ?? "/samples/customers.csv", /* skipModal */ true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, isAnonymous, authLoading]);
+  }, [demoIntent, projects.length, projectsLoading, hasCompletedOnboarding, isAnonymous, authLoading, quickstartRetry]);
 
   // Returning signed-in users: if they have a remembered "last project" and
   // it still exists, deep-link them straight into it so refreshing /workspace
@@ -184,6 +188,7 @@ export function WorkspaceHomePage() {
   const handleQuickstartSample = async (url: string, skipModal = false) => {
     if (quickstarting) return;
     setQuickstarting(true);
+    setQuickstartFailed(false);
     capture("welcome_sample_picked", { url, surface: "workspace_home", from_demo: !!demoIntent });
     try {
       // Reuse the most recent project if one exists; otherwise create a
@@ -204,7 +209,16 @@ export function WorkspaceHomePage() {
       navigate(`/workspace/project/${project.id}/pipeline/new?${params.toString()}`);
     } catch (err) {
       console.error("Failed to start quickstart sample", err);
-      if (!skipModal) window.alert("Could not open the sample. Please try creating a project manually.");
+      if (skipModal) {
+        // Auto-quickstart failed (anonymous / brand-new user path).
+        // Make the failure visible so the user can retry.
+        setQuickstartFailed(true);
+        window.dispatchEvent(new CustomEvent("datahub:toast", {
+          detail: { message: "Could not set up your workspace. Please try again.", tone: "error", duration: 5000 },
+        }));
+      } else {
+        window.alert("Could not open the sample. Please try creating a project manually.");
+      }
     } finally {
       setQuickstarting(false);
     }
@@ -309,7 +323,28 @@ export function WorkspaceHomePage() {
             </div>
           ) : filteredProjects.length === 0 ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--tx1)", fontSize: 14 }}>
-              {search ? "No projects match your search." : "No projects yet."}
+              {search ? (
+                "No projects match your search."
+              ) : quickstarting || (!authLoading && !projectsLoading && isAnonymous) ? (
+                // Anonymous user — quickstart is in-progress or about to fire.
+                // Show a friendly loading state instead of the raw "No projects yet."
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 24, height: 24, border: "3px solid var(--bd)", borderTopColor: "var(--ac)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                  <span>Setting up your workspace…</span>
+                  {quickstartFailed && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ marginTop: 8, padding: "8px 20px", borderRadius: 8, fontSize: 13 }}
+                      onClick={() => { setQuickstartRetry((n) => n + 1); }}
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
+              ) : (
+                "No projects yet."
+              )}
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>

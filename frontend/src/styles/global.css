@@ -225,6 +225,11 @@ svg { display: block; flex-shrink: 0; }
   100% { box-shadow: 0 0 0 8px transparent; }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .auth-shell {
   min-height: 100%;
   display: grid;

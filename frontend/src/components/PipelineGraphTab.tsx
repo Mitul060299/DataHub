@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, type CSSProperties } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -20,10 +20,12 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconCopy,
+  IconEdit,
   IconFilter,
   IconGitBranch,
   IconGrid,
   IconMerge,
+  IconPlay,
   IconPlus,
   IconSortAsc,
   IconSparkles,
@@ -88,7 +90,7 @@ function SourceNode({ data }: NodeProps<SourceNodeData>) {
       </div>
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         style={{ background: "var(--gr)", border: "2px solid var(--gr)" }}
       />
     </div>
@@ -100,7 +102,35 @@ type OperationNodeData = {
   step: PipelineStep;
   onClick: (step: PipelineStep) => void;
   onDelete: (step: PipelineStep) => void;
+  onRunUpTo: (step: PipelineStep) => void;
+  onFork: (step: PipelineStep) => void;
+  onRename: (step: PipelineStep) => void;
 };
+
+// Inline icon-button style for the per-node action toolbar.
+const nodeActionBtnStyle: CSSProperties = {
+  width: 18,
+  height: 18,
+  borderRadius: 4,
+  border: "1px solid var(--bd2)",
+  background: "var(--bg2)",
+  color: "var(--tx1)",
+  cursor: "pointer",
+  display: "grid",
+  placeItems: "center",
+  padding: 0,
+  lineHeight: 1,
+  fontSize: 11,
+};
+
+// One-time stylesheet injection so the .op-node-actions toolbar reveals on
+// hovering its containing node wrapper (ReactFlow's `.react-flow__node`).
+if (typeof document !== "undefined" && !document.getElementById("pipeline-graph-node-styles")) {
+  const s = document.createElement("style");
+  s.id = "pipeline-graph-node-styles";
+  s.textContent = ".react-flow__node:hover .op-node-actions{opacity:1!important;}";
+  document.head.appendChild(s);
+}
 
 function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
   const { step } = data;
@@ -132,42 +162,55 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
         position: "relative",
       }}
     >
-      {/* Delete button */}
-      <button
-        onClick={(e) => { e.stopPropagation(); data.onDelete(step); }}
-        title="Remove this step from the graph"
+      {/* Action toolbar — appears on hover, mirrors the per-step buttons that
+          used to live in the right-side APPLIED STEPS list. Stops propagation
+          so clicking a button never triggers the node-click handler. */}
+      <div
+        className="op-node-actions"
+        onClick={(e) => e.stopPropagation()}
         style={{
           position: "absolute",
           top: 4,
           right: 4,
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          border: "none",
-          background: "transparent",
-          color: "var(--tx2)",
-          cursor: "pointer",
-          display: "grid",
-          placeItems: "center",
-          padding: 0,
-          lineHeight: 1,
-          opacity: 0.4,
+          display: "inline-flex",
+          gap: 2,
+          opacity: 0,
+          transition: "opacity 120ms ease",
           zIndex: 5,
         }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.opacity = "1";
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--rd, #f87171)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.opacity = "0.4";
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)";
-        }}
       >
-        <IconX size={10} />
-      </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onRunUpTo(step); }}
+          title="Run pipeline up to this step"
+          style={nodeActionBtnStyle}
+        >
+          <IconPlay size={10} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onFork(step); }}
+          title="Fork from this step — next action starts a new branch"
+          style={nodeActionBtnStyle}
+        >
+          ⑂
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onRename(step); }}
+          title="Rename step"
+          style={nodeActionBtnStyle}
+        >
+          <IconEdit size={10} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onDelete(step); }}
+          title="Remove this step (re-runs downstream steps)"
+          style={{ ...nodeActionBtnStyle, color: "var(--rd, #f87171)" }}
+        >
+          <IconX size={10} />
+        </button>
+      </div>
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         style={{ background: color, border: `2px solid ${color}` }}
       />
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -239,7 +282,7 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
       )}
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         style={{ background: color, border: `2px solid ${color}` }}
       />
     </div>
@@ -253,15 +296,24 @@ const nodeTypes = {
 };
 
 // ─── Layout builder ────────────────────────────────────────────────────────────
-const Y_GAP = 170;
-const X_GAP = 260;
+// Left-to-right layout: depth increases X, siblings spread along Y.
+// Wider screens (laptop/desktop) suit horizontal flow much better than vertical.
+const H_GAP = 300; // horizontal distance between depths (X axis)
+const V_GAP = 140; // vertical distance between sibling branches (Y axis)
+
+type NodeCallbacks = {
+  onNodeClick: (step: PipelineStep) => void;
+  onNodeDelete: (step: PipelineStep) => void;
+  onNodeRunUpTo: (step: PipelineStep) => void;
+  onNodeFork: (step: PipelineStep) => void;
+  onNodeRename: (step: PipelineStep) => void;
+};
 
 function buildLayout(
   datasetName: string,
   rows: number,
   steps: PipelineStep[],
-  onNodeClick: (step: PipelineStep) => void,
-  onNodeDelete: (step: PipelineStep) => void,
+  cb: NodeCallbacks,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
     {
@@ -360,19 +412,19 @@ function buildLayout(
     childrenByParent.set(parent, list);
   }
 
-  // Assign X position: centre each parent's children around x=0 of the parent.
-  // For a single child, x stays at the parent's x. For multiple children,
-  // spread them by X_GAP. Source is at x=0; child x is parent.x + offset.
-  const xPos: number[] = new Array(steps.length).fill(0);
+  // Assign Y position: centre each parent's children around y=0 of the parent.
+  // For a single child, y stays at the parent's y. For multiple children,
+  // spread them by V_GAP. Source is at y=0; child y is parent.y + offset.
+  const yPos: number[] = new Array(steps.length).fill(0);
   childrenByParent.forEach((childIndices, parent) => {
-    const parentX =
+    const parentY =
       parent === "source"
         ? 0
-        : xPos[steps.findIndex((s) => stepNodeId(s) === parent)] ?? 0;
+        : yPos[steps.findIndex((s) => stepNodeId(s) === parent)] ?? 0;
     const n = childIndices.length;
     childIndices.forEach((idx, k) => {
-      const offset = (k - (n - 1) / 2) * X_GAP;
-      xPos[idx] = parentX + offset;
+      const offset = (k - (n - 1) / 2) * V_GAP;
+      yPos[idx] = parentY + offset;
     });
   });
 
@@ -382,8 +434,15 @@ function buildLayout(
     nodes.push({
       id: nodeId,
       type: "operationNode",
-      position: { x: xPos[i], y: depth[i] * Y_GAP },
-      data: { step, onClick: onNodeClick, onDelete: onNodeDelete } as OperationNodeData,
+      position: { x: depth[i] * H_GAP, y: yPos[i] },
+      data: {
+        step,
+        onClick: cb.onNodeClick,
+        onDelete: cb.onNodeDelete,
+        onRunUpTo: cb.onNodeRunUpTo,
+        onFork: cb.onNodeFork,
+        onRename: cb.onNodeRename,
+      } as OperationNodeData,
     });
     edges.push({
       id: `e-${prevId}-${nodeId}`,
@@ -887,7 +946,7 @@ function StepDetailPanel({
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner() {
-  const { steps, removeStep, keepStepsThrough, moveStep } = usePipelineContext();
+  const { steps, removeStep, keepStepsThrough, moveStep, renameStep, forkAtStep } = usePipelineContext();
   const { activeDataset, setActiveDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -902,6 +961,31 @@ function PipelineGraphTabInner() {
     removeStep(step.id);
     setSelectedStep((prev) => (prev?.id === step.id ? null : prev));
   }, [removeStep]);
+
+  const handleNodeRunUpTo = useCallback((step: PipelineStep) => {
+    keepStepsThrough(step.id);
+    if (step.outputDataset) {
+      setActiveDataset({
+        id: step.outputDataset.id,
+        name: step.outputDataset.name,
+        rows: step.outputDataset.rowCount ?? 0,
+      });
+    }
+  }, [keepStepsThrough, setActiveDataset]);
+
+  const handleNodeFork = useCallback((step: PipelineStep) => {
+    forkAtStep(step.id);
+  }, [forkAtStep]);
+
+  const handleNodeRename = useCallback((step: PipelineStep) => {
+    const current = step.description || step.operation.replace(/_/g, " ");
+    // Native prompt keeps the change tiny and dependency-free; matches the
+    // simple rename UX users had in the previous APPLIED STEPS list.
+    const next = window.prompt("Rename step", current);
+    if (next != null && next.trim() && next.trim() !== current) {
+      renameStep(step.id, next.trim());
+    }
+  }, [renameStep]);
 
   const handleFit = useCallback(() => {
     rf.fitView({ padding: 0.15, duration: 400 });
@@ -926,14 +1010,20 @@ function PipelineGraphTabInner() {
       setEdges([]);
       return;
     }
-    const { nodes: n, edges: e } = buildLayout(sourceName, sourceRows, steps, handleNodeClick, handleNodeDelete);
+    const { nodes: n, edges: e } = buildLayout(sourceName, sourceRows, steps, {
+      onNodeClick: handleNodeClick,
+      onNodeDelete: handleNodeDelete,
+      onNodeRunUpTo: handleNodeRunUpTo,
+      onNodeFork: handleNodeFork,
+      onNodeRename: handleNodeRename,
+    });
     setNodes(n);
     setEdges(e);
     const t = setTimeout(() => {
       rf.fitView({ padding: 0.15, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, setNodes, setEdges, rf]);
+  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, handleNodeRunUpTo, handleNodeFork, handleNodeRename, setNodes, setEdges, rf]);
 
   if (steps.length === 0) {
     return (

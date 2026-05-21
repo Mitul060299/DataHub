@@ -7,7 +7,7 @@ import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
-import { TourTooltip, STEPS } from "../components/TourTooltip";
+import { TourTooltip, STEPS_COUNT } from "../components/TourTooltip";
 import { QuickstartTour, markQuickstartStep1Done, markQuickstartStep2Done, markQuickstartStep3Done } from "../components/QuickstartTour";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
@@ -626,7 +626,7 @@ export function WorkspacePage() {
       {tourActive && (
         <TourTooltip
           step={currentStep}
-          onNext={() => nextStep(STEPS.length)}
+          onNext={() => nextStep(STEPS_COUNT)}
           onSkip={skipTour}
         />
       )}

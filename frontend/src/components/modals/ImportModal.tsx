@@ -18,13 +18,6 @@ interface ImportModalProps {
 
 type FileType = "csv" | "excel" | "json" | "parquet";
 
-const FILE_TYPES: Array<{ key: FileType; label: string; ext: string; accept: string; icon: string }> = [
-  { key: "csv",     label: "CSV",     ext: ".csv",                  accept: ".csv,.tsv,.txt",      icon: "CSV" },
-  { key: "excel",  label: "Excel",   ext: ".xlsx / .xls",          accept: ".xlsx,.xls",           icon: "XLS" },
-  { key: "json",   label: "JSON",    ext: ".json",                 accept: ".json",                icon: "JSON" },
-  { key: "parquet",label: "Parquet", ext: ".parquet",              accept: ".parquet",             icon: "PAR" },
-];
-
 interface FilePreview {
   filename: string;
   file_size_mb: number;
@@ -37,6 +30,14 @@ interface FilePreview {
 
 
 export function ImportModal({ open, workspaceId, projectId, onClose, onImported, preloadUrl, autoImport }: ImportModalProps) {
+  // Defined here (not at module level) to avoid Rollup TDZ in production bundles.
+  const FILE_TYPES: Array<{ key: FileType; label: string; ext: string; accept: string; icon: string }> = [
+    { key: "csv",     label: "CSV",     ext: ".csv",     accept: ".csv,.tsv,.txt", icon: "CSV" },
+    { key: "excel",  label: "Excel",   ext: ".xlsx / .xls", accept: ".xlsx,.xls",  icon: "XLS" },
+    { key: "json",   label: "JSON",    ext: ".json",    accept: ".json",          icon: "JSON" },
+    { key: "parquet",label: "Parquet", ext: ".parquet", accept: ".parquet",       icon: "PAR" },
+  ];
+
   // One hidden <input> per file type so accept filter changes correctly
   const csvRef     = useRef<HTMLInputElement>(null);
   const excelRef   = useRef<HTMLInputElement>(null);

@@ -7,32 +7,9 @@ interface TourStep {
   position: "right" | "left" | "bottom";
 }
 
-const STEPS: TourStep[] = [
-  {
-    target: "pipeline-tab",
-    title: "Open the Pipeline tab",
-    content: "Every AI transform you approve is saved as a node here. Click this tab to see your transformation history as a visual graph.",
-    position: "bottom",
-  },
-  {
-    target: "approve-button",
-    title: "Review & approve a step",
-    content: "The AI shows its full SQL before running anything. Approve to save the step to your pipeline — or ask it to revise.",
-    position: "left",
-  },
-  {
-    target: "artifacts-section",
-    title: "Saved checkpoints",
-    content: "After approving a step, save a checkpoint here. You can branch from any checkpoint or compare two snapshots side by side.",
-    position: "right",
-  },
-  {
-    target: "export-button",
-    title: "Export your result",
-    content: "Download as CSV for any tool, Excel for Power BI, or sync directly to Google Sheets. Click the arrow icon to open the export menu.",
-    position: "bottom",
-  },
-];
+/** Number of steps in the product tour. Exported as a primitive so callers
+ * never touch the array (which lives inside the component to avoid Rollup TDZ). */
+export const STEPS_COUNT = 4;
 
 const TOOLTIP_W = 280;
 const TOOLTIP_H = 140; // approximate
@@ -97,6 +74,34 @@ interface TourTooltipProps {
 }
 
 export function TourTooltip({ step, onNext, onSkip }: TourTooltipProps) {
+  // Defined here (not at module level) to avoid Rollup TDZ in production bundles.
+  const STEPS: TourStep[] = [
+    {
+      target: "pipeline-tab",
+      title: "Open the Pipeline tab",
+      content: "Every AI transform you approve is saved as a node here. Click this tab to see your transformation history as a visual graph.",
+      position: "bottom",
+    },
+    {
+      target: "approve-button",
+      title: "Review & approve a step",
+      content: "The AI shows its full SQL before running anything. Approve to save the step to your pipeline — or ask it to revise.",
+      position: "left",
+    },
+    {
+      target: "artifacts-section",
+      title: "Saved checkpoints",
+      content: "After approving a step, save a checkpoint here. You can branch from any checkpoint or compare two snapshots side by side.",
+      position: "right",
+    },
+    {
+      target: "export-button",
+      title: "Export your result",
+      content: "Download as CSV for any tool, Excel for Power BI, or sync directly to Google Sheets. Click the arrow icon to open the export menu.",
+      position: "bottom",
+    },
+  ];
+
   const [pos, setPos] = useState<{ top: number; left: number; arrowSide: "left" | "right" | "top" } | null>(null);
   const [highlightRect, setHighlightRect] = useState<Rect | null>(null);
 

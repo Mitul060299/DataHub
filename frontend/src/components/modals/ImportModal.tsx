@@ -111,9 +111,6 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
 
   if (!open) return null;
 
-  // Keep the ref current so the autoImport timeout always calls the latest closure.
-  uploadFileRef.current = uploadFile;
-
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
     setFilePreview(null);
@@ -307,6 +304,12 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
       setCustomDelimiter("");
     }
   };
+
+  // Keep the ref current so the autoImport timeout always calls the latest
+  // closure. Must be AFTER `uploadFile` is declared — assigning before its
+  // `const` declaration throws "Cannot access uploadFile before initialization"
+  // (Temporal Dead Zone) in production builds when the modal opens.
+  uploadFileRef.current = uploadFile;
 
   const testConnection = async () => {
     // Only file uploads are supported in this modal; DB connections use the Connector modal.

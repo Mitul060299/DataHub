@@ -13,6 +13,11 @@ export default defineConfig({
     sourcemap: "hidden",
     rollupOptions: {
       output: {
+        // Disable hoisting of transitive imports — the default (true) can cause
+        // Rollup to reorder module initializers so that a module-level `const`
+        // is accessed before its containing module has executed, throwing
+        // "Cannot access 'X' before initialization" (Temporal Dead Zone).
+        hoistTransitiveImports: false,
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           const isReact = id.includes("/node_modules/react/") || id.includes("\\node_modules\\react\\");

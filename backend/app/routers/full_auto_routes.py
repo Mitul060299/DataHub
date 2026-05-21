@@ -164,7 +164,8 @@ async def start_auto_run(
     billing_user_id = resolve_billing_user_for_project(
         body.project_id, current_user_id, db
     )
-    billing_plan = billing_repository.get_effective_plan(billing_user_id, db=db) or "Free"
+    from ..services.plan_guard import default_user_plan
+    billing_plan = billing_repository.get_effective_plan(billing_user_id, db=db) or default_user_plan()
     enforce_usage_limit(billing_user_id, billing_plan, "api_calls", db)
 
     try:

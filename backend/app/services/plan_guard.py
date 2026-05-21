@@ -169,6 +169,17 @@ def normalize_plan(plan: str | None) -> str:
     return "Free"
 
 
+def default_user_plan() -> str:
+    """Plan to assume when billing lookup yields nothing.
+
+    When BILLING_ENABLED=false this returns the open-beta plan so users
+    aren't silently throttled to Free's hard caps. When billing is on it
+    falls back to Free (the original behaviour). Use this anywhere code
+    does ``billing_repository.get_effective_plan(...) or <fallback>``.
+    """
+    return "Beta" if not settings.billing_enabled else "Free"
+
+
 def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
     """Return the plan for a known user_id (no JWT needed).
 
@@ -436,6 +447,12 @@ def resolve_user_plan(db: Session, authorization: str | None) -> str:
     Signature is (db, authorization) to match all existing call sites across routers.
     For workspace-scoped billing use resolve_workspace_plan() instead.
     """
+    # Mirror resolve_user_plan_by_id: while billing is disabled every
+    # caller (router guards, usage stats, /me, etc.) sees the open-beta
+    # plan so they aren't capped to Free's tiny limits.
+    if not settings.billing_enabled:
+        return "Beta"
+
     user_id = get_current_user_id(authorization)
     subject = get_current_subject(authorization)
 

@@ -18,7 +18,7 @@ from ..services.connectors import connector_registry
 from ..services.data_conversion import DataConversionService
 from ..services.object_storage import StorageService
 from ..services.storage_tiering import storage_tier_service
-from ..services.plan_guard import resolve_user_plan, enforce_file_constraints, enforce_connector_access
+from ..services.plan_guard import resolve_user_plan, enforce_file_constraints, enforce_connector_access, default_user_plan
 from ..services.duckdb_service import DuckDBService
 from ..services.usage_service import (
     enforce_usage_limit,
@@ -514,7 +514,7 @@ async def finalize_upload(
 
     # Quota gate (org-aware) for the dataset_uploaded counter.
     _bill_uid = resolve_billing_user_for_user(user_id, db) if user_id else "anonymous"
-    _bill_plan = billing_repository.get_effective_plan(_bill_uid, db=db) or "Free"
+    _bill_plan = billing_repository.get_effective_plan(_bill_uid, db=db) or default_user_plan()
     enforce_usage_limit(_bill_uid, _bill_plan, "datasets_uploaded", db)
     increment_usage(user_id, "datasets_uploaded", db)
     update_storage_bytes(user_id, db)

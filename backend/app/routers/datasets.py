@@ -46,7 +46,7 @@ from ..services.usage_service import (
     resolve_billing_user_for_user,
 )
 from ..services import billing_repository
-from ..services.plan_guard import resolve_user_plan, resolve_user_plan_by_id
+from ..services.plan_guard import resolve_user_plan, resolve_user_plan_by_id, default_user_plan
 from ..services.audit import audit_store
 from ..models import AuditEntry
 from ..models_db import ArtifactDB, DatasetMetaDB, DatasetDataDB, DatasetChunkDB, DataSourceDB, PipelineScheduleDB, ConnectorCredentialDB, DatasetSessionDB
@@ -63,7 +63,7 @@ def _enforce_api_call(user_id: str | None, db: Session) -> tuple[str, str]:
     """
     uid = user_id or "anonymous"
     bill_uid = resolve_billing_user_for_user(uid, db) if uid != "anonymous" else uid
-    plan = billing_repository.get_effective_plan(bill_uid, db=db) or "Free"
+    plan = billing_repository.get_effective_plan(bill_uid, db=db) or default_user_plan()
     enforce_usage_limit(bill_uid, plan, "api_calls", db)
     return bill_uid, plan
 
@@ -72,7 +72,7 @@ def _enforce_dataset_upload(user_id: str | None, db: Session) -> tuple[str, str]
     """Enforce monthly datasets_uploaded quota."""
     uid = user_id or "anonymous"
     bill_uid = resolve_billing_user_for_user(uid, db) if uid != "anonymous" else uid
-    plan = billing_repository.get_effective_plan(bill_uid, db=db) or "Free"
+    plan = billing_repository.get_effective_plan(bill_uid, db=db) or default_user_plan()
     enforce_usage_limit(bill_uid, plan, "datasets_uploaded", db)
     return bill_uid, plan
 

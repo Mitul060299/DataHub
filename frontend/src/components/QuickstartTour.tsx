@@ -28,35 +28,10 @@ interface QStep {
   celebration: string;       // toast text shown on completion
 }
 
-const QS_STEPS: QStep[] = [
-  {
-    target: "data-section",
-    title: "Step 1 — Upload a dataset",
-    content:
-      'Click "Import" or drag a CSV here to load your first dataset. You can also load a sample file to try things out.',
-    position: "right",
-    completionEvent: "datahub:quickstart-step1-done",
-    celebration: "🎉 Dataset loaded! Great start.",
-  },
-  {
-    target: "ai-agent-header",
-    title: "Step 2 — Ask the AI agent",
-    content:
-      'Type a question like "Show me the top 10 rows" or "What is the average order value?" and press Enter.',
-    position: "left",
-    completionEvent: "datahub:quickstart-step2-done",
-    celebration: "✨ Nice! The AI answered your question.",
-  },
-  {
-    target: "pipeline-tab",
-    title: "Step 3 — Review your pipeline",
-    content:
-      "Every AI transformation is saved as a pipeline step. Click the Pipeline tab to see the full history and re-run any step.",
-    position: "bottom",
-    completionEvent: "datahub:quickstart-step3-done",
-    celebration: "🚀 Tour complete! You're ready to explore.",
-  },
-];
+// QS_STEPS is defined inside the component to avoid Rollup TDZ in production
+// bundles — module-level `const` can be in the temporal dead zone when
+// Rollup concatenates chunks and the component renders before the module
+// initializer has executed.
 
 // ─── localStorage keys ─────────────────────────────────────────────────────
 
@@ -125,6 +100,37 @@ interface QuickstartTourProps {
 }
 
 export function QuickstartTour({ onDone }: QuickstartTourProps) {
+  // Defined here (not at module level) to avoid Rollup TDZ in production bundles.
+  const QS_STEPS: QStep[] = [
+    {
+      target: "data-section",
+      title: "Step 1 — Upload a dataset",
+      content:
+        'Click "Import" or drag a CSV here to load your first dataset. You can also load a sample file to try things out.',
+      position: "right",
+      completionEvent: "datahub:quickstart-step1-done",
+      celebration: "🎉 Dataset loaded! Great start.",
+    },
+    {
+      target: "ai-agent-header",
+      title: "Step 2 — Ask the AI agent",
+      content:
+        'Type a question like "Show me the top 10 rows" or "What is the average order value?" and press Enter.',
+      position: "left",
+      completionEvent: "datahub:quickstart-step2-done",
+      celebration: "✨ Nice! The AI answered your question.",
+    },
+    {
+      target: "pipeline-tab",
+      title: "Step 3 — Review your pipeline",
+      content:
+        "Every AI transformation is saved as a pipeline step. Click the Pipeline tab to see the full history and re-run any step.",
+      position: "bottom",
+      completionEvent: "datahub:quickstart-step3-done",
+      celebration: "🚀 Tour complete! You're ready to explore.",
+    },
+  ];
+
   const [stepIndex, setStepIndex] = useState<number>(() => {
     const saved = localStorage.getItem(LS_STEP);
     if (!saved || saved === "done") return 0;

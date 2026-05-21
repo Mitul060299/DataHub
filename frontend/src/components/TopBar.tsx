@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { capture } from "../lib/posthog";
+import { billingEnabled } from "../utils/featureFlags";
 import { IconBell, IconChevronDown, IconCreditCard, IconLogOut, IconSettings, IconUser } from "./Icons";
 
 const tabs = [
@@ -250,7 +251,7 @@ export function TopBar() {
                     type="button"
                     role="menuitem"
                     onClick={() => navigateAndClose("/settings/billing")}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: "flex", alignItems: "center", gap: 8, color: "#e8e8f0", textAlign: "left" }}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: billingEnabled ? "flex" : "none", alignItems: "center", gap: 8, color: "#e8e8f0", textAlign: "left" }}
                     onMouseEnter={(event) => {
                       event.currentTarget.style.background = "#22222a";
                     }}

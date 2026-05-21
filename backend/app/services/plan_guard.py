@@ -39,6 +39,11 @@ PLAN_ORDER = {
     "Team": 4,
     "Business": 5,
     "Enterprise": 6,
+    # Beta is the "billing disabled" universal plan. Ranked above
+    # Business so it satisfies any enforce_min_plan() check (every
+    # paid feature unlocks during beta) without being unbounded
+    # like Enterprise.
+    "Beta": 99,
 }
 
 
@@ -57,6 +62,25 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         webhooks_enabled=False,
         scheduling_enabled=False,
         dashboard_sharing_enabled=False,
+    ),
+    # Beta plan: assigned to every user while BILLING_ENABLED=false.
+    # Generous on cheap resources, conservative on AI usage (see
+    # USAGE_LIMITS in plan_limits.py). Unlocks every feature except
+    # multi-seat / SSO so single users can fully evaluate the product.
+    "Beta": PlanLimits(
+        max_file_size_bytes=2 * 1024 * 1024 * 1024,      # 2 GB
+        max_storage_bytes=20 * 1024 * 1024 * 1024,       # 20 GB
+        max_datasets=-1,
+        max_collab_workspaces=0,                         # multi-user disabled during beta
+        max_projects_per_workspace=-1,
+        max_project_members=1,
+        max_collaborative_projects=0,
+        allowed_formats={"csv", "excel", "json", "parquet"},
+        allowed_connectors={"*"},
+        sso_enabled=False,                               # we don't have SSO wired anyway
+        webhooks_enabled=True,
+        scheduling_enabled=True,
+        dashboard_sharing_enabled=True,
     ),
     "Starter": PlanLimits(
         max_file_size_bytes=250 * 1024 * 1024,           # 250 MB
@@ -152,6 +176,14 @@ def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
     org (i.e. they were invited under a paid Team/Business seat), the org
     owner's plan is returned instead. Lazy: never creates a personal org row.
     """
+    # While BILLING_ENABLED is off we give every user the open-beta plan.
+    # This bypasses the Free-tier hard caps so people can actually evaluate
+    # the product without being throttled on file size, storage, or scan
+    # volume. Re-enable billing by setting BILLING_ENABLED=true and the
+    # normal per-user lookup resumes.
+    if not settings.billing_enabled:
+        return "Beta"
+
     # Resolve to org owner if this user is an org member
     from .organization_service import resolve_org_owner_user_id  # avoid cycle
     billing_user_id = resolve_org_owner_user_id(user_id, db) if user_id else user_id

@@ -176,6 +176,26 @@ export function PricingPage() {
         {message ? <p style={{ color: "var(--tx1)", marginTop: 12, fontSize: 14 }}>{message}</p> : null}
       </section>
 
+      {!billingEnabled && (
+        <div style={{
+          maxWidth: 900,
+          margin: "0 auto 24px",
+          background: "linear-gradient(135deg, rgba(91,106,240,0.15), rgba(139,92,246,0.12))",
+          border: "1px solid rgba(91,106,240,0.45)",
+          borderRadius: "var(--r12)",
+          padding: "16px 22px",
+          textAlign: "center",
+          fontSize: 14,
+          color: "var(--tx0)",
+        }}>
+          <strong style={{ fontSize: 15 }}>DataHub is free while we&apos;re in early beta.</strong>{" "}
+          <span style={{ color: "var(--tx1)" }}>
+            The tiers below are a preview of our planned pricing \u2014 nothing is being charged today.
+            Everyone gets access at no cost while we finalize plans.
+          </span>
+        </div>
+      )}
+
       {!isIndian && (
         <div style={{
           maxWidth: 800,

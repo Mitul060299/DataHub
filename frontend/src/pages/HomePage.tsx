@@ -2,6 +2,7 @@ import { type CSSProperties, type FormEvent, useState, useEffect, useRef, useMem
 import { useNavigate, Link } from "react-router-dom";
 import { useSEO } from "../hooks/useSEO";
 import { motion, useScroll, useTransform, useSpring } from "framer-motion";
+import { billingEnabled } from "../utils/featureFlags";
 import {
   IconBrain,
   IconCheck,
@@ -939,6 +940,25 @@ export function HomePage() {
         className="scroll-progress-bar"
         style={{ scaleX: smoothProgress, opacity: progressOpacity }}
       />
+
+      {!billingEnabled && (
+        <div style={{
+          background: "linear-gradient(90deg, rgba(91,106,240,0.18), rgba(139,92,246,0.14))",
+          borderBottom: "1px solid rgba(91,106,240,0.35)",
+          padding: "10px 20px",
+          textAlign: "center",
+          fontSize: 13,
+          color: "#e8e8f0",
+          position: "relative",
+          zIndex: 5,
+        }}>
+          <strong>Free during beta.</strong>{" "}
+          <span style={{ color: "#b8b8d0" }}>
+            DataHub is fully free while we&apos;re finalizing pricing — no card required. {" "}
+            <Link to="/pricing" style={{ color: "#a5b3ff", textDecoration: "underline" }}>Planned tiers</Link>.
+          </span>
+        </div>
+      )}
 
       {/* HERO */}
       <section className="hero" ref={heroRef}>

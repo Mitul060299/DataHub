@@ -232,9 +232,14 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
     },
   ];
 
+  // Hide the Billing tab entirely while billing is disabled \u2014 the
+  // section still renders a fallback if someone navigates directly,
+  // but there's no need to advertise it.
+  const visibleItems = billingEnabled ? items : items.filter((i) => i.key !== "billing");
+
   return (
     <div style={{ paddingTop: "4px" }}>
-      {items.map((item) => (
+      {visibleItems.map((item) => (
         <div
           key={item.key}
           onClick={() => navigate(item.path)}

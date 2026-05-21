@@ -66,6 +66,23 @@ USAGE_LIMITS: dict[str, UsageLimits] = {
         "max_seats": 1,
         "token_budget_per_month": 500_000,
     },
+    # Open beta tier. Used as the default plan for every user while
+    # BILLING_ENABLED=false. Generous on cheap resources (storage, scan,
+    # pipeline runs) but conservative on AI calls because every LLM
+    # request costs real money. When billing is turned back on, this
+    # tier becomes unreachable and existing users fall back to whatever
+    # plan is on their User row (defaults to "Free").
+    "Beta": {
+        "api_calls_per_month": 500,
+        "pipeline_runs_per_month": 2_000,
+        "datasets_per_month": 200,
+        "storage_bytes": 20 * 1024 * 1024 * 1024,               # 20 GB
+        "max_team_members": 1,
+        "data_scan_bytes_per_month": 200 * 1024 * 1024 * 1024,  # 200 GB
+        "included_seats": 1,
+        "max_seats": 1,
+        "token_budget_per_month": 5_000_000,
+    },
     "Starter": {
         "api_calls_per_month": 500,
         "pipeline_runs_per_month": 100,

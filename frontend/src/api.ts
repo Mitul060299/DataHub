@@ -291,7 +291,7 @@ export async function fetchCurrentUser() {
     id: string;
     username: string;
     role: string;
-    plan: "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
+    plan: "Free" | "Beta" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
     has_completed_onboarding: boolean;
     has_uploaded_first_file: boolean;
     usage: {

@@ -5,7 +5,7 @@ import { useAuth } from "./AuthContext";
 import { recordMilestone as _recordMilestone } from "../lib/activation";
 import type { Milestone } from "../lib/activation";
 
-type UserPlan = "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
+type UserPlan = "Free" | "Beta" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
 
 type PlanLimits = {
   maxFileSize: number;
@@ -73,6 +73,30 @@ const planLimits: Record<UserPlan, PlanLimits> = {
       collaboration: false,
       customML: false,
       enterpriseConnectors: false,
+      sso: false,
+    },
+  },
+  // Open beta tier — assigned to every user while billing is disabled.
+  // Generous on cheap resources, conservative on AI calls.
+  Beta: {
+    maxFileSize: 2 * 1024 * 1024 * 1024,
+    maxDatasets: -1,
+    maxStorage: 20 * 1024 * 1024 * 1024,
+    maxWorkspaces: 1,
+    maxProjectsPerWorkspace: -1,
+    maxDatasetsPerProject: -1,
+    maxPipelines: -1,
+    aiMessagesPerMonth: 500,
+    features: {
+      allFileFormats: true,
+      databaseConnections: true,
+      cloudStorage: true,
+      autoML: true,
+      apiAccess: true,
+      scheduledPipelines: true,
+      collaboration: false,
+      customML: true,
+      enterpriseConnectors: true,
       sso: false,
     },
   },

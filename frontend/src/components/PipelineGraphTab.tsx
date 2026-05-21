@@ -105,6 +105,8 @@ type OperationNodeData = {
   onRunUpTo: (step: PipelineStep) => void;
   onFork: (step: PipelineStep) => void;
   onRename: (step: PipelineStep) => void;
+  onUndoFrom: (step: PipelineStep) => void;
+  onEditSql: (step: PipelineStep) => void;
 };
 
 // Inline icon-button style for the per-node action toolbar.
@@ -186,6 +188,15 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
         >
           <IconPlay size={10} />
         </button>
+        {step.sql ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); data.onEditSql(step); }}
+            title="Edit step SQL"
+            style={nodeActionBtnStyle}
+          >
+            <IconEdit size={10} />
+          </button>
+        ) : null}
         <button
           onClick={(e) => { e.stopPropagation(); data.onFork(step); }}
           title="Fork from this step — next action starts a new branch"
@@ -198,7 +209,14 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
           title="Rename step"
           style={nodeActionBtnStyle}
         >
-          <IconEdit size={10} />
+          ✏
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onUndoFrom(step); }}
+          title="Undo from this step (removes this and all later steps)"
+          style={nodeActionBtnStyle}
+        >
+          ↺
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); data.onDelete(step); }}
@@ -307,6 +325,8 @@ type NodeCallbacks = {
   onNodeRunUpTo: (step: PipelineStep) => void;
   onNodeFork: (step: PipelineStep) => void;
   onNodeRename: (step: PipelineStep) => void;
+  onNodeUndoFrom: (step: PipelineStep) => void;
+  onNodeEditSql: (step: PipelineStep) => void;
 };
 
 function buildLayout(
@@ -442,6 +462,8 @@ function buildLayout(
         onRunUpTo: cb.onNodeRunUpTo,
         onFork: cb.onNodeFork,
         onRename: cb.onNodeRename,
+        onUndoFrom: cb.onNodeUndoFrom,
+        onEditSql: cb.onNodeEditSql,
       } as OperationNodeData,
     });
     edges.push({
@@ -987,6 +1009,22 @@ function PipelineGraphTabInner() {
     }
   }, [renameStep]);
 
+  // Undo-from and Edit-SQL stay in PipelineSection because they involve a
+  // confirm prompt (undo) and an inline editor panel (edit SQL) that already
+  // live there. We just dispatch events from the graph node so users can
+  // trigger them in-place without losing that existing UX.
+  const handleNodeUndoFrom = useCallback((step: PipelineStep) => {
+    window.dispatchEvent(
+      new CustomEvent("datahub:pipeline:undo-from", { detail: { stepId: step.id } }),
+    );
+  }, []);
+
+  const handleNodeEditSql = useCallback((step: PipelineStep) => {
+    window.dispatchEvent(
+      new CustomEvent("datahub:pipeline:edit-sql", { detail: { stepId: step.id } }),
+    );
+  }, []);
+
   const handleFit = useCallback(() => {
     rf.fitView({ padding: 0.15, duration: 400 });
   }, [rf]);
@@ -1016,6 +1054,8 @@ function PipelineGraphTabInner() {
       onNodeRunUpTo: handleNodeRunUpTo,
       onNodeFork: handleNodeFork,
       onNodeRename: handleNodeRename,
+      onNodeUndoFrom: handleNodeUndoFrom,
+      onNodeEditSql: handleNodeEditSql,
     });
     setNodes(n);
     setEdges(e);
@@ -1023,7 +1063,7 @@ function PipelineGraphTabInner() {
       rf.fitView({ padding: 0.15, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, handleNodeRunUpTo, handleNodeFork, handleNodeRename, setNodes, setEdges, rf]);
+  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, handleNodeRunUpTo, handleNodeFork, handleNodeRename, handleNodeUndoFrom, handleNodeEditSql, setNodes, setEdges, rf]);
 
   if (steps.length === 0) {
     return (

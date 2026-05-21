@@ -61,6 +61,33 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       setEditPanelStepId(null);
     }
   }, [steps, editPanelStepId]);
+
+  // Ref to the latest handleUndoFromStep so the window-event listener (which
+  // is registered once on mount) always invokes the freshest closure rather
+  // than capturing stale `steps` / context values.
+  const undoFromRef = useRef<((stepId: string) => void) | null>(null);
+
+  // Listen for events dispatched by graph node action buttons. The Edit-SQL
+  // and Undo-from buttons live on the graph nodes (in PipelineGraphTab) but
+  // their UI (inline EditStepPanel, confirm prompt) lives here, so we bridge
+  // them through window events.
+  useEffect(() => {
+    const handleEditSql = (e: Event) => {
+      const stepId = (e as CustomEvent<{ stepId: string }>).detail?.stepId;
+      if (stepId) setEditPanelStepId(stepId);
+    };
+    const handleUndoFrom = (e: Event) => {
+      const stepId = (e as CustomEvent<{ stepId: string }>).detail?.stepId;
+      if (stepId) undoFromRef.current?.(stepId);
+    };
+    window.addEventListener("datahub:pipeline:edit-sql", handleEditSql);
+    window.addEventListener("datahub:pipeline:undo-from", handleUndoFrom);
+    return () => {
+      window.removeEventListener("datahub:pipeline:edit-sql", handleEditSql);
+      window.removeEventListener("datahub:pipeline:undo-from", handleUndoFrom);
+    };
+  }, []);
+
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [builtInPickerOpen, setBuiltInPickerOpen] = useState(false);
@@ -161,6 +188,10 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       },
     });
   };
+
+  // Keep the ref pointing at the latest closure so node-button events always
+  // run against current state instead of the first-render snapshot.
+  undoFromRef.current = handleUndoFromStep;
 
   const handleSurgicalRemove = (stepId: string) => {
     if (undoing || surgicalRemoving) return;
@@ -564,6 +595,25 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                 {steps.length} {steps.length === 1 ? "step" : "steps"} · click a node in the graph to inspect or edit
               </div>
             )}
+
+            {/* Edit-SQL panel — opened by clicking the pencil button on a
+                graph node (which dispatches `datahub:pipeline:edit-sql`). */}
+            {editPanelStepId != null && (() => {
+              const editIdx = steps.findIndex((s) => s.id === editPanelStepId);
+              if (editIdx < 0) return null;
+              return (
+                <div style={{ borderTop: "1px solid var(--bd)", padding: "6px 8px" }}>
+                  <EditStepPanel
+                    step={steps[editIdx]}
+                    stepIndex={editIdx}
+                    allSteps={steps}
+                    activeDataset={activeDataset}
+                    onClose={() => setEditPanelStepId(null)}
+                    onApplied={handleEditApplied}
+                  />
+                </div>
+              );
+            })()}
           </div>
         </div>
       ) : null}

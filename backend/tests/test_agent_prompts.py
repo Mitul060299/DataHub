@@ -311,6 +311,7 @@ class TestPromptFormatable:
                 calculated_columns="[]",
                 dashboards="[]",
                 secondary_datasets="{}",
+                cross_pipeline_inputs="[]",
                 table_registry="{}",
                 user_goal="dedupe and fix dates",
                 glossary="(none)",

@@ -144,6 +144,7 @@ async def planner(state: AgentState) -> dict:
         calculated_columns=_dumps(state.get("calculated_columns", [])),
         dashboards=_dumps(state.get("dashboards", [])),
         secondary_datasets=_dumps(state.get("secondary_schemas", {})),
+        cross_pipeline_inputs=_dumps(state.get("cross_pipeline_inputs", [])),
         table_registry=_dumps(_tr),
         user_goal=user_goal,
     )

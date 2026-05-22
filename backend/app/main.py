@@ -67,6 +67,7 @@ from .routers import trial as trial_routes
 # production-ready. The endpoints have been removed for the GA launch and
 # will be re-introduced once the underlying training pipeline is real.
 from .routers import pipeline_refresh, cron, data_sources
+from .routers.pipeline_steps import router as pipeline_steps_router
 from .routers import waitlist
 from .routers import dashboard_access
 from .routers.project_members import router as project_members_router, project_invite_router as project_invite_router
@@ -789,3 +790,4 @@ app.include_router(project_invite_router)
 app.include_router(organization_members_router)
 app.include_router(org_invite_router)
 app.include_router(usage_routes.router)
+app.include_router(pipeline_steps_router)

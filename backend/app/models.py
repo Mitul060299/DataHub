@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Dict, List, Optional, Literal
 
 
@@ -86,6 +86,63 @@ class CrossDatasetQueryResponse(BaseModel):
     results: List[Dict[str, Any]]
     row_count: int
     aliases: List[str]
+
+
+# ── Cross-pipeline step inputs ────────────────────────────────────────────────
+
+class CrossPipelineInputCreate(BaseModel):
+    """Body for POST /datasets/{datasetId}/cross-inputs."""
+    source_step_id: str
+    alias: str
+
+
+class CrossPipelineInputOut(BaseModel):
+    id: str
+    consumer_dataset_id: str
+    source_step_id: str
+    source_dataset_id: str
+    alias: str
+    # Extra fields populated by the list endpoint for display
+    source_dataset_name: Optional[str] = None
+    step_number: Optional[int] = None
+    step_description: Optional[str] = None
+    snapshot_path: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StepSnapshotOut(BaseModel):
+    """One item returned by GET /users/me/pipeline-steps/snapshots."""
+    step_id: str
+    step_number: int
+    operation: str
+    description: Optional[str] = None
+    row_count_after: Optional[int] = None
+    snapshot_path: str
+    dataset_id: str
+    dataset_name: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class ForkFromStepRequest(BaseModel):
+    """Body for POST /pipeline-steps/{stepId}/fork-to-dataset."""
+    name: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+class ForkFromStepOut(BaseModel):
+    """Response from POST /pipeline-steps/{stepId}/fork-to-dataset."""
+    dataset_id: str
+    dataset_name: str
+    forked_from_step_id: str
+    steps: List[Dict[str, Any]]  # copied pipeline steps
+
+
+class ForkChildOut(BaseModel):
+    """One item returned by GET /pipeline-steps/{stepId}/forks."""
+    dataset_id: str
+    dataset_name: Optional[str] = None
+    forked_at: Optional[str] = None
 
 
 class JoinableDataset(BaseModel):
@@ -332,7 +389,7 @@ class AuthToken(BaseModel):
 
 
 UserRole = Literal["admin", "editor", "viewer"]
-UserPlan = Literal["Free", "Professional", "Team", "Business", "Enterprise"]
+UserPlan = Literal["Free", "Beta", "Starter", "Professional", "Team", "Business", "Enterprise"]
 
 
 class DashboardWidget(BaseModel):

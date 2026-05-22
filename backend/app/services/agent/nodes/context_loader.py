@@ -7,7 +7,7 @@ from ...dashboards_v2_service import DashboardsV2Service
 from ...duckdb_session import get_connection, register_view, SessionExpiredError
 from ...object_storage import StorageService
 from ....db import SessionLocal
-from ....models_db import ChatTemplateDB, DatasetMetaDB
+from ....models_db import ChatTemplateDB, DatasetMetaDB, PipelineStepDB
 import re as _re
 
 _logger = _logging.getLogger(__name__)
@@ -632,5 +632,73 @@ async def context_loader(state: AgentState) -> dict:
                 })
         if join_suggestions:
             base["join_suggestions"] = join_suggestions
+
+    # ── Cross-pipeline step inputs ────────────────────────────────────────────
+    # Load any cross-pipeline inputs registered for this dataset as named DuckDB
+    # views so the agent can JOIN/reconcile across datasets without the user
+    # needing to manually wire anything.  The agent sees these alias tables
+    # exactly like the primary table.
+    from ....models_db import CrossPipelineInputDB as _CrossInputDB
+    _ci_db = SessionLocal()
+    try:
+        _cross_rows = (
+            _ci_db.query(_CrossInputDB)
+            .filter(_CrossInputDB.consumer_dataset_id == dataset_id)
+            .all()
+        )
+    finally:
+        _ci_db.close()
+
+    cross_pipeline_inputs: list[dict] = []
+    for _cr in _cross_rows:
+        _step = None
+        _src_ds_name = None
+        _ci_db2 = SessionLocal()
+        try:
+            _step = _ci_db2.query(PipelineStepDB).filter(PipelineStepDB.id == _cr.source_step_id).first()
+            _src_meta = _ci_db2.query(DatasetMetaDB).filter(DatasetMetaDB.id == _cr.source_dataset_id).first()
+            _src_ds_name = _src_meta.name if _src_meta else _cr.source_dataset_id
+        finally:
+            _ci_db2.close()
+
+        if not _step or not _step.snapshot_path:
+            _logger.warning(
+                "CROSS_INPUT_SKIP: alias=%s step=%s no snapshot_path",
+                _cr.alias, _cr.source_step_id,
+            )
+            continue
+
+        _ci_alias = _sanitize_alias(_cr.alias)
+        _register_dataset_view(_cr.source_dataset_id, _ci_alias, storage_path=_step.snapshot_path)
+
+        if _ci_alias not in table_registry:
+            table_registry[_ci_alias] = {
+                "duckdb_name": _ci_alias,
+                "dataset_id": _cr.source_dataset_id,
+                "display_name": f"{_ci_alias} (cross-pipeline: {_src_ds_name} step {_step.step_number})",
+                "source_intent": "cross_pipeline_input",
+                "parent_tables": [],
+                "row_count": int(_step.row_count_after or 0),
+                "column_names": [],
+                "pipeline_step_number": int(_step.step_number),
+                "is_artifact": False,
+                "is_view": True,
+            }
+
+        cross_pipeline_inputs.append({
+            "alias": _ci_alias,
+            "source_step_id": _cr.source_step_id,
+            "source_dataset_id": _cr.source_dataset_id,
+            "source_dataset_name": _src_ds_name,
+            "description": _step.description,
+            "snapshot_path": _step.snapshot_path,
+        })
+        _logger.info(
+            "CROSS_INPUT_LOADED: alias=%s source_step=%s source_ds=%s session=%s",
+            _ci_alias, _cr.source_step_id, _src_ds_name, session_id,
+        )
+
+    if cross_pipeline_inputs:
+        base["cross_pipeline_inputs"] = cross_pipeline_inputs
 
     return base

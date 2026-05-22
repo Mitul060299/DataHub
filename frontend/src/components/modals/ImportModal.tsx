@@ -8,7 +8,8 @@ interface ImportModalProps {
   workspaceId?: string;
   projectId?: string;
   onClose: () => void;
-  onImported: () => void;
+  /** Called after a successful import. datasetId is the newly created dataset's id. */
+  onImported: (datasetId?: string) => void;
   preloadUrl?: string;
   /** When true AND preloadUrl is set, the file is imported automatically once
    * validation succeeds — no user click required. Used for the anonymous demo
@@ -188,6 +189,7 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
     const isParquet = /\.parquet$/i.test(selectedFile.name);
 
     try {
+      let importedDatasetId: string | undefined;
       if (selectedFile.size > PRESIGN_THRESHOLD && isParquet) {
         // ── Step 1: obtain presigned PUT URL ────────────────────────────────
         const presignRes = await api.post(
@@ -235,6 +237,7 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
           { headers: extraHeaders },
         );
         setUploadProgress(100);
+        importedDatasetId = dataset_id;
       } else {
         // ── Small files: server-side upload (existing path) ──────────────────
         const formData = new FormData();
@@ -249,13 +252,14 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
         if (selectedFileType === "csv" && customDelimiter.trim()) {
           formData.append("delimiter", customDelimiter.trim());
         }
-        await api.post("/import/upload", formData, {
+        const uploadResp = await api.post("/import/upload", formData, {
           headers: {
             "Content-Type": "multipart/form-data",
             ...extraHeaders,
           },
           timeout: 300000,
         });
+        importedDatasetId = (uploadResp.data as { datasetId?: string })?.datasetId;
       }
 
       capture("file_uploaded", {
@@ -268,7 +272,7 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
       // sample CSV that loads automatically for anonymous demo visitors.
       if (!autoImport) markAsRealUser();
       markFirstUpload();
-      onImported();
+      onImported(importedDatasetId);
       onClose();
     } catch (error: unknown) {
       const maybeError = error as { response?: { data?: { detail?: unknown } } };

@@ -11,6 +11,7 @@ import { ProjectModal } from "./modals/ProjectModal";
 import { ImportModal } from "./modals/ImportModal";
 import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
+import { markQuickstartStep1Done } from "./QuickstartTour";
 
 interface ExplorerPanelProps {
   refreshNonce?: number;
@@ -31,6 +32,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
   const [searchQuery, setSearchQuery] = useState("");
   const [datasetLoadError, setDatasetLoadError] = useState<string | null>(null);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
+  const [pendingActivateId, setPendingActivateId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Allow other components (e.g. CanvasPanel empty state) to open the connector modal.
@@ -233,6 +235,17 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetsLoading, datasets]);
 
+  // Auto-activate a newly uploaded dataset when its id arrives via pendingActivateId.
+  useEffect(() => {
+    if (!pendingActivateId || datasetsLoading) return;
+    const match = datasets.find((d) => d.id === pendingActivateId);
+    if (match) {
+      setActiveDataset(match);
+      setPendingActivateId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingActivateId, datasetsLoading, datasets]);
+
   useEffect(() => {
     if (typeof searchFocusNonce !== "number") return;
     searchInputRef.current?.focus();
@@ -403,8 +416,10 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
         open={importModalOpen}
         projectId={activeProject?.id}
         onClose={() => setImportModalOpen(false)}
-        onImported={() => {
+        onImported={(datasetId) => {
           setImportModalOpen(false);
+          if (datasetId) setPendingActivateId(datasetId);
+          markQuickstartStep1Done();
           void loadDatasets();
         }}
       />

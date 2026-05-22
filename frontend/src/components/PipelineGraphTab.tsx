@@ -104,6 +104,7 @@ type OperationNodeData = {
   onDelete: (step: PipelineStep) => void;
   onRunUpTo: (step: PipelineStep) => void;
   onFork: (step: PipelineStep) => void;
+  onBranchTo: (step: PipelineStep) => void;
   onRename: (step: PipelineStep) => void;
   onUndoFrom: (step: PipelineStep) => void;
   onEditSql: (step: PipelineStep) => void;
@@ -203,6 +204,13 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
           style={nodeActionBtnStyle}
         >
           ⑂
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onBranchTo(step); }}
+          title="Create a new branch dataset from this step"
+          style={{ ...nodeActionBtnStyle, color: "var(--or, #fb923c)" }}
+        >
+          ↗
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); data.onRename(step); }}
@@ -324,6 +332,7 @@ type NodeCallbacks = {
   onNodeDelete: (step: PipelineStep) => void;
   onNodeRunUpTo: (step: PipelineStep) => void;
   onNodeFork: (step: PipelineStep) => void;
+  onNodeBranchTo: (step: PipelineStep) => void;
   onNodeRename: (step: PipelineStep) => void;
   onNodeUndoFrom: (step: PipelineStep) => void;
   onNodeEditSql: (step: PipelineStep) => void;
@@ -461,6 +470,7 @@ function buildLayout(
         onDelete: cb.onNodeDelete,
         onRunUpTo: cb.onNodeRunUpTo,
         onFork: cb.onNodeFork,
+        onBranchTo: cb.onNodeBranchTo,
         onRename: cb.onNodeRename,
         onUndoFrom: cb.onNodeUndoFrom,
         onEditSql: cb.onNodeEditSql,
@@ -969,11 +979,14 @@ function StepDetailPanel({
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner() {
   const { steps, removeStep, keepStepsThrough, moveStep, renameStep, forkAtStep } = usePipelineContext();
-  const { activeDataset, setActiveDataset } = useWorkspaceContext();
+  const { activeDataset, setActiveDataset, addLane } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedStep, setSelectedStep] = useState<PipelineStep | null>(null);
+  const [branchingStep, setBranchingStep] = useState<PipelineStep | null>(null);
+  const [branchName, setBranchName] = useState("");
+  const [branchBusy, setBranchBusy] = useState(false);
 
   const handleNodeClick = useCallback((step: PipelineStep) => {
     setSelectedStep((prev) => (prev?.id === step.id ? null : step));
@@ -998,6 +1011,42 @@ function PipelineGraphTabInner() {
   const handleNodeFork = useCallback((step: PipelineStep) => {
     forkAtStep(step.id);
   }, [forkAtStep]);
+
+  const handleNodeBranchTo = useCallback((step: PipelineStep) => {
+    setBranchingStep(step);
+    setBranchName(`${activeDataset?.name ?? "Dataset"} → step ${step.stepNumber}`);
+    window.dispatchEvent(new Event("datahub:quickstart-step5-done"));
+  }, [activeDataset?.name]);
+
+  const handleBranchConfirm = useCallback(async () => {
+    if (!branchingStep) return;
+    setBranchBusy(true);
+    try {
+      const { forkFromStep } = await import("../api");
+      const result = await forkFromStep(branchingStep.id, {
+        name: branchName.trim() || undefined,
+      });
+      addLane({
+        id: result.dataset_id,
+        name: result.dataset_name,
+        rows: 0,
+      });
+      window.dispatchEvent(
+        new CustomEvent("datahub:toast", {
+          detail: { message: `Branch created: ${result.dataset_name}`, type: "success" },
+        }),
+      );
+      setBranchingStep(null);
+    } catch (err) {
+      window.dispatchEvent(
+        new CustomEvent("datahub:toast", {
+          detail: { message: `Branch failed: ${err instanceof Error ? err.message : "unknown error"}`, type: "error" },
+        }),
+      );
+    } finally {
+      setBranchBusy(false);
+    }
+  }, [branchingStep, branchName, addLane]);
 
   const handleNodeRename = useCallback((step: PipelineStep) => {
     const current = step.description || step.operation.replace(/_/g, " ");
@@ -1053,6 +1102,7 @@ function PipelineGraphTabInner() {
       onNodeDelete: handleNodeDelete,
       onNodeRunUpTo: handleNodeRunUpTo,
       onNodeFork: handleNodeFork,
+      onNodeBranchTo: handleNodeBranchTo,
       onNodeRename: handleNodeRename,
       onNodeUndoFrom: handleNodeUndoFrom,
       onNodeEditSql: handleNodeEditSql,
@@ -1063,7 +1113,7 @@ function PipelineGraphTabInner() {
       rf.fitView({ padding: 0.15, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, handleNodeRunUpTo, handleNodeFork, handleNodeRename, handleNodeUndoFrom, handleNodeEditSql, setNodes, setEdges, rf]);
+  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, handleNodeRunUpTo, handleNodeFork, handleNodeBranchTo, handleNodeRename, handleNodeUndoFrom, handleNodeEditSql, setNodes, setEdges, rf]);
 
   if (steps.length === 0) {
     return (
@@ -1163,6 +1213,96 @@ function PipelineGraphTabInner() {
             : undefined
         }
       />
+
+      {/* Branch-name dialog */}
+      {branchingStep && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => !branchBusy && setBranchingStep(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--bg1)",
+              border: "1px solid var(--bd2)",
+              borderRadius: 12,
+              padding: "20px 22px",
+              width: 360,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--tx0)", marginBottom: 4 }}>
+              Create branch from step {branchingStep.stepNumber}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--tx2)", marginBottom: 14 }}>
+              A new dataset will be created with steps 1–{branchingStep.stepNumber} copied from this pipeline.
+            </div>
+            <input
+              value={branchName}
+              onChange={(e) => setBranchName(e.target.value)}
+              placeholder="Branch dataset name"
+              autoFocus
+              style={{
+                width: "100%",
+                padding: "7px 10px",
+                fontSize: 13,
+                background: "var(--bg3)",
+                border: "1px solid var(--bd2)",
+                borderRadius: 6,
+                color: "var(--tx0)",
+                outline: "none",
+                boxSizing: "border-box",
+                marginBottom: 14,
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleBranchConfirm();
+                if (e.key === "Escape") setBranchingStep(null);
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setBranchingStep(null)}
+                disabled={branchBusy}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  background: "var(--bg3)",
+                  border: "1px solid var(--bd2)",
+                  borderRadius: "var(--r6)",
+                  color: "var(--tx1)",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleBranchConfirm()}
+                disabled={branchBusy}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  background: "var(--or, #fb923c)",
+                  border: "none",
+                  borderRadius: "var(--r6)",
+                  color: "#fff",
+                  cursor: branchBusy ? "not-allowed" : "pointer",
+                  opacity: branchBusy ? 0.7 : 1,
+                }}
+              >
+                {branchBusy ? "Branching…" : "Create branch ↗"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

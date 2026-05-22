@@ -172,12 +172,12 @@ def normalize_plan(plan: str | None) -> str:
 def default_user_plan() -> str:
     """Plan to assume when billing lookup yields nothing.
 
-    When BILLING_ENABLED=false this returns the open-beta plan so users
-    aren't silently throttled to Free's hard caps. When billing is on it
-    falls back to Free (the original behaviour). Use this anywhere code
-    does ``billing_repository.get_effective_plan(...) or <fallback>``.
+    During the open-beta period all users without an explicitly purchased
+    paid plan receive Beta, which unlocks every single-user feature so they
+    can fully evaluate the product. Users with an active paid subscription
+    get their purchased plan tier via billing_repository.
     """
-    return "Beta" if not settings.billing_enabled else "Free"
+    return "Beta"
 
 
 def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
@@ -205,8 +205,11 @@ def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
             return normalize_plan(effective_plan)
     user = db.query(User).filter(User.id == billing_user_id).first()
     if not user:
-        return "Free"
-    return normalize_plan(user.plan)
+        return default_user_plan()
+    plan = normalize_plan(user.plan)
+    # Users stored with "Free" have no explicit paid subscription — give them
+    # the Beta tier so they aren't blocked from features during the beta period.
+    return plan if plan != "Free" else default_user_plan()
 
 
 def enforce_collab_workspace_limit(plan: str, existing_collab_count: int) -> None:
@@ -467,8 +470,11 @@ def resolve_user_plan(db: Session, authorization: str | None) -> str:
     if not user and subject:
         user = db.query(User).filter(User.username == subject).first()
     if not user:
-        return "Free"
-    return normalize_plan(user.plan)
+        return default_user_plan()
+    plan = normalize_plan(user.plan)
+    # Users stored with "Free" have no explicit paid subscription — give them
+    # the Beta tier so they aren't blocked from features during the beta period.
+    return plan if plan != "Free" else default_user_plan()
 
 
 def limits_for_plan(plan: str) -> PlanLimits:

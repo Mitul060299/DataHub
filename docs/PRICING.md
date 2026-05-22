@@ -6,6 +6,34 @@
 
 ---
 
+## Beta Tier (Open Beta — billing disabled)
+
+When `BILLING_ENABLED=false` (the default until billing is switched on), **every user automatically receives the Beta plan** regardless of what is stored in the database. Beta unlocks all single-user features so the product can be evaluated without artificial limits.
+
+| Attribute | Beta value |
+|---|---|
+| **Max file upload** | 2 GB |
+| **Storage** | 20 GB |
+| **Max datasets** | Unlimited |
+| **Dataset uploads / month** | 200 |
+| **Data scan / month** | 200 GB |
+| **Pipeline runs / month** | 2,000 |
+| **AI token budget / month** | 5,000,000 tokens |
+| **API calls / month** | 500 |
+| **File formats** | CSV, Excel, JSON, Parquet |
+| **Database connectors** | All (PostgreSQL, MySQL, MSSQL, Oracle, Snowflake, BigQuery, Redshift, S3, GCS, Azure Blob, Google Sheets, SQLite) |
+| **Scheduling** | ✓ |
+| **Webhooks** | ✓ |
+| **Dashboard sharing** | ✓ |
+| **SSO** | — |
+| **Collab workspaces** | — (single-user only) |
+
+**When billing is re-enabled** (`BILLING_ENABLED=true`), users who have purchased a plan get their tier; users without a paid plan still receive Beta (not Free) until they are explicitly downgraded. This avoids silently blocking existing beta users the moment billing goes live.
+
+The Beta plan is enforced in `plan_guard.py` → `default_user_plan()` and respected in `resolve_user_plan_by_id()` / `resolve_user_plan()`.
+
+---
+
 ## Tier Overview
 
 | Feature | Free | Starter | Professional | Team | Business | Enterprise |

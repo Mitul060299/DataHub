@@ -30,6 +30,7 @@ VALID_INTENTS = {
     "summarise", "pivot", "union", "join", "reconcile",
     "sql_query", "visualise", "export", "converse", "clarify",
     "goal", "analyse", "predict",
+    "cross_join", "branch",
 }
 
 

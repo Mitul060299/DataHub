@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { IconFilter } from "./Icons";
 
 type SortDirection = "asc" | "desc";
@@ -13,6 +13,14 @@ interface DataTableProps {
   columns: string[];
   stepCount: number;
   lastAction: string;
+  /**
+   * Other datasets currently held in lane HUD. When provided, clicking a cell
+   * shows a popover that includes "Drill to <dataset> where <col> = <value>"
+   * actions for each lane. The handler is expected to switch the active
+   * dataset and dispatch a filter prompt to the AI chat.
+   */
+  otherLanes?: { id: string; name: string }[];
+  onDrillTo?: (datasetId: string, column: string, value: string) => void;
 }
 
 const statusColor: Record<string, string> = {
@@ -21,7 +29,7 @@ const statusColor: Record<string, string> = {
   Shipped: "var(--ac)",
 };
 
-export function DataTable({ loading, rows, columns, stepCount, lastAction }: DataTableProps) {
+export function DataTable({ loading, rows, columns, stepCount, lastAction, otherLanes, onDrillTo }: DataTableProps) {
   // ── sort ────────────────────────────────────────────────────────────────────
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -152,6 +160,59 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
 
   const clearAllFilters = () => { setColumnFilters({}); setOpenFilterCol(null); };
 
+  // ── cell-click popover (drill-through / quick filter / copy) ───────────
+  const [cellPopover, setCellPopover] = useState<{
+    column: string;
+    value: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const cellPopoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!cellPopover) return;
+    const handler = (e: MouseEvent) => {
+      if (cellPopoverRef.current?.contains(e.target as Node)) return;
+      setCellPopover(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [cellPopover]);
+
+  const handleCellClick = (e: ReactMouseEvent<HTMLTableCellElement>, column: string, value: unknown) => {
+    // Only show popover for non-blank, primitive values
+    if (value === null || value === undefined || value === "") {
+      setCellPopover(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setCellPopover({
+      column,
+      value: String(value),
+      top: rect.bottom + 4,
+      left: rect.left,
+    });
+  };
+
+  const applyFilterHere = () => {
+    if (!cellPopover) return;
+    const { column, value } = cellPopover;
+    setColumnFilters((prev) => ({ ...prev, [column]: [value] }));
+    setCellPopover(null);
+  };
+
+  const copyCellValue = () => {
+    if (!cellPopover) return;
+    void navigator.clipboard?.writeText(cellPopover.value).catch(() => undefined);
+    setCellPopover(null);
+  };
+
+  const triggerDrillTo = (datasetId: string) => {
+    if (!cellPopover || !onDrillTo) return;
+    onDrillTo(datasetId, cellPopover.column, cellPopover.value);
+    setCellPopover(null);
+  };
+
   if (loading) {
     return (
       <div className="panel" style={{ margin: 8, height: "calc(100% - 16px)", padding: 12 }}>
@@ -260,14 +321,17 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
                   const text = value === null || value === undefined || value === "" ? "—" : String(value);
                   const isNumber = typeof value === "number";
                   const status = typeof value === "string" && statusColor[value] ? value : null;
+                  const isClickable = value !== null && value !== undefined && value !== "";
                   return (
                     <td
                       key={`${String(rowKey)}-${column}`}
                       className="mono"
+                      onClick={isClickable ? (e) => handleCellClick(e, column, value) : undefined}
                       style={{
                         padding: "7px 10px",
                         color: status ? statusColor[status] : isNumber ? "#7dd3fc" : value === null || value === undefined || value === "" ? "var(--tx2)" : "var(--tx0)",
                         fontStyle: value === null || value === undefined || value === "" ? "italic" : "normal",
+                        cursor: isClickable ? "pointer" : "default",
                       }}
                     >
                       {text}
@@ -396,6 +460,77 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction }: Dat
           </div>
         );
       })()}
+
+      {/* Cell click popover — quick filter / copy / drill-to-other-dataset */}
+      {cellPopover && (
+        <div
+          ref={cellPopoverRef}
+          role="menu"
+          style={{
+            position: "fixed",
+            top: cellPopover.top,
+            left: cellPopover.left,
+            minWidth: 240,
+            maxWidth: 320,
+            background: "var(--bg)",
+            border: "1px solid var(--bd2)",
+            borderRadius: "var(--r6)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
+            zIndex: 9999,
+            padding: 4,
+          }}
+        >
+          <div
+            className="mono"
+            style={{
+              padding: "6px 10px",
+              fontSize: 10,
+              color: "var(--tx2)",
+              borderBottom: "1px solid var(--bd)",
+              marginBottom: 4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={`${cellPopover.column} = ${cellPopover.value}`}
+          >
+            <strong style={{ color: "var(--tx0)" }}>{cellPopover.column}</strong> = {cellPopover.value}
+          </div>
+          <button
+            className="btn"
+            onClick={applyFilterHere}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", color: "var(--tx0)", cursor: "pointer", fontSize: 12 }}
+          >
+            Filter this column to <strong>{cellPopover.value.length > 24 ? cellPopover.value.slice(0, 24) + "…" : cellPopover.value}</strong>
+          </button>
+          <button
+            className="btn"
+            onClick={copyCellValue}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", color: "var(--tx0)", cursor: "pointer", fontSize: 12 }}
+          >
+            Copy value
+          </button>
+          {otherLanes && otherLanes.length > 0 && onDrillTo && (
+            <>
+              <div style={{ borderTop: "1px solid var(--bd)", margin: "4px 0" }} />
+              <div className="mono" style={{ padding: "4px 10px", fontSize: 9, color: "var(--tx2)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Drill to another dataset
+              </div>
+              {otherLanes.map((lane) => (
+                <button
+                  key={lane.id}
+                  className="btn"
+                  onClick={() => triggerDrillTo(lane.id)}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", color: "var(--ac)", cursor: "pointer", fontSize: 12 }}
+                  title={`Switch to ${lane.name} and filter ${cellPopover.column} = ${cellPopover.value}`}
+                >
+                  → {lane.name}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

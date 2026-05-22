@@ -982,6 +982,27 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
     }
   };
 
+  // Keep a ref to the latest handleSend so window event listeners (registered
+  // once) always call the current closure. Used by the cross-dataset drill-through
+  // flow: DataTable cell click → WorkspacePage switches active dataset →
+  // dispatches "datahub:chat:send-prompt" with the filter prompt.
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ prompt?: string; datasetId?: string }>).detail;
+      const prompt = detail?.prompt?.trim();
+      if (!prompt) return;
+      // If the event targets a specific dataset, ignore it unless we ARE that dataset.
+      if (detail?.datasetId && dataset?.id && detail.datasetId !== dataset.id) return;
+      setInput(prompt);
+      void handleSendRef.current(prompt);
+    };
+    window.addEventListener("datahub:chat:send-prompt", handler);
+    return () => window.removeEventListener("datahub:chat:send-prompt", handler);
+  }, [dataset?.id]);
+
   const handleCancel = () => {
     cancelMessage();
     const restored = lastSentInputRef.current;

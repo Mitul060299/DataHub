@@ -127,7 +127,7 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
       </div>
       {open ? (
         <div style={{ display: "grid", gap: 4 }}>
-          {datasets.map((dataset) => {
+          {datasets.map((dataset, idx) => {
             const active = activeDatasetId === dataset.id;
             const normalizedFormat = normalizeFormat(dataset.format);
             const isFirstNudge = showNudge && idx === 0 && !active;

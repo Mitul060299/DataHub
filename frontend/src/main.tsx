@@ -8,7 +8,7 @@ import "./styles/global.css";
 import { Analytics } from "@vercel/analytics/react";
 
 // Buffer errors that arrive before Sentry is loaded — drained once it initialises.
-const _pendingErrors: Array<{ error: Error; info: object }> = [];
+const _pendingErrors: Array<{ error: Error; info: Record<string, unknown> }> = [];
 
 // Capture unhandled JS errors with full stack trace for production debugging
 window.addEventListener("error", (e) => {

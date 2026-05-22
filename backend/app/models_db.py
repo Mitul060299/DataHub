@@ -209,6 +209,9 @@ class DatasetMetaDB(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     # Soft-delete (Trash with retention): NULL = active, NOT NULL = in trash since this timestamp.
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    # Cross-pipeline fork lineage: ID of the pipeline_steps row this dataset was
+    # created from.  NULL = not a fork.  Set by the fork-to-dataset endpoint.
+    forked_from_step_id = Column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_datasets_user", "user_id"),
@@ -919,6 +922,38 @@ class PipelineStepDB(Base):
         Index("idx_pipeline_steps_run_id", "pipeline_run_id"),
         Index("idx_pipeline_steps_user_id", "user_id"),
         Index("idx_pipeline_steps_session_id", "session_id"),
+    )
+
+
+class CrossPipelineInputDB(Base):
+    """Links a consumer dataset to a specific pipeline-step snapshot from any
+    dataset owned by the same user.  At session start the agent loads each
+    linked snapshot as a named DuckDB VIEW (``alias``) so the LLM can JOIN /
+    reconcile across datasets without the user manually wiring anything."""
+
+    __tablename__ = "cross_pipeline_inputs"
+
+    id = Column(String, primary_key=True)
+    consumer_dataset_id = Column(
+        String,
+        ForeignKey("dataset_meta.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_step_id = Column(
+        String,
+        ForeignKey("pipeline_steps.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Denormalised for cheap lookups — avoids joining pipeline_steps.
+    source_dataset_id = Column(String, nullable=False)
+    # DuckDB alias the agent uses to reference this table in SQL, e.g.
+    # ``trial_balance_q1``.
+    alias = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_cross_pipeline_consumer", "consumer_dataset_id"),
+        Index("idx_cross_pipeline_source_step", "source_step_id"),
     )
 
 

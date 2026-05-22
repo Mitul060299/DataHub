@@ -177,7 +177,56 @@ time curl -X GET http://localhost:8000/api/datasets \
 
 ---
 
-## 🚀 Production Deployment
+## � Cross-Pipeline Features
+
+DataHub lets you link outputs from one pipeline into another, and branch pipelines at any step.
+
+### 1 · Add a Cross-Pipeline Input
+
+**What it does:** makes a snapshot from another dataset's pipeline step available as a SQL alias in the current dataset's AI chat. Use it to JOIN or reconcile two datasets that live in separate pipelines.
+
+**UI steps:**
+1. Open a dataset and switch to the **Pipeline** tab.
+2. Click **⊕ Cross input** in the tab toolbar.
+3. The left pane shows all your other datasets grouped by name. Expand a dataset to see its saved steps.
+4. Click a step — it pre-fills an alias (e.g. `customers_step2`).
+5. Click **Add →** to link it. The alias appears in the right pane.
+6. Close the panel. In the AI chat, type: **"join with customers_step2"** or **"merge with customers_step2 on customer_id"**.
+
+> 💡 The alias is automatically loaded into the DuckDB session — the AI agent can reference it in SQL without any extra setup.
+
+**Remove a linked input:** re-open ⊕ Cross input and click **Remove** next to the alias.
+
+---
+
+### 2 · Branch a Pipeline at a Step
+
+**What it does:** forks your pipeline at a chosen step, creating a new dataset that starts from that point. The original pipeline continues unchanged. Use branching to explore "what-if" transformations without touching the main dataset.
+
+**UI steps (button):**
+1. Switch to the **Pipeline** tab and click the **Graph** view.
+2. Hover over any operation node — an orange **↗** button appears on the node.
+3. Click **↗**. A dialog asks for a branch name (pre-filled as `{dataset} → step N`).
+4. Confirm. The new branch dataset appears in the **workspace lane bar** at the top.
+
+**AI chat command:**
+- Type: **"fork from step 3"** or **"branch at step 2"** or **"create a parallel pipeline from step 4"**.
+- The agent responds with the new dataset name and auto-adds it to the lane bar.
+
+> 💡 The branch reuses the Parquet snapshot of the chosen step — no data is copied. This keeps storage minimal and branching instant.
+
+---
+
+### 3 · Combining Both Features
+
+A common workflow:
+1. Dataset A has a `customers` pipeline with a clean step at step 3.
+2. Dataset B is a new `orders` dataset.
+3. In Dataset B, add a cross-pipeline input linking Dataset A / step 3 with alias `clean_customers`.
+4. In the AI chat: **"left join with clean_customers on customer_id"**.
+5. The agent generates the join SQL using both tables — no manual SQL required.
+
+---
 
 ### Checklist
 - [ ] Database: Run `alembic upgrade head` on production DB

@@ -280,6 +280,42 @@ UPDATE reviews SET approved = true WHERE id = '<id>';
 ## Feedback (homepage)
 - POST /feedback — submit contact/feedback form `{name, email, subject?, message}`
   - Saved to the `feedback` table in Postgres
+
+## Cross-Pipeline Inputs & Branching
+
+### Step Snapshots
+- `GET /users/me/pipeline-steps/snapshots` — list every pipeline step (for the current user) that has a saved Parquet snapshot, grouped by dataset. Used to populate the "⊕ Cross input" selector.
+  - Returns: `[{ step_id, step_number, operation, description, row_count_after, snapshot_path, dataset_id, dataset_name, created_at }]`
+
+### Cross-Pipeline Inputs
+Link a snapshot from another pipeline into the current dataset so the AI agent can JOIN/reconcile against it.
+
+- `POST /datasets/{dataset_id}/cross-inputs` — add a cross-pipeline input
+  - Body: `{ source_step_id: string, alias: string }`
+  - `alias` is the SQL alias the agent will use (e.g. `customers_step2`)
+  - Returns: `CrossPipelineInputOut`
+
+- `GET /datasets/{dataset_id}/cross-inputs` — list all linked cross-pipeline inputs for this dataset
+  - Returns: `CrossPipelineInputOut[]` (enriched with source dataset name, step number, description)
+
+- `DELETE /datasets/{dataset_id}/cross-inputs/{input_id}` — remove a linked cross-pipeline input
+
+### Pipeline Branching (Fork)
+Create a new branch dataset from any step in an existing pipeline.
+
+- `POST /pipeline-steps/{step_id}/fork-to-dataset` — fork pipeline at the given step
+  - Body: `{ name?: string, project_id?: string }`
+  - Creates a new `DatasetMetaDB` pointing at the step's Parquet snapshot (no file copy)
+  - Copies all pipeline steps up to (and including) the chosen step to the new dataset
+  - Returns: `{ dataset_id, dataset_name, forked_from_step_id, steps: [...] }`
+
+- `GET /pipeline-steps/{step_id}/forks` — list datasets previously forked from this step
+  - Returns: `[{ dataset_id, dataset_name, forked_at }]`
+
+### AI Agent Intents
+Two new intents are available in the AI chat:
+- `cross_join` — triggered when the user says "join with {alias}", "merge with {alias}", "combine with {alias}"; the alias must match a linked cross-pipeline input
+- `branch` — triggered when the user says "branch from step N", "fork at step 3", "create a parallel pipeline"; the agent calls `branch_handler` and returns a `branch_result` with the new dataset info
   - Triggers a notification email to `mitul.srivastava000@gmail.com` via Resend
 
 ## Webhooks & Jobs

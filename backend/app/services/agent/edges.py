@@ -30,6 +30,9 @@ _PLANNING_INTENTS = {
     "clean", "filter", "transform", "add_column", "pivot",
     "union", "join", "reconcile", "sql_query", "visualise", "export",
     "validate", "summarise",
+    # cross_join uses cross-pipeline alias tables already in the session registry;
+    # the planner generates the SQL exactly like a normal join.
+    "cross_join",
 }
 
 
@@ -44,6 +47,8 @@ def route_intent(state: AgentState) -> str:
         return "analyse"
     if intent == "predict":
         return "predict"
+    if intent == "branch":
+        return "branch_handler"
     if intent in _PLANNING_INTENTS:
         return "planner"
     return "responder"

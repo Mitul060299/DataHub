@@ -262,5 +262,3 @@ export function TourTooltip({ step, onNext, onSkip }: TourTooltipProps) {
     </>
   );
 }
-
-export { STEPS };

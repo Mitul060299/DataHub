@@ -19,6 +19,7 @@ from .edges import (
 )
 from .nodes.analyse import analyse
 from .nodes.predict import predict
+from .nodes.branch_handler import branch_handler
 from .nodes.auto_planner import auto_planner
 from .nodes.clarify_step import clarify_step
 from .nodes.context_loader import context_loader
@@ -56,6 +57,7 @@ def build_agent_graph():
     graph.add_node("responder", responder)
     graph.add_node("analyse", analyse)
     graph.add_node("predict", predict)
+    graph.add_node("branch_handler", branch_handler)
 
     # ------------------------------------------------------------------
     # Auto Mode nodes
@@ -81,6 +83,7 @@ def build_agent_graph():
     graph.add_edge("clarify_step", END)
     graph.add_edge("analyse", END)
     graph.add_edge("predict", END)
+    graph.add_edge("branch_handler", END)
     graph.add_edge("planner", "plan_presenter")
     graph.add_edge("pipeline_recorder", "responder")
     graph.add_edge("responder", END)
@@ -96,6 +99,7 @@ def build_agent_graph():
             "responder": "responder",
             "analyse": "analyse",
             "predict": "predict",
+            "branch_handler": "branch_handler",
             # Auto Mode destinations
             "prior_pipeline_parser": "prior_pipeline_parser",
             "goal_parser": "goal_parser",

@@ -4,6 +4,8 @@
  * Step 1: Upload a dataset  (targets: data-section in ExplorerPanel)
  * Step 2: Ask the AI agent  (targets: ai-agent-header in AIPanel)
  * Step 3: Review the result (targets: pipeline-tab in CanvasPanel)
+ * Step 4: Link another pipeline (targets: cross-input-button in CanvasPanel toolbar)
+ * Step 5: Branch your pipeline (targets: pipeline-step-list in CanvasPanel Pipeline tab)
  *
  * Step completions are detected via custom DOM events:
  *   "datahub:quickstart-step1-done"   – fired when first dataset is imported
@@ -127,7 +129,25 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
         "Every AI transformation is saved as a pipeline step. Click the Pipeline tab to see the full history and re-run any step.",
       position: "bottom",
       completionEvent: "datahub:quickstart-step3-done",
-      celebration: "🚀 Tour complete! You're ready to explore.",
+      celebration: "🚀 Three down! Two more tips…",
+    },
+    {
+      target: "cross-input-button",
+      title: "Step 4 — Link another pipeline's output",
+      content:
+        "⊕ Cross input lets you link a snapshot from any other pipeline step. The AI can then JOIN or reconcile the two datasets using a SQL alias — just say \"join with alias_name\" in the chat.",
+      position: "bottom",
+      completionEvent: "datahub:quickstart-step4-done",
+      celebration: "🔗 Cross-pipeline linked!",
+    },
+    {
+      target: "pipeline-step-list",
+      title: "Step 5 — Branch your pipeline",
+      content:
+        "Hover any step node in the graph on the left and click the orange ↗ button to fork from that point. You can also type \"fork from step 3\" in the AI chat. The new branch opens as a separate workspace lane.",
+      position: "left",
+      completionEvent: "datahub:quickstart-step5-done",
+      celebration: "🎉 Tour complete! You're a DataHub pro.",
     },
   ];
 

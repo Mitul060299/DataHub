@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
+import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { IconClock, IconDownload, IconGitBranch, IconGrid, IconRefresh, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 
@@ -12,6 +13,7 @@ import { PipelineSection } from "./PipelineSection";
 import { DataVersionHistory } from "./DataVersionHistory";
 import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
+import { CrossStepInputPanel } from "./CrossStepInputPanel";
 
 type CanvasTab = "data" | "pipeline" | "dashboards" | "schedule" | "history";
 
@@ -77,6 +79,7 @@ function relTime(iso?: string | null): string {
 export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError, onTabChange }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const { exportPipeline } = usePipeline();
+  const { activeLanes, setActiveDataset } = useWorkspaceContext();
   const navigate = useNavigate();
   const [tab, setTab] = useState<CanvasTab>("data");
 
@@ -129,6 +132,9 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
 
   // ── Send-to-destination modal state ──────────────────────────────────────
   const [isSendToDestOpen, setIsSendToDestOpen] = useState(false);
+
+  // ── Cross-pipeline input picker state ────────────────────────────────────
+  const [isCrossInputOpen, setIsCrossInputOpen] = useState(false);
 
   // ── Step-preview state (triggered from PipelineSection 👁 buttons) ────────
   const [viewingStepIndex, setViewingStepIndex] = useState<number | null>(null);
@@ -348,6 +354,15 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         datasetName={dataset?.name ?? null}
         rowCount={liveArtifact?.rowCount ?? rowCount}
       />
+      {/* ── Cross-pipeline input picker ────────────────────────────────── */}
+      {isCrossInputOpen && dataset?.id && (
+        <CrossStepInputPanel
+          open={isCrossInputOpen}
+          onClose={() => setIsCrossInputOpen(false)}
+          datasetId={dataset.id}
+          datasetName={dataset.name}
+        />
+      )}
       {/* ── Export Confirmation Modal ───────────────────────────────────── */}
       {exportConfirmTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -436,6 +451,22 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
 
         {/* Export dropdown */}
         <div style={{ display: "inline-flex", gap: 6, position: "relative" }} ref={dropdownRef}>
+          {tab === "pipeline" && dataset?.id && (
+            <button
+              className="btn"
+              data-tour="cross-input-button"
+              title="Add a cross-pipeline step input — link a saved snapshot from another pipeline step so the AI agent can JOIN or reconcile against it using a SQL alias"
+              onClick={() => {
+                setIsCrossInputOpen(true);
+                window.dispatchEvent(new Event("datahub:quickstart-step4-done"));
+              }}
+              style={{ gap: 5 }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                ⊕ Cross input
+              </span>
+            </button>
+          )}
           <button
             className="btn"
             data-tour="export-button"
@@ -662,11 +693,11 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         )}
         {tab === "pipeline" ? (
           <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-            <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+            <div data-tour="pipeline-graph-area" style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
               <PipelineGraphTab />
             </div>
             <div style={{ width: 1, background: "var(--bd)", flexShrink: 0 }} />
-            <div style={{ width: 300, flexShrink: 0, overflowY: "auto" }}>
+            <div data-tour="pipeline-step-list" style={{ width: 300, flexShrink: 0, overflowY: "auto" }}>
               <PipelineSection
                 onExport={() => exportPipeline(steps)}
                 hideHeader
@@ -727,6 +758,28 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
                 columns={effectiveCols ?? []}
                 stepCount={steps.length}
                 lastAction={viewingStepIndex !== null ? "" : lastAction}
+                otherLanes={activeLanes
+                  .filter((lane) => lane.id !== dataset?.id)
+                  .map((lane) => ({ id: lane.id, name: lane.name }))}
+                onDrillTo={(datasetId, column, value) => {
+                  const target = activeLanes.find((l) => l.id === datasetId);
+                  if (!target) return;
+                  setActiveDataset(target);
+                  // Build a safe filter prompt. Quote the value if it contains
+                  // characters that confuse natural-language parsing.
+                  const safeValue = /[\s,'"]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+                  const prompt = `Filter to rows where ${column} = ${safeValue}`;
+                  // Defer the prompt dispatch one tick so the AIPanel binds to
+                  // the newly-active dataset before receiving the event.
+                  setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent("datahub:chat:send-prompt", {
+                      detail: { prompt, datasetId },
+                    }));
+                    window.dispatchEvent(new CustomEvent("datahub:toast", {
+                      detail: { message: `Drilled to ${target.name}: filtering ${column} = ${safeValue}`, tone: "info" },
+                    }));
+                  }, 150);
+                }}
               />
             </>
           )

@@ -65,6 +65,11 @@ class AgentState(TypedDict):
     # Schemas loaded for secondary datasets – keyed by dataset name/alias
     secondary_schemas: NotRequired[dict[str, dict]]
 
+    # Cross-pipeline step inputs loaded for this session.  Each entry is:
+    # { alias, source_step_id, source_dataset_id, source_dataset_name, description, snapshot_path }
+    # The agent can reference these by alias in any SQL it generates.
+    cross_pipeline_inputs: NotRequired[list[dict]]
+
     # Session workspace
     session_id: NotRequired[str]           # f"{user_id}:{chat_session_id}"
     table_registry: NotRequired[dict[str, TableRegistryEntry]]  # duckdb_name -> entry

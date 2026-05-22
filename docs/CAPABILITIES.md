@@ -123,6 +123,8 @@ All operations available via NL pipeline editing and the visual step builder:
 - Join key auto-detection ✅ — planner identifies both tables from session registry by name matching; finds common columns; prefers `*_id / id / key / code`; generates complete `LEFT JOIN` SQL with `left_table / right_table / join_key / join_type` in parameters block
 - Proactive insights after every operation ✅ — `RESPONDER_TRANSFORM_PROMPT` appends one domain observation about the result and one "Want me to" / "Shall I" follow-up; outlier callout injected when `outlier_count > 0`
 - `intent` field on `agent.done` SSE event ✅ — frontend follow-up chips are intent-aware: `validate` → fix/chart/export; `clarify` and `converse` → no chips shown
+- **Cross-pipeline step inputs** ✅ — link a saved snapshot from any other pipeline step into the current dataset via alias; AI agent automatically sees the alias as a join table and can reference it in SQL; managed via "⊕ Cross input" button in the Pipeline tab toolbar; REST API: `POST/GET/DELETE /datasets/{id}/cross-inputs`
+- **Pipeline branching (fork)** ✅ — create a new parallel branch dataset from any step in an existing pipeline via the "↗" button on pipeline graph nodes or by saying "fork from step N" in the AI chat; branch inherits all steps up to the chosen step; new dataset appears in the workspace lane bar automatically; REST API: `POST /pipeline-steps/{stepId}/fork-to-dataset`
 
 ## 7. Analytics & Visualizations
 - Summary charts ✅

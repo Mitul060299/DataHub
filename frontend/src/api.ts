@@ -1459,6 +1459,85 @@ export async function updateProject(
   return response.data;
 }
 
+// ─── Cross-pipeline step join + branch ───────────────────────────────────────
+
+export interface StepSnapshotOut {
+  step_id: string;
+  step_number: number;
+  operation: string;
+  description?: string | null;
+  row_count_after?: number | null;
+  snapshot_path: string;
+  dataset_id: string;
+  dataset_name?: string | null;
+  created_at?: string | null;
+}
+
+export interface CrossPipelineInputOut {
+  id: string;
+  consumer_dataset_id: string;
+  source_step_id: string;
+  source_dataset_id: string;
+  alias: string;
+  source_dataset_name?: string | null;
+  step_number?: number | null;
+  step_description?: string | null;
+  snapshot_path?: string | null;
+}
+
+export interface ForkChildOut {
+  dataset_id: string;
+  dataset_name?: string | null;
+  forked_at?: string | null;
+}
+
+export interface ForkFromStepOut {
+  dataset_id: string;
+  dataset_name: string;
+  forked_from_step_id: string;
+  steps: Record<string, unknown>[];
+}
+
+export async function fetchUserStepSnapshots(): Promise<StepSnapshotOut[]> {
+  const response = await api.get("/users/me/pipeline-steps/snapshots");
+  return response.data as StepSnapshotOut[];
+}
+
+export async function addCrossInput(
+  datasetId: string,
+  body: { source_step_id: string; alias: string },
+): Promise<CrossPipelineInputOut> {
+  const response = await api.post(`/datasets/${datasetId}/cross-inputs`, body);
+  return response.data as CrossPipelineInputOut;
+}
+
+export async function listCrossInputs(
+  datasetId: string,
+): Promise<CrossPipelineInputOut[]> {
+  const response = await api.get(`/datasets/${datasetId}/cross-inputs`);
+  return response.data as CrossPipelineInputOut[];
+}
+
+export async function removeCrossInput(
+  datasetId: string,
+  inputId: string,
+): Promise<void> {
+  await api.delete(`/datasets/${datasetId}/cross-inputs/${inputId}`);
+}
+
+export async function forkFromStep(
+  stepId: string,
+  body: { name?: string; project_id?: string },
+): Promise<ForkFromStepOut> {
+  const response = await api.post(`/pipeline-steps/${stepId}/fork-to-dataset`, body);
+  return response.data as ForkFromStepOut;
+}
+
+export async function listStepForks(stepId: string): Promise<ForkChildOut[]> {
+  const response = await api.get(`/pipeline-steps/${stepId}/forks`);
+  return response.data as ForkChildOut[];
+}
+
 export async function deleteProject(id: string): Promise<void> {
   await api.delete(`/projects/${id}`);
 }

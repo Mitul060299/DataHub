@@ -121,9 +121,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const addLane = useCallback((dataset: Dataset) => {
     setActiveLanes((prev) => {
       if (prev.some((d) => d.id === dataset.id)) return prev;
-      // Max 2 lanes — drop the oldest if at capacity
+      // Max 4 lanes — drop the oldest if at capacity. Supports common
+      // multi-file workflows (e.g. finance reconciliation: JE + TB + COA + result).
       const next = [...prev, dataset];
-      return next.length > 2 ? next.slice(next.length - 2) : next;
+      return next.length > 4 ? next.slice(next.length - 4) : next;
     });
   }, []);
 
@@ -134,11 +135,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const setActiveDataset = useCallback((dataset: Dataset | null) => {
     if (dataset) {
       localStorage.setItem("activeDatasetId", dataset.id);
-      // Track in lanes (max 2, newest wins)
+      // Track in lanes (max 4, newest wins)
       setActiveLanes((prev) => {
         if (prev.some((d) => d.id === dataset.id)) return prev;
         const next = [...prev, dataset];
-        return next.length > 2 ? next.slice(next.length - 2) : next;
+        return next.length > 4 ? next.slice(next.length - 4) : next;
       });
     } else {
       localStorage.removeItem("activeDatasetId");

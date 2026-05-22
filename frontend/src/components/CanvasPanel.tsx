@@ -84,6 +84,18 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   const [tab, setTab] = useState<CanvasTab>("data");
 
   const switchTab = (next: CanvasTab) => { setTab(next); onTabChange?.(next); };
+
+  // Allow the QuickstartTour to programmatically switch tabs without
+  // prop-drilling through WorkspacePage (the backdrop blocks user clicks).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const target = (e as CustomEvent<string>).detail as CanvasTab;
+      if (target) switchTab(target);
+    };
+    window.addEventListener("datahub:quickstart-open-tab", handler);
+    return () => window.removeEventListener("datahub:quickstart-open-tab", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);

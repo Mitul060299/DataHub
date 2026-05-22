@@ -124,9 +124,9 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
     },
     {
       target: "pipeline-tab",
-      title: "Step 3 — Review your pipeline",
+      title: "Step 3 — Your pipeline history",
       content:
-        "Every AI transformation is saved as a pipeline step. Click the Pipeline tab to see the full history and re-run any step.",
+        "Every AI transformation is saved as a pipeline step. This tab shows the full history — you can re-run, undo, or branch off any step.",
       position: "bottom",
       completionEvent: "datahub:quickstart-step3-done",
       celebration: "🚀 Three down! Two more tips…",
@@ -167,6 +167,16 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
   const [celebToast, setCelebToast] = useState<string | null>(null);
 
   const step = QS_STEPS[stepIndex];
+
+  // Auto-switch to the Pipeline tab for steps 3, 4, 5 so their target
+  // elements are actually in the DOM when the tooltip appears.
+  useEffect(() => {
+    if (stepIndex >= 2 && stepIndex <= 4) {
+      window.dispatchEvent(
+        new CustomEvent("datahub:quickstart-open-tab", { detail: "pipeline" }),
+      );
+    }
+  }, [stepIndex]);
 
   // Measure target element position
   useEffect(() => {

@@ -1,14 +1,14 @@
 """
 pipeline_refresh.py
 ===================
-Endpoints:
-  GET  /api/pipelines/runs/{run_id}/status — poll run status
-  GET  /api/pipelines/{pipeline_id}/schedule — get schedule
-  POST /api/pipelines/{pipeline_id}/schedule — create/update schedule
+Endpoints (exposed under /pipelines; the reverse proxy strips the /api prefix
+clients send, so any router registered with `/api/...` is unreachable):
+  GET  /pipelines/runs/{run_id}/status — poll run status
+  GET  /pipelines/{pipeline_id}/schedule — get schedule
+  POST /pipelines/{pipeline_id}/schedule — create/update schedule
 
 NOTE: POST /{pipeline_id}/run and GET /{pipeline_id}/runs are handled
-by pipeline_workflows.py (registered earlier with same prefix) and are
-not duplicated here.
+by pipelines.py (the original CRUD router) and are not duplicated here.
 """
 
 import uuid
@@ -21,7 +21,7 @@ from ..models import PipelineRunStatus, PipelineScheduleCreate, PipelineSchedule
 from ..models_db import PipelineRunV2DB, PipelineScheduleDB, PipelineV2DB
 from ..security import get_current_user_id, get_current_role, require_role
 
-router = APIRouter(prefix="/api/pipelines", tags=["pipeline_refresh"])
+router = APIRouter(prefix="/pipelines", tags=["pipeline_refresh"])
 
 # ---------------------------------------------------------------------------
 # Poll run status

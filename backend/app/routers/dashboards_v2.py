@@ -251,7 +251,7 @@ def generate_dashboard_layout(
         dataset_names = [r.name for r in rows if r.name]
 
     # Call the AI service
-    from ..services.dashboard_ai_service import generate_layout, layout_from_screenshot
+    from ..services.dashboard_ai_service import generate_layout, layout_from_screenshot, build_tile_data
 
     try:
         if payload.screenshot_base64:
@@ -289,6 +289,33 @@ def generate_dashboard_layout(
 
         layout_entry = {"w": spec.get("w", 6), "h": spec.get("h", 6)}
 
+        # For chart/metric tiles, attempt to execute SQL against the dataset
+        # and pre-populate echarts_config / metric_value so the tile renders
+        # immediately. Failures are non-fatal — the tile is still created
+        # and the user can edit/refresh it.
+        tile_data: dict | None = None
+        if tile_type in ("chart", "metric") and dataset_id:
+            try:
+                tile_data = build_tile_data(
+                    tile_spec=spec,
+                    dataset_id=dataset_id,
+                    db=db,
+                    user_id=user_id,
+                )
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "generate_dashboard: build_tile_data failed: %s", exc
+                )
+
+        if tile_data:
+            if "sql" in tile_data:
+                query_spec["sql"] = tile_data["sql"]
+            if "x_col" in tile_data:
+                query_spec["x_col"] = tile_data["x_col"]
+            if "y_col" in tile_data:
+                query_spec["y_col"] = tile_data["y_col"]
+
         try:
             DashboardsV2Service.add_tile(
                 user_id=user_id,
@@ -300,6 +327,8 @@ def generate_dashboard_layout(
                 layout=layout_entry,
                 tile_type=tile_type,
                 metric_label=spec.get("metric_label") if tile_type == "metric" else None,
+                echarts_config=(tile_data or {}).get("echarts_config"),
+                metric_value=(tile_data or {}).get("metric_value"),
             )
         except Exception as exc:
             # Log but continue — don't fail the whole request for one bad tile
@@ -318,8 +347,13 @@ def refresh_tile(
     dashboard_id: str,
     tile_id: str,
     authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ) -> DashboardTileOut:
-    """Re-fetch a single tile from the database (ensures frontend is in sync)."""
+    """Re-execute the tile's stored SQL against its dataset and rebuild the
+    echarts_config (or metric_value). Falls back to returning the persisted
+    tile when no SQL is stored — for legacy tiles or those still authored
+    purely from the AI chat panel.
+    """
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_subject(authorization)
@@ -330,7 +364,76 @@ def refresh_tile(
     )
     if tile is None:
         raise HTTPException(status_code=404, detail="Tile not found")
-    return tile
+
+    qs = dict(tile.query_spec or {})
+    sql = (qs.get("sql") or "").strip()
+    if not sql or not tile.dataset_id or tile.tile_type not in ("chart", "metric"):
+        return tile
+
+    # Re-execute the stored SQL against the dataset and update the tile.
+    try:
+        from ..routers.datasets import get_dataset_from_db
+        from ..services.dashboard_ai_service import _format_metric
+        from ..services.echarts_builder import build_echarts_config
+        import duckdb  # lazy
+
+        df = get_dataset_from_db(tile.dataset_id, db, user_id=user_id)
+        if df is None or df.empty:
+            return tile
+        con = duckdb.connect(database=":memory:")
+        try:
+            con.register("dataset", df)
+            result_df = con.execute(sql).df()
+        finally:
+            con.close()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("refresh_tile: re-exec failed: %s", exc)
+        return tile
+
+    if result_df is None or result_df.empty:
+        return tile
+
+    updates: dict = {}
+    if tile.tile_type == "metric":
+        for col in result_df.columns:
+            try:
+                val = result_df.iloc[0][col]
+                f = float(val)
+            except Exception:
+                continue
+            updates["metric_value"] = _format_metric(f)
+            break
+    else:
+        rows = result_df.to_dict(orient="records")
+        cols = list(result_df.columns)
+        if len(cols) >= 2:
+            x_col = qs.get("x_col") or cols[0]
+            y_col = qs.get("y_col") or (cols[1:] if len(cols) > 2 else cols[1])
+            try:
+                updates["echarts_config"] = build_echarts_config(
+                    chart_type=tile.chart_type or "bar",
+                    rows=rows,
+                    x_col=x_col,
+                    y_col=y_col,
+                    title=tile.title or "",
+                )
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "refresh_tile: echarts build failed: %s", exc
+                )
+
+    if not updates:
+        return tile
+
+    updated = DashboardsV2Service.update_tile(
+        user_id=user_id,
+        dashboard_id=dashboard_id,
+        tile_id=tile_id,
+        updates=updates,
+    )
+    return updated or tile
 
 
 @router.patch("/{dashboard_id}", response_model=DashboardV2Out)

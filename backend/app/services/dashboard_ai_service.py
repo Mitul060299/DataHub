@@ -281,6 +281,212 @@ def _parse_tile_specs(raw: str) -> list[TileSpec]:
     return validated
 
 
+# ── Data builder: turn a query_hint + dataset into echarts_config / metric_value ──
+
+_SQL_PROMPT_TEMPLATE = """You are a SQL analyst. Generate ONE DuckDB SQL SELECT query against a table named exactly `dataset` to answer the request.
+
+DATASET SCHEMA (column → dtype):
+{schema}
+
+SAMPLE ROWS (first 3):
+{sample}
+
+REQUEST: {hint}
+CHART TYPE: {chart_type}
+TILE TYPE: {tile_type}
+
+Rules:
+- Table name is exactly `dataset` (no schema prefix).
+- Return ONLY the raw SQL — no markdown fences, no comments, no explanation.
+{tile_rules}
+- Use only columns from the SCHEMA above (case-sensitive).
+- Wrap identifier names with spaces / special chars in double quotes.
+- For dates, prefer `DATE_TRUNC('month', col)` when grouping by time.
+- Never return SELECT * — list explicit columns.
+"""
+
+
+def build_tile_data(
+    tile_spec: TileSpec,
+    dataset_id: str,
+    db,
+    user_id: str,
+) -> dict | None:
+    """For a chart/metric tile spec, run an SQL query against the dataset and
+    produce echarts_config (or metric_value).
+
+    Returns a dict with the new tile fields to set, or None on failure.
+    Failure is non-fatal — caller should still create the tile with the
+    layout-only fallback so the user can edit it.
+    """
+    tile_type = tile_spec.get("tile_type")
+    if tile_type not in ("chart", "metric"):
+        return None
+    if not dataset_id:
+        return None
+    query_hint = (tile_spec.get("query_hint") or "").strip()
+    if not query_hint:
+        return None
+
+    # Load dataset into a pandas DataFrame
+    try:
+        from ..routers.datasets import get_dataset_from_db
+        df = get_dataset_from_db(dataset_id, db, user_id=user_id)
+    except Exception as exc:
+        _logger.warning("build_tile_data: dataset load failed: %s", exc)
+        return None
+    if df is None or df.empty:
+        return None
+
+    # Build schema description for the prompt
+    schema_lines = [f"  {c} ({df[c].dtype})" for c in df.columns]
+    sample = df.head(3).to_dict(orient="records")
+    chart_type = (tile_spec.get("chart_type") or "bar").lower()
+
+    if tile_type == "metric":
+        tile_rules = (
+            "- METRIC tile: return EXACTLY ONE row with EXACTLY ONE numeric column "
+            "(the aggregate value the metric label refers to)."
+        )
+    else:
+        tile_rules = (
+            f"- {chart_type.upper()} chart: return at most 50 rows. "
+            "First column = category/x-axis (text or date), "
+            "remaining columns = numeric metric(s). "
+            "Use GROUP BY + aggregation where appropriate; "
+            "ORDER BY the metric DESC; LIMIT 50."
+        )
+
+    prompt = _SQL_PROMPT_TEMPLATE.format(
+        schema="\n".join(schema_lines),
+        sample=json.dumps(sample, default=str)[:800],
+        hint=query_hint,
+        chart_type=chart_type,
+        tile_type=tile_type,
+        tile_rules=tile_rules,
+    )
+
+    try:
+        raw, _, _ = complete_sync(
+            [{"role": "user", "content": prompt}],
+            temperature=0.0,
+            json_mode=False,
+            timeout=30.0,
+            call_type="dashboard_tile_sql",
+            user_id=user_id,
+        )
+    except Exception as exc:
+        _logger.warning("build_tile_data: LLM SQL generation failed: %s", exc)
+        return None
+
+    sql = _extract_sql(raw)
+    if not sql or not sql.lower().lstrip().startswith(("select", "with")):
+        _logger.warning("build_tile_data: LLM returned non-SELECT SQL: %s", sql[:200])
+        return None
+
+    # Execute against an in-memory DuckDB instance bound to this DataFrame
+    try:
+        import duckdb  # lazy import
+        con = duckdb.connect(database=":memory:")
+        try:
+            con.register("dataset", df)
+            result_df = con.execute(sql).df()
+        finally:
+            con.close()
+    except Exception as exc:
+        _logger.warning(
+            "build_tile_data: SQL exec failed (%s): %s", exc, sql[:200]
+        )
+        return None
+
+    if result_df is None or result_df.empty:
+        return None
+
+    rows = result_df.to_dict(orient="records")
+
+    # ─ Metric tile: extract the first scalar numeric value ─────────────────
+    if tile_type == "metric":
+        for col in result_df.columns:
+            try:
+                val = result_df.iloc[0][col]
+            except Exception:
+                continue
+            if val is None:
+                continue
+            try:
+                f = float(val)
+            except (TypeError, ValueError):
+                continue
+            return {
+                "sql": sql,
+                "metric_value": _format_metric(f),
+            }
+        return None
+
+    # ─ Chart tile: detect x and y columns, build echarts_config ────────────
+    cols = list(result_df.columns)
+    if len(cols) < 2:
+        return None
+    x_col = cols[0]
+    y_cols_list = cols[1:]
+
+    try:
+        from .echarts_builder import build_echarts_config
+        echarts_cfg = build_echarts_config(
+            chart_type=chart_type,
+            rows=rows,
+            x_col=x_col,
+            y_col=y_cols_list[0] if len(y_cols_list) == 1 else y_cols_list,
+            title=str(tile_spec.get("title", "")),
+        )
+    except Exception as exc:
+        _logger.warning("build_tile_data: echarts build failed: %s", exc)
+        return None
+
+    return {
+        "sql": sql,
+        "echarts_config": echarts_cfg,
+        "x_col": x_col,
+        "y_col": y_cols_list[0] if len(y_cols_list) == 1 else y_cols_list,
+    }
+
+
+def _extract_sql(raw: str) -> str:
+    """Strip code fences, comments and trailing semicolons from an LLM SQL response."""
+    s = (raw or "").strip()
+    if s.startswith("```"):
+        # Drop opening fence (and optional language tag on the same line)
+        first_nl = s.find("\n")
+        if first_nl != -1:
+            s = s[first_nl + 1:]
+        else:
+            s = s[3:]
+        # Drop closing fence
+        fence = s.rfind("```")
+        if fence != -1:
+            s = s[:fence]
+    # Strip line comments
+    cleaned = "\n".join(
+        line for line in s.splitlines()
+        if not line.lstrip().startswith("--")
+    )
+    return cleaned.strip().rstrip(";").strip()
+
+
+def _format_metric(f: float) -> str:
+    """Render a numeric metric value for display in a KPI tile."""
+    a = abs(f)
+    if a >= 1_000_000_000:
+        return f"{f/1_000_000_000:.2f}B"
+    if a >= 1_000_000:
+        return f"{f/1_000_000:.2f}M"
+    if a >= 1_000:
+        return f"{f/1_000:.2f}K"
+    if f == int(f):
+        return f"{int(f):,}"
+    return f"{f:,.2f}"
+
+
 # ── Static templates ───────────────────────────────────────────────────────────
 
 TEMPLATES: dict[str, list[TileSpec]] = {

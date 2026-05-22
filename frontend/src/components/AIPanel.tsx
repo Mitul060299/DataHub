@@ -909,17 +909,11 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   const handleSaveCheckpoint = async (messageId: string, tableName: string) => {
     if (!sessionId || savingCheckpointIds.has(messageId) || savedCheckpointIds.has(messageId)) return;
     setSavingCheckpointIds((prev) => new Set([...prev, messageId]));
-    const token = getAuthToken();
     try {
-      const res = await fetch("/api/artifacts/save-checkpoint", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ session_id: sessionId, table_name: tableName, artifact_name: tableName }),
+      const res = await api.post("/artifacts/save-checkpoint", { session_id: sessionId, table_name: tableName, artifact_name: tableName }, {
+        headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (res.status < 200 || res.status >= 300) throw new Error(String(res.data));
       setSavedCheckpointIds((prev) => new Set([...prev, messageId]));
       onDatasetMutated?.();
     } catch (err) {

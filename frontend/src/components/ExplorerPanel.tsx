@@ -372,7 +372,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
           }}
           onSaveLive={async (tableName, label) => {
             if (!liveArtifact?.sessionId) return;
-            await api.post("/api/artifacts/save-checkpoint", {
+            await api.post("/artifacts/save-checkpoint", {
               session_id: liveArtifact.sessionId,
               table_name: tableName,
               artifact_name: label,

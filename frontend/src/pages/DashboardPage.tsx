@@ -15,6 +15,7 @@ import {
 } from "../api";
 import type { DashboardV2, DashboardV2Tile } from "../types";
 import { EChartsRenderer } from "../components/EChartsRenderer";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { MetricTile } from "../components/MetricTile";
 import { SharePanel } from "../components/SharePanel";
 import { DashboardComments } from "../components/DashboardComments";
@@ -344,7 +345,7 @@ function TileCard({
                 </div>
               );
             }
-            return <EChartsRenderer config={cfg} height={260} />;
+            return <ErrorBoundary fallback={<div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#475569" }}>⚠ Chart render failed</div>}><EChartsRenderer config={cfg} height={260} /></ErrorBoundary>;
           })()
         )}
       </div>

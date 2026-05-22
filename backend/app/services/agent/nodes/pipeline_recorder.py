@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ....db import SessionLocal
 from ....models_db import PipelineRunV2DB, PipelineStepDB
@@ -45,7 +45,7 @@ async def pipeline_recorder(state: AgentState) -> dict:
                     "session_table_name": result.get("session_table_name"),
                     "row_count_before": result.get("row_count_before"),
                     "execution_time_ms": result.get("execution_time_ms"),
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     # Frontend rendering extras
                     "tile_created": result.get("tile_created"),
                     "artifact_url": result.get("artifact_url"),
@@ -69,7 +69,7 @@ async def pipeline_recorder(state: AgentState) -> dict:
                     "rows_affected": step.get("rows_affected"),
                     "input_tables": step.get("input_tables") or [],
                     "output_table": step.get("output_table"),
-                    "timestamp": step.get("timestamp") or datetime.utcnow().isoformat(),
+                    "timestamp": step.get("timestamp") or datetime.now(timezone.utc).isoformat(),
                 }
                 for index, step in enumerate(saved_steps)
             ]
@@ -91,8 +91,8 @@ async def pipeline_recorder(state: AgentState) -> dict:
                 },
                 execution_log=execution_log,
                 triggered_by="agent",
-                started_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
             )
             db.add(run)
             db.commit()

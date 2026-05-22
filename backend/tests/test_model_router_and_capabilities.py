@@ -64,7 +64,12 @@ class TestSimplePlanGoal(unittest.TestCase):
 class TestSelectModel(unittest.TestCase):
     def _env(self, enabled: bool):
         val = "true" if enabled else "false"
-        return patch.dict(os.environ, {"LLM_ROUTER_ENABLED": val})
+        env = {"LLM_ROUTER_ENABLED": val}
+        # When the router is enabled, explicitly set GROQ_FAST_MODEL so we test
+        # routing behaviour rather than the fallback-to-versatile logic.
+        if enabled:
+            env["GROQ_FAST_MODEL"] = _FAST_DEFAULT
+        return patch.dict(os.environ, env)
 
     def test_router_disabled_always_versatile(self):
         with self._env(False):

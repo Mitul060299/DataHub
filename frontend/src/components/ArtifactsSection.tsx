@@ -107,7 +107,7 @@ export function ArtifactsSection({
   const fetchStored = useCallback(async () => {
     setStoredLoading(true);
     try {
-      const response = await api.get<StoredArtifact[]>("/api/artifacts", {
+      const response = await api.get<StoredArtifact[]>("/artifacts", {
         params: projectId ? { project_id: projectId } : undefined,
       });
       setStored(response.data ?? []);

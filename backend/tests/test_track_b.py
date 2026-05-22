@@ -333,6 +333,10 @@ class TestFinalizeEndpoint(unittest.TestCase):
              patch("app.routers.imports.storage_tier_service.assign_initial_tier",
                    return_value="hot"), \
              patch("app.routers.imports._ensure_unique_table_name", return_value="my_dataset"), \
+             patch("app.routers.imports.resolve_billing_user_for_user", return_value="user1"), \
+             patch("app.routers.imports.billing_repository.get_effective_plan", return_value=None), \
+             patch("app.routers.imports.enforce_usage_limit"), \
+             patch("app.routers.imports.update_storage_bytes"), \
              patch("app.routers.imports.increment_usage"):
             return asyncio.run(finalize_upload(
                 payload={"dataset_id": dataset_id, "filename": filename},
@@ -437,6 +441,10 @@ class TestFinalizeEndpoint(unittest.TestCase):
              patch("app.routers.imports.storage_tier_service.assign_initial_tier",
                    return_value="hot"), \
              patch("app.routers.imports._ensure_unique_table_name", return_value="t"), \
+             patch("app.routers.imports.resolve_billing_user_for_user", return_value="user1"), \
+             patch("app.routers.imports.billing_repository.get_effective_plan", return_value=None), \
+             patch("app.routers.imports.enforce_usage_limit"), \
+             patch("app.routers.imports.update_storage_bytes"), \
              patch("app.routers.imports.increment_usage") as mock_inc:
             asyncio.run(finalize_upload(
                 payload={"dataset_id": "ds1", "filename": "data.parquet"},

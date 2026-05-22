@@ -36,7 +36,7 @@ from ..services.support_chat_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/support-chat", tags=["support-chat"])
+router = APIRouter(prefix="/support-chat", tags=["support-chat"])
 
 _GREETING = (
     "Hi! I'm the DataHub support assistant. Ask me anything about features, "

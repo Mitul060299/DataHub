@@ -21,7 +21,7 @@ from app.services.ai_operating_controls import get_ai_operating_controls
 from app.services.plan_guard import resolve_user_plan, resolve_user_plan_by_id
 from app.services.usage_service import enforce_usage_limit, increment_usage
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 def _resolve_chat_plan(db: DBSession, authorization: str | None) -> str:

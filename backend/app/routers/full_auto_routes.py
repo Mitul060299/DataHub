@@ -52,7 +52,7 @@ from app.services.usage_service import (
 )
 from app.services import billing_repository
 
-router = APIRouter(prefix="/api/auto", tags=["auto"])
+router = APIRouter(prefix="/auto", tags=["auto"])
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

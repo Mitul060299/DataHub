@@ -129,7 +129,7 @@ class SessionFallbackVisibilityTests(unittest.TestCase):
         }
 
         db = self._make_db(self._make_dataset())
-        with patch.object(AIAgentService, "_provider_config", return_value=(None, None, None)), \
+        with patch.object(AIAgentService, "_is_llm_configured", return_value=False), \
              patch.object(AIAgentService, "_get_dataset_context", return_value=fake_ctx):
             result = AIAgentService.analyze_dataset(
                 "ds-1", db,

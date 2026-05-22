@@ -13,7 +13,7 @@ from ..security import get_current_role, get_current_subject, require_role
 from ..config import settings
 
 router = APIRouter(
-    prefix="/api/dashboards/{dashboard_id}/access",
+    prefix="/dashboards/{dashboard_id}/access",
     tags=["dashboard-access"],
 )
 

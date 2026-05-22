@@ -21,7 +21,7 @@ from ..services.pipeline_runner import run_pipeline
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/cron", tags=["cron"])
+router = APIRouter(prefix="/cron", tags=["cron"])
 
 
 @router.get("/run-scheduled-pipelines")

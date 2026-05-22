@@ -45,39 +45,10 @@ def upgrade() -> None:
     )
 
     op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'dataset_meta'
-                  AND column_name = 'forked_from_step_id'
-            ) THEN
-                ALTER TABLE dataset_meta
-                    ADD COLUMN forked_from_step_id TEXT
-                    REFERENCES pipeline_steps(id) ON DELETE SET NULL;
-            END IF;
-        END;
-        $$;
-        """
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS forked_from_step_id TEXT"
     )
 
 
 def downgrade() -> None:
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'dataset_meta'
-                  AND column_name = 'forked_from_step_id'
-            ) THEN
-                ALTER TABLE dataset_meta DROP COLUMN forked_from_step_id;
-            END IF;
-        END;
-        $$;
-
-        DROP TABLE IF EXISTS cross_pipeline_inputs;
-        """
-    )
+    op.execute("ALTER TABLE dataset_meta DROP COLUMN IF EXISTS forked_from_step_id")
+    op.execute("DROP TABLE IF EXISTS cross_pipeline_inputs")

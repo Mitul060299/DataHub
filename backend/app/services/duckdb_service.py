@@ -48,7 +48,20 @@ class DuckDBService:
         # its own isolated execution state.  This makes every call thread-safe:
         # concurrent requests no longer share a single DuckDBPyConnection which
         # is NOT thread-safe and causes native crashes (segfaults) under load.
-        return cls._db.cursor()
+        #
+        # IMPORTANT: cursors are new connection handles in DuckDB and do NOT
+        # inherit settings (like autoload_known_extensions) from the parent
+        # connection.  Without these, DuckDB tries to auto-load httpfs when it
+        # encounters an S3 path, calling httpfs_init a second time, which
+        # crashes with "Attempted to register an already registered secret
+        # type: 's3'".  Set them on every cursor before returning.
+        cursor = cls._db.cursor()
+        try:
+            cursor.execute("SET autoinstall_known_extensions=false;")
+            cursor.execute("SET autoload_known_extensions=false;")
+        except Exception:
+            pass
+        return cursor
 
     @classmethod
     def _configure_storage(cls) -> None:

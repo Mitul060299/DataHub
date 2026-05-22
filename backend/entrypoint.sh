@@ -53,8 +53,21 @@ PYDEDUP
 
 	if [ "${_alembic_status}" != "0" ]; then
 		if grep -qE "already exists|DuplicateTable|DuplicateColumn" /tmp/_alembic_out.txt; then
-			echo "[entrypoint] Duplicate schema objects detected — stamping alembic_version to head and retrying once"
-			alembic stamp head
+			# Stamp only the specific revision that failed, not HEAD.
+			# Stamping HEAD would mark ALL subsequent (unfailed) migrations as
+			# applied before they run, causing their DDL to be silently skipped.
+			# alembic prints "Running upgrade <from> -> <to>" before each step,
+			# so the last such line identifies the failing revision.
+			_failed_rev=$(grep -oE "Running upgrade [^ ]+ -> [^ ,]+" /tmp/_alembic_out.txt \
+				| tail -1 \
+				| sed 's/Running upgrade .* -> //')
+			if [ -n "${_failed_rev}" ]; then
+				echo "[entrypoint] Duplicate schema objects detected — stamping only failing revision ${_failed_rev} and retrying"
+				alembic stamp "${_failed_rev}"
+			else
+				echo "[entrypoint] Duplicate schema objects detected — could not identify failing revision, stamping head"
+				alembic stamp head
+			fi
 			set +e
 			_run_alembic > /tmp/_alembic_out2.txt 2>&1
 			_stamp_retry_status=$?

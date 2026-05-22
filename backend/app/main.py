@@ -583,6 +583,22 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE pipeline_schedules ADD COLUMN IF NOT EXISTS write_back_config JSONB",
         # 0076 — quickstart project flag (quota-exempt onboarding project)
         "ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_quickstart BOOLEAN NOT NULL DEFAULT false",
+        # 0080/0081/0082 — cross-pipeline inputs + forked_from_step_id.
+        # These are also covered by migrations, but production was previously
+        # stamped past 0081 without the DDL running (entrypoint stamp-to-HEAD
+        # bug, since fixed). This safety net guarantees the column exists.
+        """CREATE TABLE IF NOT EXISTS cross_pipeline_inputs (
+            id                  TEXT PRIMARY KEY,
+            consumer_dataset_id TEXT NOT NULL,
+            source_step_id      TEXT NOT NULL,
+            source_dataset_id   TEXT NOT NULL,
+            alias               TEXT NOT NULL,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (consumer_dataset_id, alias)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_cross_pipeline_consumer ON cross_pipeline_inputs (consumer_dataset_id)",
+        "CREATE INDEX IF NOT EXISTS idx_cross_pipeline_source_step ON cross_pipeline_inputs (source_step_id)",
+        "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS forked_from_step_id TEXT",
     ]
     try:
         from sqlalchemy import text as _text

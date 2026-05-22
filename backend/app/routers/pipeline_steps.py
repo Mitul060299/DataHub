@@ -274,6 +274,7 @@ def list_cross_inputs(
 @router.delete(
     "/datasets/{dataset_id}/cross-inputs/{input_id}",
     status_code=204,
+    response_model=None,
 )
 def remove_cross_input(
     dataset_id: str,

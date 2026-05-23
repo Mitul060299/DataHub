@@ -615,7 +615,7 @@ export function WorkspacePage() {
           />
         </>
       )}
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={() => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } markQuickstartStep1Done(); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } markQuickstartStep1Done(); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}

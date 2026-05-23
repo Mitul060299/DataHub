@@ -44,6 +44,17 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
     return () => window.removeEventListener("datahub:connect:database", handleConnectDatabase);
   }, []);
 
+  // Allow WorkspacePage (and others) to trigger auto-activation of a dataset
+  // by ID after an import without needing to prop-drill setPendingActivateId.
+  useEffect(() => {
+    function handleActivate(e: Event) {
+      const id = (e as CustomEvent<string>).detail;
+      if (id) setPendingActivateId(id);
+    }
+    window.addEventListener("datahub:activate-dataset", handleActivate);
+    return () => window.removeEventListener("datahub:activate-dataset", handleActivate);
+  }, []);
+
   const operationByOutputDataset = useMemo(() => {
     const outputMap = new Map<string, string>();
     for (const step of steps) {

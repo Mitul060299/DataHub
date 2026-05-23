@@ -79,12 +79,16 @@ function toProject(raw: ProjectOut): Project {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { session, isAnonymous } = useAuth();
+  const { session, isAnonymous, anonUserId } = useAuth();
   // User-scoped key so two accounts on the same browser don't clobber each
   // other's "last project" memory, and an anon visitor's last project can't
   // hijack a signed-in user's view.
-  const lastProjectStorageKey = session?.user?.id
-    ? `datahub_last_project_${session.user.id}`
+  // For anonymous users session?.user?.id is null (no Supabase session), so
+  // fall back to anonUserId so they also benefit from project persistence and
+  // don't land on a newly-provisioned quickstart instead of their prior project.
+  const effectiveUserId = session?.user?.id ?? (isAnonymous ? anonUserId : null);
+  const lastProjectStorageKey = effectiveUserId
+    ? `datahub_last_project_${effectiveUserId}`
     : null;
   const readLastProjectId = useCallback((): string | null => {
     if (!lastProjectStorageKey) return null;
@@ -97,8 +101,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [activeLanes, setActiveLanes] = useState<Dataset[]>([]);
   const [lastProjectId, setLastProjectId] = useState<string | null>(() => {
     // Initial peek (may be null if session not yet hydrated; reconciled below).
+    // effectiveUserId is not available in the initialiser (it depends on session
+    // which resolves asynchronously), so this is intentionally approximate —
+    // the useEffect below reconciles it once the session is known.
     try {
-      const uid = session?.user?.id;
+      const uid = session?.user?.id ?? (isAnonymous ? localStorage.getItem("datahub_anon_user_id") : null);
       return uid ? localStorage.getItem(`datahub_last_project_${uid}`) : null;
     } catch { return null; }
   });

@@ -191,9 +191,17 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
     artifact: LiveArtifactState,
   ) => {
     if (sessionSyncTimerRef.current) clearTimeout(sessionSyncTimerRef.current);
+    // Only sync to the server when we have a real session ID.  When the
+    // live artifact is cleared (e.g. after a rollback or "view original"
+    // click), we must NOT send chat_session_id: null — that would wipe the
+    // DatasetSessionDB link that get_pipeline_steps relies on to find
+    // PipelineStepDB rows.  The link is established authoritatively by
+    // pipeline_recorder on the backend; the client should only reinforce
+    // it, never destroy it.
+    if (!artifact?.sessionId) return;
     sessionSyncTimerRef.current = setTimeout(() => {
       void saveDatasetSession(dsId, {
-        chat_session_id: artifact?.sessionId ?? null,
+        chat_session_id: artifact.sessionId,
       }).catch(() => { /* best-effort; localStorage still has it */ });
     }, 800);
   };

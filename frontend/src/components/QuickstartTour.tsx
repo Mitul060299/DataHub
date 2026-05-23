@@ -165,22 +165,6 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
 
   const step = QS_STEPS[stepIndex];
 
-  // Switch to the correct canvas tab when the step changes so the target
-  // element is in the DOM when the tooltip appears.
-  useEffect(() => {
-    const tabForStep: Record<number, string> = {
-      2: "data",
-      3: "pipeline",
-      4: "dashboards",
-    };
-    const target = tabForStep[stepIndex];
-    if (target) {
-      window.dispatchEvent(
-        new CustomEvent("datahub:quickstart-open-tab", { detail: target }),
-      );
-    }
-  }, [stepIndex]);
-
   // Measure target element position
   useEffect(() => {
     if (!step) return;

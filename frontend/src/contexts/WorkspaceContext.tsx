@@ -161,18 +161,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const data = await fetchProjects();
       let mapped = data.map(toProject);
 
-      // For anonymous users: if the project list is empty and we haven't
-      // provisioned the quickstart project yet, do it now and re-fetch.
-      // This prevents the race where refreshProjects() fires before
-      // AuthContext finishes calling provisionQuickstart().
-      if (isAnonymous && mapped.length === 0 && !localStorage.getItem("datahub_qs_provisioned")) {
+      // For ALL users: if no quickstart project exists yet, provision one.
+      // - Anonymous users: use the shared "datahub_qs_provisioned" key.
+      // - Signed-in users: use a per-user key so two accounts on the same
+      //   browser get independent provisioning, and a user whose quickstart
+      //   was deleted (e.g. by migration 0075 when it had no datasets) gets a
+      //   fresh one next time they log in.
+      const hasQsProject = mapped.some((p) => p.is_quickstart);
+      const qsKey = isAnonymous
+        ? "datahub_qs_provisioned"
+        : `datahub_qs_provisioned_${session?.user?.id ?? "auth"}`;
+      if (!hasQsProject && !localStorage.getItem(qsKey)) {
         try {
           await provisionQuickstart();
-          localStorage.setItem("datahub_qs_provisioned", "1");
+          localStorage.setItem(qsKey, "1");
           const data2 = await fetchProjects();
           mapped = data2.map(toProject);
         } catch {
-          // Non-fatal — fall through with empty list
+          // Non-fatal — fall through with existing list
         }
       }
 

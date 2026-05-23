@@ -20,9 +20,12 @@ import { api } from "../api";
 export type Milestone =
   | "workspace_first_visit"
   | "dataset_loaded"
+  | "dataset_uploaded"
   | "ai_prompt_submitted"
   | "aha_first_ai_answer"
+  | "ai_transformation_completed"
   | "pipeline_step_approved"
+  | "pipeline_replayed"
   | "result_exported";
 
 /**

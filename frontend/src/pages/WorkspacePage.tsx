@@ -150,6 +150,11 @@ export function WorkspacePage() {
         sessionId: sessionIdToUse,
       });
       window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline ran \u2014 ${(previewResult.count ?? previewResult.rows?.length ?? 0).toLocaleString()} rows ready`, tone: "success" } }));
+      recordMilestone("pipeline_replayed", {
+        step_count: replayPipelineSteps.length,
+        $add: { total_pipeline_runs: 1 },
+        $set: { last_pipeline_run_at: new Date().toISOString() },
+      });
     } catch (err) {
       console.error("Pipeline replay failed", err);
       const axiosDetail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
@@ -608,13 +613,17 @@ export function WorkspacePage() {
               }
             }}
             onFirstAiAnswer={(meta) => {
-              ctxRecordMilestone("aha_first_ai_answer");
+              const now = new Date().toISOString();
+              ctxRecordMilestone("aha_first_ai_answer", {
+                $set: { is_activated_user: true },
+                $set_once: { first_ai_transform_at: now },
+              });
               markQuickstartStep2Done();
             }}
           />
         </>
       )}
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } markQuickstartStep1Done(); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } markQuickstartStep1Done(); recordMilestone("dataset_uploaded", { $add: { total_datasets_uploaded: 1 }, $set_once: { first_dataset_at: new Date().toISOString() }, $set: { last_dataset_at: new Date().toISOString() } }); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}

@@ -226,7 +226,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         traits.name = name;
         traits.$name = name;
       }
-      identify(u.id, traits);
+      identify(u.id, {
+        ...traits,
+        $set_once: {
+          signed_up_at: u.created_at,
+          signed_up: true,
+        },
+      });
       markAsRealUser();
       setSentryUser(u.id, email);
     };

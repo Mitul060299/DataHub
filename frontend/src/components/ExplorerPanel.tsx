@@ -12,6 +12,7 @@ import { ImportModal } from "./modals/ImportModal";
 import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { markQuickstartStep1Done } from "./QuickstartTour";
+import { recordMilestone } from "../lib/activation";
 
 interface ExplorerPanelProps {
   refreshNonce?: number;
@@ -431,6 +432,11 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
           setImportModalOpen(false);
           if (datasetId) setPendingActivateId(datasetId);
           markQuickstartStep1Done();
+          recordMilestone("dataset_uploaded", {
+            $add: { total_datasets_uploaded: 1 },
+            $set_once: { first_dataset_at: new Date().toISOString() },
+            $set: { last_dataset_at: new Date().toISOString() },
+          });
           void loadDatasets();
         }}
       />

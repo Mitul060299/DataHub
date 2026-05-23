@@ -296,6 +296,8 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   const firstAiAnswerFiredRef = useRef(false);
   // Guard: fire onFirstPrompt only once per component lifetime
   const firstPromptFiredRef = useRef(false);
+  // Counter: how many AI transformations have completed this session
+  const aiTransformCountRef = useRef(0);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -618,6 +620,20 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             { role: "assistant" as const, content: responseText },
           ];
           void saveHistory(dataset.id, historyToSave);
+        }
+        // Track every AI transformation (not just the first) for lifecycle analytics
+        if (sortedCompletedSteps.length > 0) {
+          aiTransformCountRef.current += 1;
+          const now = new Date().toISOString();
+          const isFirst = aiTransformCountRef.current === 1;
+          recordMilestone("ai_transformation_completed", {
+            step_count: sortedCompletedSteps.length,
+            intent: doneIntent,
+            // PostHog person properties
+            $set: { last_ai_transform_at: now, ...(isFirst && { is_activated_user: true }), ...(aiTransformCountRef.current >= 2 && { is_active_user: true }) },
+            $set_once: { first_ai_transform_at: now },
+            $add: { total_ai_transforms: 1 },
+          });
         }
         // Fire aha milestone once per component lifetime
         if (!firstAiAnswerFiredRef.current && onFirstAiAnswer) {

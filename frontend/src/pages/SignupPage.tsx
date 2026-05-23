@@ -73,7 +73,7 @@ export function SignupPage() {
       setErrorMessage(error.message);
       return;
     }
-    capture("signup_success", { method: "email" });
+    capture("signup_success", { method: "email", $set_once: { signed_up_at: new Date().toISOString(), signed_up: true } });
     setSuccessMessage("Check your email to confirm your account.");
   };
 

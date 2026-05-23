@@ -8,7 +8,7 @@ import { ExplorerPanel } from "../components/ExplorerPanel";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
 import { TourTooltip, STEPS_COUNT } from "../components/TourTooltip";
-import { QuickstartTour, markQuickstartStep1Done, markQuickstartStep2Done, markQuickstartStep3Done } from "../components/QuickstartTour";
+import { QuickstartTour, markQuickstartStep1Done, markQuickstartStep2Done } from "../components/QuickstartTour";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -559,7 +559,6 @@ export function WorkspacePage() {
         onClearReplayError={() => setReplayError(null)}
         onTabChange={(tab) => {
           setPanelTab(tab);
-          if (tab === "pipeline") markQuickstartStep3Done();
         }}
       />
       {panelTab !== "pipeline" && (

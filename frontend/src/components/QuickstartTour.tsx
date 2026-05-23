@@ -1,16 +1,16 @@
 /**
- * QuickstartTour — a 3-step onboarding tooltip guide for the Quickstart project.
+ * QuickstartTour — 5-step onboarding tooltip guide for the Quickstart project.
  *
- * Step 1: Upload a dataset  (targets: data-section in ExplorerPanel)
- * Step 2: Ask the AI agent  (targets: ai-agent-header in AIPanel)
- * Step 3: Review the result (targets: pipeline-tab in CanvasPanel)
- * Step 4: Link another pipeline (targets: cross-input-button in CanvasPanel toolbar)
- * Step 5: Branch your pipeline (targets: pipeline-step-list in CanvasPanel Pipeline tab)
+ * Step 1: Upload a dataset    (targets: data-section in ExplorerPanel)
+ * Step 2: Ask the AI agent    (targets: ai-agent-header in AIPanel)
+ * Step 3: Results — Data tab  (targets: data-tab button in CanvasPanel)
+ * Step 4: Pipeline history    (targets: pipeline-tab button in CanvasPanel)
+ * Step 5: Dashboards & export (targets: dashboards-tab button in CanvasPanel)
  *
- * Step completions are detected via custom DOM events:
- *   "datahub:quickstart-step1-done"   – fired when first dataset is imported
- *   "datahub:quickstart-step2-done"   – fired when first AI answer arrives
- *   "datahub:quickstart-step3-done"   – fired when pipeline tab is opened
+ * Steps 1 and 2 auto-advance via DOM events:
+ *   "datahub:quickstart-step1-done"  – fired when first dataset is imported
+ *   "datahub:quickstart-step2-done"  – fired when first AI answer arrives
+ * Steps 3-5 are manual-only (user presses Next / Finish).
  *
  * Progress is persisted in localStorage under "datahub_qs_step".
  * The tour is fully dismissed by storing "datahub_qs_done" = "1".
@@ -22,12 +22,12 @@ import { fireConfetti } from "../utils/confetti";
 // ─── Step definitions ──────────────────────────────────────────────────────
 
 interface QStep {
-  target: string;            // data-tour value on the DOM element
+  target: string;             // data-tour value on the DOM element
   title: string;
   content: string;
   position: "right" | "left" | "bottom" | "top";
-  completionEvent: string;   // custom event that marks this step done
-  celebration: string;       // toast text shown on completion
+  completionEvent?: string;   // if omitted the step only advances via Next button
+  celebration: string;        // toast text shown on completion
 }
 
 // QS_STEPS is defined inside the component to avoid Rollup TDZ in production
@@ -108,46 +108,43 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
       target: "data-section",
       title: "Step 1 — Upload a dataset",
       content:
-        'Click "Import" or drag a CSV here to load your first dataset. You can also load a sample file to try things out.',
+        'Click "Import" or drag a CSV here to load your first dataset. You can also use a sample file to try things out.',
       position: "right",
       completionEvent: "datahub:quickstart-step1-done",
-      celebration: "🎉 Dataset loaded! Great start.",
+      celebration: "🎉 Dataset loaded! On to the AI.",
     },
     {
       target: "ai-agent-header",
-      title: "Step 2 — Ask the AI agent",
+      title: "Step 2 — Ask the AI",
       content:
-        'Type a question like "Show me the top 10 rows" or "What is the average order value?" and press Enter.',
+        'Type a question like "Show me the top 10 rows" or "What is the average value per category?" and press Enter. The AI transforms your data instantly.',
       position: "left",
       completionEvent: "datahub:quickstart-step2-done",
-      celebration: "✨ Nice! The AI answered your question.",
+      celebration: "✨ Great! The AI answered your question.",
+    },
+    {
+      target: "data-tab",
+      title: "Step 3 — Results in the Data tab",
+      content:
+        "The Data tab always shows the current state of your dataset. Every time the AI transforms your data, the result appears here — rows, columns, and all.",
+      position: "bottom",
+      celebration: "👀 Got it!",
     },
     {
       target: "pipeline-tab",
-      title: "Step 3 — Your pipeline history",
+      title: "Step 4 — Your Pipeline",
       content:
-        "Every AI transformation is saved as a pipeline step. This tab shows the full history — you can re-run, undo, or branch off any step.",
+        "The Pipeline tab records every transformation as a numbered step. You can re-run the whole pipeline, roll back a step, or export the result at any point.",
       position: "bottom",
-      completionEvent: "datahub:quickstart-step3-done",
-      celebration: "🚀 Three down! Two more tips…",
+      celebration: "🔁 Pipeline understood!",
     },
     {
-      target: "cross-input-button",
-      title: "Step 4 — Link another pipeline's output",
+      target: "dashboards-tab",
+      title: "Step 5 — Charts & Dashboards",
       content:
-        "⊕ Cross input lets you link a snapshot from any other pipeline step. The AI can then JOIN or reconcile the two datasets using a SQL alias — just say \"join with alias_name\" in the chat.",
+        "Open Dashboards to build charts from your data. Use the Export button to download as CSV, or set a Schedule to refresh the pipeline automatically.",
       position: "bottom",
-      completionEvent: "datahub:quickstart-step4-done",
-      celebration: "🔗 Cross-pipeline linked!",
-    },
-    {
-      target: "pipeline-step-list",
-      title: "Step 5 — Branch your pipeline",
-      content:
-        "Hover any step node in the graph on the left and click the orange ↗ button to fork from that point. You can also type \"fork from step 3\" in the AI chat. The new branch opens as a separate workspace lane.",
-      position: "left",
-      completionEvent: "datahub:quickstart-step5-done",
-      celebration: "🎉 Tour complete! You're a DataHub pro.",
+      celebration: "🎉 You're all set! Enjoy DataHub.",
     },
   ];
 
@@ -168,12 +165,18 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
 
   const step = QS_STEPS[stepIndex];
 
-  // Auto-switch to the Pipeline tab for steps 3, 4, 5 so their target
-  // elements are actually in the DOM when the tooltip appears.
+  // Switch to the correct canvas tab when the step changes so the target
+  // element is in the DOM when the tooltip appears.
   useEffect(() => {
-    if (stepIndex >= 2 && stepIndex <= 4) {
+    const tabForStep: Record<number, string> = {
+      2: "data",
+      3: "pipeline",
+      4: "dashboards",
+    };
+    const target = tabForStep[stepIndex];
+    if (target) {
       window.dispatchEvent(
-        new CustomEvent("datahub:quickstart-open-tab", { detail: "pipeline" }),
+        new CustomEvent("datahub:quickstart-open-tab", { detail: target }),
       );
     }
   }, [stepIndex]);
@@ -217,10 +220,10 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
 
       const next = idx + 1;
       if (next >= QS_STEPS.length) {
-        // Tour complete
+        // Tour complete — dismiss immediately so the user can't click Finish again
         localStorage.setItem(LS_STEP, "done");
         localStorage.setItem(LS_DONE, "1");
-        setTimeout(() => onDone?.(), 3600);
+        onDone?.();
       } else {
         localStorage.setItem(LS_STEP, String(next));
         setStepIndex(next);
@@ -230,17 +233,21 @@ export function QuickstartTour({ onDone }: QuickstartTourProps) {
   );
 
   useEffect(() => {
-    const handlers: Array<() => void> = QS_STEPS.map((s, i) => {
-      const handler = () => {
-        // Only fire if this is the current step
-        setStepIndex((cur) => {
-          if (cur === i) completeStep(i);
-          return cur;
-        });
-      };
-      window.addEventListener(s.completionEvent, handler);
-      return () => window.removeEventListener(s.completionEvent, handler);
-    });
+    const handlers: Array<() => void> = QS_STEPS
+      .filter((s) => !!s.completionEvent)
+      .map((s, _i) => {
+        // Resolve the real index (filter may have shifted it)
+        const i = QS_STEPS.indexOf(s);
+        const handler = () => {
+          // Only fire if this is the current step
+          setStepIndex((cur) => {
+            if (cur === i) completeStep(i);
+            return cur;
+          });
+        };
+        window.addEventListener(s.completionEvent!, handler);
+        return () => window.removeEventListener(s.completionEvent!, handler);
+      });
     return () => handlers.forEach((cleanup) => cleanup());
   }, [completeStep]);
 
@@ -436,6 +443,4 @@ export function markQuickstartStep2Done() {
   window.dispatchEvent(new CustomEvent("datahub:quickstart-step2-done"));
 }
 
-export function markQuickstartStep3Done() {
-  window.dispatchEvent(new CustomEvent("datahub:quickstart-step3-done"));
-}
+

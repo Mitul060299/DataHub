@@ -421,7 +421,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
       )}
       <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
         <div style={{ display: "inline-flex", gap: 3 }}>          {([
-            { key: "data",       icon: <IconTable size={16} />,     label: "Data" },
+            { key: "data",       icon: <IconTable size={16} />,     label: "Data", tourTarget: "data-tab" },
             { key: "pipeline",   icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
             { key: "dashboards", icon: <IconGrid size={16} />,      label: "Dashboards", badge: dashboards.length > 0 ? dashboards.length : null, tourTarget: "dashboards-tab" },
             ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),

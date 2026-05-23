@@ -161,20 +161,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const data = await fetchProjects();
       let mapped = data.map(toProject);
 
-      // For ALL users: if no quickstart project exists yet, provision one.
-      // - Anonymous users: use the shared "datahub_qs_provisioned" key.
-      // - Signed-in users: use a per-user key so two accounts on the same
-      //   browser get independent provisioning, and a user whose quickstart
-      //   was deleted (e.g. by migration 0075 when it had no datasets) gets a
-      //   fresh one next time they log in.
+      // For ALL users: if the API returned no is_quickstart project, provision
+      // one now. The backend endpoint is fully idempotent so calling it when
+      // the project already exists is harmless. We intentionally do NOT gate
+      // this on a localStorage flag — stale flags from previous sessions would
+      // prevent re-provisioning after a project deletion (e.g. migration 0075).
       const hasQsProject = mapped.some((p) => p.is_quickstart);
-      const qsKey = isAnonymous
-        ? "datahub_qs_provisioned"
-        : `datahub_qs_provisioned_${session?.user?.id ?? "auth"}`;
-      if (!hasQsProject && !localStorage.getItem(qsKey)) {
+      if (!hasQsProject) {
         try {
           await provisionQuickstart();
-          localStorage.setItem(qsKey, "1");
           const data2 = await fetchProjects();
           mapped = data2.map(toProject);
         } catch {

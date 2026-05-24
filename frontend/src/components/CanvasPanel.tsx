@@ -111,7 +111,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
       }))))
       .catch(() => {})
       .finally(() => setDashLoading(false));
-  }, [tab]);
+  }, [mode]);
 
   const [dashError, setDashError] = useState<string | null>(null);
 

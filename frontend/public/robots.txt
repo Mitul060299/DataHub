@@ -34,6 +34,7 @@ Disallow: /sources
 Disallow: /dashboard/
 Disallow: /invite/
 Disallow: /public-dashboard/
+Crawl-delay: 10
 
 # Sitemap — submitted to both Google Search Console and Bing Webmaster Tools
 Sitemap: https://datahub.org.in/sitemap.xml

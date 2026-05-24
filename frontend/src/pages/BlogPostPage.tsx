@@ -35,6 +35,21 @@ const ARTICLE_COMPONENTS: Record<string, React.LazyExoticComponent<() => JSX.Ele
   "automate-repetitive-data-cleaning-workflows": lazy(
     () => import("../content/blog/automate-repetitive-data-cleaning-workflows"),
   ),
+  "merge-multiple-csv-files": lazy(
+    () => import("../content/blog/merge-multiple-csv-files"),
+  ),
+  "ai-etl-tool-for-analysts": lazy(
+    () => import("../content/blog/ai-etl-tool-for-analysts"),
+  ),
+  "no-code-data-transformation": lazy(
+    () => import("../content/blog/no-code-data-transformation"),
+  ),
+  "automate-accounting-exports": lazy(
+    () => import("../content/blog/automate-accounting-exports"),
+  ),
+  "automate-monthly-excel-reports": lazy(
+    () => import("../content/blog/automate-monthly-excel-reports"),
+  ),
 };
 
 function ArticleSkeleton() {
@@ -84,9 +99,9 @@ export function BlogPostPage() {
         datePublished: post.date,
         dateModified: post.date,
         author: {
-          "@type": "Organization",
+          "@type": "Person",
           name: "DataHub Team",
-          url: "https://datahub.org.in",
+          url: "https://datahub.org.in/about",
         },
         publisher: {
           "@type": "Organization",
@@ -126,6 +141,19 @@ export function BlogPostPage() {
           },
         ],
       },
+      ...(post.faqItems
+        ? [
+            {
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: post.faqItems.map((item) => ({
+                "@type": "Question",
+                name: item.q,
+                acceptedAnswer: { "@type": "Answer", text: item.a },
+              })),
+            },
+          ]
+        : []),
     ],
   });
 

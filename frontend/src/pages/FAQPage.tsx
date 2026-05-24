@@ -115,6 +115,43 @@ const FAQ_SECTIONS: FAQSection[] = [
       },
     ],
   },
+  {
+    title: "Common Workflows",
+    items: [
+      {
+        q: "Can I merge multiple CSV files in DataHub?",
+        a: "Yes. Upload multiple CSV (or Excel) files and describe the merge in plain English — for example, 'Stack all these monthly exports into one table. Match columns by name even if the casing is different. Remove duplicate rows where the order ID appears more than once.' DataHub aligns columns, normalises types, and optionally adds a source_file column so you can trace which row came from which original file.",
+      },
+      {
+        q: "How do I prepare data for Power BI automatically?",
+        a: "Upload your raw file to DataHub, describe the cleanup and transformation steps in plain English, and export the result as CSV or Excel. Common prep steps — removing blank rows, fixing date formats, splitting combined columns, standardising column names — are handled automatically. You can save these steps as a pipeline and re-run it every time you get a new export, before opening Power BI.",
+      },
+      {
+        q: "Can DataHub replace Power Query (M) in Excel?",
+        a: "For most analytical cleanup and transformation tasks, yes. DataHub handles the same operations as Power Query — filtering, joining, pivoting, type conversion, column renaming — but through plain English instead of M query language. DataHub also works on Mac, supports much larger files, and lets you schedule the pipeline to run automatically.",
+      },
+      {
+        q: "Does DataHub work with accounting software exports (QuickBooks, Tally, Xero)?",
+        a: "Yes. DataHub is well suited to accounting exports from QuickBooks, Tally (ERP 9 and TallyPrime), Xero, SAP, and similar tools. It handles common issues in these exports: multi-row headers, subtotal rows mixed in with data, Indian number formats (₹1,23,456), Dr/Cr suffixes, and inconsistent date formats. You can save the cleanup as a reusable pipeline so next month's export is cleaned in one click.",
+      },
+      {
+        q: "How do I remove duplicates from an Excel file automatically?",
+        a: "Upload your Excel file to DataHub, then type: 'Remove duplicate rows based on [column name].' DataHub generates a SQL deduplication step, shows you how many rows will be removed, and lets you approve before executing. For near-duplicates — where the same record appears with slight variations — DataHub supports fuzzy deduplication using configurable similarity thresholds.",
+      },
+      {
+        q: "Can I automate monthly Excel reports with DataHub?",
+        a: "Yes. Build a pipeline that covers every step of your monthly report: clean the source export, join with a reference table, aggregate by region or category, add calculated columns. Save the pipeline and schedule it to run monthly — or drop the new file in and click run. The same transformation logic applies to the new data every time.",
+      },
+      {
+        q: "Is DataHub suitable for accountants, consultants, or finance teams?",
+        a: "DataHub is particularly well suited to these roles. Accountants use it for reconciliation, export cleanup, and MIS report automation. Finance analysts use it for actuals-vs-budget comparisons, variance analysis, and aggregated reporting across regions or entities. Consultants use it for onboarding client data quickly and building repeatable cleanup workflows that run across multiple client files.",
+      },
+      {
+        q: "What is the difference between DataHub and a traditional ETL tool?",
+        a: "Traditional ETL tools (Informatica, Talend, Pentaho) are built for data engineers who write code and manage infrastructure. They require weeks to set up and cost thousands of dollars per seat per year. DataHub is designed for analysts who need to move quickly: plain English interface, zero infrastructure, no coding required, free plan to start. It handles the same analytical ETL workflows — cleaning, joining, transforming, scheduling — at a fraction of the cost and setup time.",
+      },
+    ],
+  },
 ];
 
 /* ── JSON-LD ── */
@@ -202,9 +239,9 @@ function AccordionItem({ q, a }: FAQItem) {
 /* ── Page ── */
 export function FAQPage() {
   useSEO({
-    title: "DataHub FAQ – AI Agent for Data Work | Common Questions Answered",
+    title: "DataHub FAQ – AI Tool for Analysts | Common Questions Answered",
     description:
-      "Answers to common questions about DataHub: how the AI agent works, what visual pipelines do, data security, pricing, and how it compares to Excel, Power BI, and Alteryx.",
+      "Answers to common questions about DataHub: how to clean Excel files, merge CSVs, automate monthly reports, prepare data for Power BI, work with accounting exports, pricing plans, and how DataHub compares to Excel, Power Query, and Alteryx.",
     canonical: "https://datahub.org.in/faq",
     structuredData: FAQ_LD,
   });

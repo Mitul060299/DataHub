@@ -1,7 +1,7 @@
 {
-  "name": "DataHub – AI Data Analysis Tool",
+  "name": "DataHub – AI Tool for Analysts",
   "short_name": "DataHub",
-  "description": "AI-powered data analysis platform with transparent SQL pipelines.",
+  "description": "Clean Excel files, merge CSVs, and automate data workflows — no code required.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f111a",

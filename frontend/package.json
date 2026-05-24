@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/prerender-routes.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "indexnow": "node scripts/indexnow-submit.mjs"
   },
   "dependencies": {
     "@sentry/react": "^8.45.0",

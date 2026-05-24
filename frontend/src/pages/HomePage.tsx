@@ -506,9 +506,9 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – Reliable AI Agent for Data Work",
+    title: "DataHub – AI Tool for Analysts | Clean Excel Files, Merge CSVs, Automate Data Work",
     description:
-      "DataHub is your reliable AI agent for data work. Tell it what you need in plain English and get trusted results in minutes — or turn any workflow into a visual pipeline that runs itself every week on fresh data, using the exact steps you reviewed and approved.",
+      "Clean messy Excel files, merge multiple CSVs, remove duplicates, and automate repetitive data workflows — DataHub is the AI-powered transformation tool for analysts, accountants, and consultants. No code required.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });
@@ -990,8 +990,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            AI-assisted data preparation{" "}
-            <span className="hero-gradient-text">you can trust</span>.
+            Clean messy files. Merge CSVs.{" "}
+            <span className="hero-gradient-text">Automate the rest</span>.
           </motion.h1>
 
           <motion.p
@@ -1000,8 +1000,9 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            DataHub helps analysts and data teams clean and transform messy data faster
-            using plain English commands, transparent SQL, and visual reusable pipelines.
+            DataHub is your AI-powered data transformation tool — built for analysts, accountants,
+            and consultants who need to clean Excel files, merge data sources, remove duplicates,
+            and automate repetitive workflows without writing code.
           </motion.p>
 
           <motion.div

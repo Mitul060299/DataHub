@@ -71,6 +71,70 @@ const SECTIONS: Section[] = [
 
 const FLAT_PAGES: Page[] = SECTIONS.flatMap((s) => s.pages);
 
+// ── Per-page SEO descriptions ──────────────────────────────────
+const PAGE_DESCRIPTIONS: Record<string, string> = {
+  // Getting Started
+  welcome:
+    "Welcome to DataHub — the AI-powered data transformation tool for analysts. Learn what DataHub does, how it works, and how to get started for free.",
+  quickstart:
+    "Get started with DataHub in under 5 minutes. Upload a CSV or Excel file, let the AI clean it, and build your first pipeline — no signup required to try.",
+  "guest-mode":
+    "Try DataHub without creating an account. Upload a file, clean it, and run transformations instantly — no email, no credit card.",
+  concepts:
+    "Learn the core concepts behind DataHub: datasets, pipelines, AI agent, canvases, and how they work together to automate data transformation workflows.",
+  // Core Features
+  projects:
+    "DataHub projects keep your datasets, pipelines, and dashboards organised. Learn how to create projects, invite team members, and manage your workspace.",
+  pipelines:
+    "Build reusable data pipelines in DataHub. Chain transformation steps — clean, join, filter, aggregate — save them once and schedule them to run automatically on fresh data.",
+  "ai-agent":
+    "Use DataHub's AI agent to clean Excel files, merge CSVs, remove duplicates, and transform data in plain English. Every step is visible SQL you review before it runs.",
+  "data-ops":
+    "30+ data transformation operations in DataHub: remove duplicates, fill nulls, standardize column names, merge datasets, filter rows, type casting, and more — without writing code.",
+  artifacts:
+    "DataHub artifacts are the outputs of pipeline runs — cleaned datasets, transformed tables, and exports. Learn how to manage, download, and reuse pipeline outputs.",
+  canvases:
+    "Build interactive dashboards in DataHub with drag-and-drop KPI tiles, charts, tables, and filters. Share with your team or publish a public link.",
+  visualizations:
+    "Explore the full visualisation library in DataHub: bar charts, line charts, scatter plots, heatmaps, KPI cards, pivot tables, and more — powered by your live data.",
+  // How To Guides
+  "guide-start":
+    "Step-by-step: create your first DataHub project. Upload a file, explore your data, and run your first transformation in minutes.",
+  "guide-upload":
+    "How to import CSV, Excel, JSON, and Parquet files into DataHub. Handles messy headers, mixed types, multi-sheet Excel, and broken encodings automatically.",
+  "guide-database":
+    "Connect DataHub to PostgreSQL, MySQL, SQLite, MSSQL, Oracle, Snowflake, BigQuery, or Redshift. Query live databases without exporting to CSV first.",
+  "guide-pipeline":
+    "How to build a reusable data pipeline in DataHub. Chain transformation steps, review the generated SQL, and schedule the pipeline to run automatically.",
+  "guide-pipeline-edit":
+    "How to edit, re-run, and debug pipeline steps in DataHub. Modify individual steps, preview results, and re-execute without rebuilding the pipeline from scratch.",
+  "guide-schedule":
+    "Schedule a DataHub pipeline to run daily, weekly, or monthly. Automate Excel reconciliation, CSV cleanup, and reporting without touching a file manually.",
+  "guide-dashboard":
+    "Build a DataHub dashboard from scratch. Add charts, KPI tiles, filters, and tables. Connect to live pipeline outputs and share with your team.",
+  "guide-invite":
+    "Invite team members to your DataHub workspace. Assign roles, manage permissions, and collaborate on datasets, pipelines, and dashboards.",
+  "guide-export":
+    "Export and share DataHub results. Download as CSV or Excel, publish a dashboard link, push to Power BI or Google Sheets, or set up automated delivery.",
+  // Reference
+  faq:
+    "Answers to common questions about DataHub: how the AI agent works, what pipelines do, data security, pricing, and how it compares to Excel, Power BI, and Alteryx.",
+  limits:
+    "Plan limits for DataHub: file upload sizes, row limits, AI messages per month, pipeline steps, number of projects, and database connections by plan tier.",
+  formats:
+    "Supported file formats in DataHub: CSV, Excel (.xlsx and .xls, including multi-sheet), JSON, Parquet, and direct database connections to 10+ database types.",
+  shortcuts:
+    "Keyboard shortcuts for DataHub: navigate faster, run pipelines, switch between views, and access common actions without reaching for the mouse.",
+  // Legal
+  "legal-terms":
+    "DataHub Terms of Service: usage rules, account responsibilities, billing terms, intellectual property, and liability for the DataHub platform.",
+  "legal-privacy":
+    "DataHub Privacy Policy: how we collect, store, and protect your data. We never use customer data to train AI models. Full encryption and audit logging.",
+};
+
+const FALLBACK_DOCS_DESCRIPTION =
+  "Step-by-step guides to upload data, connect databases, work with the AI agent, and build visual reusable pipelines on DataHub. Full reference and connector documentation.";
+
 // ── Content components ─────────────────────────────────────────
 
 function Welcome() {
@@ -2063,8 +2127,7 @@ export function DocsPage() {
 
   useSEO({
     title: `${pageLabel} – DataHub Documentation`,
-    description:
-      "Step-by-step guides to upload data, connect databases, work with the AI agent, and build visual reusable pipelines on DataHub. Full API reference and connector documentation.",
+    description: PAGE_DESCRIPTIONS[page] ?? FALLBACK_DOCS_DESCRIPTION,
     canonical: docsCanonical,
     structuredData: breadcrumbLd,
   });

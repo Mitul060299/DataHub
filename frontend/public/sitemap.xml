@@ -3,7 +3,7 @@
 
   <url>
     <loc>https://datahub.org.in/</loc>
-    <lastmod>2026-05-08</lastmod>
+    <lastmod>2026-05-24</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -17,7 +17,7 @@
 
   <url>
     <loc>https://datahub.org.in/docs</loc>
-    <lastmod>2026-05-08</lastmod>
+    <lastmod>2026-05-24</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -51,77 +51,112 @@
   <!-- Blog -->
   <url>
     <loc>https://datahub.org.in/blog</loc>
-    <lastmod>2026-05-10</lastmod>
+    <lastmod>2026-05-24</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://datahub.org.in/blog/reconcile-excel-files-automatically</loc>
-    <lastmod>2026-05-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://datahub.org.in/blog/remove-duplicates-csv-without-code</loc>
-    <lastmod>2026-05-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://datahub.org.in/blog/alteryx-alternative-cheaper</loc>
-    <lastmod>2026-05-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://datahub.org.in/blog/data-cleaning-tool-for-analysts</loc>
-    <lastmod>2026-05-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://datahub.org.in/blog/standardise-column-names-excel</loc>
-    <lastmod>2026-05-10</lastmod>
+    <loc>https://datahub.org.in/blog/why-analysts-spend-more-time-cleaning</loc>
+    <lastmod>2026-04-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://datahub.org.in/blog/clean-messy-excel-csv-without-coding</loc>
-    <lastmod>2026-05-10</lastmod>
+    <lastmod>2026-04-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://datahub.org.in/blog/affordable-alteryx-alternative-small-teams</loc>
-    <lastmod>2026-05-10</lastmod>
+    <loc>https://datahub.org.in/blog/remove-duplicates-csv-without-code</loc>
+    <lastmod>2026-04-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/standardise-column-names-excel</loc>
+    <lastmod>2026-05-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/reconcile-excel-files-automatically</loc>
+    <lastmod>2026-05-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://datahub.org.in/blog/prepare-raw-data-for-power-bi</loc>
-    <lastmod>2026-05-10</lastmod>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://datahub.org.in/blog/why-analysts-spend-more-time-cleaning</loc>
-    <lastmod>2026-05-10</lastmod>
+    <loc>https://datahub.org.in/blog/alteryx-alternative-cheaper</loc>
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/affordable-alteryx-alternative-small-teams</loc>
+    <lastmod>2026-05-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/data-cleaning-tool-for-analysts</loc>
+    <lastmod>2026-05-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://datahub.org.in/blog/automate-repetitive-data-cleaning-workflows</loc>
-    <lastmod>2026-05-10</lastmod>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/merge-multiple-csv-files</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/ai-etl-tool-for-analysts</loc>
+    <lastmod>2026-05-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/no-code-data-transformation</loc>
+    <lastmod>2026-05-21</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/automate-accounting-exports</loc>
+    <lastmod>2026-05-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://datahub.org.in/blog/automate-monthly-excel-reports</loc>
+    <lastmod>2026-05-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -129,7 +164,7 @@
   <!-- FAQ -->
   <url>
     <loc>https://datahub.org.in/faq</loc>
-    <lastmod>2026-05-15</lastmod>
+    <lastmod>2026-05-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

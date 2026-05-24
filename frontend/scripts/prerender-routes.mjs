@@ -15,6 +15,39 @@ const DIST = join(__dirname, "..", "dist");
 const SOURCE = join(DIST, "index.html");
 const ORIGIN = "https://datahub.org.in";
 
+// ── JSON-LD helpers ──────────────────────────────────────────
+function makeBlogLd(path, title, description, datePublished) {
+  const url = `${ORIGIN}/${path}`;
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: title,
+      description,
+      image: `${ORIGIN}/logo.png`,
+      datePublished,
+      dateModified: datePublished,
+      author: { "@type": "Person", name: "DataHub Team", url: `${ORIGIN}/about` },
+      publisher: {
+        "@type": "Organization",
+        name: "DataHub",
+        url: ORIGIN,
+        logo: { "@type": "ImageObject", url: `${ORIGIN}/logo.png` },
+      },
+      mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${ORIGIN}/` },
+        { "@type": "ListItem", position: 2, name: "Blog", item: `${ORIGIN}/blog` },
+        { "@type": "ListItem", position: 3, name: title, item: url },
+      ],
+    },
+  ];
+}
+
 if (!existsSync(SOURCE)) {
   console.error(`[prerender] dist/index.html not found at ${SOURCE}`);
   process.exit(1);
@@ -63,6 +96,71 @@ const routes = [
     ogType: "article",
   },
 
+  // ── FAQ ────────────────────────────────────────────────────
+  {
+    path: "faq",
+    title: "DataHub FAQ – AI Tool for Analysts | Common Questions Answered",
+    description:
+      "Answers to common questions about DataHub: how to clean Excel files, merge CSVs, automate monthly reports, prepare data for Power BI, work with accounting exports, pricing plans, and how DataHub compares to Excel, Power Query, and Alteryx.",
+    ogType: "website",
+    ldJson: [
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "What is DataHub?",
+            acceptedAnswer: { "@type": "Answer", text: "DataHub is your reliable AI agent for data work. You upload CSV, Excel, or JSON files, or connect databases like PostgreSQL and Snowflake, then describe what you need in plain English. DataHub generates a step-by-step SQL plan you review and approve before anything runs — and you can save the whole flow as a visual, reusable pipeline that runs itself on a schedule." },
+          },
+          {
+            "@type": "Question",
+            name: "Who is DataHub for?",
+            acceptedAnswer: { "@type": "Answer", text: "DataHub is built for business analysts, freelance consultants, small data teams, and managers who need to clean, transform, and analyse data regularly — without writing code or SQL. It is particularly useful for anyone spending hours on repetitive spreadsheet work or who has outgrown Excel but does not need a full enterprise ETL platform." },
+          },
+          {
+            "@type": "Question",
+            name: "Can I merge multiple CSV files in DataHub?",
+            acceptedAnswer: { "@type": "Answer", text: "Yes. Upload multiple CSV (or Excel) files and describe the merge in plain English — for example, 'Stack all these monthly exports into one table. Match columns by name even if the casing is different. Remove duplicate rows where the order ID appears more than once.' DataHub aligns columns, normalises types, and optionally adds a source_file column so you can trace which row came from which original file." },
+          },
+          {
+            "@type": "Question",
+            name: "How do I prepare data for Power BI automatically?",
+            acceptedAnswer: { "@type": "Answer", text: "Upload your raw file to DataHub, describe the cleanup and transformation steps in plain English, and export the result as CSV or Excel. Common prep steps — removing blank rows, fixing date formats, splitting combined columns, standardising column names — are handled automatically. You can save these steps as a pipeline and re-run it every time you get a new export, before opening Power BI." },
+          },
+          {
+            "@type": "Question",
+            name: "How do I remove duplicates from an Excel file automatically?",
+            acceptedAnswer: { "@type": "Answer", text: "Upload your Excel file to DataHub, then type: 'Remove duplicate rows based on [column name].' DataHub generates a SQL deduplication step, shows you how many rows will be removed, and lets you approve before executing. For near-duplicates — where the same record appears with slight variations — DataHub supports fuzzy deduplication using configurable similarity thresholds." },
+          },
+          {
+            "@type": "Question",
+            name: "Can DataHub replace Power Query (M) in Excel?",
+            acceptedAnswer: { "@type": "Answer", text: "For most analytical cleanup and transformation tasks, yes. DataHub handles the same operations as Power Query — filtering, joining, pivoting, type conversion, column renaming — but through plain English instead of M query language. DataHub also works on Mac, supports much larger files, and lets you schedule the pipeline to run automatically." },
+          },
+          {
+            "@type": "Question",
+            name: "Does DataHub work with accounting software exports (QuickBooks, Tally, Xero)?",
+            acceptedAnswer: { "@type": "Answer", text: "Yes. DataHub is well suited to accounting exports from QuickBooks, Tally (ERP 9 and TallyPrime), Xero, SAP, and similar tools. It handles common issues in these exports: multi-row headers, subtotal rows mixed in with data, Indian number formats (₹1,23,456), Dr/Cr suffixes, and inconsistent date formats. You can save the cleanup as a reusable pipeline so next month's export is cleaned in one click." },
+          },
+          {
+            "@type": "Question",
+            name: "Is DataHub suitable for accountants, consultants, or finance teams?",
+            acceptedAnswer: { "@type": "Answer", text: "DataHub is particularly well suited to these roles. Accountants use it for reconciliation, export cleanup, and MIS report automation. Finance analysts use it for actuals-vs-budget comparisons, variance analysis, and aggregated reporting across regions or entities. Consultants use it for onboarding client data quickly and building repeatable cleanup workflows that run across multiple client files." },
+          },
+        ],
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${ORIGIN}/` },
+          { "@type": "ListItem", position: 2, name: "FAQ", item: `${ORIGIN}/faq` },
+        ],
+      },
+    ],
+  },
+
   // ── Blog index ──────────────────────────────────────────────
   {
     path: "blog",
@@ -74,39 +172,12 @@ const routes = [
 
   // ── Blog posts ──────────────────────────────────────────────
   {
-    path: "blog/reconcile-excel-files-automatically",
-    title: "How to Reconcile Two Excel Files Automatically | DataHub Blog",
+    path: "blog/why-analysts-spend-more-time-cleaning",
+    title: "Why Data Analysts Spend More Time Cleaning Data Than Analysing It | DataHub Blog",
     description:
-      "Stop comparing spreadsheets row by row. This guide shows you how to automatically reconcile two Excel files — flagging differences, missing rows, and variances — in minutes.",
+      "Survey after survey shows analysts spend 60–80% of their time on data preparation. Why hasn't this changed — and what's actually being done about it in 2026?",
     ogType: "article",
-  },
-  {
-    path: "blog/remove-duplicates-csv-without-code",
-    title: "How to Remove Duplicates from a CSV File Without Code | DataHub Blog",
-    description:
-      "Duplicate rows corrupt aggregations and erode trust in your data. Remove exact and near-duplicate records from any CSV file without writing code or using Python.",
-    ogType: "article",
-  },
-  {
-    path: "blog/alteryx-alternative-cheaper",
-    title: "The Best Cheaper Alteryx Alternative in 2026 | DataHub Blog",
-    description:
-      "Alteryx Designer costs £4,000+ per seat per year. Here are the best Alteryx alternatives with the same data blending, transformation, and automation capabilities at a fraction of the cost.",
-    ogType: "article",
-  },
-  {
-    path: "blog/data-cleaning-tool-for-analysts",
-    title: "The Best Data Cleaning Tool for Analysts (No Code Required) | DataHub Blog",
-    description:
-      "Analysts spend 60–80% of their time cleaning data. The right tool collapses that to minutes. Here's what to use for null handling, deduplication, type conversion, and more.",
-    ogType: "article",
-  },
-  {
-    path: "blog/standardise-column-names-excel",
-    title: "How to Standardise Column Names in Excel Automatically | DataHub Blog",
-    description:
-      "Inconsistent column headers break every VLOOKUP, pivot table, and downstream report. Here's how to fix column names in bulk — no manual renaming, no formulas.",
-    ogType: "article",
+    date: "2026-04-22",
   },
   {
     path: "blog/clean-messy-excel-csv-without-coding",
@@ -114,13 +185,31 @@ const routes = [
     description:
       "Leading spaces, mixed date formats, merged cells, pseudo-nulls — messy files are the norm. This guide walks through every common data quality problem and how to fix it fast.",
     ogType: "article",
+    date: "2026-04-25",
   },
   {
-    path: "blog/affordable-alteryx-alternative-small-teams",
-    title: "Best Affordable Alteryx Alternative for Small Teams and Freelancers | DataHub Blog",
+    path: "blog/remove-duplicates-csv-without-code",
+    title: "How to Remove Duplicates from a CSV File Without Code | DataHub Blog",
     description:
-      "Solo analysts and small teams don't need a £40,000/year enterprise licence. These Alteryx alternatives give you the same data transformation power at prices built for freelancers and growing teams.",
+      "Duplicate rows corrupt aggregations and erode trust in your data. Remove exact and near-duplicate records from any CSV file without writing code or using Python.",
     ogType: "article",
+    date: "2026-04-28",
+  },
+  {
+    path: "blog/standardise-column-names-excel",
+    title: "How to Standardise Column Names in Excel Automatically | DataHub Blog",
+    description:
+      "Inconsistent column headers break every VLOOKUP, pivot table, and downstream report. Here's how to fix column names in bulk — no manual renaming, no formulas.",
+    ogType: "article",
+    date: "2026-05-01",
+  },
+  {
+    path: "blog/reconcile-excel-files-automatically",
+    title: "How to Reconcile Two Excel Files Automatically | DataHub Blog",
+    description:
+      "Stop comparing spreadsheets row by row. This guide shows you how to automatically reconcile two Excel files — flagging differences, missing rows, and variances — in minutes.",
+    ogType: "article",
+    date: "2026-05-04",
   },
   {
     path: "blog/prepare-raw-data-for-power-bi",
@@ -128,13 +217,31 @@ const routes = [
     description:
       "Power BI is powerful — but only if the data going in is clean, typed correctly, and properly structured. This guide covers everything to do before you open Power BI Desktop.",
     ogType: "article",
+    date: "2026-05-07",
   },
   {
-    path: "blog/why-analysts-spend-more-time-cleaning",
-    title: "Why Data Analysts Spend More Time Cleaning Data Than Analysing It | DataHub Blog",
+    path: "blog/alteryx-alternative-cheaper",
+    title: "The Best Cheaper Alteryx Alternative in 2026 | DataHub Blog",
     description:
-      "Survey after survey shows analysts spend 60–80% of their time on data preparation. Why hasn't this changed — and what's actually being done about it in 2026?",
+      "Alteryx Designer costs £4,000+ per seat per year. Here are the best Alteryx alternatives with the same data blending, transformation, and automation capabilities at a fraction of the cost.",
     ogType: "article",
+    date: "2026-05-09",
+  },
+  {
+    path: "blog/affordable-alteryx-alternative-small-teams",
+    title: "Best Affordable Alteryx Alternative for Small Teams and Freelancers | DataHub Blog",
+    description:
+      "Solo analysts and small teams don't need a £40,000/year enterprise licence. These Alteryx alternatives give you the same data transformation power at prices built for freelancers and growing teams.",
+    ogType: "article",
+    date: "2026-05-12",
+  },
+  {
+    path: "blog/data-cleaning-tool-for-analysts",
+    title: "The Best Data Cleaning Tool for Analysts (No Code Required) | DataHub Blog",
+    description:
+      "Analysts spend 60–80% of their time cleaning data. The right tool collapses that to minutes. Here's what to use for null handling, deduplication, type conversion, and more.",
+    ogType: "article",
+    date: "2026-05-14",
   },
   {
     path: "blog/automate-repetitive-data-cleaning-workflows",
@@ -142,6 +249,47 @@ const routes = [
     description:
       "If you're running the same data cleaning steps every week, you're manually doing work a pipeline should handle. Here's how to build reusable, automated cleaning workflows.",
     ogType: "article",
+    date: "2026-05-17",
+  },
+  {
+    path: "blog/merge-multiple-csv-files",
+    title: "How to Merge Multiple CSV Files Automatically (Without Code) | DataHub Blog",
+    description:
+      "Combining dozens of CSV exports by hand wastes hours and introduces errors. Here's how to merge multiple CSV files automatically in minutes — no Python, no Power Query.",
+    ogType: "article",
+    date: "2026-05-19",
+  },
+  {
+    path: "blog/ai-etl-tool-for-analysts",
+    title: "The Best AI ETL Tool for Analysts: No Engineering Team Needed | DataHub Blog",
+    description:
+      "Traditional ETL tools were built for engineers, not analysts. Here's what analysts should use instead — plain English, zero infrastructure, reusable pipelines.",
+    ogType: "article",
+    date: "2026-05-20",
+  },
+  {
+    path: "blog/no-code-data-transformation",
+    title: "No-Code Data Transformation: How Analysts Can Do ETL Without Writing Code | DataHub Blog",
+    description:
+      "You don't need Python or SQL to clean, join, and transform data. No-code transformation tools let analysts do the same work data engineers do — faster and without a ticket queue.",
+    ogType: "article",
+    date: "2026-05-21",
+  },
+  {
+    path: "blog/automate-accounting-exports",
+    title: "How to Clean and Transform Accounting Software Exports Automatically | DataHub Blog",
+    description:
+      "QuickBooks, Tally, Xero, and SAP exports are rarely analysis-ready. Here's how to automate the cleanup automatically — multi-row headers, subtotals, text amounts, and all.",
+    ogType: "article",
+    date: "2026-05-22",
+  },
+  {
+    path: "blog/automate-monthly-excel-reports",
+    title: "How to Automate Monthly Excel Reports Without Macros or VBA | DataHub Blog",
+    description:
+      "If you spend hours every month refreshing the same Excel report, there's a better way. Here's how to automate the whole workflow — clean, transform, aggregate, export — without a single macro.",
+    ogType: "article",
+    date: "2026-05-24",
   },
 ];
 
@@ -218,6 +366,19 @@ function rewriteHtml(route, canonical) {
     /<meta name="twitter:description" content="[^"]*" \/>/,
     `<meta name="twitter:description" content="${escapeAttr(route.description)}" />`,
   );
+
+  // Inject per-route JSON-LD (blog posts: Article + BreadcrumbList)
+  if (route.date) {
+    const ld = makeBlogLd(route.path, route.title, route.description, route.date);
+    const ldScript = `\n    <script type="application/ld+json" id="__prerender-ld-json__">\n    ${JSON.stringify(ld, null, 2).replace(/\n/g, "\n    ")}\n    </script>`;
+    html = html.replace("</head>", `${ldScript}\n  </head>`);
+  }
+
+  // Inject arbitrary JSON-LD for non-blog routes (e.g. FAQ page)
+  if (route.ldJson) {
+    const ldScript = `\n    <script type="application/ld+json" id="__prerender-ld-json__">\n    ${JSON.stringify(route.ldJson, null, 2).replace(/\n/g, "\n    ")}\n    </script>`;
+    html = html.replace("</head>", `${ldScript}\n  </head>`);
+  }
 
   return html;
 }

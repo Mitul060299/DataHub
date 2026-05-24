@@ -4,7 +4,7 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
-import { IconDownload } from "./Icons";
+import { IconDownload, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import type { WorkspaceMode } from "../pages/WorkspacePage";
 

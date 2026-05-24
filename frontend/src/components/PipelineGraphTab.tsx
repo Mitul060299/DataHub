@@ -100,42 +100,12 @@ function SourceNode({ data }: NodeProps<SourceNodeData>) {
 // ─── Operation Node ────────────────────────────────────────────────────────────
 type OperationNodeData = {
   step: PipelineStep;
-  onClick: (step: PipelineStep) => void;
-  onDelete: (step: PipelineStep) => void;
-  onRunUpTo: (step: PipelineStep) => void;
-  onFork: (step: PipelineStep) => void;
-  onBranchTo: (step: PipelineStep) => void;
-  onRename: (step: PipelineStep) => void;
-  onUndoFrom: (step: PipelineStep) => void;
-  onEditSql: (step: PipelineStep) => void;
+  isSelected: boolean;
+  sessionId?: string;
+  stepIndex: number;
 };
 
-// Inline icon-button style for the per-node action toolbar.
-const nodeActionBtnStyle: CSSProperties = {
-  width: 18,
-  height: 18,
-  borderRadius: 4,
-  border: "1px solid var(--bd2)",
-  background: "var(--bg2)",
-  color: "var(--tx1)",
-  cursor: "pointer",
-  display: "grid",
-  placeItems: "center",
-  padding: 0,
-  lineHeight: 1,
-  fontSize: 11,
-};
-
-// One-time stylesheet injection so the .op-node-actions toolbar reveals on
-// hovering its containing node wrapper (ReactFlow's `.react-flow__node`).
-if (typeof document !== "undefined" && !document.getElementById("pipeline-graph-node-styles")) {
-  const s = document.createElement("style");
-  s.id = "pipeline-graph-node-styles";
-  s.textContent = ".react-flow__node:hover .op-node-actions{opacity:1!important;}";
-  document.head.appendChild(s);
-}
-
-function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
+function OperationNode({ data }: NodeProps<OperationNodeData>) {
   const { step } = data;
   const color = statusBorderColor(step.status);
   const rowBefore = step.row_count_before ?? null;
@@ -147,93 +117,41 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
         ? `${(step.execution_time_ms / 1000).toFixed(1)}s`
         : `${step.execution_time_ms}ms`
       : null;
+  const isSelected = data.isSelected;
+
+  const handleClick = () => {
+    window.dispatchEvent(new CustomEvent("datahub:pipeline:step-selected", {
+      detail: {
+        id: step.id,
+        stepNumber: step.stepNumber,
+        operation: step.operation,
+        description: step.description,
+        rowsBefore: step.row_count_before,
+        rowsAfter: step.row_count_after,
+      },
+    }));
+    window.dispatchEvent(new CustomEvent("datahub:preview:step", {
+      detail: { stepIndex: data.stepIndex, sessionId: data.sessionId },
+    }));
+  };
 
   return (
     <div
-      onClick={() => data.onClick(step)}
+      onClick={handleClick}
       style={{
         width: 220,
         padding: "8px 12px",
         borderRadius: 8,
-        border: `1px solid ${selected ? "var(--ac)" : "var(--bd2)"}`,
+        border: `1px solid ${isSelected ? "var(--ac)" : "var(--bd2)"}`,
         borderLeft: `3px solid ${color}`,
-        background: selected ? "var(--acl)" : "var(--bg2)",
+        background: isSelected ? "var(--acl)" : "var(--bg2)",
         cursor: "pointer",
         boxSizing: "border-box",
-        boxShadow: selected ? "0 0 0 2px var(--acg)" : "none",
+        boxShadow: isSelected ? "0 0 0 2px var(--acg)" : "none",
         transition: "box-shadow 0.15s",
         position: "relative",
       }}
     >
-      {/* Action toolbar — appears on hover, mirrors the per-step buttons that
-          used to live in the right-side APPLIED STEPS list. Stops propagation
-          so clicking a button never triggers the node-click handler. */}
-      <div
-        className="op-node-actions"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          display: "inline-flex",
-          gap: 2,
-          opacity: 0,
-          transition: "opacity 120ms ease",
-          zIndex: 5,
-        }}
-      >
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onRunUpTo(step); }}
-          title="Run pipeline up to this step"
-          style={nodeActionBtnStyle}
-        >
-          <IconPlay size={10} />
-        </button>
-        {step.sql ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); data.onEditSql(step); }}
-            title="Edit step SQL"
-            style={nodeActionBtnStyle}
-          >
-            <IconEdit size={10} />
-          </button>
-        ) : null}
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onFork(step); }}
-          title="Fork from this step — next action starts a new branch"
-          style={nodeActionBtnStyle}
-        >
-          ⑂
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onBranchTo(step); }}
-          title="Create a new branch dataset from this step"
-          style={{ ...nodeActionBtnStyle, color: "var(--or, #fb923c)" }}
-        >
-          ↗
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onRename(step); }}
-          title="Rename step"
-          style={nodeActionBtnStyle}
-        >
-          ✏
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onUndoFrom(step); }}
-          title="Undo from this step (removes this and all later steps)"
-          style={nodeActionBtnStyle}
-        >
-          ↺
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); data.onDelete(step); }}
-          title="Remove this step (re-runs downstream steps)"
-          style={{ ...nodeActionBtnStyle, color: "var(--rd, #f87171)" }}
-        >
-          <IconX size={10} />
-        </button>
-      </div>
       <Handle
         type="target"
         position={Position.Left}
@@ -263,7 +181,7 @@ function OperationNode({ data, selected }: NodeProps<OperationNodeData>) {
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              paddingRight: 16,
+              paddingRight: 4,
             }}
             title={label}
           >
@@ -328,14 +246,7 @@ const H_GAP = 300; // horizontal distance between depths (X axis)
 const V_GAP = 140; // vertical distance between sibling branches (Y axis)
 
 type NodeCallbacks = {
-  onNodeClick: (step: PipelineStep) => void;
   onNodeDelete: (step: PipelineStep) => void;
-  onNodeRunUpTo: (step: PipelineStep) => void;
-  onNodeFork: (step: PipelineStep) => void;
-  onNodeBranchTo: (step: PipelineStep) => void;
-  onNodeRename: (step: PipelineStep) => void;
-  onNodeUndoFrom: (step: PipelineStep) => void;
-  onNodeEditSql: (step: PipelineStep) => void;
 };
 
 function buildLayout(
@@ -343,6 +254,8 @@ function buildLayout(
   rows: number,
   steps: PipelineStep[],
   cb: NodeCallbacks,
+  selectedStepId?: string,
+  sessionId?: string,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
     {
@@ -466,14 +379,9 @@ function buildLayout(
       position: { x: depth[i] * H_GAP, y: yPos[i] },
       data: {
         step,
-        onClick: cb.onNodeClick,
-        onDelete: cb.onNodeDelete,
-        onRunUpTo: cb.onNodeRunUpTo,
-        onFork: cb.onNodeFork,
-        onBranchTo: cb.onNodeBranchTo,
-        onRename: cb.onNodeRename,
-        onUndoFrom: cb.onNodeUndoFrom,
-        onEditSql: cb.onNodeEditSql,
+        isSelected: step.id === selectedStepId,
+        stepIndex: i,
+        sessionId,
       } as OperationNodeData,
     });
     edges.push({
@@ -977,102 +885,16 @@ function StepDetailPanel({
 }
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
-function PipelineGraphTabInner() {
-  const { steps, removeStep, keepStepsThrough, moveStep, renameStep, forkAtStep } = usePipelineContext();
-  const { activeDataset, setActiveDataset, addLane } = useWorkspaceContext();
+function PipelineGraphTabInner({ selectedStepId }: { selectedStepId?: string }) {
+  const { steps, removeStep, liveArtifact } = usePipelineContext();
+  const { activeDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedStep, setSelectedStep] = useState<PipelineStep | null>(null);
-  const [branchingStep, setBranchingStep] = useState<PipelineStep | null>(null);
-  const [branchName, setBranchName] = useState("");
-  const [branchBusy, setBranchBusy] = useState(false);
-
-  const handleNodeClick = useCallback((step: PipelineStep) => {
-    setSelectedStep((prev) => (prev?.id === step.id ? null : step));
-  }, []);
 
   const handleNodeDelete = useCallback((step: PipelineStep) => {
     removeStep(step.id);
-    setSelectedStep((prev) => (prev?.id === step.id ? null : prev));
   }, [removeStep]);
-
-  const handleNodeRunUpTo = useCallback((step: PipelineStep) => {
-    keepStepsThrough(step.id);
-    if (step.outputDataset) {
-      setActiveDataset({
-        id: step.outputDataset.id,
-        name: step.outputDataset.name,
-        rows: step.outputDataset.rowCount ?? 0,
-      });
-    }
-  }, [keepStepsThrough, setActiveDataset]);
-
-  const handleNodeFork = useCallback((step: PipelineStep) => {
-    forkAtStep(step.id);
-  }, [forkAtStep]);
-
-  const handleNodeBranchTo = useCallback((step: PipelineStep) => {
-    setBranchingStep(step);
-    setBranchName(`${activeDataset?.name ?? "Dataset"} → step ${step.stepNumber}`);
-    window.dispatchEvent(new Event("datahub:quickstart-step5-done"));
-  }, [activeDataset?.name]);
-
-  const handleBranchConfirm = useCallback(async () => {
-    if (!branchingStep) return;
-    setBranchBusy(true);
-    try {
-      const { forkFromStep } = await import("../api");
-      const result = await forkFromStep(branchingStep.id, {
-        name: branchName.trim() || undefined,
-      });
-      addLane({
-        id: result.dataset_id,
-        name: result.dataset_name,
-        rows: 0,
-      });
-      window.dispatchEvent(
-        new CustomEvent("datahub:toast", {
-          detail: { message: `Branch created: ${result.dataset_name}`, type: "success" },
-        }),
-      );
-      setBranchingStep(null);
-    } catch (err) {
-      window.dispatchEvent(
-        new CustomEvent("datahub:toast", {
-          detail: { message: `Branch failed: ${err instanceof Error ? err.message : "unknown error"}`, type: "error" },
-        }),
-      );
-    } finally {
-      setBranchBusy(false);
-    }
-  }, [branchingStep, branchName, addLane]);
-
-  const handleNodeRename = useCallback((step: PipelineStep) => {
-    const current = step.description || step.operation.replace(/_/g, " ");
-    // Native prompt keeps the change tiny and dependency-free; matches the
-    // simple rename UX users had in the previous APPLIED STEPS list.
-    const next = window.prompt("Rename step", current);
-    if (next != null && next.trim() && next.trim() !== current) {
-      renameStep(step.id, next.trim());
-    }
-  }, [renameStep]);
-
-  // Undo-from and Edit-SQL stay in PipelineSection because they involve a
-  // confirm prompt (undo) and an inline editor panel (edit SQL) that already
-  // live there. We just dispatch events from the graph node so users can
-  // trigger them in-place without losing that existing UX.
-  const handleNodeUndoFrom = useCallback((step: PipelineStep) => {
-    window.dispatchEvent(
-      new CustomEvent("datahub:pipeline:undo-from", { detail: { stepId: step.id } }),
-    );
-  }, []);
-
-  const handleNodeEditSql = useCallback((step: PipelineStep) => {
-    window.dispatchEvent(
-      new CustomEvent("datahub:pipeline:edit-sql", { detail: { stepId: step.id } }),
-    );
-  }, []);
 
   const handleFit = useCallback(() => {
     rf.fitView({ padding: 0.15, duration: 400 });
@@ -1098,22 +920,15 @@ function PipelineGraphTabInner() {
       return;
     }
     const { nodes: n, edges: e } = buildLayout(sourceName, sourceRows, steps, {
-      onNodeClick: handleNodeClick,
       onNodeDelete: handleNodeDelete,
-      onNodeRunUpTo: handleNodeRunUpTo,
-      onNodeFork: handleNodeFork,
-      onNodeBranchTo: handleNodeBranchTo,
-      onNodeRename: handleNodeRename,
-      onNodeUndoFrom: handleNodeUndoFrom,
-      onNodeEditSql: handleNodeEditSql,
-    });
+    }, selectedStepId, liveArtifact?.sessionId ?? localStorage.getItem(`datahub_chat_session_${activeDataset?.id}`) ?? undefined);
     setNodes(n);
     setEdges(e);
     const t = setTimeout(() => {
       rf.fitView({ padding: 0.15, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [steps, sourceName, sourceRows, handleNodeClick, handleNodeDelete, handleNodeRunUpTo, handleNodeFork, handleNodeBranchTo, handleNodeRename, handleNodeUndoFrom, handleNodeEditSql, setNodes, setEdges, rf]);
+  }, [steps, sourceName, sourceRows, handleNodeDelete, selectedStepId, setNodes, setEdges, rf]);
 
   if (steps.length === 0) {
     return (
@@ -1158,9 +973,8 @@ function PipelineGraphTabInner() {
         style={{
           position: "absolute",
           top: 10,
-          right: selectedStep ? 470 : 10,
+          right: 10,
           zIndex: 10,
-          transition: "right 0.22s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
         <button
@@ -1183,136 +997,16 @@ function PipelineGraphTabInner() {
           Fit
         </button>
       </div>
-
-      <StepDetailPanel
-        step={selectedStep}
-        onClose={() => setSelectedStep(null)}
-        onRunToHere={
-          selectedStep && steps.some((s) => s.stepNumber > selectedStep.stepNumber)
-            ? () => {
-                keepStepsThrough(selectedStep.id);
-                if (selectedStep.outputDataset) {
-                  setActiveDataset({
-                    id: selectedStep.outputDataset.id,
-                    name: selectedStep.outputDataset.name,
-                    rows: selectedStep.outputDataset.rowCount ?? 0,
-                  });
-                }
-                setSelectedStep(null);
-              }
-            : undefined
-        }
-        onMoveUp={
-          selectedStep && steps.findIndex((s) => s.id === selectedStep.id) > 0
-            ? () => moveStep(selectedStep.id, "up")
-            : undefined
-        }
-        onMoveDown={
-          selectedStep && steps.findIndex((s) => s.id === selectedStep.id) < steps.length - 1
-            ? () => moveStep(selectedStep.id, "down")
-            : undefined
-        }
-      />
-
-      {/* Branch-name dialog */}
-      {branchingStep && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            zIndex: 50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={() => !branchBusy && setBranchingStep(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--bg1)",
-              border: "1px solid var(--bd2)",
-              borderRadius: 12,
-              padding: "20px 22px",
-              width: 360,
-              boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--tx0)", marginBottom: 4 }}>
-              Create branch from step {branchingStep.stepNumber}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--tx2)", marginBottom: 14 }}>
-              A new dataset will be created with steps 1–{branchingStep.stepNumber} copied from this pipeline.
-            </div>
-            <input
-              value={branchName}
-              onChange={(e) => setBranchName(e.target.value)}
-              placeholder="Branch dataset name"
-              autoFocus
-              style={{
-                width: "100%",
-                padding: "7px 10px",
-                fontSize: 13,
-                background: "var(--bg3)",
-                border: "1px solid var(--bd2)",
-                borderRadius: 6,
-                color: "var(--tx0)",
-                outline: "none",
-                boxSizing: "border-box",
-                marginBottom: 14,
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleBranchConfirm();
-                if (e.key === "Escape") setBranchingStep(null);
-              }}
-            />
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setBranchingStep(null)}
-                disabled={branchBusy}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: 12,
-                  background: "var(--bg3)",
-                  border: "1px solid var(--bd2)",
-                  borderRadius: "var(--r6)",
-                  color: "var(--tx1)",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void handleBranchConfirm()}
-                disabled={branchBusy}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: 12,
-                  background: "var(--or, #fb923c)",
-                  border: "none",
-                  borderRadius: "var(--r6)",
-                  color: "#fff",
-                  cursor: branchBusy ? "not-allowed" : "pointer",
-                  opacity: branchBusy ? 0.7 : 1,
-                }}
-              >
-                {branchBusy ? "Branching…" : "Create branch ↗"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 // ─── Public export ─────────────────────────────────────────────────────────────
-export function PipelineGraphTab() {
+export function PipelineGraphTab({ selectedStepId }: { selectedStepId?: string } = {}) {
   return (
     <ReactFlowProvider>
       <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%" }}>
-        <PipelineGraphTabInner />
+        <PipelineGraphTabInner selectedStepId={selectedStepId} />
       </div>
     </ReactFlowProvider>
   );

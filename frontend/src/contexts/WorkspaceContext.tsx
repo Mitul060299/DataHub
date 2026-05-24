@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { createProject as apiCreateProject, fetchProjects, provisionQuickstart } from "../api";
+import { createProject as apiCreateProject, fetchProjects } from "../api";
 import type { ProjectOut } from "../api";
 import { useAuth } from "./AuthContext";
 
@@ -165,24 +165,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     setProjectsLoading(true);
     try {
-        const data = await fetchProjects();
+      const data = await fetchProjects();
       let mapped = data.map(toProject);
-
-      // For ALL users: if the API returned no is_quickstart project, provision
-      // one now. The backend endpoint is fully idempotent so calling it when
-      // the project already exists is harmless. We intentionally do NOT gate
-      // this on a localStorage flag — stale flags from previous sessions would
-      // prevent re-provisioning after a project deletion (e.g. migration 0075).
-      const hasQsProject = mapped.some((p) => p.is_quickstart);
-      if (!hasQsProject) {
-        try {
-          await provisionQuickstart();
-          const data2 = await fetchProjects();
-          mapped = data2.map(toProject);
-        } catch {
-          // Non-fatal — fall through with existing list
-        }
-      }
 
       setProjects(mapped);
       // If activeProject not loaded yet, prefer the user's last opened

@@ -1,33 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, deleteDataset, renameDataset } from "../api";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
-import { IconChevronDown, IconTeam } from "./Icons";
-import { ArtifactsSection, type ArtifactItem } from "./ArtifactsSection";
-import { VisualizationsSection } from "./VisualizationsSection";
+import { IconChevronDown } from "./Icons";
 import { DataSection } from "./DataSection";
-
-import { TeamPanel } from "./TeamPanel";
+import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { ProjectModal } from "./modals/ProjectModal";
 import { ImportModal } from "./modals/ImportModal";
 import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { markQuickstartStep1Done } from "./QuickstartTour";
 import { recordMilestone } from "../lib/activation";
+import type { WorkspaceMode } from "../pages/WorkspacePage";
 
 interface ExplorerPanelProps {
   refreshNonce?: number;
   searchFocusNonce?: number;
   width?: number;
   showDatasetNudge?: boolean;
+  mode?: WorkspaceMode;
+  pipelineId?: string;
+  selectedStepId?: string;
+  onStepSelect?: (step: import("../contexts/PipelineContext").PipelineStep | null) => void;
 }
 
-export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatasetNudge }: ExplorerPanelProps) {
-  const { activeProject, setActiveProject, activeDataset, setActiveDataset, members, projectsLoading } = useWorkspaceContext();
+export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatasetNudge, mode, pipelineId, selectedStepId, onStepSelect }: ExplorerPanelProps) {
+  const { activeProject, setActiveProject, activeDataset, setActiveDataset, projectsLoading } = useWorkspaceContext();
   const { steps, liveArtifact } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
-  const [teamPanelOpen, setTeamPanelOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,38 +57,6 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
     return () => window.removeEventListener("datahub:activate-dataset", handleActivate);
   }, []);
 
-  const operationByOutputDataset = useMemo(() => {
-    const outputMap = new Map<string, string>();
-    for (const step of steps) {
-      if (step.outputDataset?.id) {
-        outputMap.set(step.outputDataset.id, step.operation);
-      }
-    }
-    return outputMap;
-  }, [steps]);
-
-  const workflowLeafOutputIds = useMemo(() => {
-    const outputIds = new Set<string>();
-    const consumedIds = new Set<string>();
-
-    for (const step of steps) {
-      if (step.outputDataset?.id) {
-        outputIds.add(step.outputDataset.id);
-      }
-      if (step.inputDataset?.id) {
-        consumedIds.add(step.inputDataset.id);
-      }
-    }
-
-    const leafIds = new Set<string>();
-    for (const outputId of outputIds) {
-      if (!consumedIds.has(outputId)) {
-        leafIds.add(outputId);
-      }
-    }
-    return leafIds;
-  }, [steps]);
-
   const datasetsById = useMemo(() => {
     const datasetMap = new Map<string, Dataset>();
     for (const dataset of datasets) {
@@ -102,47 +71,6 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
     if (!lowered) return base;
     return base.filter((dataset) => (dataset.name ?? "").toLowerCase().includes(lowered));
   }, [datasets, datasetsById, searchQuery]);
-
-  const artifacts = useMemo<ArtifactItem[]>(() => {
-    const tableOps = new Set(["group_by", "pivot", "unpivot", "join", "union", "distinct", "sample", "filter_rows", "sort"]);
-    const metricOps = new Set(["aggregate", "bin_values"]);
-    const variableOps = new Set(["create_column", "split_column", "merge_columns", "change_type", "rename_columns", "replace_values"]);
-
-    // Show all leaf datasets that have a known parent — i.e. outputs the agent
-    // (or any pipeline step) produced from an uploaded dataset.  We deliberately
-    // do NOT restrict by workflowLeafOutputIds here: that set is only populated
-    // when the frontend has seen the agent.done event in this session.  Relying
-    // on it causes artifacts to disappear on page reload or when the pipeline
-    // recorder fails to persist steps cleanly.
-    const parentIds = new Set(
-      datasets
-        .map((dataset) => dataset.parentId)
-        .filter((parentId): parentId is string => Boolean(parentId))
-    );
-
-    const derived = datasets
-      .filter((dataset) => Boolean(
-        dataset.parentId
-        && datasetsById.has(dataset.parentId)
-        && !parentIds.has(dataset.id)
-      ))
-      .map((dataset) => {
-        const operation = (operationByOutputDataset.get(dataset.id) || "").toLowerCase();
-        let kind: ArtifactItem["kind"] = "table";
-        if (metricOps.has(operation)) {
-          kind = "metric";
-        } else if (variableOps.has(operation)) {
-          kind = "variable";
-        } else if (tableOps.has(operation)) {
-          kind = "table";
-        }
-        return { ...dataset, kind };
-      });
-
-    const lowered = searchQuery.trim().toLowerCase();
-    if (!lowered) return derived;
-    return derived.filter((dataset) => (dataset.name ?? "").toLowerCase().includes(lowered));
-  }, [datasets, datasetsById, operationByOutputDataset, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
     const cacheKey = `dh_ds_${activeProject?.id ?? "all"}`;
@@ -276,45 +204,11 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
         <IconChevronDown size={14} />
       </div>
 
-      <div className="members-strip" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div style={{ display: "inline-flex", alignItems: "center" }}>
-          {(() => {
-            const active = members.map((m) => ({ id: m.id, label: m.name }));
-            const normalized: Array<{ id: string; label: string }> = active.length > 0
-              ? active
-              : members.map((m) => ({ id: m.id, label: m.name }));
-            const shown = normalized.slice(0, 4);
-            const overflow = normalized.length - shown.length;
-            return (
-              <>
-                {shown.map((member, index) => (
-                  <div
-                    key={member.id}
-                    title={member.label}
-                    style={{ width: 22, height: 22, borderRadius: 999, border: "1px solid var(--bg1)", background: "var(--acg)", display: "grid", placeItems: "center", marginLeft: index ? -5 : 0, fontSize: 11 }}
-                  >
-                    {member.label.slice(0, 1).toUpperCase()}
-                  </div>
-                ))}
-                {overflow > 0 && (
-                  <div style={{ width: 22, height: 22, borderRadius: 999, border: "1px solid var(--bg1)", background: "var(--bg3)", display: "grid", placeItems: "center", marginLeft: -5, fontSize: 10, color: "var(--tx1)" }}>
-                    +{overflow}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
-        <button className="btn" onClick={() => setTeamPanelOpen(true)} style={{ height: 24, fontSize: 11 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconTeam size={13} />+ Invite</span>
-        </button>
-      </div>
-
       <input
         ref={searchInputRef}
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.target.value)}
-        placeholder="Search datasets and artifacts..."
+        placeholder="Search datasets..."
         style={{
           width: "100%",
           height: 32,
@@ -364,61 +258,75 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
           </div>
         ) : (
         <div data-tour="data-section">
-        <DataSection
-          datasets={sourceDatasets}
-          activeDatasetId={activeDataset?.id}
-          onSelect={setActiveDataset}
-          onImport={() => setImportModalOpen(true)}
-          onAddConnection={() => setConnectorModalOpen(true)}
-          onRemove={(dataset) => void removeDataset(dataset)}
-          showNudge={showDatasetNudge}
-          onRename={async (dataset, name) => {
-            await renameDataset(dataset.id, name);
-            void loadDatasets();
-          }}
-        />
+          {mode === "pipeline" ? (
+            /* Pipeline mode: show numbered step list */
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--tx2)", marginBottom: 8, marginTop: 4 }}>PIPELINE STEPS</div>
+              {steps.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--tx2)", padding: "8px 0", fontStyle: "italic" }}>No steps yet. Ask the AI to transform your data.</div>
+              ) : (
+                steps.map((step, idx) => {
+                  const isSelected = step.id === selectedStepId;
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => {
+                        onStepSelect?.(step);
+                        window.dispatchEvent(new CustomEvent("datahub:preview:step", {
+                          detail: { stepIndex: idx, sessionId: liveArtifact?.sessionId },
+                        }));
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        width: "100%",
+                        padding: "7px 8px",
+                        marginBottom: 4,
+                        borderRadius: 8,
+                        border: isSelected ? "1px solid var(--ac)" : "1px solid var(--bd)",
+                        background: isSelected ? "rgba(91,106,240,0.12)" : "var(--bg3)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <span style={{ minWidth: 20, height: 20, borderRadius: 999, background: isSelected ? "var(--ac)" : "var(--bg2)", border: "1px solid var(--bd2)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700, color: isSelected ? "#fff" : "var(--tx2)", flexShrink: 0 }}>
+                        {idx + 1}
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{step.operation}</div>
+                        <div style={{ fontSize: 10, color: "var(--tx2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{step.description}</div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+              {pipelineId && (
+                <div style={{ marginTop: 16 }}>
+                  <PipelineScheduleTab pipelineId={pipelineId} />
+                </div>
+              )}
+            </div>
+          ) : (
+          <DataSection
+            datasets={sourceDatasets}
+            activeDatasetId={activeDataset?.id}
+            onSelect={setActiveDataset}
+            onImport={() => setImportModalOpen(true)}
+            onAddConnection={() => setConnectorModalOpen(true)}
+            onRemove={(dataset) => void removeDataset(dataset)}
+            showNudge={showDatasetNudge}
+            onRename={async (dataset, name) => {
+              await renameDataset(dataset.id, name);
+              void loadDatasets();
+            }}
+          />
+          )}
         </div>
         )}
-        <div data-tour="artifacts-section">
-        <ArtifactsSection
-          artifacts={artifacts}
-          activeDatasetId={activeDataset?.id}
-          projectId={activeProject?.id}
-          refreshNonce={refreshNonce}
-          onSelect={setActiveDataset}
-          onRemove={(dataset) => void removeDataset(dataset)}
-          onRename={async (dataset, name) => {
-            await renameDataset(dataset.id, name);
-            void loadDatasets();
-          }}
-          liveArtifact={liveArtifact}
-          onContinueFrom={(dataset) => {
-            setActiveDataset(dataset);
-          }}
-          onSaveLive={async (tableName, label) => {
-            if (!liveArtifact?.sessionId) return;
-            await api.post("/artifacts/save-checkpoint", {
-              session_id: liveArtifact.sessionId,
-              table_name: tableName,
-              artifact_name: label,
-              source_dataset_id: activeDataset?.id,
-            });
-            void loadDatasets();
-            window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Saved checkpoint \u201c${label}\u201d`, tone: "success" } }));
-          }}
-        />
-
-        </div>
-
-        <div data-tour="viz-section">
-        <VisualizationsSection projectId={activeProject?.id} />
-        </div>
-
       </div>
 
-      {teamPanelOpen && (
-        <TeamPanel projectId={activeProject?.id ?? ""} onClose={() => setTeamPanelOpen(false)} />
-      )}
       <ProjectModal
         open={projectModalOpen}
         onClose={() => setProjectModalOpen(false)}
@@ -431,7 +339,6 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
         onImported={(datasetId) => {
           setImportModalOpen(false);
           if (datasetId) setPendingActivateId(datasetId);
-          markQuickstartStep1Done();
           recordMilestone("dataset_uploaded", {
             $add: { total_datasets_uploaded: 1 },
             $set_once: { first_dataset_at: new Date().toISOString() },

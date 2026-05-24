@@ -4,18 +4,18 @@ import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
-import { IconClock, IconDownload, IconGitBranch, IconGrid, IconRefresh, IconTable } from "./Icons";
+import { IconDownload } from "./Icons";
 import { DataTable } from "./DataTable";
+import type { WorkspaceMode } from "../pages/WorkspacePage";
 
 import { PipelineGraphTab } from "./PipelineGraphTab";
-import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { PipelineSection } from "./PipelineSection";
-import { DataVersionHistory } from "./DataVersionHistory";
+import { DashboardCanvas } from "./DashboardCanvas";
 import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 import { CrossStepInputPanel } from "./CrossStepInputPanel";
 
-type CanvasTab = "data" | "pipeline" | "dashboards" | "schedule" | "history";
+
 
 interface CanvasPanelProps {
   workspaceId?: string;
@@ -47,8 +47,14 @@ interface CanvasPanelProps {
   replayError?: string | null;
   /** Clear the replay error (e.g. when user dismisses) */
   onClearReplayError?: () => void;
-  /** Called whenever the active tab changes — lets the parent hide/show sibling panels */
-  onTabChange?: (tab: CanvasTab) => void;
+  /** Current workspace mode — controlled by WorkspacePage */
+  mode: WorkspaceMode;
+  /** Called when user switches mode via the 3-way toggle */
+  onModeChange?: (mode: WorkspaceMode) => void;
+  /** Called when user clicks ⊗ Clear in Pipeline mode */
+  onClearPipeline?: () => void;
+  /** ID of the currently selected pipeline step (for PipelineGraphTab highlight) */
+  selectedStepId?: string;
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -76,38 +82,24 @@ function relTime(iso?: string | null): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError, onTabChange }: CanvasPanelProps) {
+export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeChange, onClearPipeline, selectedStepId, dataset, loading, dataError, columns, rows, lastAction, onImport, onSheetsExport, onArtifactSaved, sessionPreviewRows, sessionPreviewColumns, showingOriginal, onViewOriginal, onViewCleaned, onSave, onRunPipeline, replayingPipeline, replayError, onClearReplayError }: CanvasPanelProps) {
   const { steps, liveArtifact } = usePipelineContext();
   const { exportPipeline } = usePipeline();
   const { activeLanes, setActiveDataset } = useWorkspaceContext();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<CanvasTab>("data");
 
-  const switchTab = (next: CanvasTab) => { setTab(next); onTabChange?.(next); };
-
-  // Allow the QuickstartTour to programmatically switch tabs without
-  // prop-drilling through WorkspacePage (the backdrop blocks user clicks).
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const target = (e as CustomEvent<string>).detail as CanvasTab;
-      if (target) switchTab(target);
-    };
-    window.addEventListener("datahub:quickstart-open-tab", handler);
-    return () => window.removeEventListener("datahub:quickstart-open-tab", handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // ── Dashboards tab state ──────────────────────────────────────────────────
+  // ── Dashboard tab state ──────────────────────────────────────────────────
   type DashItem = { id: string; name: string; tile_count: number; updated_at: string; is_published: boolean };
   const [dashboards, setDashboards] = useState<DashItem[]>([]);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashCreating, setDashCreating] = useState(false);
 
   useEffect(() => {
-    if (tab !== "dashboards") return;
+    if (mode !== "dashboard") return;
     setDashLoading(true);
     listDashboardsV2()
       .then((list) => setDashboards(list.map((d) => ({
@@ -155,8 +147,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
   const [timelineLoading, setTimelineLoading] = useState(false);
   const timelineAbortRef = useRef<AbortController | null>(null);
 
-  // Reset timeline when dataset or steps change
-  useEffect(() => { setViewingStepIndex(null); setTimelineRows(null); setTimelineCols(null); }, [dataset?.id]);
+  // Reset timeline when dataset or steps change or when mode changes away from data
+  useEffect(() => { setViewingStepIndex(null); setTimelineRows(null); setTimelineCols(null); }, [dataset?.id, mode]);
 
   // When a new step is committed (liveArtifact moves to a different output
   // table), drop the timeline preview override so the Data tab shows the
@@ -420,78 +412,110 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         </div>
       )}
       <div style={{ height: 40, borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", background: "var(--bg1)" }}>
-        <div style={{ display: "inline-flex", gap: 3 }}>          {([
-            { key: "data",       icon: <IconTable size={16} />,     label: "Data", tourTarget: "data-tab" },
-            { key: "pipeline",   icon: <IconGitBranch size={16} />, label: `Pipeline${steps.length > 0 ? ` (${steps.length} steps)` : ""}`, badge: steps.length > 0 ? steps.length : null, tourTarget: "pipeline-tab" },
-            { key: "dashboards", icon: <IconGrid size={16} />,      label: "Dashboards", badge: dashboards.length > 0 ? dashboards.length : null, tourTarget: "dashboards-tab" },
-            ...(pipelineId ? [{ key: "schedule", icon: <IconClock size={16} />,   label: "Schedule" }] : []),
-            ...(dataset?.id  ? [{ key: "history",  icon: <IconRefresh size={16} />, label: "History"  }] : []),
-          ] as { key: string; icon: React.ReactNode; label: string; badge?: number | null; tourTarget?: string }[]).map(({ key, icon, label, badge, tourTarget }) => {
-            const active = tab === key;
+        {/* 3-way segmented toggle */}
+        <div style={{ display: "inline-flex", background: "var(--bg2)", border: "1px solid var(--bd)", borderRadius: 8, padding: 2 }}>
+          {([
+            { key: "data" as WorkspaceMode,     label: "Data",     tourTarget: "data-tab" },
+            { key: "pipeline" as WorkspaceMode, label: `Pipeline${steps.length > 0 ? ` (${steps.length})` : ""}`, tourTarget: "pipeline-tab" },
+            { key: "dashboard" as WorkspaceMode, label: "Dashboard", tourTarget: "dashboards-tab" },
+          ]).map(({ key, label, tourTarget }) => {
+            const active = mode === key;
             return (
               <button
                 key={key}
-                title={label}
-                {...(tourTarget ? { "data-tour": tourTarget } : {})}
-                onClick={() => switchTab(key as CanvasTab)}
+                data-tour={tourTarget}
+                onClick={() => onModeChange?.(key)}
                 style={{
-                  position: "relative",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 38,
-                  height: 34,
-                  border: active ? "1px solid rgba(91,106,240,0.2)" : "1px solid transparent",
-                  borderRadius: 8,
-                  background: active ? "rgba(91,106,240,0.12)" : "transparent",
-                  color: active ? "var(--ac)" : "var(--tx2)",
+                  padding: "4px 14px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: active ? "var(--ac)" : "transparent",
+                  color: active ? "#fff" : "var(--tx2)",
                   cursor: "pointer",
-                  flexShrink: 0,
-                  transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  transition: "all 0.15s",
+                  whiteSpace: "nowrap",
                 }}
               >
-                {icon}
-                {badge != null && (
-                  <span style={{ position: "absolute", top: 4, right: 3, background: "var(--ac)", color: "var(--bg1)", fontSize: 8, fontWeight: 800, borderRadius: 999, minWidth: 14, height: 14, lineHeight: "14px", textAlign: "center", padding: "0 3px" }}>
-                    {badge}
-                  </span>
-                )}
+                {label}
               </button>
             );
           })}
         </div>
 
-        {/* Export dropdown */}
+        {/* Mode-aware right action buttons */}
         <div style={{ display: "inline-flex", gap: 6, position: "relative" }} ref={dropdownRef}>
-          {tab === "pipeline" && dataset?.id && (
+          {mode === "pipeline" && (
+            <>
+              <button className="btn" onClick={onImport} title="Import data into pipeline">
+                ↑ Import
+              </button>
+              <button
+                className="btn"
+                data-tour="cross-input-button"
+                title="Add a cross-pipeline step input"
+                onClick={() => {
+                  if (dataset?.id) setIsCrossInputOpen(true);
+                }}
+              >
+                ⊕ Cross input
+              </button>
+              <button
+                className="btn"
+                disabled={replayingPipeline}
+                onClick={() => { if (onRunPipeline && !replayingPipeline) { void onRunPipeline(); } }}
+                title="Run all pipeline steps"
+              >
+                {replayingPipeline ? "Running…" : "▶ Run"}
+              </button>
+              <button
+                className="btn"
+                disabled={steps.length === 0}
+                onClick={onClearPipeline}
+                title="Clear all pipeline steps"
+              >
+                ⊗ Clear
+              </button>
+              <button
+                className="btn"
+                data-tour="export-button"
+                title="Export pipeline steps"
+                disabled={steps.length === 0}
+                onClick={() => exportPipeline(steps)}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <IconDownload size={14} /> Export
+                </span>
+              </button>
+            </>
+          )}
+          {mode === "dashboard" && (
             <button
               className="btn"
-              data-tour="cross-input-button"
-              title="Add a cross-pipeline step input — link a saved snapshot from another pipeline step so the AI agent can JOIN or reconcile against it using a SQL alias"
+              style={{ background: "var(--acl)", borderColor: "var(--acg)", color: "var(--ac)" }}
               onClick={() => {
-                setIsCrossInputOpen(true);
-                window.dispatchEvent(new Event("datahub:quickstart-step4-done"));
+                window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Share link copied", tone: "success" } }));
               }}
-              style={{ gap: 5 }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                ⊕ Cross input
+              Share
+            </button>
+          )}
+          {mode === "data" && (
+            <button
+              className="btn"
+              data-tour="export-button"
+              title="Export dataset"
+              disabled={!(columns ?? []).length || isExporting !== null}
+              onClick={() => setIsExportOpen((o) => !o)}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <IconDownload size={14} />
+                {isExporting ? "Exporting…" : "Export"}
+                <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
               </span>
             </button>
           )}
-          <button
-            className="btn"
-            data-tour="export-button"
-            title="Export dataset"
-            disabled={!(columns ?? []).length || isExporting !== null}
-            onClick={() => setIsExportOpen((o) => !o)}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <IconDownload size={14} />
-              {isExporting ? "Exporting…" : "Export"}
-              <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
-            </span>
-          </button>
 
           {isExportOpen && (
             <div style={{
@@ -563,7 +587,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         </div>
       </div>
       {/* ── Step preview indicator (when previewing a step's snapshot) ── */}
-      {viewingStepIndex !== null && tab === "data" && (() => {
+      {viewingStepIndex !== null && mode === "data" && (() => {
         const stepDesc = steps[viewingStepIndex]?.description || `Step ${viewingStepIndex + 1}`;
         const dsName = dataset?.name ?? "";
         let cleanDesc = stepDesc;
@@ -592,14 +616,14 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
         );
       })()}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {dataError && tab === "data" && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
+        {dataError && mode === "data" && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
           <div style={{ padding: "10px 16px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.2)", color: "var(--rd)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
             <span>⚠</span>
             <span>{dataError}</span>
           </div>
         )}
         {/* Amber banner: cleaned preview mode */}
-        {tab === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (() => {
+        {mode === "data" && sessionPreviewRows && sessionPreviewRows.length > 0 && (() => {
           // True total: prefer last step's row_count_after (always from the server),
           // fall back to liveArtifact.rowCount, then preview length as last resort.
           const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
@@ -662,7 +686,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           );
         })()}
         {/* Green banner: steps exist but liveArtifact is gone (page refresh) — prompt user to re-run */}
-        {tab === "data" && steps.length > 0 && !liveArtifact && !showingOriginal && viewingStepIndex === null && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
+        {mode === "data" && steps.length > 0 && !liveArtifact && !showingOriginal && viewingStepIndex === null && !(sessionPreviewRows && sessionPreviewRows.length > 0) && (
           <div style={{ padding: "6px 14px", background: replayError ? "rgba(248,113,113,0.08)" : "rgba(34,197,94,0.08)", borderBottom: `1px solid ${replayError ? "rgba(248,113,113,0.2)" : "rgba(34,197,94,0.2)"}`, color: replayError ? "var(--rd)" : "#86efac", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>{replayError ? "⚠" : "🔄"}</span>
             <span style={{ flex: 1 }}>{replayError ?? `Your pipeline has ${steps.length} step${steps.length === 1 ? "" : "s"} — run it to restore the cleaned preview.`}</span>
@@ -691,7 +715,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
           </div>
         )}
         {/* Blue banner: viewing original while a live artifact exists */}
-        {tab === "data" && showingOriginal && (
+        {mode === "data" && showingOriginal && (
           <div style={{ padding: "6px 14px", background: "rgba(91,106,240,0.1)", borderBottom: "1px solid rgba(91,106,240,0.25)", color: "#a5b4fc", fontSize: 12, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span>👁</span>
             <span style={{ flex: 1 }}>Viewing original data.</span>
@@ -703,29 +727,11 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
             </button>
           </div>
         )}
-        {tab === "pipeline" ? (
-          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-            <div data-tour="pipeline-graph-area" style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
-              <PipelineGraphTab />
-            </div>
-            <div style={{ width: 1, background: "var(--bd)", flexShrink: 0 }} />
-            <div data-tour="pipeline-step-list" style={{ width: 300, flexShrink: 0, overflowY: "auto" }}>
-              <PipelineSection
-                onExport={() => exportPipeline(steps)}
-                hideHeader
-                onRunPipeline={onRunPipeline}
-              />
-            </div>
+        {mode === "pipeline" ? (
+          <div data-tour="pipeline-graph-area" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            <PipelineGraphTab selectedStepId={selectedStepId} />
           </div>
-        ) : tab === "schedule" && pipelineId ? (
-          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            <PipelineScheduleTab pipelineId={pipelineId} />
-          </div>
-        ) : tab === "history" && dataset?.id ? (
-          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            <DataVersionHistory datasetId={dataset.id} />
-          </div>
-        ) : tab === "data" ? (
+        ) : mode === "data" ? (
           !dataset && !loading ? (
             <CanvasEmptyState onImport={onImport} />
           ) : (
@@ -795,122 +801,12 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, dataset, loadi
               />
             </>
           )
-        ) : tab === "dashboards" ? (
-          /* ── Dashboards v2 list ────────────────────────────────────── */
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px 20px" }}>
-            {/* Header row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--tx0)" }}>Dashboards</span>
-                {dashboards.length > 0 && (
-                  <span style={{ marginLeft: 6, fontSize: 11, color: "var(--tx2)" }}>
-                    {dashboards.length} total
-                  </span>
-                )}
-              </div>
-              <button
-                className="btn"
-                disabled={dashCreating}
-                onClick={() => void handleNewDashboard()}
-                style={{ background: "var(--ac)", color: "#fff", borderColor: "var(--ac)", fontSize: 11, padding: "5px 10px" }}
-              >
-                {dashCreating ? "Creating…" : "+ New"}
-              </button>
-            </div>
-
-            {dashError && (
-              <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span>{dashError}</span>
-                <button onClick={() => setDashError(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>✕</button>
-              </div>
-            )}
-
-            {dashLoading ? (
-              /* Skeleton rows */
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} style={{ height: 56, borderRadius: 10, background: "var(--bg2)", animation: "pulse 1.4s ease-in-out infinite", opacity: 0.6 }} />
-                ))}
-                <style>{`@keyframes pulse{0%,100%{opacity:.6}50%{opacity:.3}}`}</style>
-              </div>
-            ) : dashboards.length === 0 ? (
-              /* Empty state */
-              <div style={{ border: "1px dashed var(--bd2)", borderRadius: 12, padding: "32px 16px", textAlign: "center", color: "var(--tx1)" }}>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>📊</div>
-                <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "var(--tx0)" }}>No dashboards yet</p>
-                <p style={{ margin: "0 0 16px", fontSize: 11, color: "var(--tx2)", lineHeight: 1.5 }}>
-                  Create a blank dashboard or let AI build one from your data.
-                </p>
-                <button
-                  className="btn"
-                  disabled={dashCreating}
-                  onClick={() => void handleNewDashboard()}
-                  style={{ background: "var(--ac)", color: "#fff", borderColor: "var(--ac)", fontSize: 12 }}
-                >
-                  {dashCreating ? "Creating…" : "+ New Dashboard"}
-                </button>
-              </div>
-            ) : (
-              /* Dashboard cards */
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {dashboards.map((d) => (
-                  <div
-                    key={d.id}
-                    onClick={() => navigate(`/dashboard/${d.id}`)}
-                    style={{
-                      background: "var(--bg2)",
-                      border: "1px solid var(--bd)",
-                      borderRadius: 10,
-                      padding: "9px 12px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      transition: "border-color 0.12s, background 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = "var(--bg3)";
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(91,106,240,0.35)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = "var(--bg2)";
-                      (e.currentTarget as HTMLElement).style.borderColor = "var(--bd)";
-                    }}
-                  >
-                    {/* Icon */}
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(91,106,240,0.12)", border: "1px solid rgba(91,106,240,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>
-                      📊
-                    </div>
-
-                    {/* Name + meta */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 2, alignItems: "center" }}>
-                        <span style={{ fontSize: 10, color: "var(--tx2)" }}>
-                          {d.tile_count === 0 ? "Empty" : `${d.tile_count} tile${d.tile_count !== 1 ? "s" : ""}`}
-                        </span>
-                        {d.updated_at && (
-                          <>
-                            <span style={{ fontSize: 10, color: "var(--bd2)" }}>·</span>
-                            <span style={{ fontSize: 10, color: "var(--tx2)" }}>{relTime(d.updated_at)}</span>
-                          </>
-                        )}
-                        {d.is_published && (
-                          <>
-                            <span style={{ fontSize: 10, color: "var(--bd2)" }}>·</span>
-                            <span style={{ fontSize: 10, color: "#10b981", fontWeight: 600 }}>Live</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Arrow */}
-                    <span style={{ fontSize: 13, color: "var(--tx2)", flexShrink: 0 }}>›</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        ) : mode === "dashboard" ? (
+          /* ── Dashboard canvas with saved visualizations ─────────────────── */
+          <DashboardCanvas
+            projectId={projectId}
+            onAskAi={() => window.dispatchEvent(new CustomEvent("datahub:ai:focus"))}
+          />
         ) : null}
       </div>
     </section>

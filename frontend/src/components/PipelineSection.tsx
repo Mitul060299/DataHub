@@ -62,31 +62,8 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     }
   }, [steps, editPanelStepId]);
 
-  // Ref to the latest handleUndoFromStep so the window-event listener (which
-  // is registered once on mount) always invokes the freshest closure rather
-  // than capturing stale `steps` / context values.
+  // Ref kept for legacy purposes but no longer wired to window events
   const undoFromRef = useRef<((stepId: string) => void) | null>(null);
-
-  // Listen for events dispatched by graph node action buttons. The Edit-SQL
-  // and Undo-from buttons live on the graph nodes (in PipelineGraphTab) but
-  // their UI (inline EditStepPanel, confirm prompt) lives here, so we bridge
-  // them through window events.
-  useEffect(() => {
-    const handleEditSql = (e: Event) => {
-      const stepId = (e as CustomEvent<{ stepId: string }>).detail?.stepId;
-      if (stepId) setEditPanelStepId(stepId);
-    };
-    const handleUndoFrom = (e: Event) => {
-      const stepId = (e as CustomEvent<{ stepId: string }>).detail?.stepId;
-      if (stepId) undoFromRef.current?.(stepId);
-    };
-    window.addEventListener("datahub:pipeline:edit-sql", handleEditSql);
-    window.addEventListener("datahub:pipeline:undo-from", handleUndoFrom);
-    return () => {
-      window.removeEventListener("datahub:pipeline:edit-sql", handleEditSql);
-      window.removeEventListener("datahub:pipeline:undo-from", handleUndoFrom);
-    };
-  }, []);
 
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(new Set());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);

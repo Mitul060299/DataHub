@@ -1542,11 +1542,6 @@ export async function deleteProject(id: string): Promise<void> {
   await api.delete(`/projects/${id}`);
 }
 
-export async function provisionQuickstart(): Promise<ProjectOut> {
-  const response = await api.post("/auth/provision-quickstart");
-  return response.data;
-}
-
 export async function fetchProjectDetail(id: string): Promise<ProjectDetailOut> {
   const response = await api.get(`/projects/${id}`);
   return response.data;

@@ -5,10 +5,12 @@ import { Breadcrumb } from "../components/Breadcrumb";
 import { AIPanel } from "../components/AIPanel";
 import { CanvasPanel } from "../components/CanvasPanel";
 import { ExplorerPanel } from "../components/ExplorerPanel";
+import type { PipelineStep } from "../contexts/PipelineContext";
+
+export type WorkspaceMode = "data" | "pipeline" | "dashboard";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
 import { TourTooltip, STEPS_COUNT } from "../components/TourTooltip";
-import { QuickstartTour, markQuickstartStep1Done, markQuickstartStep2Done } from "../components/QuickstartTour";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -30,7 +32,7 @@ export function WorkspacePage() {
   const resolvedProject = projectId
     ? (projects.find((p) => p.id === projectId) ?? activeProject)
     : activeProject;
-  const { steps, liveArtifact, setLiveArtifact } = usePipelineContext();
+  const { steps, liveArtifact, setLiveArtifact, clearSteps } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
   const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete, firstAiAnswerAt, recordMilestone: ctxRecordMilestone } = useUser();
   const [importOpen, setImportOpen] = useState(false);
@@ -41,7 +43,8 @@ export function WorkspacePage() {
   const [resizingExplorer, setResizingExplorer] = useState(false);
   const [aiWidth, setAiWidth] = useState(() => Number(localStorage.getItem("aiWidth") ?? 320));
   const [resizingAI, setResizingAI] = useState(false);
-  const [panelTab, setPanelTab] = useState<string>("data");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("data");
+  const [selectedPipelineStep, setSelectedPipelineStep] = useState<PipelineStep | null>(null);
   const [demoBannerDismissed, setDemoBannerDismissed] = useState(
     () => sessionStorage.getItem("datahub_demo_banner_dismissed") === "1",
   );
@@ -58,12 +61,6 @@ export function WorkspacePage() {
   const [toast, setToast] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
-
-  // Quickstart tour: show when the active project is flagged is_quickstart
-  // and the user hasn't completed or dismissed it yet.
-  const [showQsTour, setShowQsTour] = useState(() => {
-    return localStorage.getItem("datahub_qs_done") !== "1";
-  });
 
   // When agent.done sets sessionPreview/liveArtifact AND switches the active
   // dataset in the same React batch, the clearing useEffect on activeDataset?.id
@@ -271,6 +268,25 @@ export function WorkspacePage() {
     return () => window.removeEventListener("datahub:run:pipeline", handleRunPipelineEvent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionPreview, replayingPipeline, steps.length]);
+
+  // Clear selected step when leaving pipeline mode
+  useEffect(() => {
+    if (workspaceMode !== "pipeline") {
+      setSelectedPipelineStep(null);
+    }
+  }, [workspaceMode]);
+
+  // Listen for step selection from PipelineGraphTab / ExplorerPanel step list
+  useEffect(() => {
+    function handleStepSelected(e: Event) {
+      const detail = (e as CustomEvent<PipelineStep | null>).detail;
+      setSelectedPipelineStep(detail);
+      // When a step is clicked, switch to data mode to show the step's preview
+      if (detail) setWorkspaceMode("data");
+    }
+    window.addEventListener("datahub:pipeline:step-selected", handleStepSelected);
+    return () => window.removeEventListener("datahub:pipeline:step-selected", handleStepSelected);
+  }, []);
 
   // ── Sample loader shortcut from panel empty state ──
   useEffect(() => {
@@ -520,6 +536,13 @@ export function WorkspacePage() {
         searchFocusNonce={explorerSearchFocusNonce}
         width={explorerWidth}
         showDatasetNudge={showDatasetNudge}
+        mode={workspaceMode}
+        pipelineId={pipelineId}
+        selectedStepId={selectedPipelineStep?.id}
+        onStepSelect={(step) => {
+          setSelectedPipelineStep(step);
+          if (step) setWorkspaceMode("data");
+        }}
       />
       <div
         role="separator"
@@ -534,6 +557,7 @@ export function WorkspacePage() {
       <CanvasPanel
         projectId={resolvedProject?.id ?? ""}
         pipelineId={pipelineId}
+        mode={workspaceMode}
         dataset={activeDataset}
         loading={loading}
         dataError={datasetError ?? undefined}
@@ -562,28 +586,34 @@ export function WorkspacePage() {
         replayingPipeline={replayingPipeline}
         replayError={replayError}
         onClearReplayError={() => setReplayError(null)}
-        onTabChange={(tab) => {
-          setPanelTab(tab);
+        onModeChange={(mode) => {
+          setWorkspaceMode(mode as WorkspaceMode);
+        }}
+        onClearPipeline={() => {
+          if (window.confirm("Clear all pipeline steps? This cannot be undone.")) {
+            clearSteps();
+          }
+        }}
+        selectedStepId={selectedPipelineStep?.id}
+      />
+      {/* AI panel drag handle */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize AI panel"
+        className="resize-handle"
+        onMouseDown={() => setResizingAI(true)}
+        style={{
+          background: resizingAI ? "var(--acl)" : undefined,
         }}
       />
-      {panelTab !== "pipeline" && (
-        <>
-          {/* AI panel drag handle */}
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            title="Drag to resize AI panel"
-            className="resize-handle"
-            onMouseDown={() => setResizingAI(true)}
-            style={{
-              background: resizingAI ? "var(--acl)" : undefined,
-            }}
-          />
-          <AIPanel
-            dataset={activeDataset}
-            projectId={resolvedProject?.id ?? "default"}
-            width={aiWidth}
-            showInputNudge={showAiNudge}
+      <AIPanel
+        dataset={activeDataset}
+        projectId={resolvedProject?.id ?? "default"}
+        width={aiWidth}
+        showInputNudge={showAiNudge}
+        selectedPipelineStep={selectedPipelineStep}
+        onStepDeselect={() => setSelectedPipelineStep(null)}
             onStepApplied={() => {
               setDatasetRefreshNonce((value) => value + 1);
               void refetch();
@@ -618,12 +648,9 @@ export function WorkspacePage() {
                 $set: { is_activated_user: true },
                 $set_once: { first_ai_transform_at: now },
               });
-              markQuickstartStep2Done();
             }}
           />
-        </>
-      )}
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } markQuickstartStep1Done(); recordMilestone("dataset_uploaded", { $add: { total_datasets_uploaded: 1 }, $set_once: { first_dataset_at: new Date().toISOString() }, $set: { last_dataset_at: new Date().toISOString() } }); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } recordMilestone("dataset_uploaded", { $add: { total_datasets_uploaded: 1 }, $set_once: { first_dataset_at: new Date().toISOString() }, $set: { last_dataset_at: new Date().toISOString() } }); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
@@ -637,9 +664,6 @@ export function WorkspacePage() {
           onNext={() => nextStep(STEPS_COUNT)}
           onSkip={skipTour}
         />
-      )}
-      {showQsTour && resolvedProject?.is_quickstart && (
-        <QuickstartTour onDone={() => setShowQsTour(false)} />
       )}
       {toast && (
         <div

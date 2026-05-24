@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
+import { TeamPanel } from "../components/TeamPanel";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { capture } from "../lib/posthog";
@@ -51,6 +52,7 @@ export function WorkspaceHomePage() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
   const [renameModal, setRenameModal] = useState<{ projectId: string; value: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [inviteProjectId, setInviteProjectId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -236,6 +238,12 @@ export function WorkspaceHomePage() {
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
                         >Rename</button>
                         <button
+                          onClick={(e) => { e.stopPropagation(); setInviteProjectId(p.id); setMenuProjectId(null); }}
+                          style={{ display: "block", width: "100%", padding: "9px 14px", textAlign: "left", background: "none", border: "none", color: "var(--tx0)", fontSize: 13, cursor: "pointer" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg3)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                        >Invite members</button>
+                        <button
                           onClick={(e) => { e.stopPropagation(); void handleDeleteProject(p); }}
                           disabled={actionLoading}
                           style={{ display: "block", width: "100%", padding: "9px 14px", textAlign: "left", background: "none", border: "none", color: "#fca5a5", fontSize: 13, cursor: "pointer" }}
@@ -378,6 +386,10 @@ export function WorkspaceHomePage() {
         onClose={() => setNewProjectOpen(false)}
         onCreated={handleProjectCreated}
       />
+
+      {inviteProjectId && (
+        <TeamPanel projectId={inviteProjectId} onClose={() => setInviteProjectId(null)} />
+      )}
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </div>

@@ -265,9 +265,13 @@ interface AIPanelProps {
   onFirstPrompt?: () => void;
   /** When true, pulses the chat input to guide user to type their first question */
   showInputNudge?: boolean;
+  /** Pipeline step selected in the graph — provides context to the next message */
+  selectedPipelineStep?: { id: string; stepNumber: number; operation: string; description: string; rowsBefore?: number; rowsAfter?: number } | null;
+  /** Called to clear the pipeline step selection */
+  onStepDeselect?: () => void;
 }
 
-export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge, selectedPipelineStep, onStepDeselect }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -351,6 +355,13 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  // Focus textarea when DashboardCanvas "Ask AI" CTA is clicked
+  useEffect(() => {
+    const handler = () => requestAnimationFrame(() => textareaRef.current?.focus());
+    window.addEventListener("datahub:ai:focus", handler);
+    return () => window.removeEventListener("datahub:ai:focus", handler);
   }, []);
 
   const history = useMemo<ConversationMessage[]>(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
@@ -941,7 +952,11 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
 
   const handleSend = async (text?: string, approvePlan?: boolean, pendingPlan?: PlanStep[], isPlanModification?: boolean) => {
     if (!dataset) return;
-    const content = (text || input).trim();
+    const rawContent = (text || input).trim();
+    // Prepend selected pipeline step context if set
+    const content = rawContent && selectedPipelineStep && !approvePlan
+      ? `[Selected pipeline step ${selectedPipelineStep.stepNumber} — ${selectedPipelineStep.operation}]: ${rawContent}`
+      : rawContent;
     if (!content && !approvePlan) return;
 
     if (content && !approvePlan) {
@@ -950,7 +965,8 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         ...previous,
         { id: crypto.randomUUID(), role: "user", content },
       ]);
-      lastSentInputRef.current = content;
+      lastSentInputRef.current = rawContent;
+      if (selectedPipelineStep) onStepDeselect?.();
       capture("ai_message_sent", { dataset_id: dataset.id });
       if (!firstPromptFiredRef.current && onFirstPrompt) {
         firstPromptFiredRef.current = true;
@@ -1595,6 +1611,18 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
               <div style={{ position: "absolute", top: "100%", left: 16, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid rgba(91,106,240,0.45)" }} />
             </div>
           </>
+        )}
+        {selectedPipelineStep && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--acl, rgba(91,106,240,0.12))", border: "1px solid var(--acg, rgba(91,106,240,0.35))", borderRadius: 6, padding: "5px 8px", marginBottom: 4, fontSize: 11, color: "var(--tx1)" }}>
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Step {selectedPipelineStep.stepNumber}: <strong>{selectedPipelineStep.operation.replace(/_/g, " ")}</strong>
+              {selectedPipelineStep.description ? ` — ${selectedPipelineStep.description}` : ""}
+              {selectedPipelineStep.rowsBefore != null && selectedPipelineStep.rowsAfter != null
+                ? ` (${selectedPipelineStep.rowsBefore.toLocaleString()} → ${selectedPipelineStep.rowsAfter.toLocaleString()} rows)`
+                : ""}
+            </span>
+            <button onClick={onStepDeselect} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--tx2)", padding: "0 2px", lineHeight: 1 }} title="Dismiss">✕</button>
+          </div>
         )}
         <AiSuggestionStrip
           columns={columnSchema}

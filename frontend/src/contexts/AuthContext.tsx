@@ -6,6 +6,12 @@ import { clearAuthToken, setAuthToken } from "../utils/auth";
 import { capture, identify, reset, setUserType, markAsRealUser } from "../lib/posthog";
 import { setSentryUser, clearSentryUser } from "../lib/sentry";
 
+// Randomly generated at module load-time.  Included in the
+// "datahub:auth:user-changed" CustomEvent detail so WorkspaceContext can
+// verify the event originated from this module and reject spoofed dispatches
+// from third-party scripts or XSS payloads.
+export const AUTH_CHANGE_NONCE = crypto.randomUUID();
+
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8000";
 const ANON_TOKEN_KEY = "datahub_anon_token";
@@ -52,7 +58,7 @@ function wipeUnscopedTenantState() {
   }
   // Signal React contexts (e.g. WorkspaceContext) to discard per-user
   // in-memory state so stale projects/datasets can't bleed into the next session.
-  try { window.dispatchEvent(new CustomEvent("datahub:auth:user-changed")); } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent("datahub:auth:user-changed", { detail: { nonce: AUTH_CHANGE_NONCE } })); } catch { /* ignore */ }
 }
 
 // Synthetic session shape for anonymous users so the rest of the app can keep

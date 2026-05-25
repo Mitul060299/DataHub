@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { createProject as apiCreateProject, fetchProjects } from "../api";
 import type { ProjectOut } from "../api";
-import { useAuth } from "./AuthContext";
+import { useAuth, AUTH_CHANGE_NONCE } from "./AuthContext";
 
 export interface Project {
   id: string;
@@ -118,7 +118,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // When user identity changes (anon→real or sign-out→anon), wipe in-memory
   // workspace state so the previous user's projects/datasets can't leak.
   useEffect(() => {
-    const handler = () => {
+    const handler = (evt: Event) => {
+      // Reject events not originating from AuthContext (spoofed by external scripts).
+      if ((evt as CustomEvent<{ nonce?: string }>).detail?.nonce !== AUTH_CHANGE_NONCE) return;
       setActiveProjectState(null);
       setActiveDatasetState(null);
       setActiveLanes([]);

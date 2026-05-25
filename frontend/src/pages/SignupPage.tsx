@@ -73,7 +73,9 @@ export function SignupPage() {
       setErrorMessage(error.message);
       return;
     }
-    capture("signup_success", { method: "email", $set_once: { signed_up_at: new Date().toISOString(), signed_up: true } });
+    // Store the signup method so identifyFromSession fires signup_success
+    // under the real user distinct_id once the session is established.
+    localStorage.setItem("datahub_signup_pending", "email");
     setSuccessMessage("Check your email to confirm your account.");
   };
 
@@ -83,6 +85,8 @@ export function SignupPage() {
       return;
     }
     capture("signup_oauth_clicked", { provider });
+    // Flag so identifyFromSession fires signup_success after the OAuth redirect.
+    localStorage.setItem("datahub_signup_pending", provider);
     setLoading(true);
     const { error } = await signInWithProvider(provider);
     setLoading(false);

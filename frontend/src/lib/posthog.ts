@@ -34,7 +34,18 @@ export const capturePageview = (path?: string): void => {
 
 export const identify = (userId: string, traits?: Record<string, unknown>): void => {
   try {
-    if (key) posthog.identify(userId, traits);
+    if (!key) return;
+    // Extract $set_once so it's passed as the 3rd arg — PostHog JS SDK only
+    // honours set-once semantics when it receives the value there, not when it
+    // is nested inside the $set properties object.
+    const { $set_once, ...setProps } = (traits ?? {}) as Record<string, unknown> & {
+      $set_once?: Record<string, unknown>;
+    };
+    posthog.identify(
+      userId,
+      Object.keys(setProps).length ? setProps : undefined,
+      $set_once && Object.keys($set_once).length ? $set_once : undefined,
+    );
   } catch {
     // never throw
   }

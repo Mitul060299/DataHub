@@ -244,6 +244,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       markAsRealUser();
       setSentryUser(u.id, email);
+
+      // Fire signup_success exactly once per device under the real user ID.
+      // - Email: SignupPage sets "datahub_signup_pending" = "email" when the
+      //   form succeeds; we consume it here after email confirmation lands.
+      // - OAuth: Supabase redirects back within seconds so created_at is very
+      //   recent; we use a 2-minute window as the signal.
+      const tracked = !!localStorage.getItem("datahub_signup_tracked");
+      if (!tracked) {
+        const pendingMethod = localStorage.getItem("datahub_signup_pending");
+        const ageMs = Date.now() - new Date(u.created_at).getTime();
+        const isRecentOAuth = !pendingMethod && ageMs < 120_000;
+        if (pendingMethod || isRecentOAuth) {
+          localStorage.removeItem("datahub_signup_pending");
+          localStorage.setItem("datahub_signup_tracked", "1");
+          capture("signup_success", {
+            method: pendingMethod ?? "oauth",
+            $set: { signed_up: true },
+            $set_once: { signed_up_at: u.created_at },
+          });
+        }
+      }
     };
 
     const loadSession = async () => {

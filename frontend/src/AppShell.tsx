@@ -31,6 +31,11 @@ export function AppShell() {
   // hero / landing content paints without waiting for a server round-trip.
   // This is the primary fix for high LCP on connections far from the backend.
   if (isPublic) {
+    // Real signed-in users who land on / should go straight to the workspace
+    // home — they have no reason to see the marketing landing page.
+    if (!loading && !isAnonymous && location.pathname === "/") {
+      return <Navigate to="/workspace" replace state={{ fromRoot: true }} />;
+    }
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <TopBar />

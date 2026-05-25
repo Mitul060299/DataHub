@@ -50,6 +50,9 @@ function wipeUnscopedTenantState() {
   } catch {
     // ignore quota / disabled storage errors
   }
+  // Signal React contexts (e.g. WorkspaceContext) to discard per-user
+  // in-memory state so stale projects/datasets can't bleed into the next session.
+  try { window.dispatchEvent(new CustomEvent("datahub:auth:user-changed")); } catch { /* ignore */ }
 }
 
 // Synthetic session shape for anonymous users so the rest of the app can keep

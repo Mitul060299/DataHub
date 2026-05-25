@@ -115,6 +115,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setLastProjectId(readLastProjectId());
   }, [readLastProjectId]);
 
+  // When user identity changes (anon→real or sign-out→anon), wipe in-memory
+  // workspace state so the previous user's projects/datasets can't leak.
+  useEffect(() => {
+    const handler = () => {
+      setActiveProjectState(null);
+      setActiveDatasetState(null);
+      setActiveLanes([]);
+      try { localStorage.removeItem("activeDatasetId"); } catch { /* ignore */ }
+    };
+    window.addEventListener("datahub:auth:user-changed", handler);
+    return () => window.removeEventListener("datahub:auth:user-changed", handler);
+  }, []);
+
   const setActiveProject = useCallback((project: Project) => {
     setActiveProjectState(project);
     if (lastProjectStorageKey) {
@@ -175,7 +188,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveProjectState((prev) => {
         if (prev) {
           const updated = mapped.find((p) => p.id === prev.id);
-          return updated ?? prev;
+            return updated ?? mapped[0] ?? null;
         }
         const lastId = readLastProjectId();
         const restored = lastId ? mapped.find((p) => p.id === lastId) : undefined;

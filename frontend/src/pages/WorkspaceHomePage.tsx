@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { deleteProject, fetchWorkspaceRecent, updateProject } from "../api";
 import type { WorkspaceRecentOut } from "../api";
 import { NewProjectModal } from "../components/modals/NewProjectModal";
 import { TeamPanel } from "../components/TeamPanel";
 import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
+import { useAuth } from "../contexts/AuthContext";
 import { capture } from "../lib/posthog";
 
 function Skeleton({ width, height = 14, style }: { width: string | number; height?: number; style?: React.CSSProperties }) {
@@ -44,7 +45,10 @@ function relativeTime(iso?: string | null): string {
 
 export function WorkspaceHomePage() {
   const navigate = useNavigate();
-  const { projects, projectsLoading, setActiveProject, refreshProjects } = useWorkspaceContext();
+  const location = useLocation();
+  const locationState = location.state as { fromRoot?: boolean } | null;
+  const { isAnonymous } = useAuth();
+  const { projects, projectsLoading, setActiveProject, refreshProjects, lastProjectId } = useWorkspaceContext();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -62,6 +66,28 @@ export function WorkspaceHomePage() {
       .catch(() => setRecent(null))
       .finally(() => setRecentLoading(false));
   }, []);
+
+  // Auto-navigation:
+  //   Anon users with a single project (the demo) → jump straight into it.
+  //   Real users returning via the AppShell / redirect → restore their last project.
+  useEffect(() => {
+    if (projectsLoading || projects.length === 0) return;
+    if (isAnonymous) {
+      if (projects.length === 1) {
+        setActiveProject(projects[0]);
+        navigate(`/workspace/project/${projects[0].id}/pipeline/new`, { replace: true });
+      }
+    } else if (locationState?.fromRoot) {
+      const last = lastProjectId ? projects.find((p) => p.id === lastProjectId) : null;
+      const target = last ?? projects[0];
+      if (target) {
+        setActiveProject(target);
+        navigate(`/workspace/project/${target.id}/pipeline/new`, { replace: true });
+      }
+    }
+  // Run once after projects load — don’t re-trigger on every lastProjectId change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectsLoading, isAnonymous]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).

@@ -7,29 +7,6 @@ import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import { billingEnabled } from "./utils/featureFlags";
 
 const PUBLIC_PATHS = ["/home", "/marketplace", "/pricing", "/docs"];
-const BETA_BANNER_KEY = "datahub_beta_banner_dismissed";
-
-function BetaBanner() {
-  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem(BETA_BANNER_KEY) === "1");
-  if (dismissed) return null;
-  return (
-    <div style={{ background: "#fef3c7", borderBottom: "1px solid #f59e0b", padding: "6px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12, color: "#92400e" }}>
-      <span>
-        <strong>DataHub is in public beta.</strong> Features may change and data may be lost. Use at your own risk.{" "}
-        <a href="/terms" style={{ color: "#92400e", textDecorationLine: "underline" }}>Terms</a>{" · "}
-        <a href="/privacy" style={{ color: "#92400e", textDecorationLine: "underline" }}>Privacy</a>
-      </span>
-      <button
-        onClick={() => { sessionStorage.setItem(BETA_BANNER_KEY, "1"); setDismissed(true); }}
-        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#92400e", padding: "0 4px", lineHeight: 1 }}
-        title="Dismiss"
-      >
-        ×
-      </button>
-    </div>
-  );
-}
-
 export function AppShell() {
   const { isAuthenticated, isAnonymous, loading, session, anonUserId } = useAuth();
   const location = useLocation();
@@ -61,7 +38,6 @@ export function AppShell() {
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <TopBar />
-        <BetaBanner />
         <Outlet />
       </div>
     );
@@ -84,7 +60,6 @@ export function AppShell() {
           <PipelineProvider>
             <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
               <TopBar />
-              <BetaBanner />
               <Outlet />
             </div>
           </PipelineProvider>
@@ -100,7 +75,6 @@ export function AppShell() {
       <PipelineProvider>
         <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
           <TopBar />
-          <BetaBanner />
           {upgradeMessage ? (
             <div style={{ borderBottom: "1px solid var(--bd2)", background: "var(--bg2)", padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <span style={{ color: "var(--tx1)", fontSize: 12 }}>

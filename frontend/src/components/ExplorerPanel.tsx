@@ -300,7 +300,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
             <style>{`@keyframes dh-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
           </div>
         ) : (
-        <div data-tour="data-section">
+        <div>
           {mode === "pipeline" ? (
             /* Pipeline mode: hint + schedule/run controls */
             <div>

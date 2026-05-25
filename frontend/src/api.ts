@@ -302,16 +302,6 @@ export async function fetchCurrentUser() {
   };
 }
 
-export async function updateOnboardingState(opts: {
-  completed?: boolean;
-  uploadedFirstFile?: boolean;
-}): Promise<void> {
-  await api.patch("/users/me/onboarding", {
-    completed: opts.completed,
-    uploaded_first_file: opts.uploadedFirstFile,
-  });
-}
-
 export async function chatWithAgent(
   datasetId: string,
   message: string,

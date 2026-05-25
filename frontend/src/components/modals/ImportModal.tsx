@@ -56,6 +56,8 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
   const [filePreview, setFilePreview]     = useState<FilePreview | null>(null);
   const [customDelimiter, setCustomDelimiter] = useState("");
   const [isDragOver, setIsDragOver]       = useState(false);
+  const [activeTab, setActiveTab]         = useState<"file" | "paste">("file");
+  const [pasteText, setPasteText]         = useState("");
   // Stable ref to the upload function so the auto-import setTimeout can call
   // the latest closure without capturing a stale one.
   const uploadFileRef = useRef<(() => void) | null>(null);
@@ -140,9 +142,20 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
     setFilePreview(null);
     setErrorText(null);
     setCustomDelimiter("");
+    setPasteText("");
     for (const ref of [csvRef, excelRef, jsonRef, parquetRef]) {
       if (ref.current) ref.current.value = "";
     }
+  };
+
+  const handlePastePreview = async () => {
+    const text = pasteText.trim();
+    if (!text) { setErrorText("Paste some CSV text first."); return; }
+    setErrorText(null);
+    const filename = (datasetName.trim() || "paste") + ".csv";
+    const file = new File([text], filename, { type: "text/csv" });
+    setSelectedFileType("csv");
+    void handleFileSelect(file);
   };
 
   const detectFileType = (file: File): FileType => {
@@ -339,6 +352,26 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
         onDrop={handleDrop}
       >
         <h3 style={{ marginBottom: 10 }}>Import Data Source</h3>
+
+        {/* Tab toggle */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: "1px solid var(--bd2)", paddingBottom: 8 }}>
+          {(["file", "paste"] as const).map((t) => (
+            <button
+              key={t}
+              className="btn"
+              style={{
+                fontSize: 12,
+                padding: "4px 14px",
+                background: activeTab === t ? "var(--ac)" : "transparent",
+                color: activeTab === t ? "#fff" : "var(--tx2)",
+                borderColor: activeTab === t ? "var(--ac)" : "var(--bd2)",
+              }}
+              onClick={() => { setActiveTab(t); resetFileState(); }}
+            >
+              {t === "file" ? "Upload file" : "Paste CSV"}
+            </button>
+          ))}
+        </div>
         {isDragOver && (
           <div style={{
             position: "absolute", inset: 0, borderRadius: "var(--r12)", zIndex: 10,
@@ -387,7 +420,7 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
         </label>
 
         {/* File type selection buttons */}
-        {!selectedFile && (
+        {activeTab === "file" && !selectedFile && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 6 }}>
             {FILE_TYPES.map((ft) => (
               <button
@@ -414,10 +447,43 @@ export function ImportModal({ open, workspaceId, projectId, onClose, onImported,
             ))}
           </div>
         )}
-        {!selectedFile && (
+        {activeTab === "file" && !selectedFile && (
           <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--tx2, #888)", textAlign: "center" }}>
             Click a file type above or drag &amp; drop a file anywhere in this window
           </p>
+        )}
+
+        {/* Paste CSV tab content */}
+        {activeTab === "paste" && !filePreview && (
+          <div style={{ marginBottom: 10 }}>
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder={`Paste CSV here, e.g.:\nname,age,city\nAlice,30,Delhi\nBob,25,Mumbai`}
+              disabled={isValidating || isUploading}
+              rows={8}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                fontFamily: "monospace",
+                fontSize: 12,
+                border: "1px solid var(--bd2)",
+                borderRadius: "var(--r8)",
+                background: "var(--bg2)",
+                color: "var(--tx0)",
+                padding: 8,
+                resize: "vertical",
+              }}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => void handlePastePreview()}
+              disabled={!pasteText.trim() || isValidating || isUploading}
+              style={{ marginTop: 6 }}
+            >
+              {isValidating ? "Validating…" : "Preview"}
+            </button>
+          </div>
         )}
 
         {/* CSV custom delimiter — only shown when a CSV is selected and not yet previewed */}

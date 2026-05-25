@@ -19,11 +19,38 @@ from typing import Any, AsyncIterator
 
 import httpx
 from langchain_core.language_models import BaseChatModel
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from ..config import settings
 from .token_tracking_service import log_call as _log_call
 
 _logger = logging.getLogger(__name__)
+
+
+# ── Retry helpers ─────────────────────────────────────────────────────────────
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Return True for transient LLM API errors (429 rate-limit, 5xx server errors)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in (429, 500, 502, 503, 504)
+    if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError)):
+        return True
+    return False
+
+
+_RETRY = dict(
+    retry=retry_if_exception(_is_retryable),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    stop=stop_after_attempt(3),
+    before_sleep=before_sleep_log(_logger, logging.WARNING),
+    reraise=True,
+)
 
 
 # ── Provider helpers ───────────────────────────────────────────────────────────
@@ -200,6 +227,7 @@ def complete_sync(
 
 # ── Public function 4: Tool-calling completion (full_auto_agent) ──────────────
 
+@retry(**_RETRY)
 async def complete_with_tools(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]],
@@ -307,6 +335,7 @@ async def stream_complete(
 
 # ── Internal: async dispatch ───────────────────────────────────────────────────
 
+@retry(**_RETRY)
 async def _dispatch_async(
     *,
     provider: str,
@@ -386,6 +415,7 @@ async def _dispatch_async(
 
 # ── Internal: sync dispatch ────────────────────────────────────────────────────
 
+@retry(**_RETRY)
 def _dispatch_sync(
     *,
     provider: str,

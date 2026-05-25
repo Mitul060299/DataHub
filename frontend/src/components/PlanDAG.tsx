@@ -323,7 +323,6 @@ export default function PlanDAG({
       {/* Approve / Reject / Modify buttons */}
       {pending ? (
         <div
-          data-tour="approve-button"
           style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}
         >
           {!modifying ? (

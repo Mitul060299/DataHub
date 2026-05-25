@@ -27,6 +27,7 @@ const InviteAcceptPage = lazy(() => import("./pages/InviteAcceptPage").then(m =>
 const BlogIndexPage = lazy(() => import("./pages/BlogIndexPage").then(m => ({ default: m.BlogIndexPage })));
 const BlogPostPage = lazy(() => import("./pages/BlogPostPage").then(m => ({ default: m.BlogPostPage })));
 const FAQPage = lazy(() => import("./pages/FAQPage").then(m => ({ default: m.FAQPage })));
+const ChangelogPage = lazy(() => import("./pages/ChangelogPage").then(m => ({ default: m.ChangelogPage })));
 
 // Minimal fallback — full-viewport fill prevents layout shifts while a page chunk loads
 const PageFallback = () => (
@@ -73,6 +74,7 @@ export function App() {
       <Route path="/blog" element={<BlogIndexPage />} />
       <Route path="/blog/:slug" element={<BlogPostPage />} />
       <Route path="/faq" element={<FAQPage />} />
+      <Route path="/changelog" element={<ChangelogPage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<HomePage />} />
         <Route path="home" element={<HomePage />} />

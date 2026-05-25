@@ -33,9 +33,17 @@ export function PrivacyPage() {
       </Link>
 
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Privacy Policy</h1>
-      <p style={{ color: "var(--tx1)", fontSize: 13, marginBottom: 40 }}>
-        Last updated: April 5, 2026 · Effective: April 5, 2026
+      <p style={{ color: "var(--tx1)", fontSize: 13, marginBottom: 24 }}>
+        Last updated: May 30, 2026 · Effective: April 5, 2026
       </p>
+
+      <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "14px 18px", marginBottom: 36 }}>
+        <strong style={{ color: "#92400e" }}>Beta Software Notice:</strong>
+        <span style={{ color: "#92400e", fontSize: 13, marginLeft: 6 }}>
+          DataHub is currently in public beta. Data handling practices may evolve as the product matures.
+          User data may be deleted or migrated during beta periods. We will provide reasonable notice of material changes.
+        </span>
+      </div>
 
       <Section title="1. Introduction">
         DataHub is committed to protecting your privacy. This policy explains how we collect, use,

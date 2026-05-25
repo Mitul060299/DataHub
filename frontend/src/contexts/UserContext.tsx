@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { ReactNode } from "react";
-import { fetchCurrentUser, updateOnboardingState } from "../api";
+import { fetchCurrentUser } from "../api";
 import { useAuth } from "./AuthContext";
 import { recordMilestone as _recordMilestone } from "../lib/activation";
 import type { Milestone } from "../lib/activation";
@@ -44,11 +44,9 @@ type UserContextType = {
     username: string;
     role: string;
   } | null;
-  hasCompletedOnboarding: boolean;
   hasUploadedFirstFile: boolean;
   firstAiAnswerAt: string | null;
   firstDatasetAt: string | null;
-  markOnboardingComplete: () => void;
   markFirstUpload: () => void;
   recordMilestone: (milestone: Milestone, props?: Record<string, unknown>) => void;
 };
@@ -222,7 +220,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     aiMessagesUsed: 0,
   });
   const [user, setUser] = useState<UserContextType["user"]>(null);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [hasUploadedFirstFile, setHasUploadedFirstFile] = useState(false);
   const [firstAiAnswerAt, setFirstAiAnswerAt] = useState<string | null>(null);
   const [firstDatasetAt, setFirstDatasetAt] = useState<string | null>(null);
@@ -237,7 +234,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setPlan("Free");
         setUsage({ datasetsUsed: 0, storageUsed: 0, aiMessagesUsed: 0 });
         setUser(null);
-        setHasCompletedOnboarding(false);
         setHasUploadedFirstFile(false);
         return;
       }
@@ -251,7 +247,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           username: profile.username,
           role: profile.role,
         });
-        setHasCompletedOnboarding(profile.has_completed_onboarding ?? false);
         setHasUploadedFirstFile(profile.has_uploaded_first_file ?? false);
         setFirstAiAnswerAt((profile as { first_ai_answer_at?: string | null }).first_ai_answer_at ?? null);
         setFirstDatasetAt((profile as { first_dataset_at?: string | null }).first_dataset_at ?? null);
@@ -266,14 +261,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [session, loading]);
 
-  const markOnboardingComplete = useCallback(() => {
-    setHasCompletedOnboarding(true);
-    updateOnboardingState({ completed: true }).catch(() => {});
-  }, []);
-
   const markFirstUpload = useCallback(() => {
     setHasUploadedFirstFile(true);
-    updateOnboardingState({ uploadedFirstFile: true }).catch(() => {});
     if (!firstDatasetAt) {
       setFirstDatasetAt(new Date().toISOString());
       _recordMilestone("dataset_loaded", { source: "upload" });
@@ -305,11 +294,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         limits,
         usage,
         user,
-        hasCompletedOnboarding,
         hasUploadedFirstFile,
         firstAiAnswerAt,
         firstDatasetAt,
-        markOnboardingComplete,
         markFirstUpload,
         recordMilestone,
       }}

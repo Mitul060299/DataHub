@@ -955,7 +955,26 @@ class PipelineEngine:
             run.completed_at = datetime.utcnow()
             run.execution_log = execution_log
             self.db.commit()
-            
+
+            # — Email notification on failure (best-effort) ───────────────────
+            try:
+                from ..services.email_service import send_pipeline_complete
+                from ..models_db import User as UserDB
+                user_row = self.db.query(UserDB).filter(UserDB.id == self.user_id).first()
+                prefs: dict = dict(user_row.notification_prefs or {}) if user_row else {}
+                if prefs.get("pipeline_complete", True):
+                    to_email = (user_row.username if user_row else None) or self.user_id
+                    if to_email and "@" in to_email:
+                        send_pipeline_complete(
+                            to=to_email,
+                            pipeline_name=pipeline.name,
+                            pipeline_id=pipeline_id,
+                            status="failed",
+                        )
+            except Exception:
+                pass
+            # ──────────────────────────────────────────────────────────────────
+
             yield ChatEvent(
                 type=EventType.ERROR,
                 content=f"Pipeline failed: {str(e)}"

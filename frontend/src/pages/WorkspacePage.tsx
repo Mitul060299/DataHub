@@ -32,7 +32,7 @@ export function WorkspacePage() {
     : activeProject;
   const { steps, liveArtifact, setLiveArtifact, clearSteps } = usePipelineContext();
   const { data, loading, error: datasetError, refetch } = useDataset(activeDataset?.id);
-  const { hasCompletedOnboarding, hasUploadedFirstFile, markOnboardingComplete, firstAiAnswerAt, recordMilestone: ctxRecordMilestone } = useUser();
+  const { hasUploadedFirstFile, firstAiAnswerAt, recordMilestone: ctxRecordMilestone } = useUser();
   const [importOpen, setImportOpen] = useState(false);
   const [sampleUrl, setSampleUrl] = useState<string | undefined>(undefined);
   const [datasetRefreshNonce, setDatasetRefreshNonce] = useState(0);
@@ -183,14 +183,6 @@ export function WorkspacePage() {
     next.delete("from");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
-
-  // Mark onboarding complete when all steps done
-  useEffect(() => {
-    if (hasUploadedFirstFile && hasAskedFirstQuestion && !hasCompletedOnboarding) {
-      markOnboardingComplete();
-      capture("onboarding_completed");
-    }
-  }, [hasUploadedFirstFile, hasAskedFirstQuestion, hasCompletedOnboarding, markOnboardingComplete]);
 
   // Clear in-session view state whenever the user switches to a different source dataset.
   // PipelineContext handles loading the correct steps for each dataset independently.

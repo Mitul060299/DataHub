@@ -89,7 +89,7 @@ export default function PlanCard({
       </div>
 
       {pending ? (
-        <div data-tour="approve-button" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
           {!modifying ? (
             <div style={{ display: "flex", gap: 6 }}>
               <button className="btn" onClick={onApprove} disabled={sending} style={{ flex: 1, background: "#5B6AF0", color: "#eef2ff", borderColor: "#5B6AF0", ...(sending ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}>

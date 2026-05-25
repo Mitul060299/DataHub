@@ -21,6 +21,9 @@ interface DataTableProps {
    */
   otherLanes?: { id: string; name: string }[];
   onDrillTo?: (datasetId: string, column: string, value: string) => void;
+  /** When set, only rows where at least one column value equals this string are shown. */
+  quickFilter?: string | null;
+  onClearQuickFilter?: () => void;
 }
 
 const statusColor: Record<string, string> = {
@@ -29,7 +32,7 @@ const statusColor: Record<string, string> = {
   Shipped: "var(--ac)",
 };
 
-export function DataTable({ loading, rows, columns, stepCount, lastAction, otherLanes, onDrillTo }: DataTableProps) {
+export function DataTable({ loading, rows, columns, stepCount, lastAction, otherLanes, onDrillTo, quickFilter, onClearQuickFilter }: DataTableProps) {
   // ── sort ────────────────────────────────────────────────────────────────────
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -86,6 +89,16 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction, other
 
   const filteredRows = useMemo(() => {
     let nextRows = rows;
+    // Quick filter from chart click
+    if (quickFilter) {
+      const qf = String(quickFilter).toLowerCase();
+      nextRows = nextRows.filter((row) =>
+        columns.some((col) => {
+          const v = row[col];
+          return v !== null && v !== undefined && String(v).toLowerCase() === qf;
+        }),
+      );
+    }
     // Per-column checkbox filters
     for (const [col, selected] of Object.entries(columnFilters)) {
       const selectedSet = new Set(selected);
@@ -237,18 +250,28 @@ export function DataTable({ loading, rows, columns, stepCount, lastAction, other
 
   return (
     <div className="panel" style={{ margin: 8, display: "flex", flexDirection: "column", minHeight: 0, height: "calc(100% - 16px)" }}>
-      {activeFilterCount > 0 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "4px 8px", borderBottom: "1px solid var(--bd)", gap: 6, flexShrink: 0 }}>
-          <span className="mono" style={{ fontSize: 11, color: "var(--tx2)" }}>{activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active</span>
-          <button
-            className="btn"
-            style={{ height: 24, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", color: "var(--ac)", border: "1px solid var(--ac)", padding: "0 8px" }}
-            onClick={clearAllFilters}
-            title="Clear all column filters"
-          >
-            <IconFilter size={11} />
-            <span className="mono" style={{ fontSize: 11 }}>Clear all</span>
-          </button>
+      {(activeFilterCount > 0 || quickFilter) && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "4px 8px", borderBottom: "1px solid var(--bd)", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
+          {quickFilter && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, background: "rgba(91,106,240,0.12)", color: "var(--ac)", borderRadius: 20, padding: "2px 10px 2px 8px", border: "1px solid rgba(91,106,240,0.3)" }}>
+              Chart filter: <strong>{quickFilter}</strong>
+              <button onClick={onClearQuickFilter} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ac)", fontSize: 13, padding: 0, lineHeight: 1, marginLeft: 2 }} title="Clear chart filter">×</button>
+            </span>
+          )}
+          {activeFilterCount > 0 && (
+            <>
+              <span className="mono" style={{ fontSize: 11, color: "var(--tx2)" }}>{activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active</span>
+              <button
+                className="btn"
+                style={{ height: 24, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", color: "var(--ac)", border: "1px solid var(--ac)", padding: "0 8px" }}
+                onClick={clearAllFilters}
+                title="Clear all column filters"
+              >
+                <IconFilter size={11} />
+                <span className="mono" style={{ fontSize: 11 }}>Clear all</span>
+              </button>
+            </>
+          )}
         </div>
       )}
 

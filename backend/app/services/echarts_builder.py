@@ -333,7 +333,26 @@ def _build_pie(
     subtitle: str | None,
     donut: bool = False,
 ) -> dict:
-    data = [{"name": str(r.get(label_col, "")), "value": r.get(value_col, 0)} for r in rows]
+    # Access by declared col names first; fall back to "name"/"value" aliases
+    # (produced by visualization.py) then positional — guards against SQL alias
+    # mismatches where the LLM-generated query renames columns.
+    def _get_name(r: dict) -> str:
+        v = r.get(label_col) if label_col else None
+        if v is None:
+            v = r.get("name")
+        if v is None and r:
+            v = next(iter(r.values()))
+        return str(v) if v is not None else ""
+
+    def _get_value(r: dict) -> float | int:
+        v = r.get(value_col) if value_col else None
+        if v is None:
+            v = r.get("value")
+        if v is None and len(r) >= 2:
+            v = list(r.values())[1]
+        return v if isinstance(v, (int, float)) else 0
+
+    data = [{"name": _get_name(r), "value": _get_value(r)} for r in rows]
     cfg = _base(title, subtitle)
     cfg["tooltip"] = {
         "trigger": "item",
@@ -351,8 +370,8 @@ def _build_pie(
         "center": ["50%", "55%"],
         "data": data,
         "color": _PALETTE,
-        "label": {"color": _TEXT, "fontSize": 12},
-        "labelLine": {"lineStyle": {"color": _SUBTEXT}},
+        "label": {"show": True, "color": _TEXT, "fontSize": 12},
+        "labelLine": {"show": True, "lineStyle": {"color": _SUBTEXT}},
         "itemStyle": {"borderRadius": 4, "borderColor": "transparent", "borderWidth": 2},
         "emphasis": {"itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0,0,0,0.3)"}},
     }]

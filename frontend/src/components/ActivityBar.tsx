@@ -11,10 +11,10 @@ export function ActivityBar({ explorerOpen, pipelineOpen, onToggleExplorer, onTo
   return (
     <aside style={{ width: "var(--lw)", borderRight: "1px solid var(--bd)", background: "var(--bg1)", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "10px 0" }}>
       <div style={{ display: "grid", gap: 4, justifyItems: "center" }}>
-        <button data-tour="activity-explorer" title="Explorer" onClick={onToggleExplorer} style={iconButton(explorerOpen)}>
+        <button title="Explorer" onClick={onToggleExplorer} style={iconButton(explorerOpen)}>
           <IconTable size={16} color={explorerOpen ? "var(--ac)" : undefined} />
         </button>
-        <button data-tour="activity-pipeline" title="Pipeline" onClick={onTogglePipeline} style={iconButton(pipelineOpen)}>
+        <button title="Pipeline" onClick={onTogglePipeline} style={iconButton(pipelineOpen)}>
           <IconLayers size={16} color={pipelineOpen ? "var(--ac)" : undefined} />
         </button>
       </div>

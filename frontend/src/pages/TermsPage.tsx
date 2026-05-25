@@ -33,9 +33,18 @@ export function TermsPage() {
       </Link>
 
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Terms of Service</h1>
-      <p style={{ color: "var(--tx1)", fontSize: 13, marginBottom: 40 }}>
-        Last updated: April 5, 2026 · Effective: April 5, 2026
+      <p style={{ color: "var(--tx1)", fontSize: 13, marginBottom: 24 }}>
+        Last updated: May 30, 2026 · Effective: April 5, 2026
       </p>
+
+      <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "14px 18px", marginBottom: 36 }}>
+        <strong style={{ color: "#92400e" }}>Beta Software Notice:</strong>
+        <span style={{ color: "#92400e", fontSize: 13, marginLeft: 6 }}>
+          DataHub is currently in public beta. The platform is provided "as is" without warranty of any kind.
+          Features may change, data may be lost, and the service may be unavailable at times.
+          Do not use DataHub as your sole or primary data storage solution. By using DataHub you accept all risks associated with beta software.
+        </span>
+      </div>
 
       <Section title="1. Agreement to Terms">
         By accessing or using DataHub ("Service", "Platform"), you agree to be bound by these Terms of

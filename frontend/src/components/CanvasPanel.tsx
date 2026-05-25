@@ -92,6 +92,17 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // ── Chart click → data table quick filter ────────────────────────────────
+  const [chartFilter, setChartFilter] = useState<string | null>(null);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const value = (e as CustomEvent<{ value: string }>).detail?.value;
+      if (value) setChartFilter(value);
+    };
+    window.addEventListener("datahub:chart-click-filter", handler);
+    return () => window.removeEventListener("datahub:chart-click-filter", handler);
+  }, []);
+
   // ── Dashboard tab state ──────────────────────────────────────────────────
   type DashItem = { id: string; name: string; tile_count: number; updated_at: string; is_published: boolean };
   const [dashboards, setDashboards] = useState<DashItem[]>([]);
@@ -415,15 +426,14 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
         {/* 3-way segmented toggle */}
         <div style={{ display: "inline-flex", background: "var(--bg2)", border: "1px solid var(--bd)", borderRadius: 8, padding: 2 }}>
           {([
-            { key: "data" as WorkspaceMode,     label: "Data",     tourTarget: "data-tab" },
-            { key: "pipeline" as WorkspaceMode, label: `Pipeline${steps.length > 0 ? ` (${steps.length})` : ""}`, tourTarget: "pipeline-tab" },
-            { key: "dashboard" as WorkspaceMode, label: "Dashboard", tourTarget: "dashboards-tab" },
-          ]).map(({ key, label, tourTarget }) => {
+            { key: "data" as WorkspaceMode,     label: "Data" },
+            { key: "pipeline" as WorkspaceMode, label: `Pipeline${steps.length > 0 ? ` (${steps.length})` : ""}` },
+            { key: "dashboard" as WorkspaceMode, label: "Dashboard" },
+          ]).map(({ key, label }) => {
             const active = mode === key;
             return (
               <button
                 key={key}
-                data-tour={tourTarget}
                 onClick={() => onModeChange?.(key)}
                 style={{
                   padding: "4px 14px",
@@ -453,7 +463,6 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
               </button>
               <button
                 className="btn"
-                data-tour="cross-input-button"
                 title="Add a cross-pipeline step input"
                 onClick={() => {
                   if (dataset?.id) setIsCrossInputOpen(true);
@@ -479,10 +488,9 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
               </button>
               <button
                 className="btn"
-                data-tour="export-button"
-                title="Export pipeline steps"
                 disabled={steps.length === 0}
                 onClick={() => exportPipeline(steps)}
+                title="Export pipeline steps"
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <IconDownload size={14} /> Export
@@ -504,7 +512,6 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
           {mode === "data" && (
             <button
               className="btn"
-              data-tour="export-button"
               title="Export dataset"
               disabled={!(columns ?? []).length || isExporting !== null}
               onClick={() => setIsExportOpen((o) => !o)}
@@ -728,7 +735,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
           </div>
         )}
         {mode === "pipeline" ? (
-          <div data-tour="pipeline-graph-area" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             <PipelineGraphTab selectedStepId={selectedStepId} />
           </div>
         ) : mode === "data" ? (
@@ -798,6 +805,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
                     }));
                   }, 150);
                 }}
+                quickFilter={chartFilter}
+                onClearQuickFilter={() => setChartFilter(null)}
               />
             </>
           )

@@ -1,6 +1,7 @@
 fastapi==0.115.6
 uvicorn[standard]==0.30.6
 slowapi==0.1.9
+tenacity==8.5.0
 chardet==5.2.0
 resend==2.0.0
 pandas==2.2.3

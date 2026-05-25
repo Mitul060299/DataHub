@@ -29,9 +29,10 @@ interface DataSectionProps {
   onRemove: (dataset: Dataset) => void;
   onRename?: (dataset: Dataset, newName: string) => void;
   onAddConnection?: () => void;
+  onPromoteToRoot?: (dataset: Dataset) => void;
 }
 
-export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename, onAddConnection }: DataSectionProps) {
+export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onRemove, onRename, onAddConnection, onPromoteToRoot }: DataSectionProps) {
   const [open, setOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -268,6 +269,17 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
             onClick={() => startEdit(dataset)}
           >
             ✏
+          </button>
+        ) : null}
+        {isChild && onPromoteToRoot ? (
+          <button
+            className="btn"
+            aria-label={`Make ${dataset.name} standalone`}
+            title="Make standalone (detach from parent)"
+            style={{ height: 22, width: 22, padding: 0, marginLeft: 4, borderColor: "transparent", background: "transparent", color: "var(--tx1)", fontSize: 13 }}
+            onClick={() => onPromoteToRoot(dataset)}
+          >
+            ⊙
           </button>
         ) : null}
         <button

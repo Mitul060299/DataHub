@@ -62,7 +62,8 @@ class DatasetQueryResponse(BaseModel):
 
 
 class DatasetRenameRequest(BaseModel):
-    name: str
+    name: Optional[str] = None
+    clear_parent: Optional[bool] = False
 
 
 class CrossDatasetQueryRequest(BaseModel):

@@ -356,6 +356,9 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       restoreLiveArtifact(stepsToUse, datasetId);
       return;
     }
+    // Capture parent ID now (synchronous) so the async callbacks below can
+    // use it without a stale-closure on activeDataset.
+    const parentDatasetId = activeDataset?.parentId ?? null;
     fetchDatasetPipelineSteps(datasetId)
       .then((loaded) => {
         // The dataset may have switched again while the fetch was in flight
@@ -364,6 +367,33 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
         if (datasetId !== prevDatasetIdRef.current) return;
         const parsed = (loaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
           .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
+        // Child dataset with no steps of its own — inherit the parent's pipeline
+        // so the user sees the full transformation history and can continue from it.
+        if (parsed.length === 0 && parentDatasetId) {
+          const fromLocal = loadPersistedSteps(parentDatasetId);
+          if (fromLocal.length > 0) {
+            stepsOwnerRef.current = datasetId;
+            setSteps(fromLocal);
+            restoreLiveArtifact(fromLocal, datasetId);
+            return;
+          }
+          // Parent not in localStorage — fetch from the API.
+          fetchDatasetPipelineSteps(parentDatasetId)
+            .then((parentLoaded) => {
+              if (datasetId !== prevDatasetIdRef.current) return;
+              const parentParsed = (parentLoaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
+                .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
+              stepsOwnerRef.current = datasetId;
+              setSteps(parentParsed);
+              restoreLiveArtifact(parentParsed, datasetId);
+            })
+            .catch(() => {
+              if (datasetId !== prevDatasetIdRef.current) return;
+              stepsOwnerRef.current = datasetId;
+              setSteps([]);
+            });
+          return;
+        }
         const resolved = parsed.length > 0 ? parsed : loadPersistedSteps(datasetId);
         stepsOwnerRef.current = datasetId;
         setSteps(resolved);
@@ -372,11 +402,31 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (datasetId !== prevDatasetIdRef.current) return;
         const fallback = loadPersistedSteps(datasetId);
+        if (fallback.length === 0 && parentDatasetId) {
+          const fromLocal = loadPersistedSteps(parentDatasetId);
+          stepsOwnerRef.current = datasetId;
+          setSteps(fromLocal);
+          restoreLiveArtifact(fromLocal, datasetId);
+          return;
+        }
         stepsOwnerRef.current = datasetId;
         setSteps(fallback);
         restoreLiveArtifact(fallback, datasetId);
       });
   }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a child dataset is promoted to root its inherited steps are wiped.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const promotedId = (e as CustomEvent<string>).detail;
+      if (promotedId === datasetId) {
+        stepsOwnerRef.current = datasetId;
+        setSteps([]);
+      }
+    };
+    window.addEventListener("datahub:dataset:promoted", handler);
+    return () => window.removeEventListener("datahub:dataset:promoted", handler);
+  }, [datasetId]);
 
   const addStep = (step: PipelineStep) => {
     // Intercept join operations with multiple inputs for confirmation

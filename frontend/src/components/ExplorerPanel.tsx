@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, deleteDataset, renameDataset } from "../api";
+import { api, deleteDataset, renameDataset, promoteToRoot } from "../api";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
 import { IconChevronDown } from "./Icons";
 import { DataSection } from "./DataSection";
@@ -158,6 +158,24 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
     }
   };
 
+  const handlePromoteToRoot = async (dataset: Dataset) => {
+    if (!dataset.id) return;
+    try {
+      await promoteToRoot(dataset.id);
+      // Clear any inherited steps stored under this dataset's ID.
+      localStorage.removeItem(`datahub_steps_v2_${dataset.id}`);
+      // Update the active dataset record in context so UI reflects no parentId.
+      if (activeDataset?.id === dataset.id) {
+        setActiveDataset({ ...dataset, parentId: null });
+      }
+      window.dispatchEvent(new CustomEvent("datahub:dataset:promoted", { detail: dataset.id }));
+      void loadDatasets();
+    } catch {
+      setDatasetLoadError("Failed to promote dataset — please try again.");
+      setTimeout(() => setDatasetLoadError(null), 4000);
+    }
+  };
+
   // Wait for the project list to resolve so loadDatasets runs exactly once
   // with the correct project_id, eliminating the wasted blank-project-id request
   // that fires on every cold mount (Render cold-start double-fetch).
@@ -303,6 +321,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
                 onImport={() => setImportModalOpen(true)}
                 onAddConnection={() => setConnectorModalOpen(true)}
                 onRemove={(dataset) => void removeDataset(dataset)}
+                onPromoteToRoot={(dataset) => void handlePromoteToRoot(dataset)}
                 onRename={async (dataset, name) => {
                   await renameDataset(dataset.id, name);
                   void loadDatasets();
@@ -352,6 +371,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
             onImport={() => setImportModalOpen(true)}
             onAddConnection={() => setConnectorModalOpen(true)}
             onRemove={(dataset) => void removeDataset(dataset)}
+            onPromoteToRoot={(dataset) => void handlePromoteToRoot(dataset)}
             onRename={async (dataset, name) => {
               await renameDataset(dataset.id, name);
               void loadDatasets();

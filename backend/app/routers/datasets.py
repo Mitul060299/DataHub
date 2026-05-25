@@ -1435,17 +1435,26 @@ def rename_dataset(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Rename a dataset (user-facing label only)."""
+    """Rename a dataset and/or detach it from its parent (promote to root)."""
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
     meta = _load_user_dataset(db, dataset_id, user_id)
-    name = payload.name.strip()
-    if not name:
-        raise HTTPException(status_code=422, detail="name is required")
-    meta.name = name
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="name is required")
+        meta.name = name
+    if payload.clear_parent:
+        meta.parent_id = None
+        from ..models_db import DatasetLineageEdgeDB
+        db.query(DatasetLineageEdgeDB).filter(
+            DatasetLineageEdgeDB.child_id == dataset_id
+        ).delete(synchronize_session=False)
+    if payload.name is None and not payload.clear_parent:
+        raise HTTPException(status_code=422, detail="nothing to update")
     db.commit()
-    return {"dataset_id": dataset_id, "name": name}
+    return {"dataset_id": dataset_id, "name": meta.name}
 
 
 @router.get("/{dataset_id}/suggest-columns")

@@ -598,6 +598,13 @@ export async function renameDataset(datasetId: string, name: string) {
   return response.data;
 }
 
+/** Detach a derived dataset from its parent, promoting it to a standalone root. */
+export async function promoteToRoot(datasetId: string) {
+  const response = await api.patch(`/datasets/${datasetId}`, { clear_parent: true });
+  invalidateAnalyticsCache({ datasetId });
+  return response.data;
+}
+
 export async function exportDatasetCsv(datasetId: string, params?: Record<string, unknown>) {
   const response = await api.get(`/datasets/${datasetId}/export`, {
     responseType: "blob",

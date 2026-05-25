@@ -50,7 +50,7 @@ const howSteps = [
     step: "04",
     color: "#22d3ee",
     icon: <IconGrid size={18} color="#22d3ee" />,
-    title: "Save as a pipeline",
+    title: "Save as a self-running pipeline",
     description: "Schedule it daily, weekly, or monthly. Same approved logic runs itself on new data.",
   },
   {
@@ -81,10 +81,10 @@ const features: Feature[] = [
     visual: "browser",
   },
   {
-    title: "No setup, no configuration",
+    title: "Up and running in under a minute",
     color: "#22c55e",
     icon: <IconFileText size={20} color="#22c55e" />,
-    description: "No warehouse, no ETL stack. Drop a file or paste DB credentials — working in under a minute.",
+    description: "No warehouse, no ETL stack. Drop a file or paste DB credentials — working immediately.",
     span: "md",
     visual: "instant",
   },
@@ -990,8 +990,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            Clean messy files. Merge CSVs.{" "}
-            <span className="hero-gradient-text">Automate the rest</span>.
+            Reliable AI for your{" "}
+            <span className="hero-gradient-text">data work</span>.
           </motion.h1>
 
           <motion.p
@@ -1000,9 +1000,8 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
-            DataHub is your AI-powered data transformation tool — built for analysts, accountants,
-            and consultants who need to clean Excel files, merge data sources, remove duplicates,
-            and automate repetitive workflows without writing code.
+            Analysts spend most of their time preparing data. DataHub does that work —
+            transparently, repeatably, and without a single line of code.
           </motion.p>
 
           <motion.div

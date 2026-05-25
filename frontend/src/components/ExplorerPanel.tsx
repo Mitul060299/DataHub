@@ -70,10 +70,9 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
 
   const sourceDatasets = useMemo(() => {
     const lowered = searchQuery.trim().toLowerCase();
-    const base = datasets.filter((dataset) => !dataset.parentId || !datasetsById.has(dataset.parentId));
-    if (!lowered) return base;
-    return base.filter((dataset) => (dataset.name ?? "").toLowerCase().includes(lowered));
-  }, [datasets, datasetsById, searchQuery]);
+    if (!lowered) return datasets;
+    return datasets.filter((dataset) => (dataset.name ?? "").toLowerCase().includes(lowered));
+  }, [datasets, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
     const cacheKey = `dh_ds_${activeProject?.id ?? "all"}`;

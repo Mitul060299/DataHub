@@ -1439,6 +1439,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
                               name: message.tileCreated!.title || "AI Chart",
                               chart_type: message.tileCreated!.chart_type || "bar",
                               echarts_config: message.tileCreated!.echarts_config!,
+                              project_id: projectId || undefined,
                             });
                             setSavedVizIds((prev) => new Set([...prev, chartId]));
                             window.dispatchEvent(new CustomEvent("datahub:visualizations:refresh"));

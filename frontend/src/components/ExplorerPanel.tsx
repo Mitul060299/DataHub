@@ -16,14 +16,13 @@ interface ExplorerPanelProps {
   refreshNonce?: number;
   searchFocusNonce?: number;
   width?: number;
-  showDatasetNudge?: boolean;
   mode?: WorkspaceMode;
   pipelineId?: string;
   selectedStepId?: string;
   onStepSelect?: (step: import("../contexts/PipelineContext").PipelineStep | null) => void;
 }
 
-export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatasetNudge, mode, pipelineId, selectedStepId, onStepSelect }: ExplorerPanelProps) {
+export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pipelineId, selectedStepId, onStepSelect }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, projectsLoading } = useWorkspaceContext();
   const { steps } = usePipelineContext();
 
@@ -305,13 +304,12 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
                 onImport={() => setImportModalOpen(true)}
                 onAddConnection={() => setConnectorModalOpen(true)}
                 onRemove={(dataset) => void removeDataset(dataset)}
-                showNudge={showDatasetNudge}
                 onRename={async (dataset, name) => {
                   await renameDataset(dataset.id, name);
                   void loadDatasets();
                 }}
               />
-              {/* Visualizations section */}
+              {/* Visualizations section */
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--tx2)", padding: "6px 0", borderTop: "1px solid var(--bd)" }}>VISUALIZATIONS</div>
                 {vizLoading ? (
@@ -355,7 +353,6 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
             onImport={() => setImportModalOpen(true)}
             onAddConnection={() => setConnectorModalOpen(true)}
             onRemove={(dataset) => void removeDataset(dataset)}
-            showNudge={showDatasetNudge}
             onRename={async (dataset, name) => {
               await renameDataset(dataset.id, name);
               void loadDatasets();

@@ -264,8 +264,6 @@ interface AIPanelProps {
   onFirstAiAnswer?: (meta?: { hadError: boolean }) => void;
   /** Fired once when the user submits their first AI prompt */
   onFirstPrompt?: () => void;
-  /** When true, pulses the chat input to guide user to type their first question */
-  showInputNudge?: boolean;
   /** Pipeline step selected in the graph — provides context to the next message */
   selectedPipelineStep?: { id: string; stepNumber: number; operation: string; description: string; rowsBefore?: number; rowsAfter?: number } | null;
   /** Called to clear the pipeline step selection */
@@ -274,7 +272,7 @@ interface AIPanelProps {
   mode?: WorkspaceMode;
 }
 
-export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge, selectedPipelineStep, onStepDeselect, mode }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, selectedPipelineStep, onStepDeselect, mode }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -1629,34 +1627,6 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       </div>
 
       <div style={{ borderTop: "1px solid var(--bd)", padding: 10, position: "relative" }}>
-        {showInputNudge && (
-          <>
-            <style>{`@keyframes dh-ai-nudge-pulse{0%,100%{box-shadow:0 0 0 2px rgba(91,106,240,0.4)}50%{box-shadow:0 0 0 6px rgba(91,106,240,0.1)}}`}</style>
-            <div style={{
-              position: "absolute",
-              bottom: "calc(100% + 8px)",
-              left: 12,
-              right: 12,
-              background: "linear-gradient(135deg,rgba(91,106,240,0.18),rgba(124,58,237,0.14))",
-              border: "1px solid rgba(91,106,240,0.45)",
-              borderRadius: 8,
-              padding: "8px 10px",
-              fontSize: 12,
-              color: "#c7d2fe",
-              fontWeight: 500,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              pointerEvents: "none",
-              zIndex: 10,
-              animation: "dh-ai-nudge-pulse 1.8s ease-in-out infinite",
-            }}>
-              <span style={{ fontSize: 14 }}>💬</span>
-              <span>Now type a question about your data here!</span>
-              <div style={{ position: "absolute", top: "100%", left: 16, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid rgba(91,106,240,0.45)" }} />
-            </div>
-          </>
-        )}
         {selectedPipelineStep && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--acl, rgba(91,106,240,0.12))", border: "1px solid var(--acg, rgba(91,106,240,0.35))", borderRadius: 6, padding: "5px 8px", marginBottom: 4, fontSize: 11, color: "var(--tx1)" }}>
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

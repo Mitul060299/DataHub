@@ -10,13 +10,11 @@ import type { PipelineStep } from "../contexts/PipelineContext";
 export type WorkspaceMode = "data" | "pipeline" | "dashboard";
 import { ImportModal } from "../components/modals/ImportModal";
 import { SheetsExportModal } from "../components/SheetsExportModal";
-import { TourTooltip, STEPS_COUNT } from "../components/TourTooltip";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useUser } from "../contexts/UserContext";
 import { useDataset } from "../hooks/useDataset";
-import { useTour } from "../hooks/useTour";
 import { capture, markAsRealUser } from "../lib/posthog";
 import { recordMilestone } from "../lib/activation";
 
@@ -50,17 +48,12 @@ export function WorkspacePage() {
   );
   const [hasAskedFirstQuestion, setHasAskedFirstQuestion] = useState(false);
   const [sheetsExportOpen, setSheetsExportOpen] = useState(false);
-  // Onboarding nudges: pulse on dataset row after import, then pulse AI input after first select
-  const [showDatasetNudge, setShowDatasetNudge] = useState(false);
-  const [showAiNudge, setShowAiNudge] = useState(false);
-  const prevActiveDatasetIdRef = useRef<string | undefined>(undefined);
   const [sessionPreview, setSessionPreview] = useState<{ rows: Record<string, unknown>[]; columns: string[] } | null>(null);
   const [showingOriginal, setShowingOriginal] = useState(false);
   const [replayingPipeline, setReplayingPipeline] = useState(false);
   const [replayError, setReplayError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { tourActive, currentStep, startTour, nextStep, skipTour, isTourDone } = useTour();
 
   // When agent.done sets sessionPreview/liveArtifact AND switches the active
   // dataset in the same React batch, the clearing useEffect on activeDataset?.id
@@ -172,28 +165,6 @@ export function WorkspacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When the user selects a dataset for the first time: clear the dataset nudge
-  // and start the AI-input nudge so they know where to type their question.
-  useEffect(() => {
-    const prevId = prevActiveDatasetIdRef.current;
-    const newId = activeDataset?.id;
-    if (!prevId && newId) {
-      setShowDatasetNudge(false);
-      setShowAiNudge(true);
-      // Keep the AI nudge pulsing longer for anon users — they need more time
-      // to notice and act on it.
-      const nudgeDuration = isAnonymous ? 24000 : 8000;
-      const t = setTimeout(() => setShowAiNudge(false), nudgeDuration);
-      if (isAnonymous) {
-        window.dispatchEvent(new CustomEvent("datahub:toast", {
-          detail: { message: "🎉 Data loaded! Type a question in the AI panel →", tone: "success", duration: 5000 },
-        }));
-      }
-      return () => clearTimeout(t);
-    }
-    prevActiveDatasetIdRef.current = newId;
-  }, [activeDataset?.id]);
-
   // Auto-import a sample CSV when the user lands here with `?sample=<url>` in
   // the URL. Used by the Welcome flow on WorkspaceHomePage and by the
   // post-demo signup landing so visitors keep their context.
@@ -212,28 +183,6 @@ export function WorkspacePage() {
     next.delete("from");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
-
-  // Auto-start tooltip tour for signed-in first-time visitors after their aha moment.
-  useEffect(() => {
-    if (!firstAiAnswerAt) return;
-    if (isAnonymous) return;
-    const id = setTimeout(() => {
-      if (!isTourDone()) startTour();
-    }, 1500);
-    return () => clearTimeout(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firstAiAnswerAt, isAnonymous]);
-
-  // For anonymous guests, start the tour once they have a dataset selected —
-  // this is the earliest meaningful moment to guide them.
-  useEffect(() => {
-    if (!isAnonymous || !activeDataset?.id) return;
-    const id = setTimeout(() => {
-      if (!isTourDone()) startTour();
-    }, 1800);
-    return () => clearTimeout(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAnonymous, activeDataset?.id]);
 
   // Mark onboarding complete when all steps done
   useEffect(() => {
@@ -535,7 +484,6 @@ export function WorkspacePage() {
         refreshNonce={datasetRefreshNonce}
         searchFocusNonce={explorerSearchFocusNonce}
         width={explorerWidth}
-        showDatasetNudge={showDatasetNudge}
         mode={workspaceMode}
         pipelineId={pipelineId}
         selectedStepId={selectedPipelineStep?.id}
@@ -611,7 +559,6 @@ export function WorkspacePage() {
         dataset={activeDataset}
         projectId={resolvedProject?.id ?? "default"}
         width={aiWidth}
-        showInputNudge={showAiNudge}
         selectedPipelineStep={selectedPipelineStep}
         onStepDeselect={() => setSelectedPipelineStep(null)}
         mode={workspaceMode}
@@ -634,7 +581,6 @@ export function WorkspacePage() {
             onUploadClick={() => setImportOpen(true)}
             onFirstPrompt={() => {
               setHasAskedFirstQuestion(true);
-              setShowAiNudge(false);
               ctxRecordMilestone("ai_prompt_submitted");
               markAsRealUser();
               if (isAnonymous) {
@@ -651,19 +597,12 @@ export function WorkspacePage() {
               });
             }}
           />
-      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); setShowDatasetNudge(true); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } recordMilestone("dataset_uploaded", { $add: { total_datasets_uploaded: 1 }, $set_once: { first_dataset_at: new Date().toISOString() }, $set: { last_dataset_at: new Date().toISOString() } }); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
+      <ImportModal projectId={resolvedProject?.id} open={importOpen} onClose={() => { setImportOpen(false); setSampleUrl(undefined); }} onImported={(datasetId) => { setDatasetRefreshNonce((value) => value + 1); void refetch(); if (datasetId) { window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: datasetId })); } if (isAnonymous) { try { localStorage.setItem("datahub_anon_starter_provisioned", "1"); } catch { /* ignore */ } } recordMilestone("dataset_uploaded", { $add: { total_datasets_uploaded: 1 }, $set_once: { first_dataset_at: new Date().toISOString() }, $set: { last_dataset_at: new Date().toISOString() } }); }} preloadUrl={sampleUrl} autoImport={isAnonymous && !!sampleUrl} />
       {sheetsExportOpen && activeDataset && (
         <SheetsExportModal
           datasetId={activeDataset.id}
           datasetName={activeDataset.name}
           onClose={() => setSheetsExportOpen(false)}
-        />
-      )}
-      {tourActive && (
-        <TourTooltip
-          step={currentStep}
-          onNext={() => nextStep(STEPS_COUNT)}
-          onSkip={skipTour}
         />
       )}
       {toast && (

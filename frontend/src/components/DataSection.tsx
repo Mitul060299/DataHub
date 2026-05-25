@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { IconDatabase, IconPlus } from "./Icons";
 import type { Dataset } from "../contexts/WorkspaceContext";
 
@@ -36,6 +36,8 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  // parent IDs that are manually collapsed (children hidden)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commitRename = (dataset: Dataset) => {
@@ -49,6 +51,29 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
     setEditingId(dataset.id);
     setTimeout(() => inputRef.current?.select(), 0);
   };
+
+  const toggleCollapsed = (id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Build tree: separate root datasets from children
+  const { roots, childrenByParent } = useMemo(() => {
+    const ids = new Set(datasets.map((d) => d.id));
+    const roots: Dataset[] = [];
+    const childrenByParent: Record<string, Dataset[]> = {};
+    for (const d of datasets) {
+      if (!d.parentId || !ids.has(d.parentId)) {
+        roots.push(d);
+      } else {
+        (childrenByParent[d.parentId] ??= []).push(d);
+      }
+    }
+    return { roots, childrenByParent };
+  }, [datasets]);
 
   return (
     <section style={{ borderTop: "1px solid var(--bd)", marginTop: 8 }}>
@@ -125,103 +150,136 @@ export function DataSection({ datasets, activeDatasetId, onSelect, onImport, onR
       </div>
       {open ? (
         <div style={{ display: "grid", gap: 4 }}>
-          {datasets.map((dataset, idx) => {
-            const active = activeDatasetId === dataset.id;
-            const normalizedFormat = normalizeFormat(dataset.format);
-            const formatColor = normalizedFormat ? (formatAccent[normalizedFormat] ?? "var(--tx1)") : undefined;
+          {roots.map((dataset) => {
+            const children = childrenByParent[dataset.id] ?? [];
+            const hasChildren = children.length > 0;
+            const isCollapsed = collapsedIds.has(dataset.id);
             return (
-              <div
-                key={dataset.id}
-                style={{
-                  height: 30,
-                  borderRadius: "var(--r6)",
-                  border: "1px solid var(--bd)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0 6px 0 8px",
-                  background: active ? "var(--acl)" : "transparent",
-                  position: "relative",
-                }}
-              >
-                {editingId === dataset.id ? (
-                  <>
-                    <span style={{ flexShrink: 0, display: "inline-flex" }}><IconDatabase size={14} /></span>
-                    <input
-                      ref={inputRef}
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onBlur={() => commitRename(dataset)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitRename(dataset);
-                        else if (e.key === "Escape") setEditingId(null);
-                      }}
-                      style={{
-                        flex: 1,
-                        marginLeft: 6,
-                        height: 22,
-                        fontSize: 12,
-                        background: "var(--bg3)",
-                        border: "1px solid var(--ac)",
-                        borderRadius: 4,
-                        color: "var(--tx0)",
-                        padding: "0 6px",
-                        fontFamily: "DM Mono, monospace",
-                      }}
-                    />
-                  </>
-                ) : (
-                  <button onClick={() => onSelect(dataset)} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1, textAlign: "left" }}>
-                    <IconDatabase size={14} />
-                    <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dataset.name}</span>
-                  </button>
+              <React.Fragment key={dataset.id}>
+                {renderDatasetRow(dataset, false, hasChildren, isCollapsed, toggleCollapsed)}
+                {hasChildren && !isCollapsed && (
+                  <div style={{ display: "grid", gap: 3, marginLeft: 14, paddingLeft: 8, borderLeft: "2px solid var(--bd)" }}>
+                    {children.map((child) => renderDatasetRow(child, true, false, false, toggleCollapsed))}
+                  </div>
                 )}
-                {editingId !== dataset.id && normalizedFormat ? (
-                  <span
-                    className="mono"
-                    style={{
-                      height: 18,
-                      borderRadius: "var(--r4)",
-                      border: `1px solid ${formatColor}`,
-                      color: formatColor,
-                      padding: "0 5px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      fontSize: 10,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {normalizedFormat}
-                  </span>
-                ) : null}
-                {editingId !== dataset.id ? (
-                  <span className="mono" style={{ color: "var(--tx1)", fontSize: 11, marginLeft: 8 }}>{dataset.rows}</span>
-                ) : null}
-                {onRename ? (
-                  <button
-                    className="btn"
-                    aria-label={`Rename ${dataset.name}`}
-                    title="Rename"
-                    style={{ height: 22, width: 22, padding: 0, marginLeft: 6, borderColor: "transparent", background: "transparent", color: "var(--tx1)", fontSize: 12 }}
-                    onClick={() => startEdit(dataset)}
-                  >
-                    ✏
-                  </button>
-                ) : null}
-                <button
-                  className="btn"
-                  aria-label={`Remove ${dataset.name}`}
-                  title="Remove dataset"
-                  style={{ height: 22, width: 22, padding: 0, marginLeft: 4, borderColor: "transparent", background: "transparent", color: "var(--tx1)" }}
-                  onClick={() => onRemove(dataset)}
-                >
-                  ×
-                </button>
-              </div>
+              </React.Fragment>
             );
           })}
         </div>
       ) : null}
     </section>
   );
+
+  function renderDatasetRow(
+    dataset: Dataset,
+    isChild: boolean,
+    hasChildren: boolean,
+    isCollapsed: boolean,
+    onToggle: (id: string) => void,
+  ) {
+    const active = activeDatasetId === dataset.id;
+    const normalizedFormat = normalizeFormat(dataset.format);
+    const formatColor = normalizedFormat ? (formatAccent[normalizedFormat] ?? "var(--tx1)") : undefined;
+    return (
+      <div
+        key={dataset.id}
+        style={{
+          height: 30,
+          borderRadius: "var(--r6)",
+          border: "1px solid var(--bd)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 6px 0 6px",
+          background: active ? "var(--acl)" : "transparent",
+          position: "relative",
+        }}
+      >
+        {/* Chevron for parents that have children */}
+        {hasChildren ? (
+          <button
+            onClick={() => onToggle(dataset.id)}
+            style={{ background: "none", border: "none", padding: "0 2px 0 0", cursor: "pointer", color: "var(--tx2)", fontSize: 9, lineHeight: 1, flexShrink: 0, display: "inline-flex", alignItems: "center" }}
+          >
+            {isCollapsed ? "▶" : "▼"}
+          </button>
+        ) : isChild ? (
+          <span style={{ width: 10, flexShrink: 0 }} />
+        ) : null}
+        {editingId === dataset.id ? (
+          <>
+            <span style={{ flexShrink: 0, display: "inline-flex" }}><IconDatabase size={14} /></span>
+            <input
+              ref={inputRef}
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              onBlur={() => commitRename(dataset)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename(dataset);
+                else if (e.key === "Escape") setEditingId(null);
+              }}
+              style={{
+                flex: 1,
+                marginLeft: 6,
+                height: 22,
+                fontSize: 12,
+                background: "var(--bg3)",
+                border: "1px solid var(--ac)",
+                borderRadius: 4,
+                color: "var(--tx0)",
+                padding: "0 6px",
+                fontFamily: "DM Mono, monospace",
+              }}
+            />
+          </>
+        ) : (
+          <button onClick={() => onSelect(dataset)} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1, textAlign: "left" }}>
+            <IconDatabase size={14} />
+            <span className="mono" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dataset.name}</span>
+          </button>
+        )}
+        {editingId !== dataset.id && normalizedFormat ? (
+          <span
+            className="mono"
+            style={{
+              height: 18,
+              borderRadius: "var(--r4)",
+              border: `1px solid ${formatColor}`,
+              color: formatColor,
+              padding: "0 5px",
+              display: "inline-flex",
+              alignItems: "center",
+              fontSize: 10,
+              textTransform: "uppercase",
+            }}
+          >
+            {normalizedFormat}
+          </span>
+        ) : null}
+        {editingId !== dataset.id ? (
+          <span className="mono" style={{ color: "var(--tx1)", fontSize: 11, marginLeft: 8 }}>{dataset.rows}</span>
+        ) : null}
+        {onRename ? (
+          <button
+            className="btn"
+            aria-label={`Rename ${dataset.name}`}
+            title="Rename"
+            style={{ height: 22, width: 22, padding: 0, marginLeft: 6, borderColor: "transparent", background: "transparent", color: "var(--tx1)", fontSize: 12 }}
+            onClick={() => startEdit(dataset)}
+          >
+            ✏
+          </button>
+        ) : null}
+        <button
+          className="btn"
+          aria-label={`Remove ${dataset.name}`}
+          title="Remove dataset"
+          style={{ height: 22, width: 22, padding: 0, marginLeft: 4, borderColor: "transparent", background: "transparent", color: "var(--tx1)" }}
+          onClick={() => onRemove(dataset)}
+        >
+          ×
+        </button>
+      </div>
+    );
+  }
 }

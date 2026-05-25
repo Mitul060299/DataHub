@@ -107,13 +107,26 @@ def list_projects(
     db: Session = Depends(get_db),
 ) -> List[ProjectOut]:
     try:
-        # Projects owned by the calling user
+        # Projects owned by the calling user — exclude legacy quickstart projects
         owned = (
             db.query(ProjectDB)
             .filter(ProjectDB.user_id == current_user.id)
             .order_by(ProjectDB.updated_at.desc())
             .all()
         )
+        # Silently delete any lingering quickstart projects (one-time self-cleanup)
+        qs_projects = [p for p in owned if getattr(p, "is_quickstart", False)]
+        if qs_projects:
+            for p in qs_projects:
+                try:
+                    db.delete(p)
+                except Exception:
+                    pass
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+            owned = [p for p in owned if not getattr(p, "is_quickstart", False)]
         # Plus projects the user is a collaborator on (project_members) — best-effort
         try:
             member_project_ids = list_visible_project_ids(current_user.id, db)

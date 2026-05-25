@@ -230,8 +230,6 @@ export function WorkspacePage() {
     function handleStepSelected(e: Event) {
       const detail = (e as CustomEvent<PipelineStep | null>).detail;
       setSelectedPipelineStep(detail);
-      // When a step is clicked, switch to data mode to show the step's preview
-      if (detail) setWorkspaceMode("data");
     }
     window.addEventListener("datahub:pipeline:step-selected", handleStepSelected);
     return () => window.removeEventListener("datahub:pipeline:step-selected", handleStepSelected);
@@ -489,7 +487,6 @@ export function WorkspacePage() {
         selectedStepId={selectedPipelineStep?.id}
         onStepSelect={(step) => {
           setSelectedPipelineStep(step);
-          if (step) setWorkspaceMode("data");
         }}
       />
       <div

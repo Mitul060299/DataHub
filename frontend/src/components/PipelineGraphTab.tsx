@@ -886,11 +886,23 @@ function StepDetailPanel({
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner({ selectedStepId }: { selectedStepId?: string }) {
-  const { steps, removeStep, liveArtifact } = usePipelineContext();
+  const { steps, removeStep, liveArtifact, moveStep, keepStepsThrough } = usePipelineContext();
   const { activeDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [detailStepId, setDetailStepId] = useState<string | null>(null);
+  const detailStep = detailStepId ? (steps.find((s) => s.id === detailStepId) ?? null) : null;
+
+  // Listen for step clicks from OperationNode
+  useEffect(() => {
+    function handler(e: Event) {
+      const id = (e as CustomEvent<{ id: string } | null>).detail?.id;
+      setDetailStepId(id ?? null);
+    }
+    window.addEventListener("datahub:pipeline:step-selected", handler);
+    return () => window.removeEventListener("datahub:pipeline:step-selected", handler);
+  }, []);
 
   const handleNodeDelete = useCallback((step: PipelineStep) => {
     removeStep(step.id);
@@ -997,6 +1009,21 @@ function PipelineGraphTabInner({ selectedStepId }: { selectedStepId?: string }) 
           Fit
         </button>
       </div>
+      {/* Step detail panel — slides in from the right on node click */}
+      {(() => {
+        const stepIndex = detailStep ? steps.findIndex((s) => s.id === detailStep.id) : -1;
+        return (
+          <StepDetailPanel
+            step={detailStep}
+            onClose={() => setDetailStepId(null)}
+            onMoveUp={stepIndex > 0 ? () => moveStep(detailStep!.id, "up") : undefined}
+            onMoveDown={stepIndex < steps.length - 1 ? () => moveStep(detailStep!.id, "down") : undefined}
+            onRunToHere={stepIndex >= 0 && stepIndex < steps.length - 1
+              ? () => { keepStepsThrough(detailStep!.id); setDetailStepId(null); }
+              : undefined}
+          />
+        );
+      })()}
     </div>
   );
 }

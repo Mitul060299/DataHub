@@ -309,7 +309,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
                   void loadDatasets();
                 }}
               />
-              {/* Visualizations section */
+              {/* Visualizations section */}
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--tx2)", padding: "6px 0", borderTop: "1px solid var(--bd)" }}>VISUALIZATIONS</div>
                 {vizLoading ? (

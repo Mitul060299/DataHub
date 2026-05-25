@@ -406,12 +406,18 @@ function StepDetailPanel({
   onRunToHere,
   onMoveUp,
   onMoveDown,
+  onRename,
+  onRemove,
+  onFork,
 }: {
   step: PipelineStep | null;
   onClose: () => void;
   onRunToHere?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onRename?: (label: string) => void;
+  onRemove?: () => void;
+  onFork?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [materializing, setMaterializing] = useState(false);
@@ -419,6 +425,11 @@ function StepDetailPanel({
   const [previewCols, setPreviewCols] = useState<string[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+
+  // Reset rename state when step changes
+  useEffect(() => { setRenaming(false); }, [step?.id]);
 
   // Fetch preview when step changes
   useEffect(() => {
@@ -668,6 +679,61 @@ function StepDetailPanel({
               )}
             </div>
 
+            {/* Action buttons — rename / fork / remove */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={() => { setRenameValue(step.description || step.operation); setRenaming((v) => !v); }}
+                style={{ flex: 1, padding: "5px 0", fontSize: 11, background: "var(--bg3)", border: "1px solid var(--bd2)", borderRadius: 6, color: "var(--tx1)", cursor: "pointer" }}
+              >
+                ✏ Rename
+              </button>
+              {onFork && (
+                <button
+                  onClick={() => { onFork(); onClose(); }}
+                  title="Branch the pipeline from this step — your next AI prompt creates a parallel path"
+                  style={{ flex: 1, padding: "5px 0", fontSize: 11, background: "var(--bg3)", border: "1px solid var(--bd2)", borderRadius: 6, color: "var(--tx1)", cursor: "pointer" }}
+                >
+                  ⑂ Fork
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Remove this step from the pipeline?")) {
+                      onRemove();
+                      onClose();
+                    }
+                  }}
+                  style={{ flex: 1, padding: "5px 0", fontSize: 11, background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 6, color: "#f87171", cursor: "pointer" }}
+                >
+                  🗑 Remove
+                </button>
+              )}
+            </div>
+
+            {/* Inline rename input */}
+            {renaming && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const trimmed = renameValue.trim();
+                  if (trimmed) { onRename?.(trimmed); }
+                  setRenaming(false);
+                }}
+                style={{ display: "flex", gap: 6 }}
+              >
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setRenaming(false)}
+                  placeholder="New step label…"
+                  style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--bg3)", border: "1px solid var(--ac)", borderRadius: 6, color: "var(--tx0)", outline: "none" }}
+                />
+                <button type="submit" style={{ padding: "5px 10px", fontSize: 11, background: "var(--ac)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Save</button>
+              </form>
+            )}
+
             {/* SQL block */}
             {step.sql ? (
               <div>
@@ -886,7 +952,7 @@ function StepDetailPanel({
 
 // ─── Inner graph (must live inside ReactFlowProvider) ──────────────────────────
 function PipelineGraphTabInner({ selectedStepId }: { selectedStepId?: string }) {
-  const { steps, removeStep, liveArtifact, moveStep, keepStepsThrough } = usePipelineContext();
+  const { steps, removeStep, liveArtifact, moveStep, keepStepsThrough, renameStep, forkAtStep } = usePipelineContext();
   const { activeDataset } = useWorkspaceContext();
   const rf = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -1021,6 +1087,9 @@ function PipelineGraphTabInner({ selectedStepId }: { selectedStepId?: string }) 
             onRunToHere={stepIndex >= 0 && stepIndex < steps.length - 1
               ? () => { keepStepsThrough(detailStep!.id); setDetailStepId(null); }
               : undefined}
+            onRename={(label) => renameStep(detailStep!.id, label)}
+            onRemove={() => removeStep(detailStep!.id)}
+            onFork={() => forkAtStep(detailStep!.id)}
           />
         );
       })()}

@@ -367,8 +367,9 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
         if (datasetId !== prevDatasetIdRef.current) return;
         const parsed = (loaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
           .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
-        // Child dataset with no steps of its own — inherit the parent's pipeline
-        // so the user sees the full transformation history and can continue from it.
+        // Backend now returns parent's steps for childless derived datasets,
+        // so parsed will normally be non-empty for those cases.  The local
+        // localStorage fallback is kept as an offline/cold-cache safety net.
         if (parsed.length === 0 && parentDatasetId) {
           const fromLocal = loadPersistedSteps(parentDatasetId);
           if (fromLocal.length > 0) {
@@ -377,22 +378,6 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
             restoreLiveArtifact(fromLocal, datasetId);
             return;
           }
-          // Parent not in localStorage — fetch from the API.
-          fetchDatasetPipelineSteps(parentDatasetId)
-            .then((parentLoaded) => {
-              if (datasetId !== prevDatasetIdRef.current) return;
-              const parentParsed = (parentLoaded as Array<Omit<PipelineStep, "appliedAt"> & { appliedAt: string }>)
-                .map((s) => ({ ...s, appliedAt: new Date(s.appliedAt) }));
-              stepsOwnerRef.current = datasetId;
-              setSteps(parentParsed);
-              restoreLiveArtifact(parentParsed, datasetId);
-            })
-            .catch(() => {
-              if (datasetId !== prevDatasetIdRef.current) return;
-              stepsOwnerRef.current = datasetId;
-              setSteps([]);
-            });
-          return;
         }
         const resolved = parsed.length > 0 ? parsed : loadPersistedSteps(datasetId);
         stepsOwnerRef.current = datasetId;

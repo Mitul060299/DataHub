@@ -804,6 +804,60 @@ def get_pipeline_steps(
     except Exception:
         pass
 
+    # ── PARENT INHERITANCE: child dataset with no steps of its own ───────
+    # When a derived dataset is created by the AI, its pipeline steps live
+    # under the *parent* dataset's session (because that was the active
+    # conversation). Fall back one level so the child shows the full lineage.
+    parent_id = getattr(meta, "parent_id", None)
+    if parent_id:
+        parent_meta = db.query(DatasetMetaDB).filter(
+            DatasetMetaDB.id == parent_id,
+            DatasetMetaDB.user_id == user_id,
+        ).first()
+        if parent_meta:
+            parent_sess = (
+                db.query(_DSess)
+                .filter(_DSess.dataset_id == parent_id, _DSess.user_id == user_id)
+                .first()
+            )
+            parent_sess_id = parent_sess.chat_session_id if parent_sess else None
+            if parent_sess_id:
+                parent_rows = (
+                    db.query(_PSdb)
+                    .filter(
+                        _PSdb.user_id == user_id,
+                        _PSdb.session_id == parent_sess_id,
+                        _PSdb.status == "completed",
+                    )
+                    .order_by(_PSdb.step_number)
+                    .limit(100)
+                    .all()
+                )
+                if parent_rows:
+                    import uuid as _uuid_mod2
+                    return {
+                        "dataset_id": dataset_id,
+                        "steps": [
+                            {
+                                "id": str(_uuid_mod2.uuid4()),
+                                "stepNumber": ps.step_number,
+                                "operation": ps.operation,
+                                "intent": ps.intent or ps.operation,
+                                "description": ps.description,
+                                "sql": ps.duckdb_sql,
+                                "affectedRows": str(ps.row_count_after or ""),
+                                "appliedAt": ps.created_at.isoformat() if ps.created_at else None,
+                                "output_table": ps.output_table,
+                                "input_tables": ps.input_tables or [],
+                                "row_count_before": ps.row_count_before,
+                                "row_count_after": ps.row_count_after,
+                                "execution_time_ms": ps.execution_time_ms,
+                                "snapshot_path": ps.snapshot_path,
+                            }
+                            for ps in parent_rows
+                        ],
+                    }
+
     return {"dataset_id": dataset_id, "steps": []}
 
 
@@ -1447,6 +1501,9 @@ def rename_dataset(
         meta.name = name
     if payload.clear_parent:
         meta.parent_id = None
+        # Wipe any inherited steps stored in the legacy JSON column so the
+        # promoted dataset starts with a clean slate (no ghost parent steps).
+        meta.pipeline_steps_json = None
         from ..models_db import DatasetLineageEdgeDB
         db.query(DatasetLineageEdgeDB).filter(
             DatasetLineageEdgeDB.child_id == dataset_id

@@ -56,6 +56,19 @@ export function DashboardCanvas({ projectId, onAskAi }: DashboardCanvasProps) {
   });
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Refs for each tile so we can scroll-to-focus from the left panel list
+  const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    function handleFocusViz(e: Event) {
+      const id = (e as CustomEvent<string>).detail;
+      const el = tileRefs.current.get(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    window.addEventListener("datahub:dashboard:focus-viz", handleFocusViz);
+    return () => window.removeEventListener("datahub:dashboard:focus-viz", handleFocusViz);
+  }, []);
+
   // ── load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,6 +194,7 @@ export function DashboardCanvas({ projectId, onAskAi }: DashboardCanvasProps) {
         return (
           <div
             key={viz.id}
+            ref={(el) => { if (el) tileRefs.current.set(viz.id, el); else tileRefs.current.delete(viz.id); }}
             onMouseDown={(e) => handleMouseDown(e, viz.id)}
             style={{
               position: "absolute",

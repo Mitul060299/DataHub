@@ -614,6 +614,7 @@ export function WorkspacePage() {
         showInputNudge={showAiNudge}
         selectedPipelineStep={selectedPipelineStep}
         onStepDeselect={() => setSelectedPipelineStep(null)}
+        mode={workspaceMode}
             onStepApplied={() => {
               setDatasetRefreshNonce((value) => value + 1);
               void refetch();

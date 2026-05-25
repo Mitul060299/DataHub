@@ -8,7 +8,7 @@ import { ProjectModal } from "./modals/ProjectModal";
 import { ImportModal } from "./modals/ImportModal";
 import { ConnectorModal } from "./modals/ConnectorModal";
 import { usePipelineContext } from "../contexts/PipelineContext";
-import { markQuickstartStep1Done } from "./QuickstartTour";
+import { listVisualizations, type SavedVisualization } from "../api";
 import { recordMilestone } from "../lib/activation";
 import type { WorkspaceMode } from "../pages/WorkspacePage";
 
@@ -25,7 +25,7 @@ interface ExplorerPanelProps {
 
 export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatasetNudge, mode, pipelineId, selectedStepId, onStepSelect }: ExplorerPanelProps) {
   const { activeProject, setActiveProject, activeDataset, setActiveDataset, projectsLoading } = useWorkspaceContext();
-  const { steps, liveArtifact } = usePipelineContext();
+  const { steps } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -36,6 +36,10 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [pendingActivateId, setPendingActivateId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Visualizations list (dashboard mode)
+  const [vizList, setVizList] = useState<SavedVisualization[]>([]);
+  const [vizLoading, setVizLoading] = useState(false);
 
   // Allow other components (e.g. CanvasPanel empty state) to open the connector modal.
   useEffect(() => {
@@ -192,6 +196,27 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
     searchInputRef.current?.select();
   }, [searchFocusNonce]);
 
+  // Load visualizations when in dashboard mode
+  const loadVizList = useCallback(async () => {
+    setVizLoading(true);
+    try {
+      const data = await listVisualizations(activeProject?.id);
+      setVizList(data);
+    } catch {
+      setVizList([]);
+    } finally {
+      setVizLoading(false);
+    }
+  }, [activeProject?.id]);
+
+  useEffect(() => {
+    if (mode !== "dashboard") return;
+    void loadVizList();
+    function handleVizRefresh() { void loadVizList(); }
+    window.addEventListener("datahub:visualizations:refresh", handleVizRefresh);
+    return () => window.removeEventListener("datahub:visualizations:refresh", handleVizRefresh);
+  }, [mode, loadVizList]);
+
   return (
     <aside style={{ width: width ?? 228, minWidth: width ?? 228, borderRight: "1px solid var(--bd3)", background: "var(--bg2)", padding: 12, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div className="proj-selector" onClick={() => setProjectModalOpen(true)} style={{ border: "1px solid var(--bd3)", background: "var(--bg3)", borderRadius: "var(--r8)", height: 36, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", marginBottom: 10 }}>
@@ -204,24 +229,26 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
         <IconChevronDown size={14} />
       </div>
 
-      <input
-        ref={searchInputRef}
-        value={searchQuery}
-        onChange={(event) => setSearchQuery(event.target.value)}
-        placeholder="Search datasets..."
-        style={{
-          width: "100%",
-          height: 32,
-          border: "1px solid var(--bd2)",
-          borderRadius: "var(--r8)",
-          background: "var(--bg2)",
-          color: "var(--tx0)",
-          padding: "0 10px",
-          marginBottom: 10,
-          fontSize: 12,
-          transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-        }}
-      />
+      {mode === "data" || !mode ? (
+        <input
+          ref={searchInputRef}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search datasets..."
+          style={{
+            width: "100%",
+            height: 32,
+            border: "1px solid var(--bd2)",
+            borderRadius: "var(--r8)",
+            background: "var(--bg2)",
+            color: "var(--tx0)",
+            padding: "0 10px",
+            marginBottom: 10,
+            fontSize: 12,
+            transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+          }}
+        />
+      ) : null}
       {datasetLoadError ? (
         <div style={{ margin: "0 0 10px", display: "flex", alignItems: "flex-start", gap: 6 }}>
           <p style={{ margin: 0, color: datasetLoadError.includes("waking up") ? "var(--yl)" : "var(--rd)", fontSize: 11, flex: 1 }}>
@@ -259,56 +286,68 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
         ) : (
         <div data-tour="data-section">
           {mode === "pipeline" ? (
-            /* Pipeline mode: show numbered step list */
+            /* Pipeline mode: hint + schedule/run controls */
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--tx2)", marginBottom: 8, marginTop: 4 }}>PIPELINE STEPS</div>
-              {steps.length === 0 ? (
-                <div style={{ fontSize: 11, color: "var(--tx2)", padding: "8px 0", fontStyle: "italic" }}>No steps yet. Ask the AI to transform your data.</div>
-              ) : (
-                steps.map((step, idx) => {
-                  const isSelected = step.id === selectedStepId;
-                  return (
+              <div style={{ fontSize: 11, color: "var(--tx2)", padding: "6px 2px 10px", fontStyle: "italic" }}>
+                {steps.length === 0
+                  ? "No steps yet — build your pipeline in the Data tab"
+                  : `${steps.length} step${steps.length === 1 ? "" : "s"} · see the pipeline graph →`}
+              </div>
+              {pipelineId && <PipelineScheduleTab pipelineId={pipelineId} />}
+            </div>
+          ) : mode === "dashboard" ? (
+            /* Dashboard mode: datasets list + visualizations list */
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              <DataSection
+                datasets={sourceDatasets}
+                activeDatasetId={activeDataset?.id}
+                onSelect={setActiveDataset}
+                onImport={() => setImportModalOpen(true)}
+                onAddConnection={() => setConnectorModalOpen(true)}
+                onRemove={(dataset) => void removeDataset(dataset)}
+                showNudge={showDatasetNudge}
+                onRename={async (dataset, name) => {
+                  await renameDataset(dataset.id, name);
+                  void loadDatasets();
+                }}
+              />
+              {/* Visualizations section */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--tx2)", padding: "6px 0", borderTop: "1px solid var(--bd)" }}>VISUALIZATIONS</div>
+                {vizLoading ? (
+                  <>
+                    {[80, 65, 72].map((w, i) => (
+                      <div key={i} style={{
+                        height: 28, borderRadius: 6, marginBottom: 4,
+                        background: "linear-gradient(90deg, var(--bg2) 25%, var(--bg3,#1e1e28) 50%, var(--bg2) 75%)",
+                        backgroundSize: "200% 100%", animation: "dh-shimmer 1.4s infinite",
+                        width: `${w}%`, opacity: 0.7,
+                      }} />
+                    ))}
+                  </>
+                ) : vizList.length === 0 ? (
+                  <div style={{ fontSize: 11, color: "var(--tx2)", padding: "6px 2px", fontStyle: "italic" }}>No charts yet — ask AI to create one</div>
+                ) : (
+                  vizList.map((viz) => (
                     <button
-                      key={step.id}
-                      onClick={() => {
-                        onStepSelect?.(step);
-                        window.dispatchEvent(new CustomEvent("datahub:preview:step", {
-                          detail: { stepIndex: idx, sessionId: liveArtifact?.sessionId },
-                        }));
-                      }}
+                      key={viz.id}
+                      onClick={() => window.dispatchEvent(new CustomEvent("datahub:dashboard:focus-viz", { detail: viz.id }))}
                       style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 8,
-                        width: "100%",
-                        padding: "7px 8px",
-                        marginBottom: 4,
-                        borderRadius: 8,
-                        border: isSelected ? "1px solid var(--ac)" : "1px solid var(--bd)",
-                        background: isSelected ? "rgba(91,106,240,0.12)" : "var(--bg3)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s",
+                        display: "flex", alignItems: "center", gap: 7, width: "100%",
+                        padding: "5px 6px", marginBottom: 3, borderRadius: 6,
+                        border: "1px solid var(--bd)", background: "var(--bg3)",
+                        cursor: "pointer", textAlign: "left",
                       }}
                     >
-                      <span style={{ minWidth: 20, height: 20, borderRadius: 999, background: isSelected ? "var(--ac)" : "var(--bg2)", border: "1px solid var(--bd2)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700, color: isSelected ? "#fff" : "var(--tx2)", flexShrink: 0 }}>
-                        {idx + 1}
-                      </span>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{step.operation}</div>
-                        <div style={{ fontSize: 10, color: "var(--tx2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{step.description}</div>
-                      </div>
+                      <span style={{ flex: 1, fontSize: 11, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{viz.name}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--tx2)", background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 4, padding: "1px 5px", flexShrink: 0, letterSpacing: "0.04em" }}>{viz.chart_type}</span>
                     </button>
-                  );
-                })
-              )}
-              {pipelineId && (
-                <div style={{ marginTop: 16 }}>
-                  <PipelineScheduleTab pipelineId={pipelineId} />
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </div>
           ) : (
+          /* Data mode (default) */
           <DataSection
             datasets={sourceDatasets}
             activeDatasetId={activeDataset?.id}
@@ -326,6 +365,19 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, showDatas
         </div>
         )}
       </div>
+
+      {(mode === "data" || !mode) && (
+        <button
+          onClick={() => setImportModalOpen(true)}
+          style={{
+            width: "100%", height: 34, marginTop: 10, border: "none", borderRadius: 8,
+            background: "var(--ac)", color: "#fff", fontSize: 12, fontWeight: 600,
+            cursor: "pointer", letterSpacing: "0.01em",
+          }}
+        >
+          + Upload data
+        </button>
+      )}
 
       <ProjectModal
         open={projectModalOpen}

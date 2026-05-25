@@ -20,6 +20,7 @@ import { recordMilestone } from "../lib/activation";
 import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
 import { getAuthToken } from "../utils/auth";
+import type { WorkspaceMode } from "../pages/WorkspacePage";
 
 interface TileCreatedData {
   chart_id: string;
@@ -269,9 +270,11 @@ interface AIPanelProps {
   selectedPipelineStep?: { id: string; stepNumber: number; operation: string; description: string; rowsBefore?: number; rowsAfter?: number } | null;
   /** Called to clear the pipeline step selection */
   onStepDeselect?: () => void;
+  /** Current workspace mode — used for tab-context guidance */
+  mode?: WorkspaceMode;
 }
 
-export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge, selectedPipelineStep, onStepDeselect }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, showInputNudge, selectedPipelineStep, onStepDeselect, mode }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
   const { setActiveDataset } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -950,20 +953,51 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
     }
   };
 
+  // ── Tab-context keyword intercepts ─────────────────────────────────────────
+  const DATA_OP_RE = /\b(filter|sort|clean|transform|merge|join|drop|rename|fill\s*null|group\s*by|aggregate|pivot)\b/i;
+  const CHART_RE   = /\b(chart|visuali[sz]|dashboard|plot|bar chart|line chart|pie chart|scatter)\b/i;
+  const SCHED_RE   = /\b(schedule|automate|run pipeline|pipeline run|auto.?run)\b/i;
+
   const handleSend = async (text?: string, approvePlan?: boolean, pendingPlan?: PlanStep[], isPlanModification?: boolean) => {
     if (!dataset) return;
     const rawContent = (text || input).trim();
+
+    // ── Tab-separation intercept: catch obvious cross-tab requests ──────────
+    if (rawContent && !approvePlan) {
+      let redirectMsg: string | null = null;
+      if (mode === "dashboard" && DATA_OP_RE.test(rawContent)) {
+        redirectMsg = "Data operations (filter, transform, clean, etc.) belong in the **Data tab** — switch there to edit your dataset, then return here to visualize the results.";
+      } else if (mode === "pipeline" && CHART_RE.test(rawContent)) {
+        redirectMsg = "Charts and visualizations are created in the **Dashboard tab** — switch there and ask the AI to create a visualization from your data.";
+      } else if (mode === "data" && SCHED_RE.test(rawContent)) {
+        redirectMsg = "Scheduling and pipeline automation are in the **Pipeline tab** — switch there to configure your schedule and run settings.";
+      }
+      if (redirectMsg) {
+        setInput("");
+        setMessages((previous) => [
+          ...previous,
+          { id: crypto.randomUUID(), role: "user", content: rawContent },
+          { id: crypto.randomUUID(), role: "assistant", content: redirectMsg },
+        ]);
+        return;
+      }
+    }
+
+    // Prepend tab context so the backend AI knows which tab the user is on
+    const tabPrefix = mode ? `[workspace_tab:${mode}] ` : "";
     // Prepend selected pipeline step context if set
     const content = rawContent && selectedPipelineStep && !approvePlan
-      ? `[Selected pipeline step ${selectedPipelineStep.stepNumber} — ${selectedPipelineStep.operation}]: ${rawContent}`
-      : rawContent;
+      ? `${tabPrefix}[Selected pipeline step ${selectedPipelineStep.stepNumber} — ${selectedPipelineStep.operation}]: ${rawContent}`
+      : rawContent
+        ? `${tabPrefix}${rawContent}`
+        : rawContent;
     if (!content && !approvePlan) return;
 
     if (content && !approvePlan) {
       setCurrentStepInfo(null);
       setMessages((previous) => [
         ...previous,
-        { id: crypto.randomUUID(), role: "user", content },
+        { id: crypto.randomUUID(), role: "user", content: rawContent },
       ]);
       lastSentInputRef.current = rawContent;
       if (selectedPipelineStep) onStepDeselect?.();
@@ -1410,6 +1444,17 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
                             });
                             setSavedVizIds((prev) => new Set([...prev, chartId]));
                             window.dispatchEvent(new CustomEvent("datahub:visualizations:refresh"));
+                            // If not in dashboard tab, nudge the user to go see it
+                            if (mode !== "dashboard") {
+                              setMessages((prev) => [
+                                ...prev,
+                                {
+                                  id: crypto.randomUUID(),
+                                  role: "assistant",
+                                  content: "→ Chart saved — switch to the **Dashboard tab** to see it.",
+                                },
+                              ]);
+                            }
                           } catch {
                             notify.error("Failed to save chart. Please try again.");
                           } finally {

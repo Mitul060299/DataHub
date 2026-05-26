@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
@@ -6,9 +6,7 @@ import { useChatSession, type AgentEvent, type ConversationMessage, type PlanSte
 import { usePipeline } from "../hooks/usePipeline";
 import { IconBarChart, IconEdit, IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
-import PlanDAG from "./PlanDAG";
 import { StepCard } from "./StepCard";
-import { EChartsRenderer } from "./EChartsRenderer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { api, saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
@@ -21,6 +19,10 @@ import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
 import { getAuthToken } from "../utils/auth";
 import type { WorkspaceMode } from "../pages/WorkspacePage";
+
+// Lazy-loaded — only mounted when AI returns step plans or chart configs.
+const PlanDAG = lazy(() => import("./PlanDAG"));
+const EChartsRenderer = lazy(() => import("./EChartsRenderer").then(m => ({ default: m.EChartsRenderer })));
 
 interface TileCreatedData {
   chart_id: string;
@@ -1393,16 +1395,18 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
               ) : null}
               {message.plan ? (
                 message.planType === "dag" ? (
-                  <PlanDAG
-                    steps={message.plan}
-                    pending={Boolean(message.planPending)}
-                    approved={message.planApproved}
-                    rejected={message.planRejected}
-                    sending={sending}
-                    onApprove={approvePlan}
-                    onReject={rejectPlan}
-                    onModify={modifyPlan}
-                  />
+                  <Suspense fallback={null}>
+                    <PlanDAG
+                      steps={message.plan}
+                      pending={Boolean(message.planPending)}
+                      approved={message.planApproved}
+                      rejected={message.planRejected}
+                      sending={sending}
+                      onApprove={approvePlan}
+                      onReject={rejectPlan}
+                      onModify={modifyPlan}
+                    />
+                  </Suspense>
                 ) : (
                   <PlanCard
                     steps={message.plan}
@@ -1419,16 +1423,18 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
               {message.tileCreated?.echarts_config ? (
                 <div style={{ marginTop: 8 }}>
                   <ErrorBoundary fallback={<div style={{ padding: "8px 12px", fontSize: 12, color: "var(--tx2)", border: "1px solid var(--bd)", borderRadius: 6 }}>Chart render failed — the config may be unsupported.</div>}>
-                    <EChartsRenderer
-                      config={message.tileCreated.echarts_config}
-                      height={280}
-                      onChartClick={(params) => {
-                        const p = params as { name?: string };
-                        if (p?.name) {
-                          window.dispatchEvent(new CustomEvent("datahub:chart-click-filter", { detail: { value: p.name } }));
-                        }
-                      }}
-                    />
+                    <Suspense fallback={null}>
+                      <EChartsRenderer
+                        config={message.tileCreated.echarts_config}
+                        height={280}
+                        onChartClick={(params) => {
+                          const p = params as { name?: string };
+                          if (p?.name) {
+                            window.dispatchEvent(new CustomEvent("datahub:chart-click-filter", { detail: { value: p.name } }));
+                          }
+                        }}
+                      />
+                    </Suspense>
                   </ErrorBoundary>
                   {(() => {
                     const chartId = message.tileCreated!.chart_id;

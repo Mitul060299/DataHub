@@ -5,12 +5,14 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SupportChatWidget } from "./components/SupportChatWidget";
 
 // Static imports — smallest pages on the critical auth/landing path
-import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 // Lazy-loaded pages — each creates a separate async chunk loaded only when navigated to
+// HomePage is also lazy — removes framer-motion from the critical path for users who
+// navigate directly to /workspace or /login.
+const HomePage = lazy(() => import("./pages/HomePage").then(m => ({ default: m.HomePage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
 const MarketplacePage = lazy(() => import("./pages/MarketplacePage").then(m => ({ default: m.MarketplacePage })));
 const PricingPage = lazy(() => import("./pages/PricingPage").then(m => ({ default: m.PricingPage })));

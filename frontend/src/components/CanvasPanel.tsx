@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
@@ -10,12 +10,12 @@ import type { WorkspaceMode } from "../pages/WorkspacePage";
 
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineSection } from "./PipelineSection";
-import { DashboardCanvas } from "./DashboardCanvas";
 import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 import { CrossStepInputPanel } from "./CrossStepInputPanel";
 
-
+// Lazy-loaded — only mounted when workspace mode switches to "dashboard".
+const DashboardCanvas = lazy(() => import("./DashboardCanvas").then(m => ({ default: m.DashboardCanvas })));
 
 interface CanvasPanelProps {
   workspaceId?: string;
@@ -812,10 +812,12 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
           )
         ) : mode === "dashboard" ? (
           /* ── Dashboard canvas with saved visualizations ─────────────────── */
-          <DashboardCanvas
-            projectId={projectId}
-            onAskAi={() => window.dispatchEvent(new CustomEvent("datahub:ai:focus"))}
-          />
+          <Suspense fallback={null}>
+            <DashboardCanvas
+              projectId={projectId}
+              onAskAi={() => window.dispatchEvent(new CustomEvent("datahub:ai:focus"))}
+            />
+          </Suspense>
         ) : null}
       </div>
     </section>

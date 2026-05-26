@@ -976,7 +976,7 @@ export function HomePage() {
         >
           <motion.div
             className="hero-badge"
-            initial={{ opacity: 0, y: -12 }}
+            initial={{ y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
@@ -986,7 +986,7 @@ export function HomePage() {
 
           <motion.h1
             className="hero-headline"
-            initial={{ opacity: 0, y: 32 }}
+            initial={{ y: 32 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
@@ -996,7 +996,7 @@ export function HomePage() {
 
           <motion.p
             className="hero-description"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
           >
@@ -1006,7 +1006,7 @@ export function HomePage() {
 
           <motion.div
             className="hero-demo-bar"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
             whileHover={{ y: -2, boxShadow: "0 20px 60px rgba(124,58,237,0.35)" }}
@@ -1027,7 +1027,7 @@ export function HomePage() {
 
           <motion.div
             className="hero-buttons"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.28, ease: "easeOut" }}
           >
@@ -1042,6 +1042,7 @@ export function HomePage() {
                 sessionStorage.setItem("datahub_signup_intent", JSON.stringify({ source: "demo", sample: "/samples/customers.csv" }));
                 navigate("/workspace");
               }}
+              onPointerEnter={() => { void import("./WorkspacePage"); }}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
             >
@@ -1061,7 +1062,7 @@ export function HomePage() {
 
           <motion.div
             className="hero-secondary-cta"
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.36, ease: "easeOut" }}
           >
@@ -1083,7 +1084,7 @@ export function HomePage() {
 
           <motion.div
             className="hero-preview"
-            initial={{ opacity: 0, y: 60 }}
+            initial={{ y: 60 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
           >

@@ -5,7 +5,8 @@ import { App } from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
 import { UserProvider } from "./contexts/UserContext";
 import "./styles/global.css";
-import { Analytics } from "@vercel/analytics/react";
+// Analytics deferred to keep it off the critical-path bundle.
+const AnalyticsWidget = React.lazy(() => import("@vercel/analytics/react").then(m => ({ default: m.Analytics })));
 
 // Buffer errors that arrive before Sentry is loaded — drained once it initialises.
 const _pendingErrors: Array<{ error: Error; info: Record<string, unknown> }> = [];
@@ -54,7 +55,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <UserProvider>
           <PageviewTracker />
           <App />
-          <Analytics />
+          <React.Suspense fallback={null}><AnalyticsWidget /></React.Suspense>
         </UserProvider>
       </AuthProvider>
     </BrowserRouter>

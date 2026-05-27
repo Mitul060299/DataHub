@@ -18,41 +18,57 @@ class PlanLimits:
     max_file_size_bytes: int
     max_storage_bytes: int
     max_datasets: int
-    # Collab workspaces the user may *own/create* (personal workspace is always 1, not counted here)
+    # Deprecated: workspace concept replaced by project-level collaboration.
+    # Kept for backward-compat; set to 0 for all current tiers.
     max_collab_workspaces: int
     max_projects_per_workspace: int  # -1 = unlimited
-    # Project-level collaboration limits (replace workspace-collab limits).
-    max_project_members: int       # cap on members per project (-1 = unlimited)
-    max_collaborative_projects: int  # number of distinct owned projects allowed to have >=1 member (-1 = unlimited)
+    # Project-level collaboration limits.
+    max_project_members: int         # max members per project (-1 = unlimited)
+    max_collaborative_projects: int  # distinct projects allowed to have >=1 member (-1 = unlimited)
     allowed_formats: set[str]
     allowed_connectors: set[str]
     sso_enabled: bool
     webhooks_enabled: bool
     scheduling_enabled: bool
     dashboard_sharing_enabled: bool
+    audit_log_enabled: bool = False  # Expert-only
 
 
 PLAN_ORDER = {
-    "Free": 1,
-    "Starter": 2,
-    "Professional": 3,
-    "Team": 4,
-    "Business": 5,
-    "Enterprise": 6,
-    # Beta is the "billing disabled" universal plan. Ranked above
-    # Business so it satisfies any enforce_min_plan() check (every
-    # paid feature unlocks during beta) without being unbounded
-    # like Enterprise.
+    # New 3-tier pricing (effective when BILLING_ENABLED=true).
+    "Starter": 1,       # free forever
+    "Professional": 2,  # $49/mo (₹1,999)
+    "Expert": 3,        # $99/mo (₹3,999)
+    # Beta is the open-beta universal plan used while BILLING_ENABLED=false.
+    # Ranked highest so it satisfies every enforce_min_plan() check.
     "Beta": 99,
 }
 
 
 PLAN_LIMITS: dict[str, PlanLimits] = {
-    "Free": PlanLimits(
-        max_file_size_bytes=50 * 1024 * 1024,           # 50 MB
-        max_storage_bytes=500 * 1024 * 1024,             # 500 MB
-        max_datasets=3,
-        max_collab_workspaces=0,                         # cannot CREATE collab workspaces
+    # Beta plan: assigned to every user while BILLING_ENABLED=false.
+    # Unlocks every single-user feature so users can fully evaluate the product.
+    "Beta": PlanLimits(
+        max_file_size_bytes=2 * 1024 * 1024 * 1024,      # 2 GB
+        max_storage_bytes=20 * 1024 * 1024 * 1024,       # 20 GB
+        max_datasets=-1,
+        max_collab_workspaces=0,
+        max_projects_per_workspace=-1,
+        max_project_members=1,
+        max_collaborative_projects=0,
+        allowed_formats={"csv", "excel", "json", "parquet"},
+        allowed_connectors={"*"},
+        sso_enabled=False,
+        webhooks_enabled=True,
+        scheduling_enabled=True,
+        dashboard_sharing_enabled=True,
+    ),
+    # Starter — free forever, solo use.
+    "Starter": PlanLimits(
+        max_file_size_bytes=100 * 1024 * 1024,           # 100 MB
+        max_storage_bytes=2 * 1024 * 1024 * 1024,        # 2 GB
+        max_datasets=5,
+        max_collab_workspaces=0,
         max_projects_per_workspace=-1,
         max_project_members=1,                           # solo only
         max_collaborative_projects=0,
@@ -63,110 +79,59 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
         scheduling_enabled=False,
         dashboard_sharing_enabled=False,
     ),
-    # Beta plan: assigned to every user while BILLING_ENABLED=false.
-    # Generous on cheap resources, conservative on AI usage (see
-    # USAGE_LIMITS in plan_limits.py). Unlocks every feature except
-    # multi-seat / SSO so single users can fully evaluate the product.
-    "Beta": PlanLimits(
-        max_file_size_bytes=2 * 1024 * 1024 * 1024,      # 2 GB
-        max_storage_bytes=20 * 1024 * 1024 * 1024,       # 20 GB
-        max_datasets=-1,
-        max_collab_workspaces=0,                         # multi-user disabled during beta
-        max_projects_per_workspace=-1,
-        max_project_members=1,
-        max_collaborative_projects=0,
-        allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"*"},
-        sso_enabled=False,                               # we don't have SSO wired anyway
-        webhooks_enabled=True,
-        scheduling_enabled=True,
-        dashboard_sharing_enabled=True,
-    ),
-    "Starter": PlanLimits(
-        max_file_size_bytes=250 * 1024 * 1024,           # 250 MB
-        max_storage_bytes=5 * 1024 * 1024 * 1024,        # 5 GB
-        max_datasets=25,
-        max_collab_workspaces=0,                         # solo only
-        max_projects_per_workspace=-1,
-        max_project_members=1,
-        max_collaborative_projects=0,
-        allowed_formats={"csv", "excel", "json"},
-        allowed_connectors={"csv", "excel", "json", "sqlite"},
-        sso_enabled=False,
-        webhooks_enabled=False,
-        scheduling_enabled=True,                         # daily-only enforced at scheduler layer
-        dashboard_sharing_enabled=True,                  # read-only link
-    ),
+    # Professional — $49/mo (₹1,999). Up to 5 collaborators per project.
     "Professional": PlanLimits(
         max_file_size_bytes=1024 * 1024 * 1024,          # 1 GB
-        max_storage_bytes=20 * 1024 * 1024 * 1024,       # 20 GB
-        max_datasets=50,
-        max_collab_workspaces=0,                         # cannot CREATE collab workspaces
+        max_storage_bytes=25 * 1024 * 1024 * 1024,       # 25 GB
+        max_datasets=100,
+        max_collab_workspaces=0,
         max_projects_per_workspace=-1,
-        max_project_members=1,                           # solo only
-        max_collaborative_projects=0,
+        max_project_members=6,                           # owner + up to 5
+        max_collaborative_projects=-1,                   # unlimited collab projects
         allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle"},
+        allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite"},
         sso_enabled=False,
         webhooks_enabled=False,
-        scheduling_enabled=True,
+        scheduling_enabled=True,                         # daily scheduling
         dashboard_sharing_enabled=True,
     ),
-    "Team": PlanLimits(
+    # Expert — $99/mo (₹3,999). Up to 20 collaborators + audit log.
+    "Expert": PlanLimits(
         max_file_size_bytes=5 * 1024 * 1024 * 1024,      # 5 GB
-        max_storage_bytes=100 * 1024 * 1024 * 1024,       # 100 GB
-        max_datasets=-1,
-        max_collab_workspaces=5,                         # up to 5 collab workspaces (6 total incl. personal)
+        max_storage_bytes=100 * 1024 * 1024 * 1024,      # 100 GB
+        max_datasets=500,
+        max_collab_workspaces=0,
         max_projects_per_workspace=-1,
-        max_project_members=10,
-        max_collaborative_projects=5,
+        max_project_members=21,                          # owner + up to 20
+        max_collaborative_projects=-1,
         allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"csv", "excel", "postgresql", "mysql", "sqlite", "mssql", "oracle", "snowflake", "redshift", "bigquery"},
+        allowed_connectors={"*"},
         sso_enabled=False,
-        webhooks_enabled=False,
-        scheduling_enabled=True,
-        dashboard_sharing_enabled=True,
-    ),
-    "Business": PlanLimits(
-        max_file_size_bytes=10 * 1024 * 1024 * 1024,     # 10 GB
-        max_storage_bytes=2 * 1024 * 1024 * 1024 * 1024, # 2 TB
-        max_datasets=-1,
-        max_collab_workspaces=9,                         # up to 9 collab workspaces (10 total incl. personal)
-        max_projects_per_workspace=-1,
-        max_project_members=50,
-        max_collaborative_projects=-1,
-        allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"*"},
-        sso_enabled=True,
         webhooks_enabled=True,
         scheduling_enabled=True,
         dashboard_sharing_enabled=True,
-    ),
-    "Enterprise": PlanLimits(
-        max_file_size_bytes=-1,
-        max_storage_bytes=-1,
-        max_datasets=-1,
-        max_collab_workspaces=-1,
-        max_projects_per_workspace=-1,
-        max_project_members=-1,
-        max_collaborative_projects=-1,
-        allowed_formats={"csv", "excel", "json", "parquet"},
-        allowed_connectors={"*"},
-        sso_enabled=True,
-        webhooks_enabled=True,
-        scheduling_enabled=True,
-        dashboard_sharing_enabled=True,
+        audit_log_enabled=True,
     ),
 }
 
 
 def normalize_plan(plan: str | None) -> str:
     if not plan:
-        return "Free"
+        return "Starter"
     candidate = str(plan).strip().capitalize()
     if candidate in PLAN_LIMITS:
         return candidate
-    return "Free"
+    # Legacy tier mappings (data migration may not have run yet on all envs)
+    _legacy: dict[str, str] = {
+        "Free": "Starter",
+        "Team": "Expert",
+        "Business": "Expert",
+        "Enterprise": "Expert",
+    }
+    legacy_key = str(plan).strip().title()
+    if legacy_key in _legacy:
+        return _legacy[legacy_key]
+    return "Starter"
 
 
 def default_user_plan() -> str:
@@ -196,35 +161,22 @@ def resolve_user_plan_by_id(user_id: str, db: Session) -> str:
         return "Beta"
 
     # Resolve to org owner if this user is an org member
-    from .organization_service import resolve_org_owner_user_id  # avoid cycle
-    billing_user_id = resolve_org_owner_user_id(user_id, db) if user_id else user_id
-
-    if settings.billing_enabled and billing_user_id:
-        effective_plan = billing_repository.get_effective_plan(billing_user_id, db=db)
+    if settings.billing_enabled and user_id:
+        effective_plan = billing_repository.get_effective_plan(user_id, db=db)
         if effective_plan:
             return normalize_plan(effective_plan)
-    user = db.query(User).filter(User.id == billing_user_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return default_user_plan()
-    plan = normalize_plan(user.plan)
-    # Users stored with "Free" have no explicit paid subscription — give them
-    # the Beta tier so they aren't blocked from features during the beta period.
-    return plan if plan != "Free" else default_user_plan()
+    return normalize_plan(user.plan)
 
 
 def enforce_collab_workspace_limit(plan: str, existing_collab_count: int) -> None:
-    """Gate collab workspace *creation*. Free/Pro users cannot create collab workspaces."""
-    limits = limits_for_plan(plan)
-    if limits.max_collab_workspaces == 0:
-        raise HTTPException(
-            status_code=403,
-            detail=format_upgrade_message("Collab workspaces", plan, "Team"),
-        )
-    if limits.max_collab_workspaces > 0 and existing_collab_count >= limits.max_collab_workspaces:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Collab workspace limit reached for {normalize_plan(plan)} plan.",
-        )
+    """No-op: the workspace concept has been replaced by project-level collaboration.
+
+    Kept for backward-compatibility with existing call sites.
+    """
+    return
 
 
 def resolve_project_plan(
@@ -328,7 +280,7 @@ def enforce_collaborative_project_limit(
                 "plan": normalize_plan(plan),
                 "limit": 0,
                 "message": format_upgrade_message(
-                    "Shared projects", plan, "Team"
+                    "Shared projects", plan, "Professional"
                 ),
             },
         )
@@ -364,66 +316,11 @@ def enforce_member_seat_limit(
     plan: str,
     db: Session,
 ) -> None:
-    """Block workspace member invites when purchased seats are exhausted.
+    """No-op: the seat-based billing model was removed in the new 3-tier pricing.
 
-    Counts active + pending members across ALL workspaces owned by
-    *billing_user_id*.  Compares against the subscription's ``quantity``
-    (purchased seats), falling back to the plan's ``included_seats``.
-
-    Raises HTTPException(403) with a structured payload containing the
-    upgrade URL so the frontend can render a one-click resolution.
+    Kept for backward-compatibility with existing call sites.
     """
-    usage_limits = _get_usage_limits(plan)
-    included_seats: int = usage_limits["included_seats"]
-    max_seats: int = usage_limits["max_seats"]
-
-    # Read purchased seat count from active subscription (defaults to included)
-    purchased_seats = included_seats
-    if billing_user_id:
-        sub = billing_repository.get_active_subscription(billing_user_id)
-        if sub:
-            purchased_seats = max(int(sub.get("quantity") or included_seats), included_seats)
-
-    # Count active + pending members across all workspaces owned by this user
-    owned_project_ids = [
-        p.id for p in
-        db.query(ProjectDB.id).filter(ProjectDB.user_id == billing_user_id).all()
-    ]
-
-    if not owned_project_ids:
-        return  # no projects → nothing to cap
-
-    project_emails: set[str] = {
-        (email or "").lower()
-        for (email,) in db.query(ProjectMemberDB.email)
-        .filter(
-            ProjectMemberDB.project_id.in_(owned_project_ids),
-            ProjectMemberDB.status.in_(["active", "pending"]),
-        )
-        .all()
-    }
-
-    # Owner counts as 1 seat (not stored in project_members table).
-    current_seats = len(project_emails) + 1
-
-    if max_seats != -1 and current_seats >= purchased_seats:
-        extra_seat_price = "₹2,499" if plan.strip().title() == "Team" else "₹3,999"
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "seat_limit_reached",
-                "current_seats": current_seats,
-                "max_seats": purchased_seats,
-                "extra_seat_price_inr": extra_seat_price,
-                "upgrade_url": "/settings/billing#add-seats",
-                "message": (
-                    f"You've used all {purchased_seats} "
-                    f"{'included' if purchased_seats == included_seats else 'purchased'} seats. "
-                    f"Add more seats from {extra_seat_price}/seat/month in Billing settings "
-                    f"to invite this member."
-                ),
-            },
-        )
+    return
 
 
 def enforce_project_limit(plan: str, existing_count: int) -> None:
@@ -471,10 +368,7 @@ def resolve_user_plan(db: Session, authorization: str | None) -> str:
         user = db.query(User).filter(User.username == subject).first()
     if not user:
         return default_user_plan()
-    plan = normalize_plan(user.plan)
-    # Users stored with "Free" have no explicit paid subscription — give them
-    # the Beta tier so they aren't blocked from features during the beta period.
-    return plan if plan != "Free" else default_user_plan()
+    return normalize_plan(user.plan)
 
 
 def limits_for_plan(plan: str) -> PlanLimits:

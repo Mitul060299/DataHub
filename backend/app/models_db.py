@@ -350,9 +350,14 @@ class ImportConnectionDB(Base):
 class AuditLogDB(Base):
     __tablename__ = "audit_logs"
     id = Column(String, primary_key=True)
+    # event_type / action describes what happened (e.g. "ai_command_run", "pipeline_run")
     action = Column(String, nullable=False)
+    # actor is the user_id who performed the action
     actor = Column(String, nullable=False)
+    # target is a resource description or ID
     target = Column(String, nullable=False)
+    # project_id for project-scoped events (nullable for account-level events)
+    project_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

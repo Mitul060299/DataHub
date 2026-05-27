@@ -14,11 +14,14 @@ _ACTIVE_STATUSES = {"active", "authenticated"}
 _TERMINAL_STATUSES = {"halted", "cancelled", "completed", "expired"}
 
 _PLAN_SLUG_TO_CANONICAL = {
+    # New 3-tier model
     "starter": "Starter",
     "professional": "Professional",
-    "team": "Team",
-    "business": "Business",
-    "free": "Free",
+    "expert": "Expert",
+    # Legacy slugs — mapped forward via normalize_plan in plan_guard.py
+    "team": "Expert",
+    "business": "Expert",
+    "free": "Starter",
 }
 
 _PLAN_CANONICAL_TO_SLUG = {value: key for key, value in _PLAN_SLUG_TO_CANONICAL.items()}

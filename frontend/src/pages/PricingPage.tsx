@@ -6,12 +6,13 @@ import { capture } from "../lib/posthog";
 import { useBillingRegion } from "../hooks/useIsIndian";
 import { useSEO } from "../hooks/useSEO";
 
-type PlanKey = "Free" | "Starter" | "Professional" | "Team" | "Business" | "Enterprise";
+type PlanKey = "Starter" | "Professional" | "Expert";
 
 type PlanCard = {
   key: PlanKey;
   priceINR: string;
   priceUSD: string;
+  badge?: string;
   description: string;
   highlightsINR: string[];
   highlightsUSD: string[];
@@ -19,52 +20,79 @@ type PlanCard = {
 
 const planCards: PlanCard[] = [
   {
-    key: "Free",
-    priceINR: "₹0",
-    priceUSD: "$0",
-    description: "Students, evaluation, and hobby workflows",
-    highlightsINR: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "50 AI messages/month", "CSV + Excel only"],
-    highlightsUSD: ["Solo projects only", "Up to 2 projects", "500 MB storage · 5 GB scan/month", "50 AI messages/month", "CSV + Excel only"],
-  },
-  {
     key: "Starter",
-    priceINR: "₹999 / month",
-    priceUSD: "$19 / month",
-    description: "Indie analysts, students upgrading from Free",
-    highlightsINR: ["Solo projects · 1 seat", "Up to 5 projects", "5 GB storage · 25 GB scan/month", "500 AI messages/month", "CSV, Excel, JSON · SQLite connector", "Daily scheduled runs"],
-    highlightsUSD: ["Solo projects · 1 seat", "Up to 5 projects", "5 GB storage · 25 GB scan/month", "500 AI messages/month", "CSV, Excel, JSON · SQLite connector", "Daily scheduled runs"],
+    priceINR: "Free forever",
+    priceUSD: "Free forever",
+    description: "Solo data work — explore, clean, and visualise at your own pace.",
+    highlightsINR: [
+      "50 AI messages / month",
+      "20 pipeline runs / month",
+      "5 dataset uploads / month",
+      "2 GB storage · 10 GB scan",
+      "CSV + Excel files only",
+      "Solo projects (no collaborators)",
+    ],
+    highlightsUSD: [
+      "50 AI messages / month",
+      "20 pipeline runs / month",
+      "5 dataset uploads / month",
+      "2 GB storage · 10 GB scan",
+      "CSV + Excel files only",
+      "Solo projects (no collaborators)",
+    ],
   },
   {
     key: "Professional",
+    priceINR: "₹1,999 / month",
+    priceUSD: "$49 / month",
+    badge: "Most Popular",
+    description: "Analysts and consultants who collaborate with clients or teammates.",
+    highlightsINR: [
+      "500 AI messages / month",
+      "200 pipeline runs / month",
+      "100 dataset uploads / month",
+      "25 GB storage · 100 GB scan",
+      "CSV, Excel, JSON, Parquet",
+      "PostgreSQL, MySQL, SQLite connectors",
+      "Invite up to 5 collaborators per project",
+      "Dashboard sharing · daily scheduling",
+    ],
+    highlightsUSD: [
+      "500 AI messages / month",
+      "200 pipeline runs / month",
+      "100 dataset uploads / month",
+      "25 GB storage · 100 GB scan",
+      "CSV, Excel, JSON, Parquet",
+      "PostgreSQL, MySQL, SQLite connectors",
+      "Invite up to 5 collaborators per project",
+      "Dashboard sharing · daily scheduling",
+    ],
+  },
+  {
+    key: "Expert",
     priceINR: "₹3,999 / month",
-    priceUSD: "$79 / month",
-    description: "Solo consultants and analysts",
-    highlightsINR: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 100 GB scan/month", "1,500 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
-    highlightsUSD: ["Solo projects · 1 seat", "Up to 20 projects", "20 GB storage · 100 GB scan/month", "1,500 AI messages/month", "DB: PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage"],
-  },
-  {
-    key: "Team",
-    priceINR: "₹8,999 / month",
-    priceUSD: "$179 / month",
-    description: "Small analytics and consulting teams",
-    highlightsINR: ["Includes 3 seats · +₹1,499/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 500 GB+ scan/month", "4,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery", "Audit log"],
-    highlightsUSD: ["Includes 3 seats · +$29/extra seat", "10 members per project · 5 collaborative projects", "100 GB+ storage · 500 GB+ scan/month", "4,000+ AI messages (scales with seats)", "+ Snowflake, Redshift, BigQuery", "Audit log"],
-  },
-  {
-    key: "Business",
-    priceINR: "₹17,999 / month",
-    priceUSD: "$349 / month",
-    description: "Governance-first mid-size enterprises",
-    highlightsINR: ["Includes 5 seats · +₹2,499/extra seat", "50 members per project · unlimited collaborative projects", "500 GB+ storage · 2 TB+ scan/month", "15,000+ AI messages (scales with seats)", "SSO/SAML · Webhooks · Custom connectors"],
-    highlightsUSD: ["Includes 5 seats · +$49/extra seat", "50 members per project · unlimited collaborative projects", "500 GB+ storage · 2 TB+ scan/month", "15,000+ AI messages (scales with seats)", "SSO/SAML · Webhooks · Custom connectors"],
-  },
-  {
-    key: "Enterprise",
-    priceINR: "Custom",
-    priceUSD: "Custom",
-    description: "Fortune 500 and regulated environments — from $1,500/mo (5+ seats)",
-    highlightsINR: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Negotiated AI / pipeline / scan quotas", "24/7 dedicated support", "Custom compliance + integrations"],
-    highlightsUSD: ["Unlimited members per project", "Unlimited collaborative projects", "Custom TB-scale storage", "Negotiated AI / pipeline / scan quotas", "24/7 dedicated support", "Custom compliance + integrations"],
+    priceUSD: "$99 / month",
+    description: "Power users who need large files, all connectors, and an audit trail.",
+    highlightsINR: [
+      "2,000 AI messages / month",
+      "1,000 pipeline runs / month",
+      "500 dataset uploads / month",
+      "100 GB storage · 500 GB scan",
+      "All file formats · all connectors",
+      "Invite up to 20 collaborators per project",
+      "Webhooks · full scheduling",
+      "Audit log",
+    ],
+    highlightsUSD: [
+      "2,000 AI messages / month",
+      "1,000 pipeline runs / month",
+      "500 dataset uploads / month",
+      "100 GB storage · 500 GB scan",
+      "All file formats · all connectors",
+      "Invite up to 20 collaborators per project",
+      "Webhooks · full scheduling",
+      "Audit log",
+    ],
   },
 ];
 
@@ -82,53 +110,35 @@ const PRICING_LD = {
     "@type": "AggregateOffer",
     priceCurrency: "INR",
     lowPrice: "0",
-    highPrice: "17999",
-    offerCount: "6",
+    highPrice: "3999",
+    offerCount: "3",
     offers: [
       {
         "@type": "Offer",
-        name: "Free",
+        name: "Starter",
         price: "0",
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
-        description: "50 AI messages/month, 500 MB storage, CSV + Excel uploads.",
-      },
-      {
-        "@type": "Offer",
-        name: "Starter",
-        price: "999",
-        priceCurrency: "INR",
-        url: "https://datahub.org.in/pricing",
-        availability: "https://schema.org/InStock",
-        description: "5 projects, 5 GB storage, 500 AI messages, SQLite + JSON support.",
+        description: "Free forever. 50 AI messages/month, 2 GB storage, CSV + Excel uploads, solo projects.",
       },
       {
         "@type": "Offer",
         name: "Professional",
+        price: "1999",
+        priceCurrency: "INR",
+        url: "https://datahub.org.in/pricing",
+        availability: "https://schema.org/InStock",
+        description: "₹1,999/month. 500 AI messages, 25 GB storage, invite up to 5 collaborators, PostgreSQL/MySQL/SQLite.",
+      },
+      {
+        "@type": "Offer",
+        name: "Expert",
         price: "3999",
         priceCurrency: "INR",
         url: "https://datahub.org.in/pricing",
         availability: "https://schema.org/InStock",
-        description: "20 projects, 20 GB storage, 1,500 AI messages, all SQL databases.",
-      },
-      {
-        "@type": "Offer",
-        name: "Team",
-        price: "8999",
-        priceCurrency: "INR",
-        url: "https://datahub.org.in/pricing",
-        availability: "https://schema.org/InStock",
-        description: "3 seats included, collaborative projects up to 5, +Snowflake/Redshift/BigQuery.",
-      },
-      {
-        "@type": "Offer",
-        name: "Business",
-        price: "17999",
-        priceCurrency: "INR",
-        url: "https://datahub.org.in/pricing",
-        availability: "https://schema.org/InStock",
-        description: "5 seats included, SSO/SAML, webhooks, custom connectors, 500 GB storage.",
+        description: "₹3,999/month. 2,000 AI messages, 100 GB storage, up to 20 collaborators, all connectors, audit log.",
       },
     ],
   },
@@ -142,9 +152,9 @@ export function PricingPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useSEO({
-    title: "DataHub Pricing – Free, Starter, Pro & Team Plans | AI Agent for Data Work",
+    title: "DataHub Pricing – Free Starter, Professional & Expert Plans | AI Agent for Data Work",
     description:
-      "Start free forever. Starter from ₹999/month, Professional ₹3,999, Team ₹8,999, Business ₹17,999. Every plan includes the AI agent, visual reusable pipelines, and transparent SQL.",
+      "Starter is free forever. Professional ₹1,999/month ($49), Expert ₹3,999/month ($99). Every plan includes the AI agent, visual reusable pipelines, and transparent SQL. Invite collaborators on paid plans.",
     canonical: "https://datahub.org.in/pricing",
     structuredData: PRICING_LD,
   });
@@ -154,10 +164,6 @@ export function PricingPage() {
   const upgrade = async (target: PlanKey) => {
     setMessage(null);
     capture("upgrade_clicked", { target_plan: target, current_plan: plan });
-    if (target === "Enterprise") {
-      setMessage("Enterprise onboarding is sales-assisted. Contact sales@datahub.org.in.");
-      return;
-    }
     if (billingEnabled) {
       navigate("/settings/billing");
       return;
@@ -213,26 +219,50 @@ export function PricingPage() {
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 14, maxWidth: 1320, margin: "0 auto" }}>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16, maxWidth: 960, margin: "0 auto" }}>
         {planCards.map((card, index) => {
           const isCurrent = card.key === plan;
           const canUpgrade = index >= currentIndex && !isCurrent;
           const price = isIndian ? card.priceINR : card.priceUSD;
           const highlights = isIndian ? card.highlightsINR : card.highlightsUSD;
+          const isPopular = card.badge === "Most Popular";
           return (
             <article
               key={card.key}
               className="ds-card ds-card--hover"
               style={{
                 padding: 20,
-                borderColor: isCurrent ? "var(--ac)" : "var(--bd2)",
-                background: isCurrent ? "linear-gradient(180deg, rgba(99,102,241,0.08), var(--bg2) 60%)" : "var(--bg2)",
+                borderColor: isPopular ? "var(--ac)" : isCurrent ? "var(--ac)" : "var(--bd2)",
+                background: isCurrent
+                  ? "linear-gradient(180deg, rgba(99,102,241,0.08), var(--bg2) 60%)"
+                  : isPopular
+                  ? "linear-gradient(180deg, rgba(91,106,240,0.06), var(--bg2) 70%)"
+                  : "var(--bg2)",
                 display: "grid",
                 gap: 10,
                 position: "relative",
-                boxShadow: isCurrent ? "0 0 0 1px var(--acg), 0 16px 40px rgba(0,0,0,0.3)" : undefined,
+                boxShadow: isCurrent || isPopular ? "0 0 0 1px var(--acg), 0 16px 40px rgba(0,0,0,0.3)" : undefined,
               }}
             >
+              {card.badge && (
+                <span style={{
+                  position: "absolute",
+                  top: -12,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: "var(--ac)",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "3px 10px",
+                  borderRadius: 99,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}>
+                  {card.badge}
+                </span>
+              )}
               <div>
                 <h3 style={{ marginBottom: 6, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--tx0)" }}>{card.key}</h3>
                 <p className="mono" style={{ color: "var(--tx0)", fontSize: 18, fontWeight: 700, fontFamily: "var(--display)" }}>{price}</p>
@@ -255,12 +285,22 @@ export function PricingPage() {
                   onClick={() => void upgrade(card.key)}
                   style={{ marginTop: 6 }}
                 >
-                  {card.key === "Enterprise" ? "Contact Sales" : "Upgrade"}
+                  Upgrade
                 </button>
               )}
             </article>
           );
         })}
+      </section>
+
+      {/* Collaboration explainer */}
+      <section style={{ maxWidth: 720, margin: "32px auto 0", textAlign: "center" }}>
+        <p style={{ color: "var(--tx1)", fontSize: 13.5, lineHeight: 1.7, margin: 0 }}>
+          <strong style={{ color: "var(--tx0)" }}>How collaboration works:</strong>{" "}
+          Invite anyone with a DataHub account to your project. Their usage (AI messages,
+          pipeline runs, uploads) counts against <em>your</em> quota — no extra per-seat
+          charges. Professional supports up to 5 collaborators per project; Expert up to 20.
+        </p>
       </section>
     </main>
   );

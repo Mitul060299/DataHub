@@ -11,20 +11,22 @@ Pricing config layout
 * ``PLAN_AMOUNTS`` – source-of-truth amount per plan / currency / cycle in
   the smallest sub-unit (paise for INR, cents for USD).
 * ``RAZORPAY_PLAN_IDS`` – Razorpay plan ID per plan / currency / cycle.
-* ``PER_SEAT_AMOUNTS`` – overage amount per extra seat per currency.
-* ``INCLUDED_SEATS`` – seats already included in the base plan.
+* ``INCLUDED_SEATS`` – seats included in the base plan (all plans = 1
+  in the new 3-tier model; no per-seat add-ons).
 
-USD pricing
------------
-Internal mapping is hand-tuned to round prices in each currency, not a
-naive INR/USD conversion (typical SaaS pricing pattern):
+Plan overview (when BILLING_ENABLED=true)
+-----------------------------------------
+    Starter       free   ($0 / ₹0)     — no Razorpay plan needed
+    Professional  $49/mo (₹1,999/mo)
+    Expert        $99/mo (₹3,999/mo)
 
-    Starter      $19/mo    (~₹999)
-    Professional $79/mo    (~₹3,999)
-    Team         $179/mo   (~₹8,999)
-    Business     $349/mo   (~₹17,999)
-    Extra seat (Team)     $29/mo  (~₹1,499)
-    Extra seat (Business) $49/mo  (~₹2,499)
+NOTE: Starter is free so it has no Razorpay plan ID.  The ``professional``
+entries reuse the existing live INR plan (₹3,999 plan_Sk9JPF6MjLmqLr was
+the old Professional price; a new ₹1,999 plan must be created in Razorpay
+before enabling billing — override via RAZORPAY_PRO_INR_PLAN env var).
+The ``expert`` entries are NEW and must be created in the Razorpay
+dashboard before enabling billing — override via RAZORPAY_EXPERT_INR_PLAN
+/ RAZORPAY_EXPERT_USD_PLAN.
 """
 
 from __future__ import annotations
@@ -39,95 +41,55 @@ _TEST_PLAN = "plan_SW9abXgqVnqDXQ"
 # ---------------------------------------------------------------------------
 # Razorpay plan IDs (created in the Razorpay dashboard).
 #
-# Live INR plan IDs (created 2026-05-01 — "V3" pricing reset):
-#     starter      → plan_Sk9InffRzS4NjI   (₹999/mo)
-#     professional → plan_Sk9JPF6MjLmqLr   (₹3,999/mo)
-#     team         → plan_Sk9Jyri0JaFOqr   (₹8,999/mo)
-#     business     → plan_Sk9L0dcmaAgoiU   (₹17,999/mo)
+# Live INR plan IDs:
+#     professional → plan_Sk9JPF6MjLmqLr  (old ₹3,999 plan — REPLACE with new
+#                                           ₹1,999 plan before enabling billing)
+#     expert       → TODO: create in Razorpay dashboard
 #
-# Live USD plan IDs (created 2026-05-04 — International KYC approved):
-#     starter      → plan_SlAVA70nI1Jf9c   ($19/mo)
-#     professional → plan_SlAVAJtYi6MlQH   ($79/mo)
-#     team         → plan_SlAVAejGisc8gs   ($179/mo)
-#     business     → plan_SlAVAuwTe4F2Nm   ($349/mo)
+# Live USD plan IDs:
+#     professional → plan_SlAVAJtYi6MlQH  (old $79 plan — REPLACE with new
+#                                           $49 plan before enabling billing)
+#     expert       → TODO: create in Razorpay dashboard
 #
-# USD plans use the hardcoded IDs above as defaults; override via env vars
-# if needed: RAZORPAY_STARTER_USD_PLAN, RAZORPAY_PRO_USD_PLAN,
-#     RAZORPAY_TEAM_USD_PLAN, RAZORPAY_BUSINESS_USD_PLAN
+# Override via env vars:
+#   RAZORPAY_PRO_INR_PLAN, RAZORPAY_PRO_USD_PLAN
+#   RAZORPAY_EXPERT_INR_PLAN, RAZORPAY_EXPERT_USD_PLAN
 # ---------------------------------------------------------------------------
 
 RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
-    "starter": {
-        "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9InffRzS4NjI",
-        },
-        "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_STARTER_USD_PLAN", "plan_SlAVA70nI1Jf9c"),
-        },
-    },
+    # Starter is free — no Razorpay plan needed.
     "professional": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9JPF6MjLmqLr",
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_INR_PLAN", "plan_Sk9JPF6MjLmqLr"),
         },
         "USD": {
             "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_USD_PLAN", "plan_SlAVAJtYi6MlQH"),
         },
     },
-    "team": {
+    "expert": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9Jyri0JaFOqr",
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_EXPERT_INR_PLAN", "REPLACE_ME_expert_inr"),
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_TEAM_USD_PLAN", "plan_SlAVAejGisc8gs"),
-        },
-    },
-    "business": {
-        "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else "plan_Sk9L0dcmaAgoiU",
-        },
-        "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_BUSINESS_USD_PLAN", "plan_SlAVAuwTe4F2Nm"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_EXPERT_USD_PLAN", "REPLACE_ME_expert_usd"),
         },
     },
 }
 
 
 # ---------------------------------------------------------------------------
-# Plan amounts (smallest currency unit). Used for proration and add-ons.
+# Plan amounts (smallest currency unit). Used for proration.
+# Starter is free so it has no entry here.
 # ---------------------------------------------------------------------------
 
 PLAN_AMOUNTS: dict[str, dict[str, dict[str, int]]] = {
-    "starter": {
-        "INR": {"monthly": 99_900},    # ₹999/mo
-        "USD": {"monthly": 1_900},     # $19/mo
-    },
     "professional": {
+        "INR": {"monthly": 199_900},   # ₹1,999/mo
+        "USD": {"monthly": 4_900},     # $49/mo
+    },
+    "expert": {
         "INR": {"monthly": 399_900},   # ₹3,999/mo
-        "USD": {"monthly": 7_900},     # $79/mo
-    },
-    "team": {
-        "INR": {"monthly": 899_900},   # ₹8,999/mo (3 seats)
-        "USD": {"monthly": 17_900},    # $179/mo  (3 seats)
-    },
-    "business": {
-        "INR": {"monthly": 1_799_900}, # ₹17,999/mo (5 seats)
-        "USD": {"monthly": 34_900},    # $349/mo   (5 seats)
-    },
-}
-
-
-# ---------------------------------------------------------------------------
-# Per-seat overage amounts (smallest unit / month).
-# ---------------------------------------------------------------------------
-
-PER_SEAT_AMOUNTS: dict[str, dict[str, int]] = {
-    "team": {
-        "INR": 149_900,   # ₹1,499/seat/mo
-        "USD": 2_900,     # $29/seat/mo
-    },
-    "business": {
-        "INR": 249_900,   # ₹2,499/seat/mo
-        "USD": 4_900,     # $49/seat/mo
+        "USD": {"monthly": 9_900},     # $99/mo
     },
 }
 
@@ -135,8 +97,7 @@ PER_SEAT_AMOUNTS: dict[str, dict[str, int]] = {
 INCLUDED_SEATS: dict[str, int] = {
     "starter": 1,
     "professional": 1,
-    "team": 3,
-    "business": 5,
+    "expert": 1,
 }
 
 
@@ -149,7 +110,7 @@ SUPPORTED_CURRENCIES: tuple[str, ...] = ("INR", "USD")
 
 PLAN_AMOUNTS_PAISE = {p: {"monthly": PLAN_AMOUNTS[p]["INR"]["monthly"]} for p in PLAN_AMOUNTS}
 MONTHLY_AMOUNTS_PAISE = {p: PLAN_AMOUNTS[p]["INR"]["monthly"] for p in PLAN_AMOUNTS}
-PER_SEAT_PAISE = {p: PER_SEAT_AMOUNTS[p]["INR"] for p in PER_SEAT_AMOUNTS}
+# PER_SEAT_PAISE removed — no seat-based billing in new 3-tier model.
 
 
 # ---------------------------------------------------------------------------
@@ -186,5 +147,9 @@ def get_plan_amount(plan_slug: str, currency: str, cycle: str = "monthly") -> in
 
 
 def get_per_seat_amount(plan_slug: str, currency: str) -> int:
-    currency = normalize_currency(currency)
-    return PER_SEAT_AMOUNTS.get(plan_slug, {}).get(currency, 0)
+    """No-op stub: per-seat billing was removed in the new 3-tier model.
+
+    Always returns 0. Kept for backward-compatibility with existing call sites
+    (e.g. the /billing/seat-usage endpoint) until they are updated.
+    """
+    return 0

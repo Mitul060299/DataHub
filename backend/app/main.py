@@ -60,6 +60,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 from .routers import health, datasets, profiling, transformations, auth, plugins, context, insights, governance, agents, webhooks, jobs, connectors, users, metrics, approvals, realtime, templates, pipelines, imports, cleaning, visualizations, chat_sessions, pipeline_workflows, calculated_columns, dashboards_v2, feedback, billing, reviews, capabilities
 from .routers import support_chat
+from .routers import audit_log as audit_log_router
 from .routers import full_auto_routes
 from .routers import usage as usage_routes
 from .routers import trial as trial_routes
@@ -807,3 +808,4 @@ app.include_router(organization_members_router)
 app.include_router(org_invite_router)
 app.include_router(usage_routes.router)
 app.include_router(pipeline_steps_router)
+app.include_router(audit_log_router.router)

@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ...llm_provider import get_chat_model
 
-from ..prompts import PLANNER_SYSTEM_PROMPT
+from ..prompts import PLANNER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT_SLIM
 from ..state import AgentState, PlanStep
 from ...echarts_builder import infer_chart_type
 from ...token_tracking_service import log_call as _log_call
@@ -134,7 +134,19 @@ async def planner(state: AgentState) -> dict:
     )
 
     _glossary = _load_glossary(state.get("project_id", ""))
-    system_prompt = PLANNER_SYSTEM_PROMPT.format(
+
+    # Intents that need the full prompt (ML/analytics/viz/advanced-ML sections).
+    # Everything else uses the slim variant (~2 000 tokens lighter).
+    _FULL_PROMPT_INTENTS = {"goal", "predict", "analyse", "visualise"}
+    _intent = state.get("intent", "")
+    _prompt_template = (
+        PLANNER_SYSTEM_PROMPT if _intent in _FULL_PROMPT_INTENTS
+        else PLANNER_SYSTEM_PROMPT_SLIM
+    )
+    _logger.info("PLANNER_PROMPT: intent=%s template=%s", _intent,
+                 "full" if _intent in _FULL_PROMPT_INTENTS else "slim")
+
+    system_prompt = _prompt_template.format(
         schema=_dumps(state.get("schema", {})),
         stats=_dumps(state.get("stats", {})),
         sample_rows=_dumps(state.get("sample_rows", [])[:10]),

@@ -293,6 +293,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   const [analyzingDataset, setAnalyzingDataset] = useState(false);
   const [columnSchema, setColumnSchema] = useState<ColSchema[]>([]);
   const [currentStepInfo, setCurrentStepInfo] = useState<{ stepNumber: number; operation: string; totalSteps: number } | null>(null);
+  const [isAwaitingExecution, setIsAwaitingExecution] = useState(false);
   const [showAllRowsIds, setShowAllRowsIds] = useState<Set<string>>(new Set());
   // Tracks dataset IDs that have already been auto-analyzed on first load
   const autoQualityRunRef = useRef<Set<string>>(new Set());
@@ -415,6 +416,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       }
       case "agent.done": {
         setCurrentStepInfo(null);
+        setIsAwaitingExecution(false);
         const responseText = typeof event.response === "string" ? event.response : "Done.";
         const doneIntent = typeof event.intent === "string" ? event.intent : "transform";
         // Short-circuit for clarification — no execution happened, just show the question
@@ -709,6 +711,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       }
       case "agent.error": {
         setCurrentStepInfo(null);
+        setIsAwaitingExecution(false);
         // Use the raw backend message for agent.error events — they are already
         // concise server-side strings. Only fall through humaniseError for
         // network-layer errors (handled in the catch block below).
@@ -924,6 +927,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         break;
       }
       case "agent.step.start": {
+        setIsAwaitingExecution(false);
         setCurrentStepInfo({
           stepNumber: Number(event.step_number ?? 0),
           operation: typeof event.operation === "string" ? event.operation : "",
@@ -1041,6 +1045,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
     } catch (error: unknown) {
       const humanised = humaniseError(error);
       capture("ai_error", { error_type: "send_failed", retryable: isRetryableError(error) });
+      setIsAwaitingExecution(false);
       setMessages((previous) => [
         ...previous,
         { id: crypto.randomUUID(), role: "assistant", content: `Error: ${humanised}` },
@@ -1101,6 +1106,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         : message
     )));
     recordMilestone("pipeline_step_approved");
+    setIsAwaitingExecution(true);
     void handleSend(latestUserPrompt, true, pendingPlanSteps);
   };
 
@@ -1611,7 +1617,9 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             <span>
               {currentStepInfo && currentStepInfo.totalSteps > 0
                 ? `Step ${currentStepInfo.stepNumber}/${currentStepInfo.totalSteps}: ${currentStepInfo.operation.replace(/_/g, " ")}`
-                : "Thinking"}
+                : isAwaitingExecution
+                  ? "Executing..."
+                  : "Thinking"}
             </span>
             <span className="dot-bounce" />
             <span className="dot-bounce" style={{ animationDelay: "0.14s" }} />

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, deleteDataset, renameDataset, promoteToRoot } from "../api";
 import { useWorkspaceContext, type Dataset } from "../contexts/WorkspaceContext";
-import { IconChevronDown } from "./Icons";
+import { IconChevronDown, IconDatabase } from "./Icons";
 import { DataSection } from "./DataSection";
 import { PipelineScheduleTab } from "./PipelineScheduleTab";
 import { ProjectModal } from "./modals/ProjectModal";
@@ -30,6 +30,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [datasetLoadError, setDatasetLoadError] = useState<string | null>(null);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
@@ -383,16 +384,63 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
       </div>
 
       {(mode === "data" || !mode) && (
-        <button
-          onClick={() => setImportModalOpen(true)}
-          style={{
-            width: "100%", height: 34, marginTop: 10, border: "none", borderRadius: 8,
-            background: "var(--ac)", color: "#fff", fontSize: 12, fontWeight: 600,
-            cursor: "pointer", letterSpacing: "0.01em",
-          }}
-        >
-          + Upload data
-        </button>
+        <div style={{ position: "relative", marginTop: 10 }}>
+          <button
+            onClick={() => setImportMenuOpen((v) => !v)}
+            style={{
+              width: "100%", height: 34, border: "none", borderRadius: 8,
+              background: "var(--ac)", color: "#fff", fontSize: 12, fontWeight: 600,
+              cursor: "pointer", letterSpacing: "0.01em",
+            }}
+          >
+            + Import data
+          </button>
+          {importMenuOpen && (
+            <div
+              onMouseLeave={() => setImportMenuOpen(false)}
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: "calc(100% + 4px)",
+                zIndex: 200,
+                background: "var(--bg2)",
+                border: "1px solid var(--bd)",
+                borderRadius: "var(--r6)",
+                boxShadow: "0 4px 12px rgba(0,0,0,.25)",
+                overflow: "hidden",
+              }}
+            >
+              {([
+                { label: "Upload file", icon: <span style={{ fontSize: 13, lineHeight: 1 }}>+</span>, action: () => { setImportMenuOpen(false); setImportModalOpen(true); } },
+                { label: "Connect database", icon: <IconDatabase size={13} />, action: () => { setImportMenuOpen(false); setConnectorModalOpen(true); } },
+              ] as { label: string; icon: React.ReactNode; action: () => void }[]).map(({ label, icon, action }) => (
+                <button
+                  key={label}
+                  onClick={action}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 12px",
+                    fontSize: 12,
+                    color: "var(--tx1)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       <ProjectModal

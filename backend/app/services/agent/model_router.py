@@ -71,21 +71,23 @@ def is_simple_plan_goal(goal: str) -> bool:
 def select_model(kind: CallKind, goal: str = "") -> str:
     """Return the Groq model id appropriate for the given call kind.
 
-    When the router is disabled, always return the default versatile model so
-    behaviour is identical to the pre-router pipeline.
+    Classification and conversation always use the fast (8B) model — they
+    output a single word / short phrase and never need reasoning depth.
 
     For ``kind="plan"``: additionally applies goal-complexity heuristic —
-    a short, keyword-free goal is routed to the fast model to save cost.
+    a short, keyword-free goal is routed to the fast model to save cost
+    (only when LLM_ROUTER_ENABLED is set).
     """
     versatile = os.getenv(_VERSATILE_MODEL_ENV, _VERSATILE_DEFAULT)
     # If GROQ_FAST_MODEL is not explicitly set, fall back to the versatile model
     # rather than the hardcoded 8b-instant default which has a 6K token TPM limit
     # that simple prompts + schema context can easily exceed.
     fast = os.getenv(_FAST_MODEL_ENV) or versatile
-    if not _router_enabled():
-        return versatile
+    # classify / converse are always fast — no reasoning needed.
     if kind in _FAST_KINDS:
         return fast
+    if not _router_enabled():
+        return versatile
     if kind == "plan" and goal and is_simple_plan_goal(goal):
         return fast
     return versatile

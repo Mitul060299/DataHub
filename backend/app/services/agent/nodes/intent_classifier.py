@@ -35,6 +35,11 @@ VALID_INTENTS = {
 
 
 async def intent_classifier(state: AgentState) -> dict:
+    # Approval resume path: plan is already approved, graph routes straight to
+    # execute_step — no LLM call needed for classification.
+    if state.get("plan_approved"):
+        return {"intent": state.get("intent", "converse")}
+
     messages = state.get("messages", [])
     last_message = messages[-1].content if messages else ""
     _user_id: str = state.get("user_id", "")

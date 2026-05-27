@@ -424,6 +424,14 @@ Respond with ONLY this JSON — no prose, no markdown fences:
   3. Validation/test columns used in feature engineering — flag as leakage
 """
 
+# Slim variant — omits ML/AI prep, advanced analytics, visualization, and
+# advanced-ML sections (~2 000 tokens lighter).  Used for simple intents that
+# never need those capabilities: filter, summarise, pivot, union, join,
+# reconcile, sql_query, export, add_column, validate, clean, transform,
+# cross_join, branch.
+_SLIM_CUTOFF = "\n\n═══ ML / AI PREPARATION ═══"
+PLANNER_SYSTEM_PROMPT_SLIM = PLANNER_SYSTEM_PROMPT[: PLANNER_SYSTEM_PROMPT.index(_SLIM_CUTOFF)]
+
 
 REFLECT_PROMPT = """You are a DuckDB SQL expert. A query failed with an error. Rewrite the SQL to fix it.
 

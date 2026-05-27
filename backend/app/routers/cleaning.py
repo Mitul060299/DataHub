@@ -95,7 +95,7 @@ async def process_command(
             _next_task: _asyncio.Task = _asyncio.create_task(_aiter.__anext__())
             try:
                 while True:
-                    _done, _ = await _asyncio.wait({_next_task}, timeout=15.0)
+                    _done, _ = await _asyncio.wait({_next_task}, timeout=5.0)
                     if not _done:
                         yield ": keep-alive\n\n"
                         continue

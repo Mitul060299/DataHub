@@ -1,7 +1,7 @@
 """Create Razorpay plans for the current DataHub pricing.
 
 Run once per Razorpay account (test + live). After it prints the plan IDs,
-copy them into ``backend/app/razorpay_plans.py`` (the ``RAZORPAY_PLAN_IDS`` map).
+set them as env vars on Render and redeploy.
 
 Usage:
     # Test mode
@@ -12,8 +12,17 @@ Usage:
     RAZORPAY_KEY_ID=rzp_live_xxx RAZORPAY_KEY_SECRET=yyy \
         python scripts/setup_razorpay_plans.py
 
-Pricing source of truth: ``backend/app/razorpay_plans.py`` (PLAN_AMOUNTS_PAISE).
-Keep both files in sync whenever prices change.
+Pricing (3-tier model, May 2026):
+    Starter       FREE  -- no Razorpay plan needed
+    Professional  INR 1,999/mo  ($49/mo)
+    Expert        INR 3,999/mo  ($99/mo)
+
+After running, set these env vars on Render and redeploy:
+    RAZORPAY_PRO_INR_PLAN=<plan_id>
+    RAZORPAY_PRO_USD_PLAN=<plan_id>
+    RAZORPAY_EXPERT_INR_PLAN=<plan_id>
+    RAZORPAY_EXPERT_USD_PLAN=<plan_id>
+    BILLING_ENABLED=true
 """
 import os
 
@@ -33,22 +42,15 @@ def _get_client() -> razorpay.Client:
 
 
 # Amounts in minor units (paise for INR, cents for USD). Monthly billing only.
-# Mirrors PLAN_AMOUNTS in backend/app/razorpay_plans.py.
-#
-# IMPORTANT: USD plans require "International Payments" to be enabled on the
-# Razorpay merchant account. Enable it at https://dashboard.razorpay.com/app/payments/international
-# before running this script with USD plans.
+# Starter is FREE -- no Razorpay plan needed.
 PLANS = [
-    # INR (domestic) — V3 pricing reset (May 2026)
-    {"tier": "starter",      "currency": "INR", "amount": 99900,   "name": "DataHub Starter Monthly"},
-    {"tier": "professional", "currency": "INR", "amount": 399900,  "name": "DataHub Professional Monthly"},
-    {"tier": "team",         "currency": "INR", "amount": 899900,  "name": "DataHub Team Monthly"},
-    {"tier": "business",     "currency": "INR", "amount": 1799900, "name": "DataHub Business Monthly"},
-    # USD (international) — pending Razorpay International KYC approval
-    {"tier": "starter",      "currency": "USD", "amount": 1900,    "name": "DataHub Starter Monthly (USD)"},
-    {"tier": "professional", "currency": "USD", "amount": 7900,    "name": "DataHub Professional Monthly (USD)"},
-    {"tier": "team",         "currency": "USD", "amount": 17900,   "name": "DataHub Team Monthly (USD)"},
-    {"tier": "business",     "currency": "USD", "amount": 34900,   "name": "DataHub Business Monthly (USD)"},
+    # INR (domestic)
+    {"tier": "professional", "currency": "INR", "amount": 199_900, "name": "DataHub Professional Monthly"},
+    {"tier": "expert",       "currency": "INR", "amount": 399_900, "name": "DataHub Expert Monthly"},
+    # USD (international) -- requires "International Payments" enabled:
+    # https://dashboard.razorpay.com/app/payments/international
+    {"tier": "professional", "currency": "USD", "amount": 4_900,   "name": "DataHub Professional Monthly (USD)"},
+    {"tier": "expert",       "currency": "USD", "amount": 9_900,   "name": "DataHub Expert Monthly (USD)"},
 ]
 
 
@@ -76,7 +78,7 @@ def main() -> int:
             )
         except Exception as exc:  # noqa: BLE001
             print(
-                f"  ✗ {plan['tier']:13} {plan['currency']:4}  "
+                f"  FAIL {plan['tier']:13} {plan['currency']:4}  "
                 f"FAILED: {exc}"
             )
             if plan["currency"] == "USD":
@@ -85,21 +87,23 @@ def main() -> int:
         plan_id = result["id"]
         created.append((plan["tier"], plan["currency"], plan_id))
         print(
-            f"  ✓ {plan['tier']:13} {plan['currency']:4}  "
+            f"  OK {plan['tier']:13} {plan['currency']:4}  "
             f"plan_id: {plan_id}  amount: {symbol}{plan['amount'] // 100:,}"
         )
 
-    print("\n──────────────────────────────────────────────────────────────")
-    print("INR — paste plan IDs into RAZORPAY_PLAN_IDS in backend/app/razorpay_plans.py:")
+    _env_var_map = {
+        ("professional", "INR"): "RAZORPAY_PRO_INR_PLAN",
+        ("expert",       "INR"): "RAZORPAY_EXPERT_INR_PLAN",
+        ("professional", "USD"): "RAZORPAY_PRO_USD_PLAN",
+        ("expert",       "USD"): "RAZORPAY_EXPERT_USD_PLAN",
+    }
+    print("\n--------------------------------------------------------------")
+    print("Set these env vars on Render (Environment tab) and redeploy:")
     for tier, cur, pid in created:
-        if cur == "INR":
-            print(f'    "{tier}": {{"INR": {{"monthly": "{pid}"}}, ...}}')
-    print("\nUSD — set these env vars on the API server (Render / docker-compose):")
-    for tier, cur, pid in created:
-        if cur == "USD":
-            env_name = f"RAZORPAY_{tier.upper()}_USD_PLAN"
-            print(f"    {env_name}={pid}")
-    print("──────────────────────────────────────────────────────────────\n")
+        env_name = _env_var_map.get((tier, cur), f"RAZORPAY_{tier.upper()}_{cur}_PLAN")
+        print(f"    {env_name}={pid}")
+    print("    BILLING_ENABLED=true")
+    print("--------------------------------------------------------------\n")
     return 0
 
 

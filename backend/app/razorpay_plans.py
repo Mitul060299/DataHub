@@ -20,13 +20,9 @@ Plan overview (when BILLING_ENABLED=true)
     Professional  $49/mo (₹1,999/mo)
     Expert        $99/mo (₹3,999/mo)
 
-NOTE: Starter is free so it has no Razorpay plan ID.  The ``professional``
-entries reuse the existing live INR plan (₹3,999 plan_Sk9JPF6MjLmqLr was
-the old Professional price; a new ₹1,999 plan must be created in Razorpay
-before enabling billing — override via RAZORPAY_PRO_INR_PLAN env var).
-The ``expert`` entries are NEW and must be created in the Razorpay
-dashboard before enabling billing — override via RAZORPAY_EXPERT_INR_PLAN
-/ RAZORPAY_EXPERT_USD_PLAN.
+NOTE: Starter is free so it has no Razorpay plan ID. The plan IDs below
+were created via scripts/setup_razorpay_plans.py (May 2026). Override any
+ID via the corresponding env var without redeploying.
 """
 
 from __future__ import annotations
@@ -39,19 +35,14 @@ _IS_TEST = os.getenv("RAZORPAY_KEY_ID", "").startswith("rzp_test_")
 _TEST_PLAN = "plan_SW9abXgqVnqDXQ"
 
 # ---------------------------------------------------------------------------
-# Razorpay plan IDs (created in the Razorpay dashboard).
+# Razorpay plan IDs — created via scripts/setup_razorpay_plans.py (May 2026).
 #
-# Live INR plan IDs:
-#     professional → plan_Sk9JPF6MjLmqLr  (old ₹3,999 plan — REPLACE with new
-#                                           ₹1,999 plan before enabling billing)
-#     expert       → TODO: create in Razorpay dashboard
+# Live INR:  professional → plan_SugB0jUThUjLYj (₹1,999/mo)
+#            expert       → plan_SugB0xDaPeYumH (₹3,999/mo)
+# Live USD:  professional → plan_SugB1ANN7YOqf7 ($49/mo)
+#            expert       → plan_SugB1Tg6LsbnpM ($99/mo)
 #
-# Live USD plan IDs:
-#     professional → plan_SlAVAJtYi6MlQH  (old $79 plan — REPLACE with new
-#                                           $49 plan before enabling billing)
-#     expert       → TODO: create in Razorpay dashboard
-#
-# Override via env vars:
+# Override via env vars (no redeploy needed):
 #   RAZORPAY_PRO_INR_PLAN, RAZORPAY_PRO_USD_PLAN
 #   RAZORPAY_EXPERT_INR_PLAN, RAZORPAY_EXPERT_USD_PLAN
 # ---------------------------------------------------------------------------
@@ -60,18 +51,18 @@ RAZORPAY_PLAN_IDS: dict[str, dict[str, dict[str, str]]] = {
     # Starter is free — no Razorpay plan needed.
     "professional": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_INR_PLAN", "plan_Sk9JPF6MjLmqLr"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_INR_PLAN", "plan_SugB0jUThUjLYj"),
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_USD_PLAN", "plan_SlAVAJtYi6MlQH"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_PRO_USD_PLAN", "plan_SugB1ANN7YOqf7"),
         },
     },
     "expert": {
         "INR": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_EXPERT_INR_PLAN", "REPLACE_ME_expert_inr"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_EXPERT_INR_PLAN", "plan_SugB0xDaPeYumH"),
         },
         "USD": {
-            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_EXPERT_USD_PLAN", "REPLACE_ME_expert_usd"),
+            "monthly": _TEST_PLAN if _IS_TEST else os.getenv("RAZORPAY_EXPERT_USD_PLAN", "plan_SugB1Tg6LsbnpM"),
         },
     },
 }

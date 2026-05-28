@@ -67,7 +67,7 @@ export function TopBar() {
   const handleSignOut = async () => {
     setMenuOpen(false);
     await signOut();
-    navigate("/login", { replace: true });
+    navigate("/", { replace: true });
   };
 
   return (

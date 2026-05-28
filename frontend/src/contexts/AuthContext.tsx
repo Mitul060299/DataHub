@@ -294,9 +294,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUserType("registered");
         identifyFromSession(nextSession);
       } else {
-        // No real session — bootstrap (or restore) an anonymous one so the
-        // entire product is usable without sign-up.
-        await ensureAnonymousSession();
+        // No real session — user must sign in.
       }
       setLoading(false);
     };
@@ -330,13 +328,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         identifyFromSession(nextSession);
         setLoading(false);
       } else if (hadRealSession) {
-        // Real sign-out: clear creds and bootstrap a fresh anon session.
+        // Real sign-out: clear credentials.
         clearAuthToken();
         reset();
         clearSentryUser();
         wipeUnscopedTenantState();
         hadRealSession = false;
-        void ensureAnonymousSession();
         setLoading(false);
       }
       // Initial INITIAL_SESSION=null is a no-op here — loadSession() owns
@@ -357,15 +354,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // React to expired/invalid sessions surfaced by the axios interceptor.
   useEffect(() => {
     const handler = () => {
-      // If the user is anonymous, clear the stale token and bootstrap a fresh
-      // session — don't redirect to /login (they were never "signed in").
-      if (anonSessionRef.current) {
-        localStorage.removeItem(ANON_TOKEN_KEY);
-        localStorage.removeItem(ANON_USER_ID_KEY);
-        setAnonSession(null);
-        void ensureAnonymousSession();
-        return;
-      }
       void supabase.auth.signOut().finally(() => {
         if (typeof window !== "undefined") {
           const path = window.location.pathname || "";

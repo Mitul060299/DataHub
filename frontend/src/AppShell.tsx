@@ -50,23 +50,6 @@ export function AppShell() {
   }
 
   if (!isAuthenticated) {
-    // /workspace is fully open to guests — render it even while the anon JWT
-    // is still bootstrapping in the background. WorkspaceContext / project
-    // list components show their own skeletons until the token arrives and
-    // the API call succeeds. This avoids ever showing a connection wall.
-    if (location.pathname.startsWith("/workspace")) {
-      return (
-        <WorkspaceProvider>
-          <PipelineProvider>
-            <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-              <TopBar />
-              <Outlet />
-            </div>
-          </PipelineProvider>
-        </WorkspaceProvider>
-      );
-    }
-    // All other private routes do require a real auth session.
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

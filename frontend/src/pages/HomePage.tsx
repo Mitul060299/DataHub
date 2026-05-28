@@ -658,7 +658,7 @@ export function HomePage() {
   };
 
   const handleGetStarted = () => {
-    navigate("/workspace");
+    navigate("/signup");
   };
 
 

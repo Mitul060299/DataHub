@@ -6,45 +6,41 @@ declare global {
   }
 }
 
-export type BillingPlanSlug = "starter" | "professional" | "team" | "business";
+export type BillingPlanSlug = "starter" | "professional" | "expert";
 export type BillingCycle = "monthly";
 export type BillingCurrency = "INR" | "USD";
 
 const PRICES: Record<BillingCurrency, Record<BillingPlanSlug, Record<BillingCycle, number>>> = {
   INR: {
-    starter: { monthly: 999 },
-    professional: { monthly: 3999 },
-    team: { monthly: 8999 },
-    business: { monthly: 17999 },
+    starter:      { monthly: 0 },
+    professional: { monthly: 1999 },
+    expert:       { monthly: 3999 },
   },
   USD: {
-    starter: { monthly: 19 },
-    professional: { monthly: 79 },
-    team: { monthly: 179 },
-    business: { monthly: 349 },
+    starter:      { monthly: 0 },
+    professional: { monthly: 49 },
+    expert:       { monthly: 99 },
   },
 };
 
 export const INCLUDED_SEATS: Record<BillingPlanSlug, number> = {
   starter: 1,
   professional: 1,
-  team: 3,
-  business: 5,
+  expert: 1,
 };
 
 export const EXTRA_SEAT_PRICE: Record<BillingCurrency, Record<string, number>> = {
-  INR: { team: 1499, business: 2499 },
-  USD: { team: 29, business: 49 },
+  INR: {},
+  USD: {},
 };
 
 /** @deprecated kept for back-compat, prefer EXTRA_SEAT_PRICE. */
 export const EXTRA_SEAT_PRICE_INR: Record<string, number> = EXTRA_SEAT_PRICE.INR;
 
 export const PLAN_FEATURES: Record<BillingPlanSlug, string[]> = {
-  starter: ["CSV, Excel, JSON uploads", "SQLite connector", "500 AI messages/month", "Daily scheduled runs"],
-  professional: ["PostgreSQL, MySQL, SQLite, MSSQL, Oracle", "S3, GCS, Azure Blob storage", "1,500 AI messages/month", "Scheduled pipelines"],
-  team: ["+Snowflake, Redshift, BigQuery", "Includes 3 seats", "4,000+ AI messages/month (scales with seats)", "Audit log"],
-  business: ["SSO + governance + webhooks", "Includes 5 seats", "15,000+ AI messages/month (scales with seats)", "Custom connectors on request"],
+  starter: ["CSV + Excel uploads", "50 AI messages/month", "20 pipeline runs/month", "2 GB storage"],
+  professional: ["All file formats + PostgreSQL, MySQL, SQLite", "500 AI messages/month", "Dashboard sharing · daily scheduling", "Invite up to 5 collaborators"],
+  expert: ["All connectors (cloud DBs + warehouses)", "2,000 AI messages/month", "Webhooks · audit log · full scheduling", "Invite up to 20 collaborators · 100 GB storage"],
 };
 
 function formatMoney(amount: number, currency: BillingCurrency): string {

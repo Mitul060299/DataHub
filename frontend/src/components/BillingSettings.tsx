@@ -20,19 +20,17 @@ import {
 const TIER_COLOR: Record<BillingPlanSlug, string> = {
   starter: "#06b6d4",
   professional: "#3b82f6",
-  team: "#8b5cf6",
-  business: "#eab308",
+  expert: "#8b5cf6",
 };
 
-const PLAN_ORDER: BillingPlanSlug[] = ["starter", "professional", "team", "business"];
+const PLAN_ORDER: BillingPlanSlug[] = ["starter", "professional", "expert"];
 
 const canonicalToSlug = (value?: string | null): BillingPlanSlug | null => {
   if (!value) return null;
   const lowered = value.toLowerCase();
   if (lowered === "starter") return "starter";
   if (lowered === "professional") return "professional";
-  if (lowered === "team") return "team";
-  if (lowered === "business") return "business";
+  if (lowered === "expert") return "expert";
   return null;
 };
 
@@ -307,7 +305,7 @@ export function BillingSettings() {
       ) : null}
 
       {/* Seat Management */}
-      {seatUsage && currentPlanSlug && (currentPlanSlug === "team" || currentPlanSlug === "business") ? (
+      {seatUsage && currentPlanSlug && false ? (
         <div id="add-seats" style={{ border: "1px solid var(--bd2)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
           <h3 style={{ fontSize: 14 }}>Seat Management</h3>
           <p style={{ color: "var(--tx1)", fontSize: 13 }}>

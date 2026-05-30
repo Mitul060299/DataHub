@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -131,12 +132,12 @@ def rename_visualization(
     return _viz_out(viz)
 
 
-@router.delete("/{viz_id}", status_code=204)
+@router.delete("/{viz_id}", status_code=204, response_class=Response)
 def delete_visualization(
     viz_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
     viz = db.query(VisualizationDB).filter(
         VisualizationDB.id == viz_id,
         VisualizationDB.user_id == current_user.id,
@@ -145,3 +146,4 @@ def delete_visualization(
         raise HTTPException(status_code=404, detail="Visualization not found")
     db.delete(viz)
     db.commit()
+    return Response(status_code=204)

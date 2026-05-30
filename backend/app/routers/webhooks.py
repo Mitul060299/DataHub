@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Header, Depends, HTTPException
+from fastapi.responses import Response
 import uuid
 import ipaddress
 import socket
@@ -86,12 +87,12 @@ def list_hooks(
     return [WebhookRegistration(hook_id=row.id, target_url=row.target_url, event=row.event) for row in rows]
 
 
-@router.delete("/{hook_id}", status_code=204)
+@router.delete("/{hook_id}", status_code=204, response_class=Response)
 def delete_hook(
     hook_id: str,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     role = get_current_role(authorization)
     require_role("editor", role)
     user_plan = resolve_user_plan(db, authorization)
@@ -104,3 +105,4 @@ def delete_hook(
         raise HTTPException(status_code=403, detail="Not authorized to delete this webhook")
     db.delete(hook)
     db.commit()
+    return Response(status_code=204)

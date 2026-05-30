@@ -315,11 +315,11 @@ def upsert_idp_config(
     return _config_dict(config)
 
 
-@router.delete("/config", status_code=204)
+@router.delete("/config", status_code=204, response_class=Response)
 def delete_idp_config(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     """Remove the SAML IdP config for the caller's org."""
     subject = get_current_subject(authorization)
     if not subject:
@@ -330,12 +330,13 @@ def delete_idp_config(
     user_id = get_current_user_id(authorization) or ""
     org = _get_org_for_user(user_id, db)
     if not org:
-        return
+        return Response(status_code=204)
 
     config = db.query(SamlIdpConfigDB).filter(SamlIdpConfigDB.org_id == org.id).first()
     if config:
         db.delete(config)
         db.commit()
+    return Response(status_code=204)
 
 
 # ── SSO Redirect ──────────────────────────────────────────────────────────────

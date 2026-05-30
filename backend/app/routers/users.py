@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi.responses import Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 import logging
@@ -342,11 +343,11 @@ def update_notification_preferences(
     return {**_DEFAULT_PREFS, **current}
 
 
-@router.delete("/me", status_code=204)
+@router.delete("/me", status_code=204, response_class=Response)
 def delete_me(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     """Permanently delete the current user record and write an audit event."""
     from ..services.audit import audit_store
     from ..models import AuditEntry
@@ -368,6 +369,7 @@ def delete_me(
             pass
         db.delete(user)
         db.commit()
+    return Response(status_code=204)
 
 # -- Email preferences ----------------------------------------------------------
 
@@ -573,11 +575,11 @@ def gdpr_export(
     }
 
 
-@router.delete("/me/gdpr-erase", status_code=204)
+@router.delete("/me/gdpr-erase", status_code=204, response_class=Response)
 def gdpr_erase(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     """Permanently erase all data for the current user across every table.
 
     GDPR Article 17 — Right to Erasure ('right to be forgotten').
@@ -678,6 +680,7 @@ def gdpr_erase(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Erasure failed — partial deletion may have occurred")
+    return Response(status_code=204)
 
 
 @router.get("/me/unsubscribe/{token}", include_in_schema=False)

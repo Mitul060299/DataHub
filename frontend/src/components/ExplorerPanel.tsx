@@ -345,21 +345,37 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
                 ) : vizList.length === 0 ? (
                   <div style={{ fontSize: 11, color: "var(--tx2)", padding: "6px 2px", fontStyle: "italic" }}>No charts yet — ask AI to create one</div>
                 ) : (
-                  vizList.map((viz) => (
-                    <button
-                      key={viz.id}
-                      onClick={() => window.dispatchEvent(new CustomEvent("datahub:dashboard:focus-viz", { detail: viz.id }))}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 7, width: "100%",
-                        padding: "5px 6px", marginBottom: 3, borderRadius: 6,
-                        border: "1px solid var(--bd)", background: "var(--bg3)",
-                        cursor: "pointer", textAlign: "left",
-                      }}
-                    >
-                      <span style={{ flex: 1, fontSize: 11, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{viz.name}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--tx2)", background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 4, padding: "1px 5px", flexShrink: 0, letterSpacing: "0.04em" }}>{viz.chart_type}</span>
-                    </button>
-                  ))
+                  <>
+                    <div style={{ fontSize: 10, color: "var(--tx2)", padding: "2px 0 6px", opacity: 0.7 }}>
+                      Click or drag to add to dashboard
+                    </div>
+                    {vizList.map((viz) => (
+                      <div
+                        key={viz.id}
+                        draggable
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("datahub:dashboard:add-viz", { detail: viz }));
+                          window.dispatchEvent(new CustomEvent("datahub:dashboard:focus-viz", { detail: viz.id }));
+                        }}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "copy";
+                          e.dataTransfer.setData("application/datahub-viz", JSON.stringify(viz));
+                        }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 7, width: "100%",
+                          padding: "5px 6px", marginBottom: 3, borderRadius: 6,
+                          border: "1px solid var(--bd)", background: "var(--bg3)",
+                          cursor: "grab", textAlign: "left", userSelect: "none",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(91,106,240,0.5)"; e.currentTarget.style.background = "rgba(91,106,240,0.08)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--bd)"; e.currentTarget.style.background = "var(--bg3)"; }}
+                      >
+                        <span style={{ fontSize: 14, flexShrink: 0, opacity: 0.5 }}>⠿</span>
+                        <span style={{ flex: 1, fontSize: 11, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{viz.name}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "var(--tx2)", background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 4, padding: "1px 5px", flexShrink: 0, letterSpacing: "0.04em" }}>{viz.chart_type}</span>
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             </div>

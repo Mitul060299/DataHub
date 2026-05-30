@@ -754,6 +754,8 @@ export function DashboardPage({
   const [showSavedViz, setShowSavedViz] = useState(false);
   const [savedVizList, setSavedVizList] = useState<SavedVisualization[]>([]);
   const [savedVizLoading, setSavedVizLoading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const layoutSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCrossFilter = useCallback((value: string, sourceTileId: string) => {
@@ -802,6 +804,34 @@ export function DashboardPage({
       return [...prev, ...buildAutoLayout(newTiles).map((e) => ({ ...e, y: e.y + maxY }))];
     });
   }, [tiles]);
+
+  // Add a saved visualization as a dashboard tile
+  const addVizAsTile = useCallback(async (viz: SavedVisualization) => {
+    if (!id) return;
+    try {
+      const newTile = await addDashboardTile({
+        dashboard_id: id,
+        title: viz.name,
+        chart_type: viz.chart_type,
+        tile_type: "chart",
+        echarts_config: viz.echarts_config as Record<string, unknown>,
+      });
+      setTiles((prev) => [...prev, newTile]);
+    } catch (err) {
+      console.error("addVizAsTile failed:", err);
+    }
+  }, [id]);
+
+  // Listen for viz dropped from the left panel (only when embedded in workspace)
+  useEffect(() => {
+    if (!embedded) return;
+    const handler = (e: Event) => {
+      const viz = (e as CustomEvent<SavedVisualization>).detail;
+      if (viz) void addVizAsTile(viz);
+    };
+    window.addEventListener("datahub:dashboard:add-viz", handler);
+    return () => window.removeEventListener("datahub:dashboard:add-viz", handler);
+  }, [embedded, addVizAsTile]);
 
   const handleDeleteTile = async (tileId: string) => {
     if (!id) return;
@@ -1144,51 +1174,38 @@ ${tileBlocks.join("\n")}
               <button onClick={() => setCrossFilter(null)} title="Clear filter" style={{ background: "none", border: "none", color: "#818CF8", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
             </div>
           )}
-          {dashboard.updated_at && (
-            <span style={{ fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>
-              Updated {timeAgo(dashboard.updated_at)}
-            </span>
-          )}
 
-          <div style={{ display: "flex", gap: 6 }}>
-            {/* Delete dashboard */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+            {/* Edit / Done — always visible, accent-coloured */}
             <button
-              onClick={async () => {
-                if (!window.confirm(`Delete "${dashboard.name}"? This cannot be undone.`)) return;
-                try {
-                  await deleteDashboardV2(id!);
-                  onBack ? onBack() : navigate(-1);
-                } catch {
-                  alert("Failed to delete dashboard");
-                }
+              onClick={() => setEditMode((p) => !p)}
+              style={{
+                ...headerBtnStyle,
+                background: editMode ? primaryColor : "rgba(91,106,240,0.12)",
+                color: editMode ? "#fff" : "#818CF8",
+                borderColor: "rgba(91,106,240,0.4)",
+                fontWeight: 600,
               }}
-              style={{ ...headerBtnStyle, color: "#EF4444", borderColor: "rgba(239,68,68,0.3)" }}
-              title="Delete dashboard"
             >
-              🗑 Delete
+              {editMode ? "✓ Done" : "✎ Edit"}
             </button>
-            {/* Saved charts picker */}
-            {editMode && (
+
+            {/* Arrange (edit mode only, multiple tiles) */}
+            {editMode && tiles.length > 1 && (
               <button
-                onClick={async () => {
-                  setShowSavedViz(true);
-                  setSavedVizLoading(true);
-                  try {
-                    const list = await listVisualizations(propProjectId);
-                    setSavedVizList(list);
-                  } catch { /* ignore */ }
-                  finally { setSavedVizLoading(false); }
-                }}
-                style={{ ...headerBtnStyle, color: "#34D399", borderColor: "rgba(52,211,153,0.3)" }}
-                title="Pin a saved chart"
+                onClick={() => void handleAutoArrange()}
+                disabled={autoArranging}
+                style={{ ...headerBtnStyle, color: autoArranging ? "#5B6AF0" : "#94A3B8" }}
+                title="Auto-arrange tiles"
               >
-                📌 Saved charts
+                {autoArranging ? <span style={{ display: "inline-block", animation: "spin 0.8s linear infinite" }}>⟳</span> : "⊞ Arrange"}
               </button>
             )}
-            {/* Export dropdown */}
+
+            {/* Export */}
             <div style={{ position: "relative" }}>
               <button
-                onClick={() => setShowExportMenu((p) => !p)}
+                onClick={() => { setShowExportMenu((p) => !p); setShowOverflowMenu(false); }}
                 style={headerBtnStyle}
                 title="Export"
               >
@@ -1196,85 +1213,52 @@ ${tileBlocks.join("\n")}
               </button>
               {showExportMenu && (
                 <>
-                  {/* Click-away backdrop */}
-                  <div
-                    style={{ position: "fixed", inset: 0, zIndex: 299 }}
-                    onClick={() => setShowExportMenu(false)}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 6px)",
-                      right: 0,
-                      zIndex: 300,
-                      background: "#0F1117",
-                      border: "1px solid #1E293B",
-                      borderRadius: 10,
-                      padding: 6,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 2,
-                      minWidth: 180,
-                      boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                    }}
-                  >
-                    <button
-                      onClick={() => { setShowExportMenu(false); handlePrint(); }}
-                      style={exportMenuItemStyle}
-                    >
-                      🖨 Print / Save as PDF
+                  <div style={{ position: "fixed", inset: 0, zIndex: 299 }} onClick={() => setShowExportMenu(false)} />
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 300, background: "#0F1117", border: "1px solid #1E293B", borderRadius: 10, padding: 6, display: "flex", flexDirection: "column", gap: 2, minWidth: 180, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
+                    <button onClick={() => { setShowExportMenu(false); handlePrint(); }} style={exportMenuItemStyle}>🖨 Print / Save as PDF</button>
+                    <button onClick={() => { setShowExportMenu(false); exportDashboardCSV(dashboard.name, tiles); }} style={exportMenuItemStyle}>📊 Export chart data (CSV)</button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* ··· overflow menu */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => { setShowOverflowMenu((p) => !p); setShowExportMenu(false); }}
+                style={headerBtnStyle}
+                title="More options"
+              >
+                ···
+              </button>
+              {showOverflowMenu && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 299 }} onClick={() => setShowOverflowMenu(false)} />
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 300, background: "#0F1117", border: "1px solid #1E293B", borderRadius: 10, padding: 6, display: "flex", flexDirection: "column", gap: 2, minWidth: 190, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
+                    {editMode && (
+                      <button onClick={() => { setShowOverflowMenu(false); setShowContentEditor(true); }} style={exportMenuItemStyle}>+ Add text / image block</button>
+                    )}
+                    <button onClick={() => { setShowOverflowMenu(false); setFilterBarVisible((p) => !p); }} style={{ ...exportMenuItemStyle, color: (filterBarVisible || activeFilters.length > 0) ? "#818CF8" : undefined }}>
+                      {activeFilters.length > 0 ? `⧩ Filters (${activeFilters.length})` : "⧩ Filter"}
                     </button>
+                    <button onClick={() => { setShowOverflowMenu(false); setShowShare(true); }} style={exportMenuItemStyle}>🔗 Share</button>
+                    <button onClick={() => { setShowOverflowMenu(false); setShowSettings(true); }} style={exportMenuItemStyle}>⚙ Settings</button>
+                    <div style={{ height: 1, background: "#1E293B", margin: "4px 0" }} />
                     <button
-                      onClick={() => { setShowExportMenu(false); exportDashboardCSV(dashboard.name, tiles); }}
-                      style={exportMenuItemStyle}
+                      onClick={async () => {
+                        setShowOverflowMenu(false);
+                        if (!window.confirm(`Delete "${dashboard.name}"? This cannot be undone.`)) return;
+                        try { await deleteDashboardV2(id!); onBack ? onBack() : navigate(-1); }
+                        catch { alert("Failed to delete dashboard"); }
+                      }}
+                      style={{ ...exportMenuItemStyle, color: "#EF4444" }}
                     >
-                      📊 Export chart data (CSV)
+                      🗑 Delete dashboard
                     </button>
                   </div>
                 </>
               )}
             </div>
-            <button
-              onClick={() => setFilterBarVisible((p) => !p)}
-              style={{
-                ...headerBtnStyle,
-                background: filterBarVisible ? "rgba(91,106,240,0.15)" : undefined,
-                color: filterBarVisible ? "#818CF8" : undefined,
-                borderColor: (filterBarVisible || activeFilters.length > 0) ? "rgba(91,106,240,0.4)" : undefined,
-              }}
-              title="Toggle filter bar"
-            >
-              {activeFilters.length > 0 ? `⧩ Filters (${activeFilters.length})` : "⧩ Filter"}
-            </button>
-            <button onClick={() => setShowShare(true)} style={headerBtnStyle} title="Share">🔗 Share</button>
-            <button onClick={() => setShowSettings(true)} style={headerBtnStyle} title="Settings">⚙</button>
-            <button
-              onClick={() => setShowGenerateModal(true)}
-              style={{ ...headerBtnStyle, color: "#818CF8", borderColor: "rgba(129,140,248,0.3)" }}
-              title="Generate layout with AI"
-            >
-              ✦ Generate
-            </button>
-            {editMode && tiles.length > 1 && (
-              <button
-                onClick={() => void handleAutoArrange()}
-                disabled={autoArranging}
-                style={{ ...headerBtnStyle, color: autoArranging ? "#5B6AF0" : "#94A3B8" }}
-                title="Auto-arrange tiles with AI"
-              >
-                {autoArranging ? (
-                  <span style={{ display: "inline-block", animation: "spin 0.8s linear infinite" }}>⟳</span>
-                ) : "⊞ Arrange"}
-              </button>
-            )}
-            {editMode && (
-              <button onClick={() => setShowContentEditor(true)} style={{ ...headerBtnStyle, color: "#818CF8" }} title="Add content block">✦ Add</button>
-            )}            <button
-              onClick={() => setEditMode((p) => !p)}
-              style={{ ...headerBtnStyle, background: editMode ? primaryColor : undefined, color: editMode ? "#fff" : undefined }}
-            >
-              {editMode ? "✓ Done" : "✎ Edit"}
-            </button>
           </div>
         </header>
 
@@ -1287,58 +1271,81 @@ ${tileBlocks.join("\n")}
           />
         )}
 
+        {/* View-mode hint banner */}
+        {!editMode && tiles.length > 0 && (
+          <div style={{ padding: "5px 16px", background: "rgba(91,106,240,0.06)", borderBottom: "1px solid rgba(91,106,240,0.12)", fontSize: 11, color: "#475569", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span>View mode</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>Click <strong style={{ color: "#818CF8" }}>Edit</strong> to rearrange, resize, or add tiles · Drag a chart from the left panel to pin it</span>
+          </div>
+        )}
+
         {/* Tiles grid */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+        <div
+          style={{ flex: 1, overflowY: "auto", padding: 16, position: "relative", border: isDragOver ? "2px dashed rgba(91,106,240,0.6)" : "2px solid transparent", borderRadius: isDragOver ? 10 : 0, transition: "border 0.15s" }}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setIsDragOver(true); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+            const raw = e.dataTransfer.getData("application/datahub-viz");
+            if (!raw) return;
+            try {
+              const viz: SavedVisualization = JSON.parse(raw) as SavedVisualization;
+              void addVizAsTile(viz);
+            } catch { /* ignore bad payload */ }
+          }}
+        >
+          {isDragOver && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(91,106,240,0.08)", borderRadius: 8, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+              <span style={{ fontSize: 14, color: "#818CF8", fontWeight: 600, background: "#0F172A", padding: "8px 18px", borderRadius: 8, border: "1px solid rgba(91,106,240,0.4)" }}>Drop to add chart</span>
+            </div>
+          )}
+
           {tiles.length === 0 ? (
-            <div style={{ maxWidth: 480, margin: "60px auto 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
-              {/* Empty illustration */}
-              <div style={{ width: 72, height: 72, borderRadius: 20, background: "rgba(91,106,240,0.1)", border: "1px solid rgba(91,106,240,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
+            <div style={{ maxWidth: 460, margin: "40px auto 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
+              <div style={{ width: 60, height: 60, borderRadius: 16, background: "rgba(91,106,240,0.1)", border: "1px solid rgba(91,106,240,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, marginBottom: 16 }}>
                 📊
               </div>
-              <div style={{ textAlign: "center" }}>
-                <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#E2E8F0" }}>
-                  Dashboard is empty
-                </p>
-                <p style={{ margin: 0, fontSize: 13, color: "#64748B", lineHeight: 1.6 }}>
-                  Generate a full layout with AI, pick a template, or add individual tiles manually.
-                </p>
+              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#E2E8F0", textAlign: "center" }}>Dashboard is empty</p>
+              <p style={{ margin: "0 0 28px", fontSize: 12, color: "#64748B", lineHeight: 1.6, textAlign: "center" }}>Add charts from the left panel, or ask the AI agent to build the whole thing.</p>
+
+              {/* Two-path layout */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%", marginBottom: 16 }}>
+                {/* Left path */}
+                <div style={{ border: "1px solid #1E293B", borderRadius: 10, padding: "16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>←</span>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#E2E8F0" }}>From the left panel</p>
+                  <p style={{ margin: 0, fontSize: 11, color: "#64748B", lineHeight: 1.5 }}>Click or drag any chart from <strong style={{ color: "#94A3B8" }}>VISUALIZATIONS</strong> to pin it here instantly.</p>
+                </div>
+                {/* Right path */}
+                <div style={{ border: "1px solid #1E293B", borderRadius: 10, padding: "16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>→</span>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#E2E8F0" }}>Ask the AI agent</p>
+                  <p style={{ margin: 0, fontSize: 11, color: "#64748B", lineHeight: 1.5 }}>Tell the AI what you want to analyse — it will build charts and pin them for you.</p>
+                </div>
               </div>
-              {/* Primary CTA */}
+
+              {/* Generate shortcut → pre-fills AI chat */}
               <button
-                onClick={() => setShowGenerateModal(true)}
-                style={{
-                  border: "1px solid rgba(129,140,248,0.4)",
-                  borderRadius: 12,
-                  background: "rgba(91,106,240,0.1)",
-                  color: "#818CF8",
-                  padding: "12px 28px",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
+                onClick={() => {
+                  const datasetName = (dashboard as unknown as { dataset_name?: string }).dataset_name ?? "this dataset";
+                  window.dispatchEvent(new CustomEvent("datahub:chat:send-prompt", {
+                    detail: { prompt: `Generate a full dashboard for ${datasetName}` },
+                  }));
                 }}
+                style={{ width: "100%", border: "1px solid rgba(129,140,248,0.4)", borderRadius: 10, background: "rgba(91,106,240,0.1)", color: "#818CF8", padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
               >
-                ✦ Generate with AI
+                ✦ Generate dashboard with AI →
               </button>
-              {/* Secondary options */}
-              <div style={{ display: "flex", gap: 10, width: "100%" }}>
-                <button
-                  onClick={() => { setEditMode(true); setShowContentEditor(true); }}
-                  style={{ flex: 1, border: "1px solid #1E293B", borderRadius: 10, background: "transparent", color: "#94A3B8", padding: "9px 0", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
-                >
-                  + Add content tile
-                </button>
-                <button
-                  onClick={() => setEditMode(true)}
-                  style={{ flex: 1, border: "1px solid #1E293B", borderRadius: 10, background: "transparent", color: "#94A3B8", padding: "9px 0", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
-                >
-                  ✎ Edit mode
-                </button>
-              </div>
+
+              {/* Content block fallback */}
+              <button
+                onClick={() => { setEditMode(true); setShowContentEditor(true); }}
+                style={{ width: "100%", border: "1px solid #1E293B", borderRadius: 10, background: "transparent", color: "#64748B", padding: "9px 0", fontSize: 12, cursor: "pointer" }}
+              >
+                + Add text / image block
+              </button>
             </div>
           ) : (
             <ResponsiveGridLayout
@@ -1417,52 +1424,6 @@ ${tileBlocks.join("\n")}
           }}
           onClose={() => setShowGenerateModal(false)}
         />
-      )}
-
-      {/* Saved Viz Picker */}
-      {showSavedViz && (
-        <div
-          onClick={() => setShowSavedViz(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 4000, display: "flex", alignItems: "center", justifyContent: "center" }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: "#0F172A", border: "1px solid #1E293B", borderRadius: 14, width: 520, maxHeight: "70vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
-          >
-            <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid #1E293B", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0" }}>📌 Pin a saved chart</span>
-              <button onClick={() => setShowSavedViz(false)} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", fontSize: 18 }}>×</button>
-            </div>
-            <div style={{ overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-              {savedVizLoading ? (
-                <p style={{ color: "#64748B", textAlign: "center", fontSize: 13 }}>Loading…</p>
-              ) : savedVizList.length === 0 ? (
-                <p style={{ color: "#64748B", textAlign: "center", fontSize: 13 }}>No saved charts found. Create charts in the Pipeline tab and save them.</p>
-              ) : savedVizList.map((viz) => (
-                <button
-                  key={viz.id}
-                  onClick={async () => {
-                    if (!id) return;
-                    const newTile = await addDashboardTile({
-                      dashboard_id: id,
-                      title: viz.name,
-                      chart_type: viz.chart_type,
-                      tile_type: "chart",
-                      echarts_config: viz.echarts_config as Record<string, unknown>,
-                    });
-                    setTiles((prev) => [...prev, newTile]);
-                    setRglLayout((prev) => [...prev, { i: newTile.id, x: 0, y: Infinity, w: 6, h: 4 }]);
-                    setShowSavedViz(false);
-                  }}
-                  style={{ background: "rgba(91,106,240,0.07)", border: "1px solid #1E293B", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left", color: "#E2E8F0" }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{viz.name}</span>
-                  <span style={{ fontSize: 11, color: "#64748B", marginLeft: 8, textTransform: "capitalize" }}>{viz.chart_type}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
       )}
 
       {editingTile && (

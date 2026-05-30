@@ -20,6 +20,21 @@ window.addEventListener("error", (e) => {
 });
 window.addEventListener("unhandledrejection", (e) => {
   const msg = (e.reason instanceof Error ? e.reason.stack : String(e.reason)) ?? "unhandledrejection";
+  // Auto-reload on stale-chunk 404 — happens when a new deploy ships while the
+  // user still has an old index.html cached.  Guard with sessionStorage to avoid
+  // an infinite reload loop if the asset is genuinely missing.
+  const isChunkError = e.reason instanceof Error && (
+    /failed to fetch dynamically imported module/i.test(e.reason.message) ||
+    /importing a module script failed/i.test(e.reason.message) ||
+    /error loading dynamically imported module/i.test(e.reason.message)
+  );
+  if (isChunkError) {
+    if (!sessionStorage.getItem("datahub_chunk_reload")) {
+      sessionStorage.setItem("datahub_chunk_reload", "1");
+      window.location.reload();
+    }
+    return; // swallow — don't log/buffer this as an app error
+  }
   try { sessionStorage.setItem("datahub_last_rejection", msg); } catch { /* ignore */ }
   console.error("[datahub unhandled rejection]", msg);
   _pendingErrors.push({ error: e.reason ?? new Error("unhandledrejection"), info: { stack: msg } });

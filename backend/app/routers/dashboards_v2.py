@@ -54,6 +54,7 @@ def create_dashboard(
         description=payload.description,
         layout=payload.layout,
         theme=payload.theme,
+        project_id=payload.project_id,
     )
 
 
@@ -453,6 +454,20 @@ def update_dashboard(
     if updated is None:
         raise HTTPException(status_code=404, detail="Dashboard not found")
     return updated
+
+
+@router.delete("/{dashboard_id}", status_code=204, response_class=Response)
+def delete_dashboard(
+    dashboard_id: str,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    role = get_current_role(authorization)
+    require_role("editor", role)
+    user_id = get_current_subject(authorization)
+    success = DashboardsV2Service.delete_dashboard(user_id=user_id, dashboard_id=dashboard_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+    return Response(status_code=204)
 
 
 @router.delete("/{dashboard_id}/tiles/{tile_id}")

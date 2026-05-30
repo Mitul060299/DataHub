@@ -868,6 +868,7 @@ export async function createDashboardV2(payload: {
   name: string;
   description?: string;
   layout?: Record<string, unknown>;
+  project_id?: string;
 }) {
   const normalized = { ...payload };
   const response = await api.post("/dashboards", normalized);
@@ -938,6 +939,10 @@ export async function publishDashboardV2(dashboardId: string, expiresInHours?: n
 export async function unpublishDashboardV2(dashboardId: string) {
   const response = await api.delete(`/dashboards/${dashboardId}/publish`);
   return response.data as { success: boolean; dashboard_id: string };
+}
+
+export async function deleteDashboardV2(dashboardId: string): Promise<void> {
+  await api.delete(`/dashboards/${dashboardId}`);
 }
 
 export async function fetchDashboardById(dashboardId: string) {

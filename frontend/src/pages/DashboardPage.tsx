@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { listVisualizations, type SavedVisualization } from "../api";
+import { deleteDashboardV2 } from "../api";
 import GridLayout, { WidthProvider, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -718,8 +720,19 @@ const primaryBtnStyle: CSSProperties = {
 
 // ---------- Main page ----------
 
-export function DashboardPage() {
-  const { id } = useParams<{ id: string }>();
+export function DashboardPage({
+  dashboardId: propDashboardId,
+  onBack,
+  embedded = false,
+  projectId: propProjectId,
+}: {
+  dashboardId?: string;
+  onBack?: () => void;
+  embedded?: boolean;
+  projectId?: string;
+} = {}) {
+  const { id: urlId } = useParams<{ id: string }>();
+  const id = propDashboardId ?? urlId;
   const navigate = useNavigate();
   const [dashboard, setDashboard] = useState<DashboardV2 | null>(null);
   const [tiles, setTiles] = useState<DashboardV2Tile[]>([]);
@@ -738,6 +751,9 @@ export function DashboardPage() {
   const [crossFilter, setCrossFilter] = useState<{ value: string; sourceTileId: string } | null>(null);
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [filterBarVisible, setFilterBarVisible] = useState(false);
+  const [showSavedViz, setShowSavedViz] = useState(false);
+  const [savedVizList, setSavedVizList] = useState<SavedVisualization[]>([]);
+  const [savedVizLoading, setSavedVizLoading] = useState(false);
   const layoutSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCrossFilter = useCallback((value: string, sourceTileId: string) => {
@@ -1050,13 +1066,13 @@ ${tileBlocks.join("\n")}
 
   if (loading) {
     return (
-      <main style={{ padding: 32, color: "#94A3B8", textAlign: "center" }}>Loading dashboard…</main>
+      <div style={{ padding: 32, color: "#94A3B8", textAlign: "center" }}>Loading dashboard…</div>
     );
   }
 
   if (error || !dashboard) {
     return (
-      <main style={{ padding: 32, color: "#EF4444", textAlign: "center" }}>{error ?? "Dashboard not found"}</main>
+      <div style={{ padding: 32, color: "#EF4444", textAlign: "center" }}>{error ?? "Dashboard not found"}</div>
     );
   }
 
@@ -1087,7 +1103,7 @@ ${tileBlocks.join("\n")}
         </div>
       )}
 
-      <main style={{ minHeight: "100%", background: "var(--bg0)", color: "var(--tx0)", display: "flex", flexDirection: "column" }}>
+      <main style={{ minHeight: embedded ? "100%" : "100%", height: embedded ? "100%" : undefined, background: "var(--bg0)", color: "var(--tx0)", display: "flex", flexDirection: "column", overflow: embedded ? "hidden" : undefined }}>
         {/* Header */}
         <header
           className="no-print"
@@ -1102,8 +1118,8 @@ ${tileBlocks.join("\n")}
         >
           {/* Back to workspace */}
           <button
-            onClick={() => navigate(-1)}
-            title="Back to workspace"
+            onClick={() => onBack ? onBack() : navigate(-1)}
+            title="Back to dashboard list"
             style={{ background: "transparent", border: "none", color: "#475569", cursor: "pointer", padding: "4px 6px", borderRadius: 6, fontSize: 16, lineHeight: 1, flexShrink: 0, display: "flex", alignItems: "center" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#94A3B8"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; }}
@@ -1135,6 +1151,40 @@ ${tileBlocks.join("\n")}
           )}
 
           <div style={{ display: "flex", gap: 6 }}>
+            {/* Delete dashboard */}
+            <button
+              onClick={async () => {
+                if (!window.confirm(`Delete "${dashboard.name}"? This cannot be undone.`)) return;
+                try {
+                  await deleteDashboardV2(id!);
+                  onBack ? onBack() : navigate(-1);
+                } catch {
+                  alert("Failed to delete dashboard");
+                }
+              }}
+              style={{ ...headerBtnStyle, color: "#EF4444", borderColor: "rgba(239,68,68,0.3)" }}
+              title="Delete dashboard"
+            >
+              🗑 Delete
+            </button>
+            {/* Saved charts picker */}
+            {editMode && (
+              <button
+                onClick={async () => {
+                  setShowSavedViz(true);
+                  setSavedVizLoading(true);
+                  try {
+                    const list = await listVisualizations(propProjectId);
+                    setSavedVizList(list);
+                  } catch { /* ignore */ }
+                  finally { setSavedVizLoading(false); }
+                }}
+                style={{ ...headerBtnStyle, color: "#34D399", borderColor: "rgba(52,211,153,0.3)" }}
+                title="Pin a saved chart"
+              >
+                📌 Saved charts
+              </button>
+            )}
             {/* Export dropdown */}
             <div style={{ position: "relative" }}>
               <button
@@ -1367,6 +1417,52 @@ ${tileBlocks.join("\n")}
           }}
           onClose={() => setShowGenerateModal(false)}
         />
+      )}
+
+      {/* Saved Viz Picker */}
+      {showSavedViz && (
+        <div
+          onClick={() => setShowSavedViz(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 4000, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#0F172A", border: "1px solid #1E293B", borderRadius: 14, width: 520, maxHeight: "70vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+          >
+            <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid #1E293B", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0" }}>📌 Pin a saved chart</span>
+              <button onClick={() => setShowSavedViz(false)} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", fontSize: 18 }}>×</button>
+            </div>
+            <div style={{ overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              {savedVizLoading ? (
+                <p style={{ color: "#64748B", textAlign: "center", fontSize: 13 }}>Loading…</p>
+              ) : savedVizList.length === 0 ? (
+                <p style={{ color: "#64748B", textAlign: "center", fontSize: 13 }}>No saved charts found. Create charts in the Pipeline tab and save them.</p>
+              ) : savedVizList.map((viz) => (
+                <button
+                  key={viz.id}
+                  onClick={async () => {
+                    if (!id) return;
+                    const newTile = await addDashboardTile({
+                      dashboard_id: id,
+                      title: viz.name,
+                      chart_type: viz.chart_type,
+                      tile_type: "chart",
+                      echarts_config: viz.echarts_config as Record<string, unknown>,
+                    });
+                    setTiles((prev) => [...prev, newTile]);
+                    setRglLayout((prev) => [...prev, { i: newTile.id, x: 0, y: Infinity, w: 6, h: 4 }]);
+                    setShowSavedViz(false);
+                  }}
+                  style={{ background: "rgba(91,106,240,0.07)", border: "1px solid #1E293B", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left", color: "#E2E8F0" }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{viz.name}</span>
+                  <span style={{ fontSize: 11, color: "#64748B", marginLeft: 8, textTransform: "capitalize" }}>{viz.chart_type}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {editingTile && (

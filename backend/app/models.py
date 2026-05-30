@@ -223,6 +223,7 @@ class DashboardV2Create(BaseModel):
     description: str | None = None
     layout: dict[str, Any] = Field(default_factory=dict)
     theme: dict[str, Any] = Field(default_factory=dict)
+    project_id: str | None = None
 
 
 class DashboardV2Update(BaseModel):

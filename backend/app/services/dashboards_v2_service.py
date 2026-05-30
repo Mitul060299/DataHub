@@ -146,6 +146,7 @@ class DashboardsV2Service:
         description: str | None,
         layout: dict,
         theme: dict | None = None,
+        project_id: str | None = None,
     ) -> DashboardV2Out:
         db = SessionLocal()
         try:
@@ -153,6 +154,7 @@ class DashboardsV2Service:
                 id=str(uuid.uuid4()),
                 user_id=user_id,
                 dataset_id=dataset_id,
+                project_id=project_id,
                 name=name.strip(),
                 description=description,
                 layout=layout or {},
@@ -277,6 +279,24 @@ class DashboardsV2Service:
                 .all()
             )
             return cls._dashboard_out(dashboard, tiles)
+        finally:
+            db.close()
+
+    @classmethod
+    def delete_dashboard(cls, user_id: str, dashboard_id: str) -> bool:
+        db = SessionLocal()
+        try:
+            dashboard = (
+                db.query(DashboardV2DB)
+                .filter(DashboardV2DB.id == dashboard_id)
+                .filter(DashboardV2DB.user_id == user_id)
+                .first()
+            )
+            if not dashboard:
+                return False
+            db.delete(dashboard)
+            db.commit()
+            return True
         finally:
             db.close()
 

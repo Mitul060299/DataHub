@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
 import type { Dataset } from "../contexts/WorkspaceContext";
@@ -7,10 +6,10 @@ import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { IconDownload, IconTable } from "./Icons";
 import { DataTable } from "./DataTable";
 import type { WorkspaceMode } from "../pages/WorkspacePage";
-
+import { DashboardPage } from "../pages/DashboardPage";
 import { PipelineGraphTab } from "./PipelineGraphTab";
 import { PipelineSection } from "./PipelineSection";
-import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
+import { api, createDashboardV2, deleteDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportDatasetTableau, fetchDatasetPage, fetchSnapshotPreview, fetchStepPreview, listDashboardsV2 } from "../api";
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 import { CrossStepInputPanel } from "./CrossStepInputPanel";
 
@@ -85,7 +84,6 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
   const { steps, liveArtifact } = usePipelineContext();
   const { exportPipeline } = usePipeline();
   const { activeLanes, setActiveDataset } = useWorkspaceContext();
-  const navigate = useNavigate();
 
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
@@ -107,6 +105,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
   const [dashboards, setDashboards] = useState<DashItem[]>([]);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashCreating, setDashCreating] = useState(false);
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
 
   useEffect(() => {
     if (mode !== "dashboard") return;
@@ -130,8 +129,8 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
     setDashCreating(true);
     setDashError(null);
     try {
-      const dash = await createDashboardV2({ name: "Untitled Dashboard" });
-      navigate(`/dashboard/${dash.id}`);
+      const dash = await createDashboardV2({ name: "Untitled Dashboard", project_id: projectId || undefined });
+      setSelectedDashboardId(dash.id);
     } catch (err) {
       console.error("[CanvasPanel] createDashboardV2 failed:", err);
       setDashError("Failed to create dashboard. Check your connection and try again.");
@@ -810,7 +809,19 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
             </>
           )
         ) : mode === "dashboard" ? (
-          /* ── Dashboard V2 list picker ───────────────────────────────────── */
+          /* ── Dashboard V2 ─────────────────────────────────────────────── */
+          selectedDashboardId ? (
+            /* Inline dashboard view — stays inside the 3-panel workspace */
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <DashboardPage
+                dashboardId={selectedDashboardId}
+                projectId={projectId}
+                embedded
+                onBack={() => setSelectedDashboardId(null)}
+              />
+            </div>
+          ) : (
+          /* ── Dashboard list picker ───────────────────────────────────── */
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -868,7 +879,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
                 {dashboards.map((dash) => (
                   <div
                     key={dash.id}
-                    onClick={() => navigate(`/dashboard/${dash.id}`)}
+                    onClick={() => setSelectedDashboardId(dash.id)}
                     style={{
                       border: "1px solid var(--bd2)",
                       borderRadius: 10,
@@ -891,12 +902,29 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
                         {dash.is_published ? <span style={{ marginLeft: 8, color: "var(--gr)", fontWeight: 600 }}>● Live</span> : null}
                       </div>
                     </div>
+                    <button
+                      title="Delete dashboard"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!window.confirm(`Delete "${dash.name}"? This cannot be undone.`)) return;
+                        try {
+                          await deleteDashboardV2(dash.id);
+                          setDashboards((prev) => prev.filter((d) => d.id !== dash.id));
+                        } catch {
+                          alert("Failed to delete dashboard");
+                        }
+                      }}
+                      style={{ background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, color: "#EF4444", cursor: "pointer", padding: "4px 8px", fontSize: 12, flexShrink: 0 }}
+                    >
+                      🗑
+                    </button>
                     <span style={{ fontSize: 16, color: "var(--tx2)", flexShrink: 0 }}>›</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
+          ) /* end list picker */
         ) : null}
       </div>
     </section>

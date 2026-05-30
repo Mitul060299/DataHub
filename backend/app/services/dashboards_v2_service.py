@@ -224,8 +224,9 @@ class DashboardsV2Service:
             if source_table:
                 qs["source_table"] = source_table
 
+            tile_id = str(uuid.uuid4())
             tile = DashboardTileDB(
-                id=str(uuid.uuid4()),
+                id=tile_id,
                 dashboard_id=dashboard_id,
                 dataset_id=dataset_id,
                 title=title.strip(),
@@ -245,8 +246,35 @@ class DashboardsV2Service:
             )
             db.add(tile)
             db.commit()
-            db.refresh(tile)
-            return cls._tile_out(tile)
+            try:
+                db.refresh(tile)
+                return cls._tile_out(tile)
+            except ProgrammingError:
+                # sparkline_data / delta_pct columns may not exist yet on this
+                # deployment (startup migration pending). Build the response from
+                # the values we already have in memory — all fields except
+                # created_at (DB server default) are safe since we set them above.
+                db.rollback()
+                return DashboardTileOut(
+                    id=tile_id,
+                    dashboard_id=dashboard_id,
+                    dataset_id=dataset_id,
+                    title=title.strip(),
+                    chart_type=chart_type.strip(),
+                    query_spec=qs,
+                    layout=layout or {},
+                    tile_type=tile_type,
+                    echarts_config=echarts_config,
+                    table_data=table_data,
+                    metric_value=metric_value,
+                    metric_label=metric_label,
+                    metric_trend=metric_trend,
+                    metric_threshold=metric_threshold,
+                    sparkline_data=sparkline_data,
+                    delta_pct=delta_pct,
+                    snapshot_id=snapshot_id,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
         finally:
             db.close()
 

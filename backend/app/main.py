@@ -180,6 +180,9 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_label TEXT",
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_trend TEXT",
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_threshold JSONB",
+        # 0084 — dashboard_tiles sparkline / delta columns
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS sparkline_data JSONB",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS delta_pct DOUBLE PRECISION",
         # 0027 — dashboard_access table
         """CREATE TABLE IF NOT EXISTS dashboard_access (
             id                  TEXT PRIMARY KEY,

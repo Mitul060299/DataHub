@@ -180,9 +180,6 @@ def _apply_startup_ddl() -> None:
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_label TEXT",
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_trend TEXT",
         "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS metric_threshold JSONB",
-        # 0084 — dashboard_tiles sparkline / delta columns
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS sparkline_data JSONB",
-        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS delta_pct DOUBLE PRECISION",
         # 0027 — dashboard_access table
         """CREATE TABLE IF NOT EXISTS dashboard_access (
             id                  TEXT PRIMARY KEY,
@@ -634,6 +631,24 @@ def _apply_startup_ddl() -> None:
             updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_saml_idp_configs_org_id ON saml_idp_configs (org_id)",
+        # audit_logs — created by Alembic 0002 without project_id; ensure the
+        # table and the project_id column both exist on every deployment.
+        """CREATE TABLE IF NOT EXISTS audit_logs (
+            id         VARCHAR PRIMARY KEY,
+            action     VARCHAR NOT NULL,
+            actor      VARCHAR NOT NULL,
+            target     VARCHAR NOT NULL,
+            metadata   JSONB   NOT NULL DEFAULT '{}',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_audit_logs_actor      ON audit_logs (actor)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at)",
+        "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id) ON DELETE SET NULL",
+        "CREATE INDEX IF NOT EXISTS idx_audit_logs_project_id ON audit_logs (project_id)",
+        # 0084 — dashboard_tiles sparkline / delta columns (also in 0084 Alembic but
+        # startup DDL is needed so Render picks them up without a manual migration run)
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS sparkline_data JSONB",
+        "ALTER TABLE dashboard_tiles ADD COLUMN IF NOT EXISTS delta_pct DOUBLE PRECISION",
     ]
     try:
         from sqlalchemy import text as _text

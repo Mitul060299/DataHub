@@ -70,6 +70,29 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     }
   }, [steps, editPanelStepId]);
 
+  // ── Graph-node action events ────────────────────────────────────────────
+  // ✏️ Edit SQL dispatched by OperationNode hover button
+  useEffect(() => {
+    function handleEditSql(e: Event) {
+      const { stepId } = (e as CustomEvent<{ stepId: string }>).detail ?? {};
+      if (stepId) setEditPanelStepId(stepId);
+    }
+    window.addEventListener("datahub:pipeline:edit-sql", handleEditSql);
+    return () => window.removeEventListener("datahub:pipeline:edit-sql", handleEditSql);
+  }, []);
+
+  // ⫰ Fork-at dispatched by OperationNode hover button
+  useEffect(() => {
+    function handleForkAt(e: Event) {
+      const { stepId } = (e as CustomEvent<{ stepId: string }>).detail ?? {};
+      if (stepId) handleForkAtStep(stepId);
+    }
+    window.addEventListener("datahub:pipeline:fork-at", handleForkAt);
+    return () => window.removeEventListener("datahub:pipeline:fork-at", handleForkAt);
+  // handleForkAtStep is stable within the render (uses usePipelineContext refs)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Ref kept for legacy purposes but no longer wired to window events
   const undoFromRef = useRef<((stepId: string) => void) | null>(null);
 
@@ -630,34 +653,133 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
               </div>
             );
           })()}
-          <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", overflow: "hidden" }}>
-            <div style={{ borderBottom: "1px solid var(--bd)", padding: "6px 8px", fontSize: 11, letterSpacing: "0.08em", color: "var(--tx1)", fontWeight: 600 }}>
-              APPLIED STEPS
+          {/* ── Live artifact pill ─────────────────────────────────────── */}
+          {liveArtifact && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "var(--r8)", padding: "6px 10px", fontSize: 11 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gr)", flexShrink: 0, boxShadow: "0 0 6px var(--gr)", animation: "pipeline-glow 2s ease-in-out infinite" }} />
+              <span style={{ color: "var(--gr)", fontWeight: 600 }}>Live</span>
+              <span style={{ color: "var(--tx2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{liveArtifact.tableName}</span>
+              <span style={{ color: "var(--tx1)", fontWeight: 600, whiteSpace: "nowrap" }}>{liveArtifact.rowCount.toLocaleString()} rows</span>
             </div>
+          )}
+          {!liveArtifact && steps.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg3)", border: "1px solid var(--bd2)", borderRadius: "var(--r8)", padding: "6px 10px", fontSize: 11, color: "var(--tx2)" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--bd3)", flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>Not run — click ▶ Run Applied Steps to execute</span>
+            </div>
+          )}
 
-            <div style={{ borderBottom: "1px solid var(--bd)", minHeight: 28, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px", color: "var(--tx1)", cursor: "pointer" }}
-              onClick={() => window.dispatchEvent(new CustomEvent("datahub:view:source"))}
-              title="Click to view original source data"
-            >
-              <span style={{ fontSize: 12 }}>📄 Source</span>
-              <span className="mono" style={{ fontSize: 11, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {activeDataset?.name ?? "No dataset"}
+          {/* ── Stats summary bar ─────────────────────────────────────── */}
+          {steps.length > 0 && (() => {
+            const firstRows = steps[0]?.row_count_before ?? null;
+            const lastRows = steps[steps.length - 1]?.row_count_after ?? liveArtifact?.rowCount ?? null;
+            const totalMs = steps.reduce((acc, s) => acc + (s.execution_time_ms ?? 0), 0);
+            const timeLabel = totalMs > 0
+              ? totalMs >= 1000 ? `${(totalMs / 1000).toFixed(1)}s` : `${totalMs}ms`
+              : null;
+            return (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", background: "var(--bg3)", borderRadius: "var(--r8)", padding: "6px 10px", fontSize: 11, color: "var(--tx2)" }}>
+                <span style={{ color: "var(--ac)", fontWeight: 600 }}>{steps.length} {steps.length === 1 ? "step" : "steps"}</span>
+                {firstRows != null && lastRows != null && (
+                  <>
+                    <span style={{ color: "var(--bd3)" }}>·</span>
+                    <span>
+                      <span style={{ color: "var(--tx1)" }}>{firstRows.toLocaleString()}</span>
+                      <span style={{ margin: "0 3px", color: "var(--ac)" }}>→</span>
+                      <span style={{ color: lastRows < firstRows ? "var(--rd)" : "var(--gr)", fontWeight: 600 }}>{lastRows.toLocaleString()}</span>
+                      <span style={{ marginLeft: 2 }}>rows</span>
+                    </span>
+                  </>
+                )}
+                {timeLabel && (
+                  <>
+                    <span style={{ color: "var(--bd3)" }}>·</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><IconClock size={10} />{timeLabel}</span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          <div style={{ border: "1px solid var(--bd2)", borderRadius: "var(--r8)", background: "var(--bg2)", overflow: "hidden" }}>
+            <div style={{ borderBottom: "1px solid var(--bd)", padding: "6px 8px", display: "flex", alignItems: "center", gap: 6, justifyContent: "space-between" }}>
+              <span style={{ fontSize: 11, letterSpacing: "0.08em", color: "var(--tx1)", fontWeight: 600 }}>APPLIED STEPS</span>
+              <span
+                onClick={() => window.dispatchEvent(new CustomEvent("datahub:view:source"))}
+                title="Click to view original source data"
+                style={{ fontSize: 10, color: "var(--tx2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 5px", borderRadius: 4, background: "var(--bg3)" }}
+              >
+                📄 {activeDataset?.name ?? "Source"}
               </span>
             </div>
 
             {!steps.length ? (
-              <div style={{ minHeight: 36, display: "grid", placeItems: "center", color: "var(--tx2)", fontSize: 12 }}>
-                No steps yet
+              <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--bg3)", display: "grid", placeItems: "center", fontSize: 18 }}>⚡</div>
+                <div style={{ color: "var(--tx1)", fontSize: 12, fontWeight: 600 }}>No transforms yet</div>
+                <div style={{ color: "var(--tx2)", fontSize: 11, lineHeight: 1.5 }}>Use the AI assistant to clean,<br />filter, and reshape your data</div>
               </div>
             ) : (
-              /* Per-step rows used to be rendered here. They have been moved
-                 onto the graph nodes themselves (edit / fork / rename /
-                 delete buttons live on each operation node) so that adding
-                 more steps never pushes the Run / Import / Export footer
-                 out of view. We keep a tiny summary line so users still see
-                 the step count at a glance. */
-              <div style={{ minHeight: 36, display: "grid", placeItems: "center", color: "var(--tx2)", fontSize: 12, padding: "8px 10px", textAlign: "center", lineHeight: 1.4 }}>
-                {steps.length} {steps.length === 1 ? "step" : "steps"} · click a node in the graph to inspect or edit
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {steps.map((step, idx) => {
+                  const isPaused = appliedThroughStepId != null && (() => {
+                    const thruIdx = steps.findIndex((s) => s.id === appliedThroughStepId);
+                    return idx > thruIdx;
+                  })();
+                  const rowBefore = step.row_count_before ?? null;
+                  const rowAfter = step.row_count_after ?? null;
+                  const label = cleanStepLabel(step.description || step.operation.replace(/_/g, " "));
+                  const isFailed = step.status === "failed";
+                  const lBorderColor = isFailed ? "var(--rd)" : step.status === "completed" ? "var(--gr)" : "var(--bd3)";
+                  return (
+                    <div
+                      key={step.id}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("datahub:pipeline:step-selected", { detail: { id: step.id, stepNumber: step.stepNumber, operation: step.operation, description: step.description, rowsBefore: step.row_count_before, rowsAfter: step.row_count_after } }));
+                        window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: idx } }));
+                      }}
+                      title={isFailed && step.error_message ? step.error_message : label}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 7, padding: "5px 8px",
+                        borderBottom: idx < steps.length - 1 ? "1px solid var(--bd)" : "none",
+                        borderLeft: `2px solid ${lBorderColor}`,
+                        background: isFailed ? "rgba(244,63,94,0.04)" : "transparent",
+                        opacity: isPaused ? 0.4 : 1,
+                        cursor: "pointer",
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = isFailed ? "rgba(244,63,94,0.08)" : "var(--bg3)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = isFailed ? "rgba(244,63,94,0.04)" : "transparent"; }}
+                    >
+                      <span style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--bg3)", border: "1px solid var(--bd2)", display: "grid", placeItems: "center", fontSize: 9, fontWeight: 700, color: "var(--tx2)", flexShrink: 0 }}>
+                        {step.stepNumber}
+                      </span>
+                      <span style={{ color: isFailed ? "var(--rd)" : "var(--tx2)", flexShrink: 0, display: "grid", placeItems: "center" }}>
+                        {getOperationIcon(step.operation)}
+                      </span>
+                      <span style={{ flex: 1, fontSize: 12, color: isFailed ? "var(--rd)" : "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {label}
+                      </span>
+                      {rowAfter != null && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: rowBefore != null && rowAfter < rowBefore ? "var(--rd)" : "var(--gr)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                          {rowBefore != null && rowAfter !== rowBefore
+                            ? `${rowAfter < rowBefore ? "−" : "+"}${Math.abs(rowAfter - rowBefore).toLocaleString()}`
+                            : rowAfter.toLocaleString()}
+                        </span>
+                      )}
+                      {isPaused && <span style={{ fontSize: 9, color: "var(--tx2)", background: "var(--bg3)", padding: "1px 4px", borderRadius: 3, flexShrink: 0 }}>paused</span>}
+                      <button
+                        title="Preview this step's output"
+                        onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: idx } })); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--tx2)", padding: "2px", display: "grid", placeItems: "center", flexShrink: 0, opacity: 0.6 }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ac)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.6"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" /></svg>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

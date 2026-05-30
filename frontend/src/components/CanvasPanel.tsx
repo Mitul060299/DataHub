@@ -453,7 +453,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
         </div>
 
         {/* Mode-aware right action buttons */}
-        <div style={{ display: "inline-flex", gap: 6, position: "relative" }} ref={dropdownRef}>
+        <div style={{ display: "inline-flex", gap: 6, position: "relative", alignItems: "center" }} ref={dropdownRef}>
           {mode === "pipeline" && (
             <>
               <button className="btn" onClick={onImport} title="Import data into pipeline">
@@ -467,14 +467,6 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
                 }}
               >
                 ⊕ Cross input
-              </button>
-              <button
-                className="btn"
-                disabled={replayingPipeline}
-                onClick={() => { if (onRunPipeline && !replayingPipeline) { void onRunPipeline(); } }}
-                title="Run all pipeline steps"
-              >
-                {replayingPipeline ? "Running…" : "▶ Run"}
               </button>
               <button
                 className="btn"
@@ -494,9 +486,40 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
                   <IconDownload size={14} /> Export
                 </span>
               </button>
+              {/* Separator */}
+              <span style={{ width: 1, height: 20, background: "var(--bd2)", flexShrink: 0 }} />
+              {/* Primary Run CTA */}
+              <button
+                disabled={steps.length === 0 || replayingPipeline}
+                onClick={() => { if (onRunPipeline && !replayingPipeline) { void onRunPipeline(); } }}
+                title="Run all pipeline steps"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "4px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: steps.length === 0 || replayingPipeline ? "not-allowed" : "pointer",
+                  opacity: steps.length === 0 ? 0.5 : 1,
+                  background: replayingPipeline ? "var(--bg3)" : steps.length === 0 ? "var(--bg3)" : "var(--ac)",
+                  border: `1px solid ${replayingPipeline || steps.length === 0 ? "var(--bd2)" : "var(--ach)"}`,
+                  color: replayingPipeline || steps.length === 0 ? "var(--tx2)" : "#fff",
+                  transition: "all 0.15s",
+                }}
+              >
+                {replayingPipeline ? (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ animation: "rp-spin 0.9s linear infinite" }}>
+                      <path d="M21 12a9 9 0 1 1-6.2-8.55" strokeLinecap="round" />
+                    </svg>
+                    <style>{`@keyframes rp-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+                    Running…
+                  </>
+                ) : (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m8 6 10 6-10 6z" /></svg>
+                    Run
+                  </>
+                )}
+              </button>
             </>
           )}
-          {mode === "dashboard" && (
             <button
               className="btn"
               style={{ background: "var(--acl)", borderColor: "var(--acg)", color: "var(--ac)" }}

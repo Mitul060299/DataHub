@@ -119,40 +119,47 @@ export function TopBar() {
 
       <div className="topbar__nav" style={{ display: "flex", justifyContent: "center" }}>
         <nav style={{ display: "inline-flex", alignItems: "center", gap: 22 }}>
-          {tabs.map((tab) => (
-            <Link
-              key={tab.key}
-              to={tab.path}
-              style={{
-                height: 32,
-                borderRadius: 8,
-                background: activeTab === tab.key ? "rgba(91,106,240,0.12)" : "transparent",
-                border: activeTab === tab.key ? "1px solid rgba(91,106,240,0.2)" : "1px solid transparent",
-                color: activeTab === tab.key ? "#c7d2fe" : "#8888a0",
-                fontSize: 13,
-                fontWeight: activeTab === tab.key ? 600 : 400,
-                padding: "0 14px",
-                display: "inline-flex",
-                alignItems: "center",
-                textDecoration: "none",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                if (activeTab !== tab.key) {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-                  e.currentTarget.style.color = "#b0b0c0";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== tab.key) {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "#8888a0";
-                }
-              }}
-            >
-              {tab.label}
-            </Link>
-          ))}
+          {tabs.map((tab) => {
+            const needsAuth = tab.key === "workspace" && !session;
+            return (
+              <Link
+                key={tab.key}
+                to={tab.path}
+                onClick={needsAuth ? (e) => {
+                  e.preventDefault();
+                  navigate("/login", { state: { from: { pathname: tab.path } } });
+                } : undefined}
+                style={{
+                  height: 32,
+                  borderRadius: 8,
+                  background: activeTab === tab.key ? "rgba(91,106,240,0.12)" : "transparent",
+                  border: activeTab === tab.key ? "1px solid rgba(91,106,240,0.2)" : "1px solid transparent",
+                  color: activeTab === tab.key ? "#c7d2fe" : "#8888a0",
+                  fontSize: 13,
+                  fontWeight: activeTab === tab.key ? 600 : 400,
+                  padding: "0 14px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  textDecoration: "none",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== tab.key) {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                    e.currentTarget.style.color = "#b0b0c0";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== tab.key) {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "#8888a0";
+                  }
+                }}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
 

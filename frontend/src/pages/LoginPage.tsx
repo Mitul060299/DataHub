@@ -112,11 +112,21 @@ export function LoginPage() {
     );
   }
 
+  const fromWorkspace = state?.from?.pathname === "/workspace" || state?.from?.pathname?.startsWith("/workspace/");
+
   return (
     <div className="auth-shell">
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1 className="auth-title">Welcome back to DataHub</h1>
-        <p className="auth-sub">Sign in free — no credit card required.</p>
+        {fromWorkspace ? (
+          <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 4 }}>
+            <p style={{ margin: 0, fontSize: 13, color: "#c7d2fe", lineHeight: 1.5 }}>
+              Sign in to access your workspace — <strong style={{ color: "#a5b4fc" }}>free tier, no payment required.</strong>
+            </p>
+          </div>
+        ) : (
+          <p className="auth-sub">Sign in free — no credit card required.</p>
+        )}
         {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
 
         {/* OAuth first — one-click signin is faster and reduces password-reset traffic. */}

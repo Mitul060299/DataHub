@@ -45,7 +45,7 @@ export function AppShell() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" state={{ from: { pathname: location.pathname } }} replace />;
   }
 
   return (

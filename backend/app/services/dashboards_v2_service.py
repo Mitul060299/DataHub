@@ -4,12 +4,63 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy.exc import ProgrammingError
+
 from ..db import SessionLocal
 from ..models import DashboardTileOut, DashboardV2Out
 from ..models_db import DashboardAccessDB, DashboardPublishDB, DashboardTileDB, DashboardV2DB, DashboardViewDB
 
 
 class DashboardsV2Service:
+    @staticmethod
+    def _query_tiles(db, filter_expr) -> list[DashboardTileDB]:
+        """Query tiles, falling back to a safe column list if new columns don't exist yet."""
+        try:
+            return (
+                db.query(DashboardTileDB)
+                .filter(filter_expr)
+                .order_by(DashboardTileDB.created_at.asc())
+                .all()
+            )
+        except ProgrammingError:
+            db.rollback()
+            # Columns added by migration 0084 may not exist yet — query without them.
+            from sqlalchemy import text as _text
+            if hasattr(filter_expr, "right"):
+                # Single dashboard_id equality filter
+                dashboard_id_val = filter_expr.right.value
+                rows = db.execute(
+                    _text(
+                        "SELECT id, dashboard_id, dataset_id, title, chart_type, "
+                        "query_spec, layout, snapshot_id, refresh_config, tile_type, "
+                        "echarts_config, table_data, metric_value, metric_label, "
+                        "metric_trend, metric_threshold, created_at "
+                        "FROM dashboard_tiles WHERE dashboard_id = :did "
+                        "ORDER BY created_at ASC"
+                    ),
+                    {"did": str(dashboard_id_val)},
+                ).fetchall()
+            else:
+                # IN filter for list_dashboards — skip tiles entirely
+                return []
+            # Map raw rows back to lightweight DashboardTileDB-like objects
+            result = []
+            for r in rows:
+                obj = DashboardTileDB.__new__(DashboardTileDB)
+                obj.__dict__.update(
+                    id=r[0], dashboard_id=r[1], dataset_id=r[2],
+                    title=r[3], chart_type=r[4], query_spec=r[5] or {},
+                    layout=r[6] or {}, snapshot_id=r[7],
+                    refresh_config=r[8] or {}, tile_type=r[9] or "chart",
+                    echarts_config=r[10], table_data=r[11],
+                    metric_value=r[12], metric_label=r[13],
+                    metric_trend=r[14], metric_threshold=r[15],
+                    sparkline_data=None, delta_pct=None,
+                    created_at=r[16],
+                )
+                result.append(obj)
+            return result
+
     @staticmethod
     def _to_iso(value: datetime | None) -> str:
         return value.isoformat() if value else datetime.now(timezone.utc).isoformat()
@@ -73,11 +124,8 @@ class DashboardsV2Service:
             dashboard_ids = [str(d.id) for d in dashboards]
             tiles_by_dashboard: dict[str, list[DashboardTileDB]] = {dashboard_id: [] for dashboard_id in dashboard_ids}
             if dashboard_ids:
-                tiles = (
-                    db.query(DashboardTileDB)
-                    .filter(DashboardTileDB.dashboard_id.in_(dashboard_ids))
-                    .order_by(DashboardTileDB.created_at.asc())
-                    .all()
+                tiles = cls._query_tiles(
+                    db, DashboardTileDB.dashboard_id.in_(dashboard_ids)
                 )
                 for tile in tiles:
                     tiles_by_dashboard.setdefault(str(tile.dashboard_id), []).append(tile)
@@ -129,11 +177,8 @@ class DashboardsV2Service:
             )
             if not dashboard:
                 return None
-            tiles = (
-                db.query(DashboardTileDB)
-                .filter(DashboardTileDB.dashboard_id == dashboard_id)
-                .order_by(DashboardTileDB.created_at.asc())
-                .all()
+            tiles = cls._query_tiles(
+                db, DashboardTileDB.dashboard_id == dashboard_id
             )
             return cls._dashboard_out(dashboard, tiles)
         finally:

@@ -395,7 +395,7 @@ class AuthToken(BaseModel):
 
 
 UserRole = Literal["admin", "editor", "viewer"]
-UserPlan = Literal["Free", "Beta", "Starter", "Professional", "Team", "Business", "Enterprise"]
+UserPlan = Literal["Free", "Beta", "Starter", "Professional", "Expert", "Team", "Business", "Enterprise"]
 
 
 class DashboardWidget(BaseModel):

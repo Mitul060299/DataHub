@@ -134,7 +134,7 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
 
-  const { runStatus, isRunning, triggerRun } = useRealtimePipelineRun(pipelineId);
+  const { runStatus } = useRealtimePipelineRun(pipelineId);
 
   // Load schedule
   useEffect(() => {
@@ -215,54 +215,6 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
 
   return (
     <div style={{ padding: "20px 0" }}>
-      {/* Run Now */}
-      <div style={cardStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Manual Run</h3>
-            <p style={{ fontSize: 12, color: "var(--tx1)" }}>Trigger the pipeline immediately with the latest data.</p>
-          </div>
-          <button
-            className="btn btn-primary"
-            onClick={() => triggerRun()}
-            disabled={isRunning}
-            style={{ minWidth: 96 }}
-          >
-            {isRunning ? "Running…" : "Run Now"}
-          </button>
-        </div>
-        {runStatus && (
-          <div style={{
-            marginTop: 12,
-            padding: "8px 12px",
-            borderRadius: 6,
-            background: "var(--bg3, #252540)",
-            fontSize: 12,
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-          }}>
-            <span style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: statusColor(runStatus.status),
-              display: "inline-block",
-              flexShrink: 0,
-            }} />
-            <span style={{ color: statusColor(runStatus.status), fontWeight: 600, textTransform: "capitalize" }}>
-              {runStatus.status}
-            </span>
-            {runStatus.error_message && (
-              <span style={{ color: "#f87171" }}> — {runStatus.error_message}</span>
-            )}
-            {runStatus.status === "running" && (
-              <span style={{ color: "var(--tx1)", marginLeft: "auto" }}>Live • Realtime</span>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Schedule Config */}
       <div style={cardStyle}>
         <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Automatic Schedule</h3>

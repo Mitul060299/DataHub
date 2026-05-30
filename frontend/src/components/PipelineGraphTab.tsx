@@ -120,6 +120,7 @@ function OperationNode({ data }: NodeProps<OperationNodeData>) {
       : null;
   const isSelected = data.isSelected;
   const [hovered, setHovered] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
 
   const handleClick = () => {
     window.dispatchEvent(new CustomEvent("datahub:pipeline:step-selected", {
@@ -141,7 +142,7 @@ function OperationNode({ data }: NodeProps<OperationNodeData>) {
     <div
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); setPendingDelete(false); }}
       style={{
         width: 220,
         padding: "8px 12px",
@@ -157,42 +158,58 @@ function OperationNode({ data }: NodeProps<OperationNodeData>) {
       }}
     >
       {/* Hover action buttons — top-right corner */}
-      {hovered && (
+      {(hovered || pendingDelete) && (
         <div
           style={{ position: "absolute", top: 5, right: 8, display: "inline-flex", gap: 2, zIndex: 10 }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* ✏️ Edit SQL */}
-          <button
-            title="Edit SQL"
-            onClick={() => window.dispatchEvent(new CustomEvent("datahub:pipeline:edit-sql", { detail: { stepId: step.id } }))}
-            style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx2)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.1s, color 0.1s" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--acl)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ac)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--acg)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m4 20 4.5-1 9-9-3.5-3.5-9 9L4 20z" /><path d="m13.5 6.5 3.5 3.5" /></svg>
-          </button>
-          {/* ⫰ Fork */}
-          <button
-            title="Fork from here"
-            onClick={() => window.dispatchEvent(new CustomEvent("datahub:pipeline:fork-at", { detail: { stepId: step.id } }))}
-            style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx2)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.1s, color 0.1s" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.12)"; (e.currentTarget as HTMLButtonElement).style.color = "#a78bfa"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(124,58,237,0.3)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v12" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
-          </button>
-          {/* × Delete */}
-          {data.onDelete && (
-            <button
-              title="Delete step"
-              onClick={() => data.onDelete?.(step)}
-              style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx2)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.1s, color 0.1s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(244,63,94,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--rd)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(244,63,94,0.3)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
-            </button>
+          {pendingDelete ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "var(--bg1)", border: "1px solid rgba(244,63,94,0.4)", borderRadius: 5, padding: "2px 5px" }}>
+              <span style={{ fontSize: 10, color: "var(--rd)", fontWeight: 600, whiteSpace: "nowrap" }}>Delete?</span>
+              <button
+                onClick={() => { data.onDelete?.(step); setPendingDelete(false); }}
+                style={{ fontSize: 10, fontWeight: 700, background: "rgba(244,63,94,0.15)", color: "var(--rd)", border: "none", borderRadius: 3, padding: "1px 5px", cursor: "pointer" }}
+              >Yes</button>
+              <button
+                onClick={() => setPendingDelete(false)}
+                style={{ fontSize: 10, fontWeight: 700, background: "var(--bg3)", color: "var(--tx2)", border: "none", borderRadius: 3, padding: "1px 5px", cursor: "pointer" }}
+              >No</button>
+            </div>
+          ) : (
+            <>
+              {/* ✏️ Edit SQL */}
+              <button
+                title="Edit SQL"
+                onClick={() => window.dispatchEvent(new CustomEvent("datahub:pipeline:edit-sql", { detail: { stepId: step.id } }))}
+                style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx2)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.1s, color 0.1s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--acl)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ac)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--acg)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m4 20 4.5-1 9-9-3.5-3.5-9 9L4 20z" /><path d="m13.5 6.5 3.5 3.5" /></svg>
+              </button>
+              {/* ⫰ Fork */}
+              <button
+                title="Fork from here"
+                onClick={() => window.dispatchEvent(new CustomEvent("datahub:pipeline:fork-at", { detail: { stepId: step.id } }))}
+                style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx2)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.1s, color 0.1s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(124,58,237,0.12)"; (e.currentTarget as HTMLButtonElement).style.color = "#a78bfa"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(124,58,237,0.3)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v12" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+              </button>
+              {/* × Delete */}
+              {data.onDelete && (
+                <button
+                  title="Delete step"
+                  onClick={() => setPendingDelete(true)}
+                  style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--bd2)", background: "var(--bg1)", color: "var(--tx2)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background 0.1s, color 0.1s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(244,63,94,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--rd)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(244,63,94,0.3)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bd2)"; }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                </button>
+              )}
+            </>
           )}
         </div>
       )}

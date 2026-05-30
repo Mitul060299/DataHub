@@ -82,15 +82,15 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
   }, []);
 
   // ⫰ Fork-at dispatched by OperationNode hover button
+  // Ref ensures the listener always calls the latest closure (reads fresh steps/liveArtifact).
+  const handleForkAtStepRef = useRef<((stepId: string) => void) | null>(null);
   useEffect(() => {
     function handleForkAt(e: Event) {
       const { stepId } = (e as CustomEvent<{ stepId: string }>).detail ?? {};
-      if (stepId) handleForkAtStep(stepId);
+      if (stepId) handleForkAtStepRef.current?.(stepId);
     }
     window.addEventListener("datahub:pipeline:fork-at", handleForkAt);
     return () => window.removeEventListener("datahub:pipeline:fork-at", handleForkAt);
-  // handleForkAtStep is stable within the render (uses usePipelineContext refs)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Ref kept for legacy purposes but no longer wired to window events
@@ -186,15 +186,15 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       }));
       if (loadedPipelineId) {
         await updatePipelineWorkflow(loadedPipelineId, { steps: workflowSteps });
-        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline "${loadedPipelineName}" updated`, type: "success" } }));
+        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline "${loadedPipelineName}" updated`, tone: "success" } }));
       } else {
         await createPipelineWorkflow({ name: name.trim(), steps: workflowSteps });
-        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline "${name.trim()}" saved`, type: "success" } }));
+        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline "${name.trim()}" saved`, tone: "success" } }));
       }
       setSaveNamePrompt(false);
       setSavePipelineName("");
     } catch {
-      window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Failed to save pipeline", type: "error" } }));
+      window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Failed to save pipeline", tone: "error" } }));
     } finally {
       setSavingPipeline(false);
     }
@@ -467,6 +467,9 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     }));
   };
 
+  // Keep ref in sync so the fork event listener always calls the latest closure.
+  handleForkAtStepRef.current = handleForkAtStep;
+
   const handleRun = async () => {
     if (running || !steps.length) return;
     setRunning(true);
@@ -736,7 +739,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                       key={step.id}
                       onClick={() => {
                         window.dispatchEvent(new CustomEvent("datahub:pipeline:step-selected", { detail: { id: step.id, stepNumber: step.stepNumber, operation: step.operation, description: step.description, rowsBefore: step.row_count_before, rowsAfter: step.row_count_after } }));
-                        window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: idx } }));
+                        window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: idx, sessionId: liveArtifact?.sessionId ?? undefined } }));
                       }}
                       title={isFailed && step.error_message ? step.error_message : label}
                       style={{
@@ -770,7 +773,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
                       {isPaused && <span style={{ fontSize: 9, color: "var(--tx2)", background: "var(--bg3)", padding: "1px 4px", borderRadius: 3, flexShrink: 0 }}>paused</span>}
                       <button
                         title="Preview this step's output"
-                        onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: idx } })); }}
+                        onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("datahub:preview:step", { detail: { stepIndex: idx, sessionId: liveArtifact?.sessionId ?? undefined } })); }}
                         style={{ background: "none", border: "none", cursor: "pointer", color: "var(--tx2)", padding: "2px", display: "grid", placeItems: "center", flexShrink: 0, opacity: 0.6 }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ac)"; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.6"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; }}

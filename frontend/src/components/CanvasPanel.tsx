@@ -520,6 +520,7 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
               </button>
             </>
           )}
+          {mode === "dashboard" && (
             <button
               className="btn"
               style={{ background: "var(--acl)", borderColor: "var(--acg)", color: "var(--ac)" }}

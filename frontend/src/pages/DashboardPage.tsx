@@ -819,6 +819,7 @@ export function DashboardPage({
       setTiles((prev) => [...prev, newTile]);
     } catch (err) {
       console.error("addVizAsTile failed:", err);
+      alert("Failed to add chart to dashboard. Please try again.");
     }
   }, [id]);
 
@@ -1296,9 +1297,26 @@ ${tileBlocks.join("\n")}
             } catch { /* ignore bad payload */ }
           }}
         >
+          {/* Full-coverage drop capture overlay — shown while dragging over the grid.
+              pointer-events: all ensures canvas/ECharts elements inside tiles don't
+              swallow the drop event before it reaches our onDrop handler. */}
           {isDragOver && (
-            <div style={{ position: "absolute", inset: 0, background: "rgba(91,106,240,0.08)", borderRadius: 8, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-              <span style={{ fontSize: 14, color: "#818CF8", fontWeight: 600, background: "#0F172A", padding: "8px 18px", borderRadius: 8, border: "1px solid rgba(91,106,240,0.4)" }}>Drop to add chart</span>
+            <div
+              style={{ position: "absolute", inset: 0, background: "rgba(91,106,240,0.08)", borderRadius: 8, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "all", cursor: "copy" }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                const raw = e.dataTransfer.getData("application/datahub-viz");
+                if (!raw) return;
+                try {
+                  const viz: SavedVisualization = JSON.parse(raw) as SavedVisualization;
+                  void addVizAsTile(viz);
+                } catch { /* ignore bad payload */ }
+              }}
+            >
+              <span style={{ fontSize: 14, color: "#818CF8", fontWeight: 600, background: "#0F172A", padding: "8px 18px", borderRadius: 8, border: "1px solid rgba(91,106,240,0.4)", pointerEvents: "none" }}>Drop to add chart</span>
             </div>
           )}
 

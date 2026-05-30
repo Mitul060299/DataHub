@@ -23,6 +23,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -166,11 +167,11 @@ def upsert_branding(
     return _branding_dict(branding)
 
 
-@router.delete("", status_code=204)
+@router.delete("", status_code=204, response_class=Response)
 def reset_branding(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     """Delete branding settings, reverting to DataHub defaults.
 
     Requires org owner.
@@ -182,7 +183,7 @@ def reset_branding(
     user_id = get_current_user_id(authorization) or ""
     org = _get_org_for_user(user_id, db)
     if not org:
-        return  # nothing to delete
+        return Response(status_code=204)
 
     branding = db.query(OrganizationBrandingDB).filter(
         OrganizationBrandingDB.org_id == org.id
@@ -190,3 +191,4 @@ def reset_branding(
     if branding:
         db.delete(branding)
         db.commit()
+    return Response(status_code=204)

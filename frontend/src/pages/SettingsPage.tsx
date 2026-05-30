@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, listWebhooks, registerWebhook, deleteWebhook, listAuditLogs, listApprovalRequests, approveRequest, rejectRequest } from "../api";
+import { api, listWebhooks, registerWebhook, deleteWebhook, listAuditLogs, listApprovalRequests, approveRequest, rejectRequest, fetchOrgBranding, updateOrgBranding, resetOrgBranding, gdprExport, gdprErase, fetchSamlConfig, updateSamlConfig, deleteSamlConfig } from "../api";
+import type { OrgBranding, SamlIdpConfig, SamlIdpConfigPayload } from "../api";
 import { BillingSettings } from "../components/BillingSettings";
 import { TeamSettings } from "../components/TeamSettings";
 import { useAuth } from "../contexts/AuthContext";
@@ -9,7 +10,7 @@ import { formatFileSize, useUser } from "../contexts/UserContext";
 import { supabase } from "../lib/supabase";
 import { billingEnabled } from "../utils/featureFlags";
 
-type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team" | "webhooks" | "approvals";
+type SettingsSection = "profile" | "settings" | "billing" | "usage" | "audit" | "team" | "webhooks" | "approvals" | "branding" | "saml";
 
 interface SettingsPageProps {
   section: SettingsSection;
@@ -131,6 +132,8 @@ export function SettingsPage({ section }: SettingsPageProps) {
           {section === "team" ? <TeamSettings /> : null}
           {section === "webhooks" ? <WebhooksPanel plan={plan} /> : null}
           {section === "approvals" ? <ApprovalsPanel /> : null}
+          {section === "branding" ? <BrandingPanel plan={plan} /> : null}
+          {section === "saml" ? <SamlConfigPanel plan={plan} /> : null}
         </div>
       </div>
     </div>
@@ -227,6 +230,28 @@ function SettingsSidebar({ active }: { active: SettingsSection }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      ),
+    },
+    {
+      key: "branding" as SettingsSection,
+      label: "Branding",
+      path: "/settings/branding",
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      ),
+    },
+    {
+      key: "saml" as SettingsSection,
+      label: "SAML SSO",
+      path: "/settings/saml",
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       ),
     },
@@ -1235,6 +1260,168 @@ function ApprovalsPanel() {
   );
 }
 
+// ── BrandingPanel ─────────────────────────────────────────────────────────────
+
+const _BRANDING_PLANS = new Set(["Business", "Enterprise"]);
+const _CSS_PLANS = new Set(["Enterprise"]);
+
+function BrandingPanel({ plan }: { plan: string }) {
+  const [branding, setBranding] = useState<OrgBranding | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Local draft state
+  const [productName, setProductName] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [faviconUrl, setFaviconUrl] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [hideBranding, setHideBranding] = useState(false);
+  const [customCss, setCustomCss] = useState("");
+
+  useEffect(() => {
+    fetchOrgBranding()
+      .then((b) => {
+        setBranding(b);
+        setProductName(b.product_name ?? "");
+        setLogoUrl(b.logo_url ?? "");
+        setFaviconUrl(b.favicon_url ?? "");
+        setPrimaryColor(b.primary_color ?? "");
+        setSupportEmail(b.support_email ?? "");
+        setHideBranding(b.hide_datahub_branding ?? false);
+        setCustomCss(b.custom_css ?? "");
+      })
+      .catch(() => setErr("Could not load branding settings"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const canHide = _BRANDING_PLANS.has(plan);
+  const canCss = _CSS_PLANS.has(plan);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const updated = await updateOrgBranding({
+        product_name: productName || null,
+        logo_url: logoUrl || null,
+        favicon_url: faviconUrl || null,
+        primary_color: primaryColor || null,
+        support_email: supportEmail || null,
+        hide_datahub_branding: canHide ? hideBranding : false,
+        custom_css: canCss ? customCss || null : null,
+      });
+      setBranding(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setErr(msg ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm("Reset all branding to DataHub defaults?")) return;
+    await resetOrgBranding();
+    setBranding(null);
+    setProductName(""); setLogoUrl(""); setFaviconUrl("");
+    setPrimaryColor(""); setSupportEmail(""); setHideBranding(false); setCustomCss("");
+  };
+
+  const inputStyle: CSSProperties = {
+    background: "#0d0d10", border: "1px solid #2a2a38", borderRadius: 8,
+    padding: "8px 12px", color: "#e8e8f0", fontSize: 13, width: "100%", boxSizing: "border-box",
+  };
+  const labelStyle: CSSProperties = { fontSize: 12, color: "#8888a0", marginBottom: 4, display: "block" };
+  const fieldStyle: CSSProperties = { display: "grid", gap: 4 };
+
+  if (loading) return <p style={{ color: "#8888a0", fontSize: 13 }}>Loading…</p>;
+
+  return (
+    <div style={{ display: "grid", gap: 24 }}>
+      <div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: "#e8e8f0", marginBottom: 4 }}>White-label Branding</h2>
+        <p style={{ fontSize: 13, color: "#8888a0" }}>
+          Customise the product name, logo, and colours shown to your users.
+          {!canHide && <> Hiding DataHub branding requires <strong style={{ color: "#e8e8f0" }}>Business or Enterprise</strong> plan.</>}
+        </p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Product name</label>
+          <input style={inputStyle} value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="DataHub" />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Support email</label>
+          <input style={inputStyle} type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="support@your-company.com" />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Logo URL</label>
+          <input style={inputStyle} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://cdn.example.com/logo.svg" />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Favicon URL</label>
+          <input style={inputStyle} value={faviconUrl} onChange={(e) => setFaviconUrl(e.target.value)} placeholder="https://cdn.example.com/favicon.ico" />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Primary colour</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="color" value={primaryColor || "#5B6AF0"} onChange={(e) => setPrimaryColor(e.target.value)}
+              style={{ width: 36, height: 36, padding: 2, background: "none", border: "1px solid #2a2a38", borderRadius: 6, cursor: "pointer" }} />
+            <input style={{ ...inputStyle, flex: 1 }} value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#5B6AF0" />
+          </div>
+        </div>
+        <div style={{ ...fieldStyle, alignItems: "flex-start", paddingTop: 20 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: canHide ? "pointer" : "not-allowed", opacity: canHide ? 1 : 0.4 }}>
+            <input type="checkbox" checked={hideBranding} disabled={!canHide}
+              onChange={(e) => { if (canHide) setHideBranding(e.target.checked); }} />
+            <span style={{ fontSize: 13, color: "#c8c8d8" }}>Hide "Powered by DataHub" badge</span>
+          </label>
+          {!canHide && <span style={{ fontSize: 11, color: "#5B6AF0", marginTop: 4 }}>Business / Enterprise only</span>}
+        </div>
+      </div>
+
+      {canCss && (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Custom CSS <span style={{ color: "#5B6AF0" }}>(Enterprise)</span></label>
+          <textarea
+            value={customCss}
+            onChange={(e) => setCustomCss(e.target.value)}
+            rows={6}
+            style={{ ...inputStyle, fontFamily: "monospace", resize: "vertical" }}
+            placeholder=":root { --brand-primary: #your-color; }"
+          />
+        </div>
+      )}
+
+      {err && <p style={{ color: "#F87171", fontSize: 13 }}>{err}</p>}
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{ background: "#5B6AF0", border: "none", borderRadius: 8, padding: "9px 20px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}
+        >
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save branding"}
+        </button>
+        {branding && (branding.product_name || branding.logo_url || branding.primary_color) && (
+          <button
+            onClick={handleReset}
+            style={{ background: "transparent", border: "1px solid #2a2a38", borderRadius: 8, padding: "9px 16px", color: "#8888a0", fontSize: 13, cursor: "pointer" }}
+          >
+            Reset to defaults
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const WEBHOOK_EVENTS = [
   { value: "pipeline.run", label: "Pipeline Run" },
   { value: "dataset.upload", label: "Dataset Upload" },
@@ -1438,6 +1625,186 @@ function WebhooksPanel({ plan }: { plan: string }) {
               </button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SAML Config Panel ────────────────────────────────────────────────────────
+
+function SamlConfigPanel({ plan }: { plan: string }) {
+  const isEnterprise = plan === "Enterprise";
+  const [config, setConfig] = useState<SamlIdpConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [draft, setDraft] = useState<SamlIdpConfigPayload>({
+    entity_id: "",
+    sso_url: "",
+    slo_url: "",
+    certificate: "",
+    sp_entity_id: "",
+    attribute_email: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+    attribute_name: "",
+    name_id_format: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+    is_active: false,
+  });
+
+  useEffect(() => {
+    if (!isEnterprise) { setLoading(false); return; }
+    fetchSamlConfig()
+      .then((c) => {
+        setConfig(c);
+        setDraft({
+          entity_id: c.entity_id,
+          sso_url: c.sso_url,
+          slo_url: c.slo_url ?? "",
+          certificate: "",
+          sp_entity_id: c.sp_entity_id ?? "",
+          attribute_email: c.attribute_email,
+          attribute_name: c.attribute_name ?? "",
+          name_id_format: c.name_id_format,
+          is_active: c.is_active,
+        });
+      })
+      .catch((e) => {
+        if (e?.response?.status !== 404) setError(e?.message ?? "Failed to load SAML config");
+      })
+      .finally(() => setLoading(false));
+  }, [isEnterprise]);
+
+  const handleSave = async () => {
+    try {
+      const payload: SamlIdpConfigPayload = { ...draft };
+      if (!payload.certificate) delete (payload as Partial<SamlIdpConfigPayload>).certificate;
+      const updated = await updateSamlConfig(payload);
+      setConfig(updated);
+      setSaveMsg("Saved ✓");
+      setTimeout(() => setSaveMsg(null), 2500);
+    } catch (e: unknown) {
+      setSaveMsg("Error: " + ((e as Error).message ?? "Failed to save"));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Remove SAML configuration? SSO login will stop working immediately.")) return;
+    try {
+      await deleteSamlConfig();
+      setConfig(null);
+      setDraft({ ...draft, entity_id: "", sso_url: "", slo_url: "", certificate: "", is_active: false });
+      setSaveMsg("SAML config removed");
+    } catch (e: unknown) {
+      setSaveMsg("Error: " + ((e as Error).message ?? "Failed to delete"));
+    }
+  };
+
+  const inputStyle: CSSProperties = {
+    background: "#0d0d14",
+    border: "1px solid #2a2a3a",
+    borderRadius: 6,
+    color: "#e8e8f0",
+    fontSize: 13,
+    padding: "7px 10px",
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  if (!isEnterprise) {
+    return (
+      <div style={{ color: "#888", fontSize: 13, padding: "20px 0" }}>
+        SAML 2.0 SSO is available on the <strong style={{ color: "#e8e8f0" }}>Enterprise</strong> plan.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#e8e8f0" }}>SAML 2.0 SSO</h3>
+        <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
+          Configure your Identity Provider (Okta, Azure AD, Google Workspace, etc.) to enable
+          enterprise single sign-on for your organization.
+        </p>
+      </div>
+
+      {config && (
+        <div style={{ background: "#0d0d14", border: "1px solid #2a2a3a", borderRadius: 8, padding: "12px 14px", fontSize: 12 }}>
+          <div style={{ color: "#888", marginBottom: 4 }}>SP Metadata URL (give to your IdP admin):</div>
+          <code style={{ color: "#a0c4ff", wordBreak: "break-all" }}>{config.metadata_url}</code>
+          <div style={{ color: "#888", marginTop: 8, marginBottom: 4 }}>Assertion Consumer Service (ACS) URL:</div>
+          <code style={{ color: "#a0c4ff" }}>{config.acs_url}</code>
+        </div>
+      )}
+
+      {error && <div style={{ color: "#e05a5a", fontSize: 12 }}>{error}</div>}
+      {loading && <div style={{ color: "#666", fontSize: 12 }}>Loading…</div>}
+
+      {!loading && (
+        <div style={{ display: "grid", gap: 12 }}>
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888" }}>IdP Entity ID *</span>
+            <input style={inputStyle} value={draft.entity_id} placeholder="https://idp.example.com/saml/metadata"
+              onChange={(e) => setDraft({ ...draft, entity_id: e.target.value })} />
+          </label>
+
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888" }}>IdP SSO URL *</span>
+            <input style={inputStyle} value={draft.sso_url} placeholder="https://idp.example.com/saml/sso"
+              onChange={(e) => setDraft({ ...draft, sso_url: e.target.value })} />
+          </label>
+
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888" }}>IdP SLO URL (optional)</span>
+            <input style={inputStyle} value={draft.slo_url ?? ""} placeholder="https://idp.example.com/saml/logout"
+              onChange={(e) => setDraft({ ...draft, slo_url: e.target.value })} />
+          </label>
+
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888" }}>
+              IdP Signing Certificate (PEM) {config ? "— leave blank to keep existing" : "*"}
+            </span>
+            <textarea rows={5} style={{ ...inputStyle, resize: "vertical", fontFamily: "monospace" }}
+              value={draft.certificate ?? ""}
+              placeholder={"-----BEGIN CERTIFICATE-----\nMIIC....\n-----END CERTIFICATE-----"}
+              onChange={(e) => setDraft({ ...draft, certificate: e.target.value })} />
+          </label>
+
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888" }}>Email attribute name</span>
+            <input style={inputStyle} value={draft.attribute_email}
+              onChange={(e) => setDraft({ ...draft, attribute_email: e.target.value })} />
+          </label>
+
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888" }}>Display name attribute (optional)</span>
+            <input style={inputStyle} value={draft.attribute_name ?? ""} placeholder="displayName"
+              onChange={(e) => setDraft({ ...draft, attribute_name: e.target.value })} />
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={draft.is_active ?? false}
+              onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />
+            <span style={{ fontSize: 13, color: "#e8e8f0" }}>Enable SAML SSO for this organization</span>
+          </label>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={handleSave}
+              style={{ background: "#5B6AF0", border: "none", borderRadius: 6, color: "#fff", fontSize: 13, padding: "8px 18px", cursor: "pointer" }}
+            >
+              Save Configuration
+            </button>
+            {config && (
+              <button
+                onClick={handleDelete}
+                style={{ background: "transparent", border: "1px solid #3a2a2a", borderRadius: 6, color: "#e05a5a", fontSize: 12, padding: "7px 14px", cursor: "pointer" }}
+              >
+                Remove SAML
+              </button>
+            )}
+            {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith("Error") ? "#e05a5a" : "#5fcb8a" }}>{saveMsg}</span>}
+          </div>
         </div>
       )}
     </div>

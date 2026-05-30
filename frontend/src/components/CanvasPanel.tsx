@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePipelineContext } from "../contexts/PipelineContext";
 import { usePipeline } from "../hooks/usePipeline";
@@ -14,8 +14,7 @@ import { api, createDashboardV2, exportDatasetCsv, exportDatasetPowerBI, exportD
 import { SendToDestinationModal } from "./modals/SendToDestinationModal";
 import { CrossStepInputPanel } from "./CrossStepInputPanel";
 
-// Lazy-loaded — only mounted when workspace mode switches to "dashboard".
-const DashboardCanvas = lazy(() => import("./DashboardCanvas").then(m => ({ default: m.DashboardCanvas })));
+// (DashboardCanvas removed — dashboard mode now uses inline DashboardV2 list picker)
 
 interface CanvasPanelProps {
   workspaceId?: string;
@@ -811,13 +810,93 @@ export function CanvasPanel({ workspaceId, projectId, pipelineId, mode, onModeCh
             </>
           )
         ) : mode === "dashboard" ? (
-          /* ── Dashboard canvas with saved visualizations ─────────────────── */
-          <Suspense fallback={null}>
-            <DashboardCanvas
-              projectId={projectId}
-              onAskAi={() => window.dispatchEvent(new CustomEvent("datahub:ai:focus"))}
-            />
-          </Suspense>
+          /* ── Dashboard V2 list picker ───────────────────────────────────── */
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "var(--tx0)" }}>Dashboards</div>
+                <div style={{ fontSize: 12, color: "var(--tx2)", marginTop: 2 }}>
+                  Build charts, KPI tiles, and reports from your pipeline outputs.
+                </div>
+              </div>
+              <button
+                className="btn"
+                style={{ background: "#5B6AF0", color: "#fff", borderColor: "#5B6AF0", opacity: dashCreating ? 0.65 : 1, cursor: dashCreating ? "not-allowed" : "pointer" }}
+                disabled={dashCreating}
+                onClick={() => void handleNewDashboard()}
+              >
+                {dashCreating ? "Creating…" : "+ New Dashboard"}
+              </button>
+            </div>
+
+            {dashError ? (
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", color: "#f87171", fontSize: 13 }}>
+                ⚠ {dashError}
+              </div>
+            ) : null}
+
+            {/* List */}
+            {dashLoading ? (
+              <div style={{ color: "var(--tx2)", fontSize: 13, paddingTop: 12 }}>Loading…</div>
+            ) : dashboards.length === 0 ? (
+              <div style={{
+                border: "1.5px dashed var(--bd2)",
+                borderRadius: 12,
+                padding: "40px 24px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 10,
+                color: "var(--tx2)",
+              }}>
+                <span style={{ fontSize: 32 }}>📊</span>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--tx1)" }}>No dashboards yet</div>
+                <div style={{ fontSize: 12 }}>Create your first dashboard to visualise pipeline outputs.</div>
+                <button
+                  className="btn"
+                  style={{ marginTop: 4, background: "#5B6AF0", color: "#fff", borderColor: "#5B6AF0" }}
+                  disabled={dashCreating}
+                  onClick={() => void handleNewDashboard()}
+                >
+                  {dashCreating ? "Creating…" : "+ New Dashboard"}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                {dashboards.map((dash) => (
+                  <div
+                    key={dash.id}
+                    onClick={() => navigate(`/dashboard/${dash.id}`)}
+                    style={{
+                      border: "1px solid var(--bd2)",
+                      borderRadius: 10,
+                      background: "var(--bg2)",
+                      padding: "12px 14px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      transition: "border-color 0.15s, background 0.15s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--ac)"; e.currentTarget.style.background = "var(--bg3)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--bd2)"; e.currentTarget.style.background = "var(--bg2)"; }}
+                  >
+                    <span style={{ fontSize: 22, flexShrink: 0 }}>📊</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--tx0)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dash.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>
+                        {dash.tile_count} tile{dash.tile_count !== 1 ? "s" : ""} · updated {relTime(dash.updated_at)}
+                        {dash.is_published ? <span style={{ marginLeft: 8, color: "var(--gr)", fontWeight: 600 }}>● Live</span> : null}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 16, color: "var(--tx2)", flexShrink: 0 }}>›</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : null}
       </div>
     </section>

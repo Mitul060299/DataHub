@@ -78,6 +78,8 @@ export interface DashboardV2Tile {
   metric_label?: string | null;
   metric_trend?: string | null;
   metric_threshold?: Record<string, unknown> | null;
+  sparkline_data?: number[] | null;
+  delta_pct?: number | null;
   query_spec: Record<string, unknown>;
   layout: Record<string, unknown>;
   created_at: string;

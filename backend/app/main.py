@@ -73,6 +73,8 @@ from .routers import waitlist
 from .routers import dashboard_access
 from .routers.project_members import router as project_members_router, project_invite_router as project_invite_router
 from .routers.organization_members import router as organization_members_router, org_invite_router as org_invite_router
+from .routers.branding import router as branding_router
+from .routers.saml import router as saml_router
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
 from .routers.saved_visualizations import router as saved_visualizations_router
@@ -600,6 +602,35 @@ def _apply_startup_ddl() -> None:
         "CREATE INDEX IF NOT EXISTS idx_cross_pipeline_consumer ON cross_pipeline_inputs (consumer_dataset_id)",
         "CREATE INDEX IF NOT EXISTS idx_cross_pipeline_source_step ON cross_pipeline_inputs (source_step_id)",
         "ALTER TABLE dataset_meta ADD COLUMN IF NOT EXISTS forked_from_step_id TEXT",
+        # 0085 — organization_branding (white-label)
+        """CREATE TABLE IF NOT EXISTS organization_branding (
+            org_id                  TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+            product_name            TEXT,
+            logo_url                TEXT,
+            favicon_url             TEXT,
+            primary_color           TEXT,
+            support_email           TEXT,
+            hide_datahub_branding   BOOLEAN NOT NULL DEFAULT false,
+            custom_css              TEXT,
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_org_branding_org_id ON organization_branding (org_id)",
+        # 0086 — SAML 2.0 IdP config (Enterprise SSO)
+        """CREATE TABLE IF NOT EXISTS saml_idp_configs (
+            org_id           TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+            entity_id        TEXT NOT NULL,
+            sso_url          TEXT NOT NULL,
+            slo_url          TEXT,
+            certificate      TEXT NOT NULL,
+            sp_entity_id     TEXT,
+            attribute_email  TEXT NOT NULL DEFAULT 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+            attribute_name   TEXT,
+            name_id_format   TEXT NOT NULL DEFAULT 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+            is_active        BOOLEAN NOT NULL DEFAULT false,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_saml_idp_configs_org_id ON saml_idp_configs (org_id)",
     ]
     try:
         from sqlalchemy import text as _text
@@ -809,3 +840,5 @@ app.include_router(org_invite_router)
 app.include_router(usage_routes.router)
 app.include_router(pipeline_steps_router)
 app.include_router(audit_log_router.router)
+app.include_router(branding_router)
+app.include_router(saml_router)

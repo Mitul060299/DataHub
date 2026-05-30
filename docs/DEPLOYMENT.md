@@ -73,6 +73,14 @@
 | `PROFILE_CACHE_TTL`, `PROFILE_CACHE_MAX` | Profiling/summary cache tuning |
 | `SHARED_RATE_LIMIT_PER_MIN` | Rate limit for shared link views |
 
+**QStash (Phase S3 — background pipeline workers)**
+| Variable | Description |
+|---|---|
+| `QSTASH_TOKEN` | Upstash QStash publish token |
+| `QSTASH_CURRENT_SIGNING_KEY` | QStash HMAC signing key (current) |
+| `QSTASH_NEXT_SIGNING_KEY` | QStash HMAC signing key (next, for rotation) |
+| `API_PUBLIC_URL` | Public URL of this Render service (e.g. `https://api.datahub.org.in`) — used for QStash delivery target and SAML SP metadata |
+
 ### Database Migrations (Supabase)
 ```bash
 DATABASE_URL=<supabase> alembic upgrade head

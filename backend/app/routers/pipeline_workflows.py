@@ -461,6 +461,28 @@ async def unshare_pipeline_from_marketplace(
     return {"success": True, "data": {"id": str(pipeline.id), "is_public": False}}
 
 
+@router.delete("/{pipeline_id}")
+async def delete_pipeline(
+    pipeline_id: str,
+    authorization: str | None = Header(default=None),
+    current_user_id: str = Depends(get_current_subject),
+    db: DBSession = Depends(get_db),
+):
+    """Permanently delete a pipeline owned by the current user."""
+    pipeline = (
+        db.query(PipelineV2DB)
+        .filter(PipelineV2DB.id == pipeline_id, PipelineV2DB.user_id == current_user_id)
+        .first()
+    )
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    db.delete(pipeline)
+    db.commit()
+
+    return {"success": True, "data": {"id": pipeline_id, "deleted": True}}
+
+
 @router.post("/{pipeline_id}/clone")
 async def clone_pipeline(
     pipeline_id: str,

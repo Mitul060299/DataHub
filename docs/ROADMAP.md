@@ -82,13 +82,28 @@
 - **Sitemap & robots updates** — all 11 blog URLs in `sitemap.xml`; explicit `Googlebot` and `Bingbot` sections in `robots.txt` with `Allow: /blog`.
 - **Shared component library** — `_components.tsx` with `CompareTable`, `MidCTA`, `FAQ`, `Callout`, `CodeBlock` for article authoring consistency.
 
-## Phase 10 - Enterprise Hardening ➕ Planned
-- SSO / SAML integration
-- On-premise / air-gapped deployment
-- Advanced data lineage and compliance packs (SOC2, GDPR)
-- White-label option
-- 24/7 dedicated support SLA
-- Scheduled pipeline runner (currently store-only)
+## Phase 11 - Dashboard Overhaul ✅ Complete
+- **5 new chart types** — funnel, gauge, treemap, radar, dual_axis (combo) added to `echarts_builder.py` and mirrored in `echartsBuilder.ts`; dispatcher extended; `infer_chart_type` heuristics extended for all 5 types
+- **Dashboard filter bar** — `DashboardFilterBar.tsx` new component; `=` / `!=` / `contains` / `>` / `<` operators; chips UI; toggle button in dashboard header; non-matching series dimmed to 8% opacity
+- **Chart type switcher** — 15-type picker popover on every chart/table tile in edit mode; `⇄` button; live type change via `updateDashboardTile` + tile refresh
+- **Auto-refresh** — per-dashboard interval selector (Off → 60 min) in Settings; stored in `theme.refresh_interval_mins`; client-side `setInterval` refreshes all chart+metric tiles
+- **DashboardCanvas → react-grid-layout** — replaced custom absolute-position drag system with `react-grid-layout` 12-column grid; drag + resize enabled; layout persisted to localStorage
+- **AIPanel.tsx bug fix** — fixed pre-existing JSX parse error (two sibling divs inside conditional without Fragment wrapper) that was blocking production build
+
+## Phase 10 - Enterprise Hardening 🔄 In Progress
+- **White-label branding ✅** — `OrganizationBrandingDB`, `PUT/GET/DELETE /organization/branding`;
+  `useBranding` hook applies CSS custom properties + favicon + custom CSS at runtime;
+  Settings → Branding panel with colour picker + plan-gated controls (Business: hide badge, Enterprise: custom CSS)
+- **GDPR compliance ✅** — `GET /users/me/gdpr-export` (Article 20 full data export);
+  `DELETE /users/me/gdpr-erase` (Article 17 right to erasure — cascades across all user-owned tables,
+  queues S3 objects for async deletion, anonymises audit log actor)
+- Scheduled pipeline runner ✅ — V2 run endpoint, cron scheduler, Realtime push status
+- SSO / SAML integration ✅ — SAML 2.0 SP (`GET /auth/saml/metadata`, `POST /auth/saml/acs`,
+  `POST/GET/DELETE /auth/saml/config`); `defusedxml` XXE-safe parsing; RSA-SHA256 signature
+  verification via `cryptography`; token issuance on ACS; Settings → SAML SSO panel (Enterprise)
+- On-premise / air-gapped deployment — planned
+- SOC2 / GDPR compliance packs (audit export, data retention policy) — GDPR erasure done ✅; audit log export done ✅ (Phase 3)
+- 24/7 dedicated support SLA — planned
 
 ---
 
@@ -104,7 +119,7 @@ no longer caches dataframes in process RAM.  All dataset reads go either through
 the DB chunk path or the per-dataset DuckDB + S3 fast path.  The backend can now
 be replicated horizontally without sticky sessions for dataset serving.
 
-### Phase S2 — DuckDB-WASM (browser-side analytics)
+### Phase S2 — DuckDB-WASM (browser-side analytics) ✅ Complete
 **Trigger**: Render memory graph consistently exceeds 70% during _normal usage_
 (not just upload peaks).  
 **What it does**: Moves DuckDB query execution from the server to the browser.
@@ -112,8 +127,10 @@ The frontend fetches a short-lived presigned URL for the dataset's S3 parquet fi
 and runs analytical SQL entirely in-browser via `@duckdb/duckdb-wasm`.
 - **Backend done ✅**: `GET /datasets/{id}/presigned-url` returns `{ url, expires_at, row_count, columns }`.
   Requires `storage_path` to be an S3 path (not `local://`).  Rate-limited to 60 req/min.
-- **Frontend TODO**: Add `@duckdb/duckdb-wasm` dependency; write `useDuckDB` hook;
-  re-route analytics queries client-side when hook is initialised.
+- **Frontend done ✅**: `@duckdb/duckdb-wasm ^1.32.0` added; `useDuckDB` singleton hook with
+  presigned-URL cache + lazy WASM init; `echartsBuilder.ts` mirrors Python backend chart builder;
+  `DashboardPage.handleTileRefresh` runs client-side for chart/metric tiles when WASM is ready,
+  falls back to server on error or when `dataset_id` is absent.
 
 ### Phase S3 — QStash background workers
 **Trigger**: Pipeline jobs start timing out (> 30 s) or OOM-killing the API process
@@ -133,8 +150,9 @@ to `POST /jobs/worker`; status is streamed back via SSE / Supabase Realtime.
   QSTASH_NEXT_SIGNING_KEY=<from Upstash console>
   API_PUBLIC_URL=https://<your-render-service>.onrender.com
   ```
-- **Frontend TODO**: Switch from polling to Supabase Realtime channel for
-  pipeline run status updates.
+- **Frontend done ✅**: `useRealtimePipelineRun` hook subscribes to `pipeline:{id}` Supabase
+  Realtime channel; `triggerRun()` stores `run_id` and filters events to avoid collisions
+  with cron-triggered runs; `PipelineScheduleTab` polling replaced with push-based status.
 
 ### Phase S4 — Horizontal autoscale
 **Trigger**: Phase S1 + Phase S2 are both live (backend fully stateless).  

@@ -28,8 +28,8 @@ export default defineConfig({
           // Supabase client is large (~200 KB) — split it from app code
           if (id.includes("@supabase")) return "supabase";
           // PostHog is analytics-only — lazy load it separately
-          if (id.includes("posthog-js")) return "posthog";
-          return undefined;
+          if (id.includes("posthog-js")) return "posthog";          // DuckDB-WASM is large and loaded lazily for client-side analytics
+          if (id.includes('@duckdb')) return 'duckdb';          return undefined;
         }
       }
     }

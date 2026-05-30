@@ -129,7 +129,14 @@ def route_intent_auto(state: AgentState) -> str:
 
 
 def route_after_goal_parser(state: AgentState) -> str:
-    """After goal_parser: run drift detector if expectations exist, else plan."""
+    """After goal_parser: run pre_plan_clarifier to gate on ambiguous rules."""
+    return "pre_plan_clarifier"
+
+
+def route_after_pre_plan_clarifier(state: AgentState) -> str:
+    """After pre_plan_clarifier: suspend if clarification needed, else continue."""
+    if state.get("goal_clarification_pending"):
+        return "__end__"
     if state.get("inferred_expectations") or state.get("expected_profile"):
         return "drift_detector"
     return "auto_planner"
@@ -174,11 +181,11 @@ def route_after_reflection_v2(state: AgentState) -> str:
 
 
 def route_after_goal_verifier(state: AgentState) -> str:
-    """After final goal check: done (pipeline_recorder) or re-plan (auto_planner) or interrupt."""
+    """After final goal check: done (dashboard_generator) or re-plan (auto_planner) or interrupt."""
     replan_rules = state.get("_verifier_trigger_replan") or []
     if replan_rules:
         return "auto_planner"
     if state.get("interrupt_pending"):
         return "interrupt_asker"
-    return "pipeline_recorder"
+    return "dashboard_generator"
 

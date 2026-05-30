@@ -199,6 +199,51 @@ export function usePipeline() {
     };
   };
 
+  const listPipelineWorkflows = async () => {
+    const response = await api.get("/api/pipelines");
+    return response.data as {
+      success: boolean;
+      data: {
+        total: number;
+        pipelines: Array<{
+          id: string;
+          name: string;
+          description: string | null;
+          status: string;
+          version: number;
+          steps_count: number;
+          is_public: boolean;
+          created_at: string;
+          updated_at: string;
+        }>;
+      };
+    };
+  };
+
+  const getPipelineWorkflow = async (pipelineId: string) => {
+    const response = await api.get(`/api/pipelines/${pipelineId}`);
+    return response.data as {
+      success: boolean;
+      data: {
+        id: string;
+        name: string;
+        description: string | null;
+        status: string;
+        steps: Array<Record<string, unknown>>;
+        execution_config: Record<string, unknown>;
+        version: number;
+        is_public: boolean;
+        created_at: string;
+        updated_at: string;
+      };
+    };
+  };
+
+  const deletePipelineWorkflow = async (pipelineId: string) => {
+    const response = await api.delete(`/api/pipelines/${pipelineId}`);
+    return response.data as { success: boolean; data: { id: string; deleted: boolean } };
+  };
+
   return {
     run,
     schedule,
@@ -210,5 +255,8 @@ export function usePipeline() {
     runPipelineWorkflow,
     clonePipelineWorkflow,
     getPipelineRunArtifact,
+    listPipelineWorkflows,
+    getPipelineWorkflow,
+    deletePipelineWorkflow,
   };
 }

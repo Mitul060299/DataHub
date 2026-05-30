@@ -1,14 +1,15 @@
 from datetime import datetime, timezone
 import uuid
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import PipelineCreate, PipelineUpdate, PipelineSchedule, PipelineRun
-from ..models_db import PipelineDB, PipelineRunDB
+from ..models_db import PipelineDB, PipelineRunDB, PipelineRunV2DB, PipelineV2DB
 from ..security import get_current_role, get_current_user_id, require_role
 from ..services.plan_guard import resolve_user_plan, enforce_scheduling
 from ..services.pipelines import schedule_pipeline, run_pipeline_job
+from ..services.pipeline_runner import run_pipeline as run_pipeline_v2
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -175,8 +176,9 @@ def delete_pipeline(
 
 
 @router.post("/{pipeline_id}/run")
-def run_pipeline(
+async def run_pipeline(
     pipeline_id: str,
+    background_tasks: BackgroundTasks,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -185,6 +187,31 @@ def run_pipeline(
     user_plan = resolve_user_plan(db, authorization)
     enforce_scheduling(user_plan)
     user_id = get_current_user_id(authorization)
+
+    # ── V2 pipeline path ─────────────────────────────────────────────────────
+    v2 = db.query(PipelineV2DB).filter(
+        PipelineV2DB.id == pipeline_id,
+        PipelineV2DB.user_id == user_id,
+    ).first()
+    if v2:
+        run_id = str(uuid.uuid4())
+        run_record = PipelineRunV2DB(
+            id=run_id,
+            pipeline_id=pipeline_id,
+            user_id=user_id,
+            status="pending",
+            triggered_by="manual",
+            started_at=datetime.now(timezone.utc),
+            execution_log=[],
+            step_results={},
+            metrics={},
+        )
+        db.add(run_record)
+        db.commit()
+        background_tasks.add_task(run_pipeline_v2, pipeline_id, "manual", None, run_id)
+        return {"run_id": run_id, "status": "running", "pipeline_id": pipeline_id}
+
+    # ── Legacy V1 pipeline path ──────────────────────────────────────────────
     row = db.query(PipelineDB).filter(
         PipelineDB.id == pipeline_id,
         (PipelineDB.user_id == user_id) | (PipelineDB.user_id.is_(None)),
@@ -192,33 +219,60 @@ def run_pipeline(
     if not row:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     run_pipeline_job(pipeline_id)
-    return {"status": "queued", "pipeline_id": pipeline_id}
+    return {"run_id": str(uuid.uuid4()), "status": "running", "pipeline_id": pipeline_id}
 
 
-@router.get("/{pipeline_id}/runs", response_model=list[PipelineRun])
+@router.get("/{pipeline_id}/runs")
 def list_pipeline_runs(
     pipeline_id: str,
+    limit: int = 20,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> list[PipelineRun]:
+) -> list[dict]:
     role = get_current_role(authorization)
     require_role("viewer", role)
+
+    # ── V2 runs ──────────────────────────────────────────────────────────────
+    v2_rows = (
+        db.query(PipelineRunV2DB)
+        .filter(PipelineRunV2DB.pipeline_id == pipeline_id)
+        .order_by(PipelineRunV2DB.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+    if v2_rows:
+        return [
+            {
+                "id": r.id,
+                "pipeline_id": r.pipeline_id,
+                "status": r.status,
+                "triggered_by": r.triggered_by,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "finished_at": r.completed_at.isoformat() if r.completed_at else None,
+                "error_message": r.error_message,
+                "output_snapshot_url": r.output_snapshot_url,
+            }
+            for r in v2_rows
+        ]
+
+    # ── Legacy V1 runs ───────────────────────────────────────────────────────
     rows = (
         db.query(PipelineRunDB)
         .filter(PipelineRunDB.pipeline_id == pipeline_id)
         .order_by(PipelineRunDB.started_at.desc())
+        .limit(limit)
         .all()
     )
     return [
-        PipelineRun(
-            run_id=row.id,
-            pipeline_id=row.pipeline_id,
-            status=row.status,
-            dataset_id=row.dataset_id,
-            error=row.error,
-            metadata=row.metadata_ or {},
-            started_at=row.started_at.isoformat(),
-            finished_at=row.finished_at.isoformat() if row.finished_at else None,
-        )
+        {
+            "id": row.id,
+            "pipeline_id": row.pipeline_id,
+            "status": row.status,
+            "triggered_by": "manual",
+            "started_at": row.started_at.isoformat() if row.started_at else None,
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+            "error_message": row.error,
+            "output_snapshot_url": None,
+        }
         for row in rows
     ]

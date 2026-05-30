@@ -31,6 +31,8 @@ class DashboardsV2Service:
             metric_label=getattr(tile, "metric_label", None),
             metric_trend=getattr(tile, "metric_trend", None),
             metric_threshold=getattr(tile, "metric_threshold", None),
+            sparkline_data=getattr(tile, "sparkline_data", None),
+            delta_pct=getattr(tile, "delta_pct", None),
             snapshot_id=getattr(tile, "snapshot_id", None),
             created_at=cls._to_iso(tile.created_at),
         )
@@ -154,6 +156,8 @@ class DashboardsV2Service:
         metric_label: str | None = None,
         metric_trend: str | None = None,
         metric_threshold: dict | None = None,
+        sparkline_data: list | None = None,
+        delta_pct: float | None = None,
         source_table: str | None = None,
         snapshot_id: str | None = None,
     ) -> DashboardTileOut:
@@ -188,6 +192,8 @@ class DashboardsV2Service:
                 metric_label=metric_label,
                 metric_trend=metric_trend,
                 metric_threshold=metric_threshold,
+                sparkline_data=sparkline_data,
+                delta_pct=delta_pct,
                 snapshot_id=snapshot_id,
             )
             db.add(tile)

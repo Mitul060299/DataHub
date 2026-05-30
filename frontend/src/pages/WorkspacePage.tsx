@@ -290,6 +290,15 @@ export function WorkspacePage() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleNavDashboard(e: Event) {
+      const { dashboardId } = (e as CustomEvent<{ dashboardId: string }>).detail ?? {};
+      if (dashboardId) navigate(`/dashboard/${dashboardId}`);
+    }
+    window.addEventListener("datahub:navigate:dashboard", handleNavDashboard);
+    return () => window.removeEventListener("datahub:navigate:dashboard", handleNavDashboard);
+  }, [navigate]);
+
   const prevActiveDatasetRef = useRef<string | null>(activeDataset?.id ?? null);
   useEffect(() => {
     const prev = prevActiveDatasetRef.current;

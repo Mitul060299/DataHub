@@ -7,6 +7,8 @@ import { usePipeline } from "../hooks/usePipeline";
 import { IconBarChart, IconEdit, IconRefresh, IconZap } from "./Icons";
 import PlanCard from "./PlanCard";
 import { StepCard } from "./StepCard";
+import { ExecutionProgressCard, type ExecStep } from "./ExecutionProgressCard";
+import { AutoGoalReport } from "./AutoGoalReport";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { api, saveVisualization } from "../api";
 import { ErrorBubble } from "./ErrorBubble";
@@ -19,6 +21,9 @@ import { humaniseError, isRetryableError } from "../utils/errorMessages";
 import { notify } from "../utils/notify";
 import { getAuthToken } from "../utils/auth";
 import type { WorkspaceMode } from "../pages/WorkspacePage";
+import { useAutoRunSession } from "../hooks/useAutoRunSession";
+import { AutoRunFeed } from "./AutoRunFeed";
+import { AutoInterruptCard } from "./AutoInterruptCard";
 
 // Lazy-loaded — only mounted when AI returns step plans or chart configs.
 const PlanDAG = lazy(() => import("./PlanDAG"));
@@ -65,6 +70,21 @@ interface DataProfile {
   duplicate_rows: number;
   duplicate_pct: number;
   columns: Record<string, ColProfile>;
+}
+
+// ── GeneratedDashboardCard ────────────────────────────────────────────────
+function GeneratedDashboardCard({ dashboardId }: { dashboardId: string }) {
+  return (
+    <div style={{ marginTop: 8, padding: "8px 10px", background: "rgba(34,197,94,0.08)", borderRadius: 8, border: "1px solid rgba(34,197,94,0.3)", display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 12, color: "#22c55e", flex: 1 }}>📊 Dashboard auto-generated from your goal results</span>
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent("datahub:navigate:dashboard", { detail: { dashboardId } }))}
+        style={{ fontSize: 12, padding: "4px 12px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
+      >
+        View Dashboard →
+      </button>
+    </div>
+  );
 }
 
 function buildFollowUpChips(
@@ -250,6 +270,19 @@ type Message = ConversationMessage & {
   qualityIssues?: QualityIssue[];
   followUpChips?: string[];
   isClarification?: boolean;
+  /** When set, render a "View Dashboard →" link card after auto-run dashboard generation */
+  generatedDashboard?: { dashboard_id: string };
+  /** Execution progress card — mutated in-place as pipeline steps run */
+  execSteps?: ExecStep[];
+  execDone?: boolean;
+  /** Goal completion report — rendered as AutoGoalReport component */
+  goalReport?: {
+    rules_satisfied: number;
+    rules_failed: number;
+    rules_skipped: number;
+    total_rules: number;
+    duration_seconds: number;
+  };
 };
 
 interface AIPanelProps {
@@ -276,7 +309,7 @@ interface AIPanelProps {
 
 export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, selectedPipelineStep, onStepDeselect, mode }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
-  const { setActiveDataset } = useWorkspaceContext();
+  const { setActiveDataset, activeLanes } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
   const { sendMessage, sending, resetSession, cancelMessage, restoreSession, saveHistory, sessionId, sessionIdRef } = useChatSession();
 
@@ -284,7 +317,12 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [aiMode, setAiMode] = useState<"chat" | "auto">("chat");
+  const [autoGoal, setAutoGoal] = useState("");
   const [editHoverId, setEditHoverId] = useState<string | null>(null);
+  /** IDs of secondary datasets to include in the next message */
+  const [secondaryDatasetIds, setSecondaryDatasetIds] = useState<string[]>([]);
+  const [showSecondaryPicker, setShowSecondaryPicker] = useState(false);
   const lastSentInputRef = useRef<string>("");
   const [savingVizIds, setSavingVizIds] = useState<Set<string>>(new Set());
   const [savedVizIds, setSavedVizIds] = useState<Set<string>>(new Set());
@@ -346,6 +384,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset?.id]);
 
+  const { state: autoState, start: startAutoRun, resume: resumeAutoRun, cancel: cancelAutoRun, approvePlan: approveAutoPlan, reset: resetAutoRun } = useAutoRunSession();
 
 
   // Press "/" anywhere (when not typing in an input) to focus the AI input
@@ -619,16 +658,22 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           if (tableName) setLiveArtifact({ tableName, rowCount, stepLabel, sessionId });
         }
 
-        setMessages((previous) => [
-          ...previous,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: responseText,
-            tileCreated: tileCreatedData,
-            followUpChips,
-          },
-        ]);
+        setMessages((previous) => {
+          // Mark the ExecutionProgressCard as done if it exists
+          const withDoneCard = previous.map((m) =>
+            m.id === "execution_progress_card" ? { ...m, execDone: true } : m
+          );
+          return [
+            ...withDoneCard,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: responseText,
+              tileCreated: tileCreatedData,
+              followUpChips,
+            },
+          ];
+        });
         // Persist conversation to DB so it survives page reloads
         if (dataset?.id) {
           const historyToSave = [
@@ -666,47 +711,39 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         break;
       }
       case "agent.step.done": {
-        // Show a compact inline progress row: "✔ Step N (operation): before → after rows"
+        // Mutate the existing ExecutionProgressCard in-place — no new bubble spawned
         const stepNum = typeof event.step === "number" ? event.step : null;
-        const opName = typeof event.operation === "string"
-          ? event.operation.replace(/_/g, " ")
-          : "step";
+        const opName = typeof event.operation === "string" ? event.operation : "step";
         const rowsBefore = typeof event.row_count_before === "number" ? event.row_count_before : null;
         const rowsAfter = typeof event.row_count_after === "number" ? event.row_count_after : null;
         const execMs = typeof event.execution_time_ms === "number" ? event.execution_time_ms : null;
-        const rowDelta = rowsBefore !== null && rowsAfter !== null ? rowsAfter - rowsBefore : null;
-        const label = [
-          stepNum !== null ? `Step ${stepNum}` : null,
-          `(${opName})`,
-          rowsBefore !== null && rowsAfter !== null
-            ? `${rowsBefore.toLocaleString()} → ${rowsAfter.toLocaleString()} rows`
-            : null,
-          rowDelta !== null && rowDelta !== 0
-            ? `(${rowDelta >= 0 ? "+" : ""}${rowDelta.toLocaleString()})`
-            : null,
-          execMs !== null ? `${execMs}ms` : null,
-        ].filter(Boolean).join(" ");
-        setMessages((previous) => [
-          ...previous,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant" as const,
-            content: `✔ ${label}`,
-          },
-        ]);
+        setMessages((previous) => previous.map((m) => {
+          if (!m.execSteps) return m;
+          return {
+            ...m,
+            execSteps: m.execSteps.map((s) =>
+              s.stepNumber === stepNum
+                ? { ...s, status: "done" as const, rowsBefore, rowsAfter, execMs }
+                : s
+            ),
+          };
+        }));
         break;
       }
       case "agent.step.error": {
-        const stepNum = typeof event.step === "number" ? `Step ${event.step}` : "Step";
+        const stepNum = typeof event.step === "number" ? event.step : null;
         const errMsg = typeof event.error === "string" ? event.error : "Unknown error";
-        setMessages((previous) => [
-          ...previous,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant" as const,
-            content: `✗ ${stepNum} failed: ${errMsg}`,
-          },
-        ]);
+        setMessages((previous) => previous.map((m) => {
+          if (!m.execSteps) return m;
+          return {
+            ...m,
+            execSteps: m.execSteps.map((s) =>
+              s.stepNumber === stepNum
+                ? { ...s, status: "error" as const, errorMsg: errMsg }
+                : s
+            ),
+          };
+        }));
         break;
       }
       case "agent.error": {
@@ -753,20 +790,48 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         }
         break;
       }
-      case "agent.goal.report": {
-        // Emitted when goal_verifier finishes checking all rules
-        const satisfied = typeof event.rules_satisfied === "number" ? event.rules_satisfied : 0;
-        const failed = typeof event.rules_failed === "number" ? event.rules_failed : 0;
-        const total = typeof event.total_rules === "number" ? event.total_rules : 0;
-        const secs = typeof event.duration_seconds === "number" ? event.duration_seconds : 0;
-        const pct = total > 0 ? Math.round((satisfied / total) * 100) : 0;
-        const emoji = pct === 100 ? "✅" : pct >= 80 ? "⚠️" : "❌";
+      case "agent.clarify": {
+        // pre_plan_clarifier needs more info before it can plan
+        const question = typeof event.question === "string" ? event.question : "Could you clarify your request?";
         setMessages((previous) => [
           ...previous,
           {
             id: crypto.randomUUID(),
             role: "assistant" as const,
-            content: `${emoji} Goal report: ${satisfied}/${total} rules satisfied (${pct}%) in ${secs.toFixed(1)}s${failed > 0 ? ` — ${failed} failed` : ""}.`,
+            content: question,
+            isClarification: true,
+          },
+        ]);
+        break;
+      }
+      case "agent.goal.report": {
+        // Render AutoGoalReport component instead of plain text
+        const satisfied = typeof event.rules_satisfied === "number" ? event.rules_satisfied : 0;
+        const failed = typeof event.rules_failed === "number" ? event.rules_failed : 0;
+        const skipped = typeof event.rules_skipped === "number" ? event.rules_skipped : 0;
+        const total = typeof event.total_rules === "number" ? event.total_rules : 0;
+        const secs = typeof event.duration_seconds === "number" ? event.duration_seconds : 0;
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: "",
+            goalReport: { rules_satisfied: satisfied, rules_failed: failed, rules_skipped: skipped, total_rules: total, duration_seconds: secs },
+          },
+        ]);
+        break;
+      }
+      case "agent.dashboard.generated": {
+        const dashId = typeof event.dashboard_id === "string" ? event.dashboard_id : "";
+        if (!dashId) break;
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: "",
+            generatedDashboard: { dashboard_id: dashId },
           },
         ]);
         break;
@@ -928,10 +993,35 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
       }
       case "agent.step.start": {
         setIsAwaitingExecution(false);
-        setCurrentStepInfo({
-          stepNumber: Number(event.step_number ?? 0),
-          operation: typeof event.operation === "string" ? event.operation : "",
-          totalSteps: Number(event.total_steps ?? 0),
+        const stepNumber = Number(event.step_number ?? 0);
+        const operation = typeof event.operation === "string" ? event.operation : "";
+        const totalSteps = Number(event.total_steps ?? 0);
+        setCurrentStepInfo({ stepNumber, operation, totalSteps });
+        // Create or update the ExecutionProgressCard message
+        setMessages((previous) => {
+          const cardIdx = previous.findIndex((m) => m.id === "execution_progress_card");
+          const newStep: ExecStep = { stepNumber, operation, totalSteps, status: "running" };
+          if (cardIdx >= 0) {
+            // Add step to existing card (avoid duplicate stepNumber)
+            const existing = previous[cardIdx];
+            const steps = (existing.execSteps ?? []).filter((s) => s.stepNumber !== stepNumber);
+            return previous.map((m) =>
+              m.id === "execution_progress_card"
+                ? { ...m, execSteps: [...steps, newStep], execDone: false }
+                : m
+            );
+          }
+          // First step.start — create the card
+          return [
+            ...previous,
+            {
+              id: "execution_progress_card",
+              role: "assistant" as const,
+              content: "",
+              execSteps: [newStep],
+              execDone: false,
+            },
+          ];
         });
         break;
       }
@@ -1028,6 +1118,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         message: content,
         dataset_id: dataset.id,
         project_id: projectId,
+        secondary_dataset_ids: secondaryDatasetIds.length > 0 ? secondaryDatasetIds : undefined,
         conversation_history: [...history, ...(content && !approvePlan ? [{ role: "user" as const, content }] : [])],
         pipeline_steps: stepsForBackend.map((step) => ({
           step_number: step.stepNumber,
@@ -1295,6 +1386,21 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           <span className="badge-dot pulse" style={{ background: "var(--gr)", width: 7, height: 7 }} />
           <IconZap size={14} color="var(--ac)" />
           <span style={{ color: "var(--tx0)" }}>AI Agent</span>
+          {/* Chat / Auto mode toggle */}
+          <span style={{ display: "inline-flex", marginLeft: 6, border: "1px solid var(--bd2)", borderRadius: 999, overflow: "hidden", fontSize: 10 }}>
+            <button
+              onClick={() => setAiMode("chat")}
+              style={{ padding: "2px 9px", background: aiMode === "chat" ? "var(--acl)" : "transparent", color: aiMode === "chat" ? "var(--ac)" : "var(--tx2)", border: "none", cursor: "pointer", fontWeight: aiMode === "chat" ? 700 : 400 }}
+            >
+              💬 Chat
+            </button>
+            <button
+              onClick={() => setAiMode("auto")}
+              style={{ padding: "2px 9px", background: aiMode === "auto" ? "var(--acl)" : "transparent", color: aiMode === "auto" ? "var(--ac)" : "var(--tx2)", border: "none", cursor: "pointer", fontWeight: aiMode === "auto" ? 700 : 400 }}
+            >
+              ⚡ Auto
+            </button>
+          </span>
         </span>
         <span style={{ display: "inline-flex", gap: 4, alignItems: "center", minWidth: 0 }}>
           {/* Quality report button */}
@@ -1310,13 +1416,120 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             </button>
           ) : null}
 
-          <button className="btn" style={{ width: 28, padding: 0, flexShrink: 0 }} onClick={() => { if (dataset?.id) localStorage.removeItem(`datahub_chat_session_${dataset.id}`); setMessages([]); resetSession(); }} title="Clear conversation">
+          <button className="btn" style={{ width: 28, padding: 0, flexShrink: 0 }} onClick={() => { if (dataset?.id) localStorage.removeItem(`datahub_chat_session_${dataset.id}`); setMessages([]); resetSession(); if (aiMode === "auto") { resetAutoRun(); setAutoGoal(""); } }} title="Clear conversation">
             <IconRefresh size={14} />
           </button>
         </span>
       </header>
 
-      {/* Chat UI — always shown */}
+      {/* ── Auto Mode Panel ──────────────────────────────────────────── */}
+      {aiMode === "auto" && (
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Goal input */}
+          {autoState.status === "idle" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--tx1)" }}>⚡ Auto Mode — Goal-driven analytics</div>
+              <div style={{ fontSize: 11, color: "var(--tx2)", lineHeight: 1.6 }}>
+                Describe what you want to achieve and the AI will build, review, and execute a full pipeline automatically.
+              </div>
+              <textarea
+                value={autoGoal}
+                onChange={(e) => setAutoGoal(e.target.value)}
+                placeholder='e.g. "Standardize all date columns to YYYY-MM-DD, remove duplicates, and fill nulls with median"'
+                rows={3}
+                style={{
+                  width: "100%",
+                  resize: "none",
+                  border: "1px solid var(--bd2)",
+                  borderRadius: "var(--r8)",
+                  background: "var(--bg1)",
+                  color: "var(--tx)",
+                  padding: 8,
+                  fontSize: 12,
+                  boxSizing: "border-box",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && dataset) {
+                    e.preventDefault();
+                    if (autoGoal.trim()) {
+                      void startAutoRun({ datasetId: dataset.id, projectId, goal: autoGoal.trim() });
+                    }
+                  }
+                }}
+              />
+              <button
+                style={{
+                  width: "100%",
+                  padding: "10px 0",
+                  background: autoGoal.trim() && dataset ? "var(--ac)" : "var(--bg3)",
+                  color: autoGoal.trim() && dataset ? "#fff" : "var(--tx2)",
+                  border: "none",
+                  borderRadius: "var(--r8)",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: autoGoal.trim() && dataset ? "pointer" : "not-allowed",
+                }}
+                disabled={!autoGoal.trim() || !dataset}
+                onClick={() => {
+                  if (dataset && autoGoal.trim()) {
+                    void startAutoRun({ datasetId: dataset.id, projectId, goal: autoGoal.trim() });
+                  }
+                }}
+              >
+                {!dataset ? "Select a dataset first" : "⚡ Run Goal"}
+              </button>
+            </div>
+          )}
+
+          {/* Live feed */}
+          {autoState.status !== "idle" && (
+            <>
+              <div style={{ fontSize: 11, color: "var(--tx2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                Goal: <strong style={{ color: "var(--tx1)" }}>{autoState.goalSummary || autoGoal}</strong>
+              </div>
+              <AutoRunFeed
+                status={autoState.status}
+                planSteps={autoState.planSteps}
+                planApproved={autoState.planApproved}
+                driftAmber={autoState.driftAmber}
+                driftRed={autoState.driftRed}
+                events={autoState.events}
+                onApprovePlan={approveAutoPlan}
+              />
+              {autoState.interruptQuestion && (
+                <AutoInterruptCard
+                  question={autoState.interruptQuestion}
+                  onAnswer={(ans) => {
+                    if (autoState.runId) void resumeAutoRun(autoState.runId, ans);
+                  }}
+                />
+              )}
+              {(autoState.status === "complete" || autoState.status === "error") && (
+                <button
+                  className="btn"
+                  style={{ width: "100%", fontSize: 12 }}
+                  onClick={() => { resetAutoRun(); setAutoGoal(""); }}
+                >
+                  ↩ Start new goal
+                </button>
+              )}
+              {autoState.status === "running" || autoState.status === "interrupted" ? (
+                <button
+                  className="btn"
+                  style={{ width: "100%", fontSize: 12, color: "var(--rd)", borderColor: "var(--rd)" }}
+                  onClick={() => void cancelAutoRun()}
+                >
+                  ✕ Cancel
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Chat UI — shown only in chat mode */}
+      {aiMode === "chat" && (
+      <>
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 10, display: "grid", gap: 10, alignContent: "start" }}>
         {!dataset ? (
           <EmptyStateChatPanel
@@ -1398,6 +1611,15 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
                   onApply={() => void applyStep(message.id, message.transformation!)}
                   onDiscard={() => discardStep(message.id)}
                 />
+              ) : null}
+              {message.execSteps && message.execSteps.length > 0 ? (
+                <ExecutionProgressCard steps={message.execSteps} done={message.execDone} />
+              ) : null}
+              {message.goalReport ? (
+                <AutoGoalReport report={message.goalReport} />
+              ) : null}
+              {message.generatedDashboard ? (
+                <GeneratedDashboardCard dashboardId={message.generatedDashboard.dashboard_id} />
               ) : null}
               {message.plan ? (
                 message.planType === "dag" ? (
@@ -1668,6 +1890,41 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           }}
           alreadyUsed={messages.some((m) => m.role === "user")}
         />
+        {/* Secondary dataset chips */}
+        {(secondaryDatasetIds.length > 0 || showSecondaryPicker) && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
+            {secondaryDatasetIds.map((id) => {
+              const ds = activeLanes.find((l) => l.id === id);
+              if (!ds) return null;
+              return (
+                <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 7px", borderRadius: 999, background: "var(--acl)", border: "1px solid var(--acg)", color: "var(--ac)" }}>
+                  📎 {ds.name}
+                  <button onClick={() => setSecondaryDatasetIds((prev) => prev.filter((x) => x !== id))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--tx2)", fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {/* + Add file picker dropdown */}
+        {showSecondaryPicker && (
+          <div style={{ position: "absolute", bottom: "calc(100% + 2px)", left: 10, right: 10, background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 8, padding: "4px 0", zIndex: 40, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
+            <div style={{ padding: "6px 12px 4px", fontSize: 11, color: "var(--tx2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Add a secondary dataset</div>
+            {activeLanes.filter((l) => l.id !== dataset?.id && !secondaryDatasetIds.includes(l.id)).map((l) => (
+              <button
+                key={l.id}
+                onClick={() => { setSecondaryDatasetIds((prev) => [...prev, l.id]); setShowSecondaryPicker(false); }}
+                style={{ display: "flex", width: "100%", padding: "6px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "var(--tx)", fontSize: 12, alignItems: "center", gap: 8 }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg3)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+              >
+                <span>📄</span>{l.name}<span style={{ marginLeft: "auto", fontSize: 10, color: "var(--tx2)" }}>{l.rows?.toLocaleString() ?? ""} rows</span>
+              </button>
+            ))}
+            {activeLanes.filter((l) => l.id !== dataset?.id && !secondaryDatasetIds.includes(l.id)).length === 0 && (
+              <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--tx2)" }}>No other open datasets. Import a file first.</div>
+            )}
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={input}
@@ -1692,7 +1949,34 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             }
           }}
         />
+        {/* Toolbar row below textarea */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+          {activeLanes.filter((l) => l.id !== dataset?.id).length > 0 ? (
+            <button
+              onClick={() => setShowSecondaryPicker((v) => !v)}
+              style={{
+                fontSize: 11,
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--bd2)",
+                background: showSecondaryPicker ? "var(--bg3)" : "none",
+                color: "var(--tx2)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+              title="Add a second dataset to join or compare with"
+            >
+              📎 Add file
+            </button>
+          ) : null}
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 10, color: "var(--tx2)" }}>Enter to send · Shift+Enter for newline</span>
+        </div>
       </div>
+      </>
+      )} {/* end aiMode === "chat" */}
     </aside>
   );
 }

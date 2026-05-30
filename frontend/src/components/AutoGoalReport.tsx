@@ -1,9 +1,16 @@
 /**
  * AutoGoalReport.tsx
- * Renders the final GoalReport summary card after an auto run completes.
+ * Renders the final GoalReport summary card after a goal run completes.
  * Uses inline styles consistent with the app's CSS-variable dark theme.
  */
-import type { GoalReport } from "../hooks/useAutoRunSession";
+
+export interface GoalReport {
+  rules_satisfied: number;
+  rules_failed: number;
+  rules_skipped: number;
+  total_rules: number;
+  duration_seconds: number;
+}
 
 interface Props {
   report: GoalReport;

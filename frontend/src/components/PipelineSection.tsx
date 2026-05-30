@@ -3,11 +3,12 @@ import { IconBarChart, IconClock, IconCode, IconDownload, IconEdit, IconFilter, 
 import { EditStepPanel } from "./EditStepPanel";
 import { usePipelineContext, type PipelineStep } from "../contexts/PipelineContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
-
+import { usePipeline } from "../hooks/usePipeline";
 import { useUser } from "../contexts/UserContext";
 import { api } from "../api";
 import { TemplatePickerModal } from "./modals/TemplatePickerModal";
 import { WORKFLOW_TEMPLATES } from "../lib/workflowTemplates";
+import { SavedPipelinesPanel } from "./SavedPipelinesPanel";
 
 function getOperationIcon(op: string) {
   const n = op.toLowerCase();
@@ -31,8 +32,12 @@ interface PipelineSectionProps {
 export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }: PipelineSectionProps) {
   const { steps, removeStep, clearSteps, keepStepsThrough, runPipeline, scheduleInfo, renameStep, replaceSteps, liveArtifact, setLiveArtifact, appliedThroughStepId, setAppliedThrough, pendingForkParentStepId, forkAtStep } = usePipelineContext();
   const { activeProject, activeDataset, setActiveDataset } = useWorkspaceContext();
+  const { undoLastTransformation, createPipelineWorkflow, updatePipelineWorkflow } = usePipeline();
 
   const [open, setOpen] = useState(true);
+  const [pipelineTab, setPipelineTab] = useState<"current" | "library">("current");
+  const [loadedPipelineId, setLoadedPipelineId] = useState<string | null>(null);
+  const [loadedPipelineName, setLoadedPipelineName] = useState<string>("");
 
   // Inject keyframe animations once on mount to avoid stylesheet churn on every render
   useEffect(() => {
@@ -49,6 +54,9 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     }
   }, []);
   const [undoing, setUndoing] = useState(false);
+  const [savingPipeline, setSavingPipeline] = useState(false);
+  const [saveNamePrompt, setSaveNamePrompt] = useState(false);
+  const [savePipelineName, setSavePipelineName] = useState("");
   const [surgicalRemoving, setSurgicalRemoving] = useState(false);
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
@@ -129,6 +137,10 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
       run: async () => {
         setUndoing(true);
         try {
+          // Call the backend snapshot-based undo so DuckDB state matches the UI
+          if (inputDs.id) {
+            try { await undoLastTransformation(inputDs.id); } catch { /* non-fatal */ }
+          }
           setActiveDataset({ id: inputDs.id, name: inputDs.name, rows: inputDs.rows });
           keepStepsThrough(prevStepId);
           if (isOnlyStep) clearSteps();
@@ -137,6 +149,32 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
         }
       },
     });
+  };
+
+  const handleSaveAsPipeline = async (name: string) => {
+    if (!name.trim() || savingPipeline) return;
+    setSavingPipeline(true);
+    try {
+      const workflowSteps = steps.map((s) => ({
+        action_type: s.operation,
+        description: s.description,
+        sql: s.duckdbSql ?? s.sql,
+        parameters: s.parameters,
+      }));
+      if (loadedPipelineId) {
+        await updatePipelineWorkflow(loadedPipelineId, { steps: workflowSteps });
+        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline "${loadedPipelineName}" updated`, type: "success" } }));
+      } else {
+        await createPipelineWorkflow({ name: name.trim(), steps: workflowSteps });
+        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline "${name.trim()}" saved`, type: "success" } }));
+      }
+      setSaveNamePrompt(false);
+      setSavePipelineName("");
+    } catch {
+      window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Failed to save pipeline", type: "error" } }));
+    } finally {
+      setSavingPipeline(false);
+    }
   };
 
   const handleUndoFromStep = (stepId: string) => {
@@ -440,22 +478,42 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
     <section style={{ ...(hideHeader ? { padding: 8 } : { borderTop: "1px solid var(--bd)", paddingTop: 8, marginTop: 10 }), display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
       {!hideHeader && (
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            {open ? "▼" : "▶"} PIPELINE
-            <span
-              style={{
-                background: "var(--bg3)",
-                borderRadius: 10,
-                padding: "1px 7px",
-                fontSize: 10,
-                color: "var(--tx2)",
-                letterSpacing: "normal",
-              }}
-            >
-              {steps.length} {steps.length === 1 ? "step" : "steps"}
-            </span>
-          </button>
-          {open ? (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <button onClick={() => setOpen((value) => !value)} style={{ color: "var(--tx1)", fontSize: 11, letterSpacing: "0.08em", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {open ? "▼" : "▶"} PIPELINE
+              <span
+                style={{
+                  background: "var(--bg3)",
+                  borderRadius: 10,
+                  padding: "1px 7px",
+                  fontSize: 10,
+                  color: "var(--tx2)",
+                  letterSpacing: "normal",
+                }}
+              >
+                {steps.length} {steps.length === 1 ? "step" : "steps"}
+              </span>
+            </button>
+            {open && (
+              <>
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: "2px 7px", marginLeft: 4, background: pipelineTab === "current" ? "var(--acl)" : undefined, color: pipelineTab === "current" ? "var(--ac)" : "var(--tx2)", borderColor: pipelineTab === "current" ? "var(--acg)" : undefined }}
+                  onClick={() => setPipelineTab("current")}
+                >
+                  Current
+                </button>
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: "2px 7px", background: pipelineTab === "library" ? "var(--acl)" : undefined, color: pipelineTab === "library" ? "var(--ac)" : "var(--tx2)", borderColor: pipelineTab === "library" ? "var(--acg)" : undefined }}
+                  onClick={() => setPipelineTab("library")}
+                >
+                  Library
+                </button>
+              </>
+            )}
+          </div>
+          {open && pipelineTab === "current" ? (
             <div style={{ display: "flex", gap: 4 }}>
               <button
                 className="btn"
@@ -465,7 +523,7 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
               >
                 Templates
               </button>
-              <button className="btn" style={{ width: 26, padding: 0 }} onClick={() => setPendingAction({ message: "Clear all pipeline steps? This cannot be undone.", run: async () => { clearSteps(); window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Pipeline cleared", tone: "success" } })); } })} aria-label="Clear steps" title="Clear all steps">
+              <button className="btn" style={{ width: 26, padding: 0 }} onClick={() => setPendingAction({ message: "Clear all pipeline steps? This cannot be undone.", run: async () => { clearSteps(); setLoadedPipelineId(null); setLoadedPipelineName(""); window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: "Pipeline cleared", tone: "success" } })); } })} aria-label="Clear steps" title="Clear all steps">
                 <IconTrash size={14} />
               </button>
             </div>
@@ -501,6 +559,36 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
         </div>
       )}
       {open ? (
+        <>
+        {/* ── Loaded pipeline banner ───────────────────────────────────── */}
+        {loadedPipelineId && pipelineTab === "current" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(91,106,240,0.08)", border: "1px solid var(--acg)", borderRadius: "var(--r6)", padding: "6px 10px", fontSize: 11 }}>
+            <span style={{ flex: 1, color: "var(--tx1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              📂 Loaded: <strong>{loadedPipelineName}</strong>
+            </span>
+            <button
+              className="btn"
+              style={{ fontSize: 10, padding: "2px 6px" }}
+              onClick={() => { setLoadedPipelineId(null); setLoadedPipelineName(""); }}
+              title="Unlink from saved pipeline (next save will create a new one)"
+            >
+              Unlink
+            </button>
+          </div>
+        )}
+
+        {/* ── Library tab ─────────────────────────────────────────────── */}
+        {pipelineTab === "library" ? (
+          <div style={{ flex: 1, overflow: "auto", paddingRight: 4 }}>
+            <SavedPipelinesPanel
+              onLoaded={(id, name) => {
+                setLoadedPipelineId(id);
+                setLoadedPipelineName(name);
+                setPipelineTab("current");
+              }}
+            />
+          </div>
+        ) : (
         <div style={{ flex: 1, overflow: "auto", display: "grid", gap: 8, paddingRight: 4 }}>
           {/* Phase 2 — Fork-pending banner: shown after ⫰ click, cleared on next step commit or cancel */}
           {pendingForkParentStepId && steps.some((s) => s.id === pendingForkParentStepId) && (() => {
@@ -593,6 +681,8 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
             })()}
           </div>
         </div>
+        )} {/* end pipelineTab === "library" ? ... : ( ... ) */}
+        </> /* end open fragment */
       ) : null}
 
       {open ? (
@@ -656,9 +746,27 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
             )}
           </button>
 
-          <button className="btn" style={{ width: "100%" }} onClick={() => handleUndoLast()} disabled={!steps.length || undoing}>
-            {undoing ? "Undoing..." : "Undo Last"}
-          </button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button className="btn" style={{ width: "100%" }} onClick={() => handleUndoLast()} disabled={!steps.length || undoing}>
+              {undoing ? "Undoing..." : "↩ Undo Last"}
+            </button>
+            <button
+              className="btn"
+              style={{ width: "100%", color: steps.length ? "var(--gr)" : undefined, borderColor: steps.length ? "var(--gr)" : undefined, opacity: steps.length ? 1 : 0.5 }}
+              onClick={() => {
+                if (loadedPipelineId) {
+                  // Update in-place — no name prompt needed
+                  void handleSaveAsPipeline(loadedPipelineName);
+                } else {
+                  setSavePipelineName("");
+                  setSaveNamePrompt(true);
+                }
+              }}
+              disabled={!steps.length || savingPipeline}
+            >
+              {loadedPipelineId ? (savingPipeline ? "Updating…" : "💾 Update Pipeline") : "💾 Save"}
+            </button>
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button className="btn" onClick={onExport}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconDownload size={14} />Export</span></button>
@@ -745,6 +853,42 @@ export function PipelineSection({ onExport, hideHeader = false, onRunPipeline }:
           setTemplatePickerOpen(false);
         }}
       />
+      {/* Save as Pipeline name prompt */}
+      {saveNamePrompt ? (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setSaveNamePrompt(false)}
+        >
+          <div
+            style={{ background: "var(--bg1)", border: "1px solid var(--bd2)", borderRadius: 12, width: 360, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 700, fontSize: 14 }}>💾 Save as Pipeline</div>
+            <p style={{ fontSize: 12, color: "var(--tx2)", margin: 0 }}>Give this pipeline a name so you can schedule and reuse it.</p>
+            <input
+              autoFocus
+              type="text"
+              value={savePipelineName}
+              onChange={(e) => setSavePipelineName(e.target.value)}
+              placeholder="e.g. Monthly Sales Cleanup"
+              onKeyDown={(e) => { if (e.key === "Enter") void handleSaveAsPipeline(savePipelineName); if (e.key === "Escape") setSaveNamePrompt(false); }}
+              style={{ background: "var(--bg2)", border: "1px solid var(--bd2)", borderRadius: 6, color: "var(--tx)", padding: "8px 10px", fontSize: 13, width: "100%", boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn"
+                style={{ flex: 1, background: savePipelineName.trim() ? "#5B6AF0" : undefined, color: savePipelineName.trim() ? "#fff" : undefined }}
+                disabled={!savePipelineName.trim() || savingPipeline}
+                onClick={() => void handleSaveAsPipeline(savePipelineName)}
+              >
+                {savingPipeline ? "Saving…" : "Save Pipeline"}
+              </button>
+              <button className="btn" style={{ flex: 1 }} onClick={() => setSaveNamePrompt(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <input
         ref={importFileRef}
         type="file"

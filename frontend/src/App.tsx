@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SupportChatWidget } from "./components/SupportChatWidget";
+import { useBranding } from "./hooks/useBranding";
 
 // Static imports — smallest pages on the critical auth/landing path
 import { LoginPage } from "./pages/LoginPage";
@@ -41,6 +42,7 @@ const PageFallback = () => (
 export function App() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
   const location = useLocation();
+  useBranding();
 
   // Hide the support chat bubble on workspace and project pages — the AI
   // panel there serves a different purpose and the widget clutters the UI.
@@ -94,6 +96,8 @@ export function App() {
         <Route path="settings/team" element={<SettingsPage section="team" />} />
         <Route path="settings/webhooks" element={<SettingsPage section="webhooks" />} />
         <Route path="settings/approvals" element={<SettingsPage section="approvals" />} />
+        <Route path="settings/branding" element={<SettingsPage section="branding" />} />
+        <Route path="settings/saml" element={<SettingsPage section="saml" />} />
         <Route path="sources" element={<SourcesPage />} />
         <Route path="dashboard/:id" element={<DashboardPage />} />
       </Route>

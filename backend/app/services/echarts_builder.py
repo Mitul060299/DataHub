@@ -200,6 +200,16 @@ def build_echarts_config(
         return _build_heatmap(rows, x_col, y_cols[0] if y_cols else "", group_by, title, subtitle)
     if ct == "waterfall":
         return _build_waterfall(rows, x_col, y_cols[0] if y_cols else "", title, subtitle)
+    if ct == "funnel":
+        return _build_funnel(rows, x_col, y_cols[0] if y_cols else "", title, subtitle)
+    if ct == "gauge":
+        return _build_gauge(rows, y_cols[0] if y_cols else "", title, subtitle)
+    if ct == "treemap":
+        return _build_treemap(rows, x_col, y_cols[0] if y_cols else "", title, subtitle)
+    if ct == "radar":
+        return _build_radar(rows, x_col, y_cols, title, subtitle)
+    if ct in ("dual_axis", "dual-axis", "combo"):
+        return _build_dual_axis(rows, x_col, y_cols, title, subtitle)
 
     # Fallback to bar
     return _build_bar(rows, x_col, y_cols, group_by, title, subtitle)
@@ -903,6 +913,347 @@ def build_forecast_chart(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Advanced chart builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_funnel(
+    rows: list[dict],
+    label_col: str,
+    value_col: str,
+    title: str,
+    subtitle: str | None,
+) -> dict:
+    """Funnel/pipeline chart — sorted descending by value."""
+    data = []
+    for r in rows:
+        name = str(r.get(label_col, ""))
+        raw = r.get(value_col, 0)
+        try:
+            value = float(raw) if raw is not None else 0.0
+        except (ValueError, TypeError):
+            value = 0.0
+        data.append({"name": name, "value": value})
+    data.sort(key=lambda d: d["value"], reverse=True)
+
+    max_val = max((d["value"] for d in data), default=100)
+    cfg = _base(title, subtitle)
+    cfg["tooltip"] = {
+        "trigger": "item",
+        "formatter": "{b}: {c} ({d}%)",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+    }
+    cfg["legend"] = {**_LEGEND_BASE}
+    cfg["series"] = [{
+        "name": title,
+        "type": "funnel",
+        "left": "10%",
+        "top": 60,
+        "bottom": 30,
+        "width": "80%",
+        "min": 0,
+        "max": max_val,
+        "minSize": "0%",
+        "maxSize": "100%",
+        "sort": "descending",
+        "gap": 2,
+        "label": {
+            "show": True,
+            "position": "inside",
+            "color": "#fff",
+            "fontSize": 12,
+            "fontWeight": 600,
+            "formatter": "{b}: {c}",
+        },
+        "labelLine": {"length": 10, "lineStyle": {"width": 1, "type": "solid"}},
+        "itemStyle": {"borderWidth": 0},
+        "emphasis": {
+            "label": {"fontSize": 13, "fontWeight": "bold"},
+            "itemStyle": {"shadowBlur": 8, "shadowColor": "rgba(0,0,0,0.3)"},
+        },
+        "data": [{"name": d["name"], "value": d["value"], "itemStyle": {"color": _PALETTE[i % len(_PALETTE)]}}
+                 for i, d in enumerate(data)],
+    }]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def _build_gauge(
+    rows: list[dict],
+    value_col: str,
+    title: str,
+    subtitle: str | None,
+    min_val: float = 0,
+    max_val: float | None = None,
+) -> dict:
+    """Single KPI gauge/dial — uses the first row's value_col."""
+    raw = rows[0].get(value_col, 0) if rows else 0
+    try:
+        value = float(raw) if raw is not None else 0.0
+    except (ValueError, TypeError):
+        value = 0.0
+
+    # Label from first non-value column in the row, or title
+    label = title
+    if rows and len(rows[0]) > 1:
+        for k, v in rows[0].items():
+            if k != value_col and v is not None:
+                label = str(v)
+                break
+
+    # Auto-scale max
+    if max_val is None:
+        if value <= 1.0:
+            max_val = 1.0
+        elif value <= 100:
+            max_val = 100.0
+        else:
+            magnitude = 10 ** (len(str(int(abs(value)))) - 1)
+            max_val = (int(value * 1.5 / magnitude) + 1) * magnitude
+
+    pct = max(0.0, min(1.0, (value - min_val) / (max_val - min_val))) if max_val != min_val else 0.0
+    color = _GREEN if pct >= 0.7 else _ACCENT2 if pct >= 0.4 else _RED
+
+    cfg = _base(title, subtitle)
+    cfg["series"] = [{
+        "name": title,
+        "type": "gauge",
+        "min": min_val,
+        "max": max_val,
+        "splitNumber": 5,
+        "radius": "75%",
+        "center": ["50%", "60%"],
+        "axisLine": {
+            "lineStyle": {
+                "width": 14,
+                "color": [[pct, color], [1, _AXIS_LINE]],
+            }
+        },
+        "pointer": {"itemStyle": {"color": color}, "length": "65%"},
+        "axisTick": {"distance": -14, "length": 6, "lineStyle": {"color": "#fff", "width": 1}},
+        "splitLine": {"distance": -18, "length": 14, "lineStyle": {"color": "#fff", "width": 2}},
+        "axisLabel": {"color": _SUBTEXT, "distance": 18, "fontSize": 10},
+        "detail": {
+            "valueAnimation": True,
+            "formatter": "{value}",
+            "color": _TEXT,
+            "fontSize": 24,
+            "fontWeight": "bold",
+            "offsetCenter": [0, "75%"],
+        },
+        "title": {"color": _SUBTEXT, "fontSize": 12, "offsetCenter": [0, "92%"]},
+        "data": [{"value": round(value, 2), "name": label}],
+    }]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def _build_treemap(
+    rows: list[dict],
+    label_col: str,
+    value_col: str,
+    title: str,
+    subtitle: str | None,
+) -> dict:
+    """Proportional-area treemap."""
+    data = []
+    for r in rows:
+        name = str(r.get(label_col, ""))
+        raw = r.get(value_col, 0)
+        try:
+            value = abs(float(raw)) if raw is not None else 0.0
+        except (ValueError, TypeError):
+            value = 0.0
+        if name and value > 0:
+            data.append({"name": name, "value": value})
+
+    cfg = _base(title, subtitle)
+    cfg["tooltip"] = {
+        "trigger": "item",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+        "formatter": "{b}: {c}",
+    }
+    cfg["series"] = [{
+        "name": title,
+        "type": "treemap",
+        "top": 50,
+        "left": 0,
+        "right": 0,
+        "bottom": 0,
+        "visibleMin": 0,
+        "label": {
+            "show": True,
+            "formatter": "{b}\n{c}",
+            "color": "#fff",
+            "fontSize": 12,
+        },
+        "upperLabel": {
+            "show": True,
+            "height": 28,
+            "color": "#fff",
+            "fontSize": 12,
+            "fontWeight": 600,
+            "borderColor": "#1E293B",
+            "borderWidth": 1,
+        },
+        "itemStyle": {
+            "borderWidth": 1,
+            "borderColor": "#0f1117",
+            "gapWidth": 2,
+            "borderColorSaturation": 0.7,
+        },
+        "breadcrumb": {"show": False},
+        "levels": [{
+            "itemStyle": {"borderColor": "#1E293B", "borderWidth": 2, "gapWidth": 2},
+            "upperLabel": {"show": False},
+        }],
+        "data": [
+            {**d, "itemStyle": {"color": _PALETTE[i % len(_PALETTE)]}}
+            for i, d in enumerate(data)
+        ],
+    }]
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def _build_radar(
+    rows: list[dict],
+    x_col: str,
+    y_cols: list[str],
+    title: str,
+    subtitle: str | None,
+) -> dict:
+    """Radar/spider chart.
+
+    If y_cols has ≥3 entries: each y_col is one radar axis; each row is one series entity.
+    Otherwise: x_col = dimension name per row, y_cols[0] = metric.
+    """
+    if not y_cols:
+        return _build_bar(rows, x_col, [], None, title, subtitle)
+
+    cfg = _base(title, subtitle)
+    cfg["tooltip"] = {
+        "trigger": "item",
+        "backgroundColor": _TOOLTIP_BG,
+        "borderColor": _AXIS_LINE,
+        "textStyle": {"color": _TEXT, "fontSize": 12},
+    }
+
+    if len(y_cols) >= 3:
+        # Multi-series mode: each y_col becomes a radar axis; each row is a series entity
+        max_per_col: dict[str, float] = {}
+        for y in y_cols:
+            vals = [float(r.get(y, 0)) for r in rows if r.get(y) is not None]
+            max_per_col[y] = max(vals) if vals else 1.0
+
+        cfg["legend"] = {**_LEGEND_BASE}
+        cfg["radar"] = {
+            "indicator": [{"name": y, "max": max_per_col[y]} for y in y_cols],
+            "axisName": {"color": _SUBTEXT, "fontSize": 11},
+            "splitLine": {"lineStyle": {"color": _AXIS_LINE}},
+            "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+            "splitArea": {"areaStyle": {"color": ["rgba(91,106,240,0.02)", "rgba(91,106,240,0.05)"]}},
+        }
+        series_data = []
+        for i, r in enumerate(rows):
+            name = str(r.get(x_col, f"Series {i+1}"))
+            vals = [float(r.get(y, 0)) for y in y_cols]
+            color = _PALETTE[i % len(_PALETTE)]
+            series_data.append({
+                "name": name,
+                "value": vals,
+                "areaStyle": {"color": color + "33"},
+                "lineStyle": {"color": color, "width": 2},
+                "itemStyle": {"color": color},
+            })
+        cfg["series"] = [{"type": "radar", "data": series_data}]
+    else:
+        # Single y_col mode: x_col = indicator name, y_col = value
+        y_col = y_cols[0]
+        indicators = [str(r.get(x_col, "")) for r in rows]
+        vals = [float(r.get(y_col, 0)) for r in rows]
+        max_val = max(vals) if vals else 1.0
+
+        cfg["radar"] = {
+            "indicator": [{"name": ind, "max": max_val} for ind in indicators],
+            "axisName": {"color": _SUBTEXT, "fontSize": 11},
+            "splitLine": {"lineStyle": {"color": _AXIS_LINE}},
+            "axisLine": {"lineStyle": {"color": _AXIS_LINE}},
+            "splitArea": {"areaStyle": {"color": ["rgba(91,106,240,0.02)", "rgba(91,106,240,0.05)"]}},
+        }
+        cfg["series"] = [{
+            "type": "radar",
+            "data": [{
+                "name": title,
+                "value": vals,
+                "areaStyle": {"color": _PRIMARY + "33"},
+                "lineStyle": {"color": _PRIMARY, "width": 2},
+                "itemStyle": {"color": _PRIMARY},
+            }],
+        }]
+
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+def _build_dual_axis(
+    rows: list[dict],
+    x_col: str,
+    y_cols: list[str],
+    title: str,
+    subtitle: str | None,
+) -> dict:
+    """Dual y-axis combo: first y_col as bar (left axis), remaining y_cols as lines (right axis)."""
+    if len(y_cols) < 2:
+        return _build_bar(rows, x_col, y_cols, None, title, subtitle)
+
+    x_labels = [str(r.get(x_col, "")) for r in rows]
+    cfg = _base(title, subtitle)
+    cfg["legend"] = {**_LEGEND_BASE}
+    cfg["tooltip"] = {**_TOOLTIP_BASE, "trigger": "axis"}
+    cfg["grid"] = {"top": 70, "bottom": 60, "left": 70, "right": 70, "containLabel": True}
+    cfg["xAxis"] = _x_axis(x_labels, x_col)
+    cfg["yAxis"] = [
+        {**_value_axis(y_cols[0])},
+        {**_value_axis(y_cols[1]), "splitLine": {"show": False}},
+    ]
+
+    series = []
+    for i, y in enumerate(y_cols):
+        data = [r.get(y, 0) for r in rows]
+        color = _PALETTE[i % len(_PALETTE)]
+        if i == 0:
+            series.append({
+                "name": y,
+                "type": "bar",
+                "yAxisIndex": 0,
+                "data": data,
+                "barMaxWidth": 40,
+                "itemStyle": {"color": color, "borderRadius": [3, 3, 0, 0]},
+                "emphasis": {"itemStyle": {"shadowBlur": 8, "shadowColor": "rgba(0,0,0,0.4)"}},
+            })
+        else:
+            series.append({
+                "name": y,
+                "type": "line",
+                "yAxisIndex": 1,
+                "data": data,
+                "smooth": True,
+                "symbol": "circle",
+                "symbolSize": 6,
+                "lineStyle": {"color": color, "width": 2},
+                "itemStyle": {"color": color},
+            })
+
+    cfg["series"] = series
+    cfg.update(_BASE_ANIMATION)
+    return cfg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Chart type inference
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -933,6 +1284,30 @@ def infer_chart_type(
     # Explicit waterfall request
     if "waterfall" in ctx:
         return "waterfall", ["bar", "table"]
+
+    # Funnel / pipeline / conversion
+    if any(k in ctx for k in ("funnel", "pipeline", "conversion", "stage", "dropout", "drop-off", "dropoff", "drop off")):
+        return "funnel", ["bar", "pie"]
+
+    # Gauge / single KPI dial
+    if any(k in ctx for k in ("gauge", "dial", "meter", "speedometer")):
+        return "gauge", ["metric", "bar"]
+    if row_count == 1 and len(num_cols) == 1 and any(k in ctx for k in ("kpi", "target", "rate", "ratio", "score", "progress")):
+        return "gauge", ["metric", "table"]
+
+    # Treemap / hierarchy
+    if any(k in ctx for k in ("treemap", "tree map", "hierarchical", "nested", "breakdown by size")):
+        return "treemap", ["bar", "pie"]
+
+    # Radar / spider / multi-dimensional comparison
+    if any(k in ctx for k in ("radar", "spider", "spider web", "radial comparison", "multi-dimensional")):
+        if len(num_cols) >= 2:
+            return "radar", ["bar", "table"]
+
+    # Dual-axis / combo chart
+    if any(k in ctx for k in ("dual axis", "dual-axis", "secondary axis", "twin axis", "two axis", "combo", "bar and line")):
+        if len(num_cols) >= 2:
+            return "dual_axis", ["bar", "line"]
 
     # Reconciliation → table
     if "reconcil" in ctx:

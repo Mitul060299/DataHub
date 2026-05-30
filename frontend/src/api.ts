@@ -965,6 +965,12 @@ export async function updateDashboardTile(dashboardId: string, tileId: string, p
   title?: string;
   layout?: Record<string, unknown>;
   echarts_config?: Record<string, unknown> | null;
+  query_spec?: Record<string, unknown>;
+  metric_label?: string;
+  metric_value?: string;
+  metric_trend?: string;
+  sparkline_data?: number[];
+  delta_pct?: number | null;
 }) {
   const response = await api.patch(`/dashboards/${dashboardId}/tiles/${tileId}`, payload);
   return response.data as import("./types").DashboardV2Tile;
@@ -1668,7 +1674,87 @@ export async function removeOrgMember(memberId: string): Promise<void> {
   await api.delete(`/organization/members/${memberId}`);
 }
 
-// ── Reviews ─────────────────────────────────────────────────────────────────
+// ── Organization branding (white-label) ─────────────────────────────────────
+
+export interface OrgBranding {
+  product_name: string | null;
+  logo_url: string | null;
+  favicon_url: string | null;
+  primary_color: string | null;
+  support_email: string | null;
+  hide_datahub_branding: boolean;
+  custom_css: string | null;
+}
+
+export async function fetchOrgBranding(): Promise<OrgBranding> {
+  const response = await api.get("/organization/branding");
+  return response.data;
+}
+
+export async function updateOrgBranding(payload: Partial<OrgBranding>): Promise<OrgBranding> {
+  const response = await api.put("/organization/branding", payload);
+  return response.data;
+}
+
+export async function resetOrgBranding(): Promise<void> {
+  await api.delete("/organization/branding");
+}
+
+// ── GDPR ────────────────────────────────────────────────────────────────────
+
+export async function gdprExport(): Promise<Record<string, unknown>> {
+  const response = await api.get("/users/me/gdpr-export");
+  return response.data;
+}
+
+export async function gdprErase(): Promise<void> {
+  await api.delete("/users/me/gdpr-erase");
+}
+
+// ── SAML 2.0 IdP Config ───────────────────────────────────────────────────────
+export interface SamlIdpConfig {
+  org_id: string;
+  entity_id: string;
+  sso_url: string;
+  slo_url?: string | null;
+  sp_entity_id?: string | null;
+  attribute_email: string;
+  attribute_name?: string | null;
+  name_id_format: string;
+  is_active: boolean;
+  certificate_preview?: string | null;
+  acs_url?: string;
+  metadata_url?: string;
+}
+
+export interface SamlIdpConfigPayload {
+  entity_id: string;
+  sso_url: string;
+  slo_url?: string;
+  certificate: string;
+  sp_entity_id?: string;
+  attribute_email?: string;
+  attribute_name?: string;
+  name_id_format?: string;
+  is_active?: boolean;
+}
+
+export async function fetchSamlConfig(): Promise<SamlIdpConfig> {
+  const response = await api.get("/auth/saml/config");
+  return response.data;
+}
+
+export async function updateSamlConfig(payload: SamlIdpConfigPayload): Promise<SamlIdpConfig> {
+  const response = await api.post("/auth/saml/config", payload);
+  return response.data;
+}
+
+export async function deleteSamlConfig(): Promise<void> {
+  await api.delete("/auth/saml/config");
+}
+
+
+
 
 export interface ReviewOut {
   id: string;

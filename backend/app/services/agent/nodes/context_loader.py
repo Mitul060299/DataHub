@@ -1,4 +1,6 @@
 import logging as _logging
+import hashlib as _hashlib
+import json as _json
 
 from ..state import AgentState, TableRegistryEntry
 from ...duckdb_service import DuckDBService
@@ -11,6 +13,55 @@ from ....models_db import ChatTemplateDB, DatasetMetaDB, PipelineStepDB
 import re as _re
 
 _logger = _logging.getLogger(__name__)
+
+# ── Lazy Redis cache for schema/stats/sample_rows ────────────────────────────
+# Keyed by (dataset_id, row_count, col_count); TTL = 10 minutes.
+# Falls back silently to loading from DuckDB if Redis is unavailable.
+
+_redis_client = None
+_redis_checked = False
+_CTX_TTL = 600  # seconds
+
+
+def _get_redis():
+    global _redis_client, _redis_checked
+    if _redis_checked:
+        return _redis_client
+    _redis_checked = True
+    try:
+        from redis import Redis
+        from ....config import settings  # type: ignore[import]
+        url = getattr(settings, "redis_url", None)
+        if url:
+            _redis_client = Redis.from_url(url, decode_responses=True, socket_connect_timeout=1)
+    except Exception:
+        pass
+    return _redis_client
+
+
+def _ctx_cache_key(dataset_id: str, row_count: int, col_count: int) -> str:
+    fingerprint = f"{dataset_id}:{row_count}:{col_count}"
+    return "ctx:" + _hashlib.md5(fingerprint.encode()).hexdigest()
+
+
+def _cache_get(key: str) -> dict | None:
+    try:
+        r = _get_redis()
+        if not r:
+            return None
+        raw = r.get(key)
+        return _json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+def _cache_set(key: str, value: dict) -> None:
+    try:
+        r = _get_redis()
+        if r:
+            r.set(key, _json.dumps(value), ex=_CTX_TTL)
+    except Exception:
+        pass
 
 
 def _sanitize_alias(name: str) -> str:
@@ -469,19 +520,26 @@ async def context_loader(state: AgentState) -> dict:
     # On the first turn intent is "" (not yet classified) so we always run it.
     _MULTI_DATASET_INTENTS = {"join", "union", "merge", "reconcile", "compare", "append", ""}
     _current_intent = state.get("intent", "")
-    _run_secondary = _current_intent in _MULTI_DATASET_INTENTS
+    # If the frontend explicitly named secondary datasets, always load them.
+    _explicit_secondary_ids: list[str] = [
+        s for s in (state.get("secondary_dataset_ids") or [])
+        if s and s != dataset_id
+    ]
+    _run_secondary = bool(_explicit_secondary_ids) or _current_intent in _MULTI_DATASET_INTENTS
 
     secondary_schemas: dict = {}
     if _run_secondary:
         _sec_db2 = SessionLocal()
         try:
+            _sec_filter = (
+                DatasetMetaDB.id.in_(_explicit_secondary_ids)
+                if _explicit_secondary_ids
+                else (DatasetMetaDB.user_id == user_id) & (DatasetMetaDB.id != dataset_id)
+            )
             workspace_datasets_list = (
                 _sec_db2.query(DatasetMetaDB)
-                .filter(
-                    DatasetMetaDB.user_id == user_id,
-                    DatasetMetaDB.id != dataset_id,
-                )
-                .limit(20)
+                .filter(_sec_filter)
+                .limit(20 if not _explicit_secondary_ids else len(_explicit_secondary_ids))
                 .all()
             )
             for sec_meta in workspace_datasets_list:
@@ -532,9 +590,20 @@ async def context_loader(state: AgentState) -> dict:
     # (DuckDB session setup and secondary registration already done above)
 
     try:
-        schema = DuckDBService.get_schema(dataset_id)
-        stats = DuckDBService.get_column_stats(dataset_id)
-        sample_rows = DuckDBService.get_sample_rows(dataset_id, limit=5)
+        _col_count = len(dataset.columns or []) if dataset else 0
+        _cache_key = _ctx_cache_key(dataset_id, int(dataset.row_count or 0) if dataset else 0, _col_count)
+        _cached_ctx = _cache_get(_cache_key)
+        if _cached_ctx:
+            schema = _cached_ctx["schema"]
+            stats = _cached_ctx["stats"]
+            sample_rows = _cached_ctx["sample_rows"]
+            _logger.debug("CTX_CACHE_HIT: dataset=%s", dataset_id)
+        else:
+            schema = DuckDBService.get_schema(dataset_id)
+            stats = DuckDBService.get_column_stats(dataset_id)
+            sample_rows = DuckDBService.get_sample_rows(dataset_id, limit=5)
+            _cache_set(_cache_key, {"schema": schema, "stats": stats, "sample_rows": sample_rows})
+            _logger.debug("CTX_CACHE_MISS: dataset=%s — loaded and cached", dataset_id)
     except Exception as exc:
         base_err: dict = {
             "schema": {},

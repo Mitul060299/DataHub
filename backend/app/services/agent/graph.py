@@ -10,6 +10,7 @@ from .edges import (
     route_after_execute,
     route_after_goal_parser,
     route_after_goal_verifier,
+    route_after_pre_plan_clarifier,
     route_after_present_unified,
     route_after_prior_pipeline_parser,
     route_after_reflect,
@@ -27,6 +28,8 @@ from .nodes.drift_detector import drift_detector
 from .nodes.execute_step import execute_step
 from .nodes.goal_parser import goal_parser
 from .nodes.goal_verifier import goal_verifier
+from .nodes.dashboard_generator import dashboard_generator
+from .nodes.pre_plan_clarifier import pre_plan_clarifier
 from .nodes.intent_classifier import intent_classifier
 from .nodes.interrupt_asker import interrupt_asker
 from .nodes.pipeline_recorder import pipeline_recorder
@@ -64,12 +67,14 @@ def build_agent_graph():
     # ------------------------------------------------------------------
     graph.add_node("prior_pipeline_parser", prior_pipeline_parser)
     graph.add_node("goal_parser", goal_parser)
+    graph.add_node("pre_plan_clarifier", pre_plan_clarifier)
     graph.add_node("drift_detector", drift_detector)
     graph.add_node("auto_planner", auto_planner)
     graph.add_node("step_validator", step_validator)
     graph.add_node("reflection_v2", reflection_v2)
     graph.add_node("interrupt_asker", interrupt_asker)
     graph.add_node("goal_verifier", goal_verifier)
+    graph.add_node("dashboard_generator", dashboard_generator)
 
     # ------------------------------------------------------------------
     # Entry point
@@ -143,7 +148,12 @@ def build_agent_graph():
     graph.add_conditional_edges(
         "goal_parser",
         route_after_goal_parser,
-        {"drift_detector": "drift_detector", "auto_planner": "auto_planner"},
+        {"pre_plan_clarifier": "pre_plan_clarifier"},
+    )
+    graph.add_conditional_edges(
+        "pre_plan_clarifier",
+        route_after_pre_plan_clarifier,
+        {"drift_detector": "drift_detector", "auto_planner": "auto_planner", "__end__": END},
     )
     graph.add_conditional_edges(
         "drift_detector",
@@ -174,9 +184,10 @@ def build_agent_graph():
         {
             "auto_planner": "auto_planner",
             "interrupt_asker": "interrupt_asker",
-            "pipeline_recorder": "pipeline_recorder",
+            "dashboard_generator": "dashboard_generator",
         },
     )
+    graph.add_edge("dashboard_generator", "pipeline_recorder")
 
     return graph.compile(checkpointer=MemorySaver())
 

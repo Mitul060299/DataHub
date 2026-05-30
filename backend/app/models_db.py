@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text
+from sqlalchemy import Column, String, Text, Integer, Boolean, BigInteger, Index, ForeignKey, ARRAY, text, Float
 from sqlalchemy import DateTime, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -118,6 +118,29 @@ class OrganizationDB(Base):
 
     __table_args__ = (
         Index("idx_organizations_owner_user_id", "owner_user_id"),
+    )
+
+
+class OrganizationBrandingDB(Base):
+    """White-label branding config for an organization (one row per org).
+
+    Stores logo URL, primary colour, and custom product name.
+    Created lazily when the org owner first saves branding settings.
+    """
+    __tablename__ = "organization_branding"
+
+    org_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    product_name = Column(String, nullable=True)         # e.g. "Acme Analytics"
+    logo_url = Column(String, nullable=True)             # CDN / presigned URL
+    favicon_url = Column(String, nullable=True)
+    primary_color = Column(String, nullable=True)        # hex e.g. "#1A73E8"
+    support_email = Column(String, nullable=True)
+    hide_datahub_branding = Column(Boolean, nullable=False, default=False)
+    custom_css = Column(Text, nullable=True)             # advanced: injected into <head>
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_org_branding_org_id", "org_id"),
     )
 
 
@@ -631,6 +654,8 @@ class DashboardTileDB(Base):
     metric_label = Column(Text, nullable=True)
     metric_trend = Column(Text, nullable=True)                  # up | down | neutral
     metric_threshold = Column(JSONB, nullable=True)             # {value, color}
+    sparkline_data = Column(JSONB, nullable=True)               # list[float] for sparkline chart
+    delta_pct = Column(Float, nullable=True)                    # e.g. 12.5 meaning +12.5%
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -1197,3 +1222,39 @@ class EmailPreferencesDB(Base):
     weekly_digest = Column(Boolean, nullable=False, default=True)
     unsubscribe_token = Column(String, nullable=False, default="")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SamlIdpConfigDB(Base):
+    """Per-organization SAML 2.0 IdP configuration.
+
+    One row per org.  Stores the metadata needed to validate SAML assertions
+    from enterprise IdPs (Okta, Azure AD, Google Workspace, Ping, etc.).
+    ``is_active`` must be True for the org's SAML flow to be enabled;
+    setting it to False lets admins disable SSO without losing the config.
+    """
+    __tablename__ = "saml_idp_configs"
+
+    org_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    entity_id = Column(Text, nullable=False)          # IdP EntityID URI
+    sso_url = Column(Text, nullable=False)             # IdP SSO URL (HTTP-Redirect or POST)
+    slo_url = Column(Text, nullable=True)              # Single Logout URL (optional)
+    certificate = Column(Text, nullable=False)         # PEM X.509, IdP signing cert
+    sp_entity_id = Column(Text, nullable=True)         # SP EntityID (default: API base URL)
+    attribute_email = Column(
+        Text,
+        nullable=False,
+        default="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+    )
+    attribute_name = Column(Text, nullable=True)       # SAML attr for display name
+    name_id_format = Column(
+        Text,
+        nullable=False,
+        default="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+    )
+    is_active = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_saml_idp_configs_org_id", "org_id"),
+    )

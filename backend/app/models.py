@@ -211,6 +211,8 @@ class DashboardTileOut(BaseModel):
     metric_label: str | None = None
     metric_trend: str | None = None
     metric_threshold: dict[str, Any] | None = None
+    sparkline_data: list[float] | None = None
+    delta_pct: float | None = None
     snapshot_id: str | None = None
     created_at: str
 
@@ -282,10 +284,13 @@ class DashboardTileUpdate(BaseModel):
     title: str | None = None
     position: dict[str, Any] | None = None
     echarts_config: dict[str, Any] | None = None
+    query_spec: dict[str, Any] | None = None
     metric_value: str | None = None
     metric_label: str | None = None
     metric_trend: str | None = None
     metric_threshold: dict[str, Any] | None = None
+    sparkline_data: list[float] | None = None
+    delta_pct: float | None = None
 
 
 class ChartSeriesPoint(BaseModel):

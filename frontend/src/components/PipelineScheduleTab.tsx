@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { useRealtimePipelineRun } from "../hooks/useRealtimePipelineRun";
 
 // ── Write-back destination types (mirrors SendToDestinationModal's DESTINATIONS) ──
 const WB_CONNECTOR_OPTIONS = [
@@ -46,12 +47,6 @@ interface RunRecord {
   finished_at: string | null;
   error_message: string | null;
   output_snapshot_url: string | null;
-}
-
-interface RunStatus {
-  run_id: string;
-  status: "pending" | "running" | "completed" | "failed";
-  error_message: string | null;
 }
 
 interface Props {
@@ -139,9 +134,7 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
 
-  const [runningId, setRunningId] = useState<string | null>(null);
-  const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { runStatus, isRunning, triggerRun } = useRealtimePipelineRun(pipelineId);
 
   // Load schedule
   useEffect(() => {
@@ -184,28 +177,12 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
     loadRuns();
   }, [loadRuns]);
 
-  // Poll run status
+  // Reload run history when a run completes or fails via Realtime
   useEffect(() => {
-    if (!runningId) {
-      if (pollRef.current) clearInterval(pollRef.current);
-      return;
+    if (runStatus?.status === "completed" || runStatus?.status === "failed") {
+      loadRuns();
     }
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await api.get<RunStatus>(`/pipelines/runs/${runningId}/status`);
-        setRunStatus(res.data);
-        if (res.data.status === "completed" || res.data.status === "failed") {
-          clearInterval(pollRef.current!);
-          setRunningId(null);
-          loadRuns();
-        }
-      } catch {
-        clearInterval(pollRef.current!);
-        setRunningId(null);
-      }
-    }, 2000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [runningId, loadRuns]);
+  }, [runStatus?.status, loadRuns]);
 
   const saveSchedule = async () => {
     setSavingSchedule(true);
@@ -232,15 +209,7 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
     }
   };
 
-  const triggerRun = async () => {
-    try {
-      const res = await api.post<{ run_id: string; status: string }>(`/pipelines/${pipelineId}/run`);
-      setRunningId(res.data.run_id);
-      setRunStatus({ run_id: res.data.run_id, status: "pending", error_message: null });
-    } catch {
-      // ignore
-    }
-  };
+
 
   const description = describeCron(schedule.cron_expression);
 
@@ -255,11 +224,11 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
           </div>
           <button
             className="btn btn-primary"
-            onClick={triggerRun}
-            disabled={!!runningId}
+            onClick={() => triggerRun()}
+            disabled={isRunning}
             style={{ minWidth: 96 }}
           >
-            {runningId ? "Running…" : "Run Now"}
+            {isRunning ? "Running…" : "Run Now"}
           </button>
         </div>
         {runStatus && (
@@ -288,7 +257,7 @@ export function PipelineScheduleTab({ pipelineId }: Props) {
               <span style={{ color: "#f87171" }}> — {runStatus.error_message}</span>
             )}
             {runStatus.status === "running" && (
-              <span style={{ color: "var(--tx1)", marginLeft: "auto" }}>Polling every 2s…</span>
+              <span style={{ color: "var(--tx1)", marginLeft: "auto" }}>Live • Realtime</span>
             )}
           </div>
         )}

@@ -13,6 +13,10 @@ interface MetricTileProps {
   subtitle?: string;
   className?: string;
   style?: CSSProperties;
+  /** Array of numeric data points to render as a sparkline (min 2 points). */
+  sparkline_data?: number[];
+  /** Percentage change to display alongside the value, e.g. 12.5 for +12.5%. */
+  delta_pct?: number;
 }
 
 function getTrendIcon(trend?: "up" | "down" | "neutral") {
@@ -49,6 +53,33 @@ function getBackgroundColor(
     : "rgba(34,197,94,0.12)";
 }
 
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  if (!data || data.length < 2) return null;
+  const W = 80;
+  const H = 28;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * W;
+    const y = H - ((v - min) / range) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible", flexShrink: 0 }}>
+      <polyline
+        points={pts.join(" ")}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.85}
+      />
+    </svg>
+  );
+}
+
 export function MetricTile({
   label,
   value,
@@ -57,6 +88,8 @@ export function MetricTile({
   subtitle,
   className = "",
   style: styleProp,
+  sparkline_data,
+  delta_pct,
 }: MetricTileProps) {
   const bg = getBackgroundColor(value, threshold);
   const trendIcon = getTrendIcon(trend);
@@ -131,6 +164,31 @@ export function MetricTile({
           {subtitle}
         </div>
       )}
+
+      {(sparkline_data && sparkline_data.length >= 2) || delta_pct != null ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+          {delta_pct != null ? (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: delta_pct >= 0 ? "#22C55E" : "#EF4444",
+                background: delta_pct >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                borderRadius: 5,
+                padding: "2px 6px",
+              }}
+            >
+              {delta_pct >= 0 ? "+" : ""}{delta_pct.toFixed(1)}%
+            </span>
+          ) : <span />}
+          {sparkline_data && sparkline_data.length >= 2 && (
+            <Sparkline
+              data={sparkline_data}
+              color={trend === "down" ? "#EF4444" : trend === "neutral" ? "#94A3B8" : "#22C55E"}
+            />
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

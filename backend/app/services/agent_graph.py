@@ -201,6 +201,10 @@ class AgentGraphService:
                 "current_rule_index": snapshot.get("current_rule_index", 0),
             }
         else:
+            # Cap conversation history to the last 6 turns (3 exchanges) to
+            # prevent unbounded token growth.  Goal-intent runs don't need prior
+            # chat context for planning — they use the schema + goal_raw directly.
+            capped_history = (conversation_history or [])[-6:]
             initial_state = cls._build_initial_state(
                 dataset_id=dataset_id,
                 message=user_message,
@@ -210,7 +214,7 @@ class AgentGraphService:
                 project_id=project_id,
                 session_id=session_id,
                 secondary_dataset_ids=secondary_dataset_ids or [],
-                conversation_history=conversation_history or [],
+                conversation_history=capped_history,
                 plan_pending_modification=plan_pending_modification,
                 pending_plan=pending_plan,
             )
@@ -225,7 +229,16 @@ class AgentGraphService:
                 initial_state["pipeline_steps"] = list(prior_snapshot["pipeline_steps"])
             # Populate auto_goal_raw from the user message so goal_parser has
             # its input when intent=="goal" routes the request to the auto path.
-            initial_state["auto_goal_raw"] = user_message
+            # If the prior turn left a clarification question pending, the current
+            # user message is the answer — append it to the original goal text so
+            # goal_parser re-parses the full, clarified intent.
+            _prior_clarification = prior_snapshot.get("goal_clarification_pending", "")
+            _prior_raw_goal = prior_snapshot.get("auto_goal_raw", "")
+            if _prior_clarification and _prior_raw_goal:
+                initial_state["auto_goal_raw"] = f"{_prior_raw_goal}\nClarification: {user_message}"
+                initial_state["goal_clarification_pending"] = ""
+            else:
+                initial_state["auto_goal_raw"] = user_message
             # Auto mode fields — will be ignored for non-goal intents
             initial_state.setdefault("auto_mode", False)
             initial_state.setdefault("dry_run", False)
@@ -462,6 +475,15 @@ class AgentGraphService:
                 # auto_planner feeds plan_presenter; plan is emitted there
                 # (same handler as manual planner — no separate event needed)
 
+                elif node_name == "pre_plan_clarifier":
+                    output = data.get("output", {})
+                    question = output.get("goal_clarification_pending", "")
+                    if question:
+                        yield {
+                            "type": "agent.clarify",
+                            "question": question,
+                        }
+
                 elif node_name == "step_validator":
                     output = data.get("output", {})
                     lv = output.get("last_validation") or {}
@@ -484,6 +506,15 @@ class AgentGraphService:
                             "rules_skipped": gr.get("rules_skipped", 0),
                             "total_rules": gr.get("total_rules", 0),
                             "duration_seconds": gr.get("duration_seconds", 0),
+                        }
+
+                elif node_name == "dashboard_generator":
+                    output = data.get("output", {})
+                    dash_id = output.get("generated_dashboard_id")
+                    if dash_id:
+                        yield {
+                            "type": "agent.dashboard.generated",
+                            "dashboard_id": dash_id,
                         }
 
                 elif node_name == "responder":

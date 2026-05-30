@@ -61,6 +61,7 @@ simple-salesforce==1.12.6  # Salesforce SOQL/API connector
 
 # Credential encryption (query folding + write-back)
 cryptography>=42.0.0
+defusedxml>=0.7.1
 
 # Antivirus scanning for uploaded files (optional — set CLAMD_SOCKET or CLAMD_HOST to enable)
 pyclamd>=0.4.0

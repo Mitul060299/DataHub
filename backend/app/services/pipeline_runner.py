@@ -164,13 +164,17 @@ async def run_pipeline(
     pipeline_id: str,
     triggered_by: str,
     source_overrides: dict | None = None,
+    run_id: str | None = None,
 ) -> str:
     """
     Execute a pipelines_v2 record end-to-end.
 
+    If ``run_id`` is provided the existing ``PipelineRunV2DB`` row is reused
+    (and its status updated to "running"); otherwise a new row is created.
+
     Returns the pipeline_run_id (UUID string).
     """
-    run_id = str(uuid.uuid4())
+    run_id = run_id or str(uuid.uuid4())
     db = SessionLocal()
 
     try:
@@ -185,20 +189,41 @@ async def run_pipeline(
         steps: list[dict] = pipeline.steps if isinstance(pipeline.steps, list) else []
         user_id: str = str(pipeline.user_id or "system")
 
-        # ── 2. Create run record (status=running) ────────────────────────────
-        run = PipelineRunV2DB(
-            id=run_id,
-            pipeline_id=pipeline_id,
-            user_id=user_id,
-            status="running",
-            triggered_by=triggered_by,
-            started_at=datetime.now(timezone.utc),
-            execution_log=[],
-            step_results={},
-            metrics={},
-        )
-        db.add(run)
+        # ── 2. Create or update run record (status=running) ──────────────────
+        run = db.query(PipelineRunV2DB).filter(PipelineRunV2DB.id == run_id).first()
+        if run:
+            run.status = "running"
+            run.started_at = datetime.now(timezone.utc)
+            run.execution_log = []
+            run.step_results = {}
+            run.metrics = {}
+        else:
+            run = PipelineRunV2DB(
+                id=run_id,
+                pipeline_id=pipeline_id,
+                user_id=user_id,
+                status="running",
+                triggered_by=triggered_by,
+                started_at=datetime.now(timezone.utc),
+                execution_log=[],
+                step_results={},
+                metrics={},
+            )
+            db.add(run)
         db.commit()
+
+        # Broadcast run started
+        await _broadcast(
+            f"pipeline:{pipeline_id}",
+            "run_status_changed",
+            {
+                "run_id": run_id,
+                "pipeline_id": pipeline_id,
+                "status": "running",
+                "error_message": None,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
         # ── 3. Open fresh DuckDB ─────────────────────────────────────────────
         con = duckdb.connect(":memory:")
@@ -305,6 +330,19 @@ async def run_pipeline(
             run.execution_log = execution_log
             run.completed_at = datetime.now(timezone.utc)
             db.commit()
+
+            # Broadcast run failed to pipeline channel
+            await _broadcast(
+                f"pipeline:{pipeline_id}",
+                "run_status_changed",
+                {
+                    "run_id": run_id,
+                    "pipeline_id": pipeline_id,
+                    "status": "failed",
+                    "error_message": error_msg,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
 
             # Broadcast failure to all dashboards that use this pipeline
             affected_dashboard_ids = _get_affected_dashboard_ids(db, pipeline_id)
@@ -527,6 +565,19 @@ async def run_pipeline(
                     "timestamp": refresh_ts,
                 },
             )
+
+        # Broadcast run completed to pipeline channel
+        await _broadcast(
+            f"pipeline:{pipeline_id}",
+            "run_status_changed",
+            {
+                "run_id": run_id,
+                "pipeline_id": pipeline_id,
+                "status": "completed",
+                "error_message": None,
+                "timestamp": refresh_ts,
+            },
+        )
 
         track(str(user_id), "pipeline_run_completed", {"pipeline_id": pipeline_id, "run_id": run_id, "steps_total": len(steps), "snapshots_created": len(snapshot_records)})
         return run_id

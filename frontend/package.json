@@ -10,6 +10,7 @@
     "indexnow": "node scripts/indexnow-submit.mjs"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.32.0",
     "@sentry/react": "^8.45.0",
     "@supabase/supabase-js": "2.48.1",
     "@tailwindcss/vite": "^4.1.13",

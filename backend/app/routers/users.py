@@ -423,6 +423,263 @@ def update_email_preferences(
     return {"ok": True, "lifecycle_emails": bool(pref.lifecycle_emails), "weekly_digest": bool(pref.weekly_digest)}
 
 
+@router.get("/me/gdpr-export")
+def gdpr_export(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return a complete machine-readable export of all data held for the current user.
+
+    GDPR Article 20 — Right to Data Portability.
+    The response is a single JSON object with one key per data category.
+    """
+    from ..models_db import (
+        ProjectDB, DatasetMetaDB as _DS, AuditLogDB,
+        FeedbackDB, SupportChatSessionDB, SupportChatMessageDB,
+        UserUsageDB, ChatSessionDB,
+    )
+    from ..models_db import PipelineDB, PipelineV2DB, DashboardV2DB
+    import datetime
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = get_current_user_id(authorization) or ""
+
+    user = db.query(User).filter(User.username == subject).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    def _iso(dt):
+        return dt.isoformat() if dt else None
+
+    # Profile
+    profile = {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "plan": user.plan,
+        "has_completed_onboarding": user.has_completed_onboarding,
+        "trial_plan": user.trial_plan,
+        "trial_started_at": _iso(user.trial_started_at),
+        "trial_ends_at": _iso(user.trial_ends_at),
+    }
+
+    # Projects
+    projects = [
+        {"id": p.id, "name": p.name, "description": p.description, "created_at": _iso(p.created_at)}
+        for p in db.query(ProjectDB).filter(ProjectDB.user_id == user.id).all()
+    ]
+
+    # Datasets (metadata only — no raw data)
+    datasets = [
+        {
+            "id": d.id, "name": d.name, "original_filename": getattr(d, "original_filename", None),
+            "file_size_bytes": d.file_size_bytes, "row_count": d.row_count,
+            "created_at": _iso(d.created_at), "deleted_at": _iso(d.deleted_at),
+        }
+        for d in db.query(_DS).filter(_DS.user_id == user.id).all()
+    ]
+
+    # Pipelines V1
+    try:
+        pipelines_v1 = [
+            {"id": p.id, "name": p.name, "created_at": _iso(p.created_at)}
+            for p in db.query(PipelineDB).filter(PipelineDB.user_id == user.id).all()
+        ]
+    except Exception:
+        pipelines_v1 = []
+
+    # Pipelines V2
+    try:
+        pipelines_v2 = [
+            {"id": p.id, "name": p.name, "created_at": _iso(p.created_at)}
+            for p in db.query(PipelineV2DB).filter(PipelineV2DB.user_id == user.id).all()
+        ]
+    except Exception:
+        pipelines_v2 = []
+
+    # Dashboards
+    try:
+        dashboards = [
+            {"id": d.id, "name": d.name, "created_at": _iso(d.created_at)}
+            for d in db.query(DashboardV2DB).filter(DashboardV2DB.user_id == user.id).all()
+        ]
+    except Exception:
+        dashboards = []
+
+    # Audit log (own actions)
+    audit = [
+        {"action": r.action, "target": r.target, "created_at": _iso(r.created_at)}
+        for r in (
+            db.query(AuditLogDB)
+            .filter(AuditLogDB.actor == subject)
+            .order_by(AuditLogDB.created_at.desc())
+            .limit(1000)
+            .all()
+        )
+    ]
+
+    # Feedback
+    try:
+        feedback = [
+            {"message": r.message, "created_at": _iso(r.created_at)}
+            for r in db.query(FeedbackDB).filter(FeedbackDB.user_id == user.id).all()
+        ]
+    except Exception:
+        feedback = []
+
+    # Support chat
+    try:
+        sessions = db.query(SupportChatSessionDB).filter(SupportChatSessionDB.user_id == user.id).all()
+        support_chats = []
+        for s in sessions:
+            msgs = db.query(SupportChatMessageDB).filter(SupportChatMessageDB.session_id == s.id).all()
+            support_chats.append({
+                "session_id": s.id,
+                "created_at": _iso(s.created_at),
+                "messages": [{"role": m.role, "content": m.content, "created_at": _iso(m.created_at)} for m in msgs],
+            })
+    except Exception:
+        support_chats = []
+
+    # Monthly usage history
+    try:
+        usage_history = [
+            {
+                "period": r.period,
+                "api_calls": r.api_calls,
+                "pipeline_runs": r.pipeline_runs,
+                "datasets_uploaded": r.datasets_uploaded,
+                "storage_bytes_used": r.storage_bytes_used,
+            }
+            for r in db.query(UserUsageDB).filter(UserUsageDB.user_id == user.id).all()
+        ]
+    except Exception:
+        usage_history = []
+
+    return {
+        "exported_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "profile": profile,
+        "projects": projects,
+        "datasets": datasets,
+        "pipelines_v1": pipelines_v1,
+        "pipelines_v2": pipelines_v2,
+        "dashboards": dashboards,
+        "audit_log": audit,
+        "feedback": feedback,
+        "support_chats": support_chats,
+        "usage_history": usage_history,
+    }
+
+
+@router.delete("/me/gdpr-erase", status_code=204)
+def gdpr_erase(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> None:
+    """Permanently erase all data for the current user across every table.
+
+    GDPR Article 17 — Right to Erasure ('right to be forgotten').
+    This is irreversible. The caller is required to be authenticated.
+    Storage objects (S3/R2) are queued via pending_storage_deletes.
+    """
+    from ..services.audit import audit_store
+    from ..models import AuditEntry
+
+    subject = get_current_subject(authorization)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = db.query(User).filter(User.username == subject).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    uid = user.id
+    # Write audit event before deleting (uses separate audit service)
+    try:
+        audit_store.add(AuditEntry(
+            action="account.gdpr_erase",
+            actor=subject,
+            target=f"user:{uid}",
+            metadata={"user_id": uid, "username": subject},
+        ))
+    except Exception:
+        pass
+
+    # Queue S3 objects for async deletion before wiping DB rows
+    try:
+        from ..models_db import DatasetMetaDB as _DS, PendingStorageDeleteDB
+        import uuid as _uuid, datetime as _dt
+        datasets_to_delete = db.query(_DS).filter(_DS.user_id == uid, _DS.storage_path.isnot(None)).all()
+        for d in datasets_to_delete:
+            if d.storage_path and not d.storage_path.startswith("local://"):
+                db.add(PendingStorageDeleteDB(
+                    id=str(_uuid.uuid4()),
+                    storage_path=d.storage_path,
+                    created_at=_dt.datetime.utcnow(),
+                ))
+    except Exception:
+        pass
+
+    # Delete from all user-owned tables via raw SQL for reliability
+    _tables_uid = [
+        "pipeline_steps", "pipeline_runs_v2", "pipeline_schedules", "pipelines_v2",
+        "pipeline_runs", "pipelines",
+        "dashboard_tiles", "dashboards_v2", "viz_dashboard_widgets", "viz_dashboard_filters",
+        "viz_dashboards",
+        "dataset_lineage_edges", "dataset_chunks", "dataset_data", "dataset_sessions",
+        "calculated_columns", "transformation_history", "transformation_steps",
+        "import_tables", "import_connections",
+        "connector_credentials",
+        "artifacts",
+        "pipeline_events",
+        "webhooks", "scheduled_jobs",
+        "data_sources",
+        "chat_sessions",
+        "table_snapshots",
+        "contexts",
+        "feedback",
+        "agent_feedback",
+        "support_chat_sessions",
+        "approval_requests",
+        "user_usage",
+        "project_members",
+        "projects",
+        "dataset_meta",
+    ]
+    for table in _tables_uid:
+        try:
+            db.execute(text(f"DELETE FROM {table} WHERE user_id = :uid"), {"uid": uid})
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    # Audit logs — anonymise instead of hard-delete to preserve audit trail integrity
+    try:
+        db.execute(
+            text("UPDATE audit_logs SET actor = '[deleted]' WHERE actor = :subject"),
+            {"subject": subject},
+        )
+    except Exception:
+        pass
+
+    # Tables keyed by owner_user_id
+    try:
+        db.execute(text("DELETE FROM organizations WHERE owner_user_id = :uid"), {"uid": uid})
+    except Exception:
+        pass
+
+    # Finally delete the user row
+    try:
+        db.delete(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Erasure failed — partial deletion may have occurred")
+
+
 @router.get("/me/unsubscribe/{token}", include_in_schema=False)
 def unsubscribe_via_token(
     token: str,

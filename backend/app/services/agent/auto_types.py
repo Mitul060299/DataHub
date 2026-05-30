@@ -60,6 +60,7 @@ class AutoPlanStep(TypedDict):
     rule_ids: NotRequired[list[int]]      # if step covers multiple rules
     justification: str
     needs_validator: bool                 # False for rename/cast/select-only ops
+    phase: NotRequired[str]               # e.g. "data_preparation", "analytics", "visualisation"
 
 
 AutoPlan = list[AutoPlanStep]

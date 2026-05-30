@@ -55,6 +55,37 @@ AI messages, pipeline runs, and storage all map to **real per-call cost** (LLM t
 
 ---
 
+## Quota Add-Ons (Planned — not yet implemented)
+
+> **Status: not built.** When a user exhausts their monthly quota today, they receive an `HTTP 403` and must upgrade their plan. The add-on top-up system below is the planned solution — it is documented here for roadmap purposes only.
+
+The planned add-on model uses two **bundled packs** — each covers AI messages, pipeline runs, data scan, and storage in a single purchase. There are no separate per-resource packs (simpler checkout, better margin control). Each pack is priced at a minimum 2× the underlying delivery cost.
+
+| Pack | AI messages | Pipeline runs | Data scan | Storage | INR | USD |
+|---|---|---|---|---|---|---|
+| **Boost Pack** | +200 | +50 | +10 GB | +3 GB (permanent) | ₹499 | $12 |
+| **Power Pack** | +1,000 | +250 | +50 GB | +15 GB (permanent) | ₹1,999 | $49 |
+
+**Pricing rationale (2× cost floor):**
+- Boost Pack: ~$4.60 delivery cost → priced at $12 (2.6×)
+- Power Pack: ~$23 delivery cost → priced at $49 (2.1×)
+
+**Rules (planned):**
+- Add-ons are per-account, not per-project.
+- AI message and pipeline run credits expire at the end of the calendar month they are purchased in.
+- Data scan credits also expire monthly.
+- Storage additions are permanent (do not expire or reset).
+- Multiple packs stack — buying two Boost Packs gives +400 messages, +100 runs, etc.
+- No refunds on consumed add-ons.
+
+**What needs to be built:**
+- `POST /billing/addon` endpoint — validates pack SKU (`boost` / `power`), creates a Razorpay order, returns checkout params.
+- `POST /billing/addon/verify` — verifies payment signature, credits the pack to a new `quota_addons` table.
+- `usage_service.py` — `enforce_usage_limit()` must deduct from purchased add-on credits before raising 403.
+- Frontend — "Buy more" modal triggered from the quota-exceeded error banner, offering the two pack options.
+
+---
+
 ## How DataHub compares (at launch)
 
 | Tool | Entry price | Per-seat | Notes |

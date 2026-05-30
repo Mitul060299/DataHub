@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import GridLayout, { WidthProvider, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -20,8 +20,11 @@ import { MetricTile } from "../components/MetricTile";
 import { SharePanel } from "../components/SharePanel";
 import { DashboardComments } from "../components/DashboardComments";
 import { useRealtimeDashboard } from "../hooks/useRealtimeDashboard";
+import { useDuckDB } from "../hooks/useDuckDB";
+import { buildEChartsConfig, extractMetricValue } from "../lib/echartsBuilder";
 import { ContentTileEditor } from "../components/ContentTileEditor";
 import { DashboardGenerateModal } from "../components/DashboardGenerateModal";
+import { DashboardFilterBar, type ActiveFilter } from "../components/DashboardFilterBar";
 
 const ResponsiveGridLayout = WidthProvider(GridLayout);
 
@@ -136,23 +139,119 @@ function exportDashboardCSV(name: string, tiles: DashboardV2Tile[]) {
 
 // ---------- Tile card ----------
 
+function applyFilterToConfig(
+  cfg: Record<string, unknown>,
+  filterValue: string,
+): Record<string, unknown> {
+  const seriesRaw = cfg.series;
+  if (!Array.isArray(seriesRaw)) return cfg;
+  const series = seriesRaw.map((s) => {
+    const ser = s as Record<string, unknown>;
+    const data = ser.data as unknown[] | undefined;
+    if (!Array.isArray(data)) return ser;
+    const mappedData = data.map((d) => {
+      const item = typeof d === "object" && d !== null ? (d as Record<string, unknown>) : { value: d, name: String(d) };
+      const name = String(item.name ?? "");
+      return { ...item, itemStyle: { opacity: name === filterValue ? 1 : 0.2 } };
+    });
+    return { ...ser, data: mappedData };
+  });
+  return { ...cfg, series };
+}
+
+function applyDashFilters(
+  cfg: Record<string, unknown>,
+  filters: ActiveFilter[],
+): Record<string, unknown> {
+  if (filters.length === 0) return cfg;
+  const seriesRaw = cfg.series;
+  if (!Array.isArray(seriesRaw)) return cfg;
+  const xAxisRaw = cfg.xAxis;
+  const categories: string[] = Array.isArray(xAxisRaw)
+    ? ((xAxisRaw[0] as Record<string, unknown>)?.data as string[] | undefined) ?? []
+    : ((xAxisRaw as Record<string, unknown>)?.data as string[] | undefined) ?? [];
+
+  const passes = (name: string): boolean =>
+    filters.every((f) => {
+      const fv = f.value.toLowerCase();
+      const nv = name.toLowerCase();
+      switch (f.operator) {
+        case "=": return nv === fv;
+        case "!=": return nv !== fv;
+        case "contains": return nv.includes(fv);
+        case ">": return parseFloat(nv) > parseFloat(fv);
+        case "<": return parseFloat(nv) < parseFloat(fv);
+        default: return true;
+      }
+    });
+
+  const series = seriesRaw.map((s) => {
+    const ser = s as Record<string, unknown>;
+    const data = ser.data as unknown[] | undefined;
+    if (!Array.isArray(data)) return ser;
+    const mappedData = data.map((d, i) => {
+      const item =
+        typeof d === "object" && d !== null
+          ? (d as Record<string, unknown>)
+          : { value: d, name: categories[i] ?? String(d) };
+      const name = String(item.name ?? categories[i] ?? "");
+      return { ...item, itemStyle: { opacity: passes(name) ? 1 : 0.08 } };
+    });
+    return { ...ser, data: mappedData };
+  });
+  return { ...cfg, series };
+}
+
+// ---------- Chart type picker ----------
+
+const CHART_TYPES = [
+  { type: "bar", label: "Bar" },
+  { type: "horizontal_bar", label: "H.Bar" },
+  { type: "line", label: "Line" },
+  { type: "area", label: "Area" },
+  { type: "scatter", label: "Scatter" },
+  { type: "pie", label: "Pie" },
+  { type: "donut", label: "Donut" },
+  { type: "heatmap", label: "Heatmap" },
+  { type: "waterfall", label: "Waterfall" },
+  { type: "funnel", label: "Funnel" },
+  { type: "gauge", label: "Gauge" },
+  { type: "treemap", label: "Treemap" },
+  { type: "radar", label: "Radar" },
+  { type: "dual_axis", label: "Dual Axis" },
+  { type: "table", label: "Table" },
+];
+
+// ---------- Tile card ----------
+
 function TileCard({
   tile,
   editMode,
   onDelete,
   onTitleEdit,
   onRefresh,
+  onEdit,
+  onChartTypeChange,
   refreshing,
+  crossFilter,
+  onCrossFilter,
+  activeFilters,
 }: {
   tile: DashboardV2Tile;
   editMode: boolean;
   onDelete: (id: string) => void;
   onTitleEdit: (id: string, newTitle: string) => void;
   onRefresh: (id: string) => void;
+  onEdit: (tile: DashboardV2Tile) => void;
+  onChartTypeChange: (id: string, chartType: string) => void;
   refreshing: boolean;
+  crossFilter: { value: string; sourceTileId: string } | null;
+  onCrossFilter: (value: string, tileId: string) => void;
+  activeFilters: ActiveFilter[];
 }) {
   const [editing, setEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(tile.title);
+  const [showTypePicker, setShowTypePicker] = useState(false);
 
   const commitTitle = () => {
     setEditing(false);
@@ -244,22 +343,115 @@ function TileCard({
           ↻
         </button>
         {editMode && (
-          <button
-            onClick={() => onDelete(tile.id)}
-            title="Remove tile"
-            style={{
-              background: "none",
-              border: "none",
-              color: "#EF4444",
-              cursor: "pointer",
-              fontSize: 16,
-              lineHeight: 1,
-              padding: "2px 4px",
-              flexShrink: 0,
-            }}
-          >
-            ×
-          </button>
+          <>
+            {(tileType === "chart" || tileType === "table") && (
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowTypePicker((p) => !p)}
+                  title="Change chart type"
+                  style={{
+                    background: showTypePicker ? "rgba(91,106,240,0.2)" : "none",
+                    border: "none",
+                    color: "#818CF8",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    lineHeight: 1,
+                    padding: "2px 5px",
+                    flexShrink: 0,
+                    borderRadius: 4,
+                  }}
+                >
+                  ⇄
+                </button>
+                {showTypePicker && (
+                  <>
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 49 }}
+                      onClick={() => setShowTypePicker(false)}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        right: 0,
+                        zIndex: 50,
+                        background: "#0F1117",
+                        border: "1px solid #1E293B",
+                        borderRadius: 10,
+                        padding: 8,
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: 4,
+                        minWidth: 180,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+                      }}
+                    >
+                      {CHART_TYPES.map(({ type, label }) => (
+                        <button
+                          key={type}
+                          onClick={() => {
+                            setShowTypePicker(false);
+                            onChartTypeChange(tile.id, type);
+                          }}
+                          style={{
+                            background:
+                              (tile.chart_type ?? "bar") === type
+                                ? "rgba(91,106,240,0.2)"
+                                : "transparent",
+                            border:
+                              (tile.chart_type ?? "bar") === type
+                                ? "1px solid rgba(91,106,240,0.4)"
+                                : "1px solid transparent",
+                            borderRadius: 6,
+                            color: (tile.chart_type ?? "bar") === type ? "#818CF8" : "#94A3B8",
+                            cursor: "pointer",
+                            fontSize: 10,
+                            padding: "4px 6px",
+                            textAlign: "center",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => onEdit(tile)}
+              title="Edit tile"
+              style={{
+                background: "none",
+                border: "none",
+                color: "#818CF8",
+                cursor: "pointer",
+                fontSize: 13,
+                lineHeight: 1,
+                padding: "2px 4px",
+                flexShrink: 0,
+              }}
+            >
+              ✎
+            </button>
+            <button
+              onClick={() => onDelete(tile.id)}
+              title="Remove tile"
+              style={{
+                background: "none",
+                border: "none",
+                color: "#EF4444",
+                cursor: "pointer",
+                fontSize: 16,
+                lineHeight: 1,
+                padding: "2px 4px",
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
+          </>
         )}
       </div>
 
@@ -275,6 +467,8 @@ function TileCard({
                 ? { value: Number((tile.metric_threshold as Record<string, unknown>).value ?? 0) }
                 : undefined
             }
+            sparkline_data={Array.isArray(tile.sparkline_data) ? (tile.sparkline_data as number[]) : undefined}
+            delta_pct={typeof tile.delta_pct === "number" ? tile.delta_pct : undefined}
             style={{ height: "100%", borderRadius: 0, border: "none" }}
           />
         ) : tileType === "heading" ? (
@@ -345,7 +539,23 @@ function TileCard({
                 </div>
               );
             }
-            return <ErrorBoundary fallback={<div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#475569" }}>⚠ Chart render failed</div>}><EChartsRenderer config={cfg} height={260} /></ErrorBoundary>;
+            const isSource = crossFilter?.sourceTileId === tile.id;
+            let displayCfg = crossFilter && !isSource ? applyFilterToConfig(cfg, crossFilter.value) : cfg;
+            if (activeFilters.length > 0) {
+              displayCfg = applyDashFilters(displayCfg, activeFilters);
+            }
+            const handleClick = (params: unknown) => {
+              const p = params as { name?: string; data?: { name?: string } };
+              const clickedVal = p?.name ?? (p?.data as Record<string, unknown> | undefined)?.name as string | undefined;
+              if (!clickedVal) return;
+              // Toggle off if clicking the same value on the source tile
+              if (isSource && crossFilter?.value === clickedVal) {
+                onCrossFilter("", tile.id); // clear
+              } else {
+                onCrossFilter(String(clickedVal), tile.id);
+              }
+            };
+            return <ErrorBoundary fallback={<div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#475569" }}>⚠ Chart render failed</div>}><EChartsRenderer config={displayCfg} height={260} onChartClick={handleClick} /></ErrorBoundary>;
           })()
         )}
       </div>
@@ -371,6 +581,9 @@ function SettingsOverlay({
   );
   const [showBranding, setShowBranding] = useState(
     (dashboard.theme as Record<string, unknown> | undefined)?.show_branding !== false
+  );
+  const [refreshIntervalMins, setRefreshIntervalMins] = useState(
+    Number((dashboard.theme as Record<string, unknown> | undefined)?.refresh_interval_mins ?? 0)
   );
 
   return (
@@ -436,10 +649,26 @@ function SettingsOverlay({
           <span style={{ fontSize: 13, color: "#94A3B8" }}>Show datahub.org.in branding</span>
         </label>
 
+        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>Auto-refresh interval</span>
+          <select
+            value={refreshIntervalMins}
+            onChange={(e) => setRefreshIntervalMins(Number(e.target.value))}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            <option value={0}>Off</option>
+            <option value={1}>Every 1 minute</option>
+            <option value={5}>Every 5 minutes</option>
+            <option value={15}>Every 15 minutes</option>
+            <option value={30}>Every 30 minutes</option>
+            <option value={60}>Every 60 minutes</option>
+          </select>
+        </label>
+
         <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
           <button onClick={onClose} style={cancelBtnStyle}>Cancel</button>
           <button
-            onClick={() => onSave({ name, description, theme: { primary: primaryColor, show_branding: showBranding } })}
+            onClick={() => onSave({ name, description, theme: { primary: primaryColor, show_branding: showBranding, refresh_interval_mins: refreshIntervalMins } })}
             style={primaryBtnStyle}
           >
             Save
@@ -505,7 +734,16 @@ export function DashboardPage() {
   const [rglLayout, setRglLayout] = useState<Layout[]>([]);
   const [refreshingTiles, setRefreshingTiles] = useState<Set<string>>(new Set());
   const [autoArranging, setAutoArranging] = useState(false);
+  const [editingTile, setEditingTile] = useState<DashboardV2Tile | null>(null);
+  const [crossFilter, setCrossFilter] = useState<{ value: string; sourceTileId: string } | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+  const [filterBarVisible, setFilterBarVisible] = useState(false);
   const layoutSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCrossFilter = useCallback((value: string, sourceTileId: string) => {
+    if (!value) { setCrossFilter(null); return; }
+    setCrossFilter((prev) => (prev?.value === value && prev.sourceTileId === sourceTileId ? null : { value, sourceTileId }));
+  }, []);
 
   const onTilesRefresh = useCallback(async (_tileIds: string[]) => {
     if (!id) return;
@@ -514,6 +752,7 @@ export function DashboardPage() {
   }, [id]);
 
   const { toastMessage, refreshFailed } = useRealtimeDashboard(id, onTilesRefresh);
+  const { isReady: isDuckReady, runQuery: duckQuery } = useDuckDB();
 
   useEffect(() => {
     if (!id) return;
@@ -594,6 +833,61 @@ export function DashboardPage() {
     if (!id) return;
     setRefreshingTiles((prev) => { const s = new Set(prev); s.add(tileId); return s; });
     try {
+      const tile = tiles.find((t) => t.id === tileId);
+      const sql = String((tile?.query_spec as Record<string, unknown>)?.sql ?? "").trim();
+
+      // Phase S2: try client-side DuckDB-WASM first when available
+      if (isDuckReady && tile?.dataset_id && sql && tile.tile_type !== "metric") {
+        try {
+          const rows = await duckQuery(tile.dataset_id, sql);
+          const qs = tile.query_spec as Record<string, unknown>;
+          const xCol = String(qs.x_col ?? (rows[0] ? Object.keys(rows[0])[0] : ""));
+          const rawYCol = qs.y_col;
+          const yCol = Array.isArray(rawYCol)
+            ? (rawYCol as string[])
+            : rawYCol
+              ? [String(rawYCol)]
+              : rows[0]
+                ? Object.keys(rows[0]).slice(1)
+                : [];
+          if (rows.length > 0 && xCol && yCol.length > 0) {
+            const cfg = buildEChartsConfig(
+              tile.chart_type || "bar",
+              rows,
+              xCol,
+              yCol.length === 1 ? yCol[0] : yCol,
+              tile.title,
+            );
+            setTiles((prev) =>
+              prev.map((t) =>
+                t.id === tileId ? { ...t, echarts_config: cfg } : t,
+              ),
+            );
+            return;
+          }
+        } catch {
+          // fall through to server-side refresh
+        }
+      }
+
+      // Metric tiles or fallback: server-side refresh
+      if (isDuckReady && tile?.dataset_id && sql && tile.tile_type === "metric") {
+        try {
+          const rows = await duckQuery(tile.dataset_id, sql);
+          const val = extractMetricValue(rows);
+          if (val !== null) {
+            setTiles((prev) =>
+              prev.map((t) =>
+                t.id === tileId ? { ...t, metric_value: val } : t,
+              ),
+            );
+            return;
+          }
+        } catch {
+          // fall through
+        }
+      }
+
       const refreshed = await refreshDashboardTile(id, tileId);
       setTiles((prev) => prev.map((t) => (t.id === tileId ? refreshed : t)));
     } catch (err) {
@@ -629,6 +923,25 @@ export function DashboardPage() {
     }
   };
 
+  const handleTileEdit = async (tileId: string, patch: Partial<DashboardV2Tile>) => {
+    if (!id) return;
+    try {
+      const payload: Parameters<typeof updateDashboardTile>[2] = {};
+      if (patch.title != null) payload.title = patch.title;
+      if (patch.query_spec != null) payload.query_spec = patch.query_spec as Record<string, unknown>;
+      if (patch.metric_label != null) payload.metric_label = patch.metric_label;
+      if (patch.metric_value != null) payload.metric_value = patch.metric_value;
+      if (patch.metric_trend != null) payload.metric_trend = patch.metric_trend;
+      if ("sparkline_data" in patch) payload.sparkline_data = patch.sparkline_data as number[] | undefined;
+      if ("delta_pct" in patch) payload.delta_pct = patch.delta_pct as number | null | undefined;
+      const updated = await updateDashboardTile(id, tileId, payload);
+      setTiles((prev) => prev.map((t) => (t.id === tileId ? { ...t, ...updated } : t)));
+      setEditingTile(null);
+    } catch (err) {
+      console.error("Tile edit failed:", err);
+    }
+  };
+
   const handleAutoArrange = async () => {
     if (!id || tiles.length === 0) return;
     setAutoArranging(true);
@@ -643,7 +956,97 @@ export function DashboardPage() {
     }
   };
 
-  const handlePrint = () => window.print();
+  // ── Chart type switcher ──────────────────────────────────────────────────
+  const handleChartTypeChange = async (tileId: string, chartType: string) => {
+    if (!id) return;
+    try {
+      const updated = await updateDashboardTile(id, tileId, { chart_type: chartType });
+      setTiles((prev) => prev.map((t) => (t.id === tileId ? { ...t, ...updated } : t)));
+      // Trigger a server-side refresh to rebuild echarts_config for the new type
+      void handleTileRefresh(tileId);
+    } catch (err) {
+      console.error("Chart type change failed:", err);
+    }
+  };
+
+  // ── Available filter columns ─────────────────────────────────────────────
+  const availableColumns = useMemo(() => {
+    const cols = new Set<string>();
+    for (const tile of tiles) {
+      if (tile.tile_type !== "chart" && tile.tile_type !== "table") continue;
+      const qs = tile.query_spec as Record<string, unknown> | null;
+      if (qs?.x_col) cols.add(String(qs.x_col));
+    }
+    return Array.from(cols);
+  }, [tiles]);
+
+  // ── Auto-refresh ─────────────────────────────────────────────────────────
+  const refreshIntervalMins = Number(
+    (dashboard?.theme as Record<string, unknown> | undefined)?.refresh_interval_mins ?? 0
+  );
+  useEffect(() => {
+    if (!refreshIntervalMins || refreshIntervalMins <= 0) return;
+    const ms = refreshIntervalMins * 60 * 1000;
+    const timer = setInterval(() => {
+      tiles
+        .filter((t) => t.tile_type === "chart" || t.tile_type === "metric")
+        .forEach((t) => void handleTileRefresh(t.id));
+    }, ms);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshIntervalMins, id]);
+
+  const handlePrint = () => {
+    // Capture each ECharts canvas in document order, then build a print-optimised
+    // popup that replaces charts with their PNG snapshots.  Falls back to
+    // window.print() if the popup is blocked.
+    const canvases = Array.from(document.querySelectorAll<HTMLCanvasElement>(".react-grid-layout canvas"));
+    const snapshots = canvases.map((c) => {
+      try { return c.toDataURL("image/png"); }
+      catch { return null; }
+    });
+
+    const primaryCol = primaryColor;
+    const dashName = dashboard?.name ?? "Dashboard";
+
+    const tileBlocks = tiles.map((tile) => {
+      const tt = tile.tile_type ?? "chart";
+      if (tt === "divider") return `<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;">`;
+      if (tt === "heading") {
+        const lvl = Number((tile.query_spec as Record<string, unknown>).level ?? 1);
+        const text = String((tile.query_spec as Record<string, unknown>).text ?? tile.title);
+        return `<h${lvl} style="margin:12px 0 4px;color:#1e293b;">${text}</h${lvl}>`;
+      }
+      if (tt === "text") {
+        return `<p style="font-size:13px;color:#334155;margin:0 0 12px;">${String((tile.query_spec as Record<string, unknown>).text ?? "")}</p>`;
+      }
+      if (tt === "metric") {
+        return `<div style="display:inline-block;border:1px solid #e2e8f0;border-radius:8px;padding:12px 20px;margin:4px;min-width:160px;text-align:center;"><div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;">${tile.metric_label ?? tile.title}</div><div style="font-size:24px;font-weight:700;color:#1e293b;margin-top:4px;">${tile.metric_value ?? "—"}</div></div>`;
+      }
+      // chart or table — try to use captured canvas snapshot
+      const cfg = tile.echarts_config as Record<string, unknown> | null;
+      if (cfg && Object.keys(cfg).length > 0 && snapshots.length > 0) {
+        const img = snapshots.shift() ?? null;
+        if (img) return `<div style="margin:8px 0;page-break-inside:avoid;"><div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:4px;">${tile.title}</div><img src="${img}" style="width:100%;border-radius:6px;border:1px solid #e2e8f0;" /></div>`;
+      }
+      return `<div style="margin:8px 0;padding:20px;border:1px dashed #e2e8f0;border-radius:6px;font-size:12px;color:#94a3b8;text-align:center;">${tile.title} — chart data not captured</div>`;
+    });
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${dashName}</title>
+<style>body{font-family:system-ui,sans-serif;padding:24px;color:#1e293b;max-width:900px;margin:0 auto;} h1{font-size:20px;margin:0 0 4px;} .subtitle{font-size:12px;color:#64748b;margin-bottom:20px;} @media print{@page{margin:16mm;}}</style>
+</head><body>
+<h1 style="color:${primaryCol};">${dashName}</h1>
+<div class="subtitle">Exported ${new Date().toLocaleDateString()}</div>
+${tileBlocks.join("\n")}
+</body></html>`;
+
+    const win = window.open("", "_blank", "width=960,height=700");
+    if (!win) { window.print(); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
 
   if (loading) {
     return (
@@ -719,6 +1122,12 @@ export function DashboardPage() {
             )}
           </div>
 
+          {crossFilter && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(91,106,240,0.12)", border: "1px solid rgba(91,106,240,0.35)", borderRadius: 6, padding: "3px 10px", flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: "#818CF8" }}>🔍 Filtered: <strong>{crossFilter.value}</strong></span>
+              <button onClick={() => setCrossFilter(null)} title="Clear filter" style={{ background: "none", border: "none", color: "#818CF8", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+            </div>
+          )}
           {dashboard.updated_at && (
             <span style={{ fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>
               Updated {timeAgo(dashboard.updated_at)}
@@ -775,6 +1184,18 @@ export function DashboardPage() {
                 </>
               )}
             </div>
+            <button
+              onClick={() => setFilterBarVisible((p) => !p)}
+              style={{
+                ...headerBtnStyle,
+                background: filterBarVisible ? "rgba(91,106,240,0.15)" : undefined,
+                color: filterBarVisible ? "#818CF8" : undefined,
+                borderColor: (filterBarVisible || activeFilters.length > 0) ? "rgba(91,106,240,0.4)" : undefined,
+              }}
+              title="Toggle filter bar"
+            >
+              {activeFilters.length > 0 ? `⧩ Filters (${activeFilters.length})` : "⧩ Filter"}
+            </button>
             <button onClick={() => setShowShare(true)} style={headerBtnStyle} title="Share">🔗 Share</button>
             <button onClick={() => setShowSettings(true)} style={headerBtnStyle} title="Settings">⚙</button>
             <button
@@ -806,6 +1227,15 @@ export function DashboardPage() {
             </button>
           </div>
         </header>
+
+        {/* Filter bar */}
+        {filterBarVisible && (
+          <DashboardFilterBar
+            columns={availableColumns}
+            filters={activeFilters}
+            onChange={setActiveFilters}
+          />
+        )}
 
         {/* Tiles grid */}
         <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
@@ -881,7 +1311,12 @@ export function DashboardPage() {
                     onDelete={(tileId) => void handleDeleteTile(tileId)}
                     onTitleEdit={(tileId, title) => void handleTitleEdit(tileId, title)}
                     onRefresh={(tileId) => void handleTileRefresh(tileId)}
+                    onEdit={(t) => setEditingTile(t)}
                     refreshing={refreshingTiles.has(tile.id)}
+                    crossFilter={crossFilter}
+                    onCrossFilter={handleCrossFilter}
+                    onChartTypeChange={(tileId, chartType) => void handleChartTypeChange(tileId, chartType)}
+                    activeFilters={activeFilters}
                   />
                 </div>
               ))}
@@ -933,6 +1368,14 @@ export function DashboardPage() {
           onClose={() => setShowGenerateModal(false)}
         />
       )}
+
+      {editingTile && (
+        <TileEditModal
+          tile={editingTile}
+          onSave={(patch) => void handleTileEdit(editingTile.id, patch)}
+          onClose={() => setEditingTile(null)}
+        />
+      )}
     </>
   );
 }
@@ -960,3 +1403,192 @@ const exportMenuItemStyle: CSSProperties = {
   width: "100%",
   whiteSpace: "nowrap",
 };
+
+// ---------- TileEditModal ----------
+
+function TileEditModal({
+  tile,
+  onSave,
+  onClose,
+}: {
+  tile: DashboardV2Tile;
+  onSave: (patch: Partial<DashboardV2Tile>) => void;
+  onClose: () => void;
+}) {
+  const tileType = tile.tile_type ?? "chart";
+  const [title, setTitle] = useState(tile.title);
+
+  // metric fields
+  const [metricLabel, setMetricLabel] = useState(tile.metric_label ?? "");
+  const [metricValue, setMetricValue] = useState(String(tile.metric_value ?? ""));
+  const [metricTrend, setMetricTrend] = useState<string>(tile.metric_trend ?? "neutral");
+  const [deltaPct, setDeltaPct] = useState(tile.delta_pct != null ? String(tile.delta_pct) : "");
+  const [sparklineRaw, setSparklineRaw] = useState(
+    Array.isArray(tile.sparkline_data) ? (tile.sparkline_data as number[]).join(", ") : ""
+  );
+
+  // text / heading / image fields
+  const [contentText, setContentText] = useState(
+    String((tile.query_spec as Record<string, unknown> | null)?.text ?? "")
+  );
+  const [imageUrl, setImageUrl] = useState(
+    String((tile.query_spec as Record<string, unknown> | null)?.url ?? "")
+  );
+
+  // chart query hint
+  const [queryHint, setQueryHint] = useState(
+    String((tile.query_spec as Record<string, unknown> | null)?.query_hint ?? "")
+  );
+
+  const handleSave = () => {
+    const patch: Partial<DashboardV2Tile> = { title: title.trim() || tile.title };
+
+    if (tileType === "metric") {
+      if (metricLabel) patch.metric_label = metricLabel;
+      if (metricValue) patch.metric_value = metricValue;
+      patch.metric_trend = metricTrend;
+      const dp = parseFloat(deltaPct);
+      patch.delta_pct = isNaN(dp) ? null : dp;
+      const spNums = sparklineRaw
+        .split(/[,\s]+/)
+        .map((s) => parseFloat(s.trim()))
+        .filter((n) => !isNaN(n));
+      patch.sparkline_data = spNums.length >= 2 ? spNums : undefined;
+    } else if (tileType === "text" || tileType === "heading") {
+      patch.query_spec = {
+        ...((tile.query_spec as Record<string, unknown>) ?? {}),
+        text: contentText,
+      };
+    } else if (tileType === "image") {
+      patch.query_spec = {
+        ...((tile.query_spec as Record<string, unknown>) ?? {}),
+        url: imageUrl,
+      };
+    } else {
+      // chart / table — update query hint only
+      patch.query_spec = {
+        ...((tile.query_spec as Record<string, unknown>) ?? {}),
+        query_hint: queryHint,
+      };
+    }
+
+    onSave(patch);
+  };
+
+  const labelStyle: CSSProperties = { fontSize: 12, color: "#94A3B8", fontWeight: 600, marginBottom: 4 };
+  const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        style={{
+          width: 440,
+          maxWidth: "calc(100vw - 32px)",
+          background: "#0F1117",
+          border: "1px solid #1E293B",
+          borderRadius: 14,
+          padding: 24,
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          maxHeight: "85vh",
+          overflowY: "auto",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#E2E8F0" }}>Edit tile</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Title */}
+        <div style={fieldStyle}>
+          <span style={labelStyle}>Title</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
+        </div>
+
+        {/* Metric fields */}
+        {tileType === "metric" && (
+          <>
+            <div style={fieldStyle}>
+              <span style={labelStyle}>Metric label</span>
+              <input value={metricLabel} onChange={(e) => setMetricLabel(e.target.value)} style={inputStyle} placeholder={tile.title} />
+            </div>
+            <div style={fieldStyle}>
+              <span style={labelStyle}>Value</span>
+              <input value={metricValue} onChange={(e) => setMetricValue(e.target.value)} style={inputStyle} placeholder="e.g. 1,234" />
+            </div>
+            <div style={fieldStyle}>
+              <span style={labelStyle}>Trend</span>
+              <select
+                value={metricTrend}
+                onChange={(e) => setMetricTrend(e.target.value)}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                <option value="neutral">Neutral →</option>
+                <option value="up">Up ↑</option>
+                <option value="down">Down ↓</option>
+              </select>
+            </div>
+            <div style={fieldStyle}>
+              <span style={labelStyle}>Delta % (optional)</span>
+              <input
+                value={deltaPct}
+                onChange={(e) => setDeltaPct(e.target.value)}
+                style={inputStyle}
+                placeholder="e.g. 12.5 for +12.5%"
+                type="number"
+                step="0.1"
+              />
+            </div>
+            <div style={fieldStyle}>
+              <span style={labelStyle}>Sparkline data (comma-separated numbers, min 2)</span>
+              <input
+                value={sparklineRaw}
+                onChange={(e) => setSparklineRaw(e.target.value)}
+                style={inputStyle}
+                placeholder="e.g. 10, 14, 12, 18, 22"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Text / heading */}
+        {(tileType === "text" || tileType === "heading") && (
+          <div style={fieldStyle}>
+            <span style={labelStyle}>Content</span>
+            <textarea
+              value={contentText}
+              onChange={(e) => setContentText(e.target.value)}
+              rows={tileType === "heading" ? 2 : 5}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </div>
+        )}
+
+        {/* Image */}
+        {tileType === "image" && (
+          <div style={fieldStyle}>
+            <span style={labelStyle}>Image URL</span>
+            <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} style={inputStyle} placeholder="https://..." />
+          </div>
+        )}
+
+        {/* Chart / table — query hint */}
+        {(tileType === "chart" || tileType === "table") && (
+          <div style={fieldStyle}>
+            <span style={labelStyle}>Query hint (shown when no data)</span>
+            <input value={queryHint} onChange={(e) => setQueryHint(e.target.value)} style={inputStyle} placeholder="e.g. Show revenue by month" />
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <button onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+          <button onClick={handleSave} style={primaryBtnStyle}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}

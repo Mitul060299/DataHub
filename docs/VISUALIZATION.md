@@ -60,5 +60,63 @@ The following legacy files were removed from active frontend code because they w
 - `frontend/src/components/WidgetRenderer.tsx`
 - `frontend/src/components/SharedDashboardPanel.tsx`
 
+## Dashboard Overhaul (May 2026)
+
+### New chart types
+Both the server-side Python builder and the client-side TypeScript mirror now support 15 chart types:
+
+| Type | Builder | Notes |
+|---|---|---|
+| `bar` | `_build_bar` | Grouped bar |
+| `horizontal_bar` | `_build_bar` | Horizontal orientation |
+| `line` | `_build_line` | Multi-series line |
+| `area` | `_build_line` | Filled area (gradient) |
+| `scatter` | `_build_scatter` | XY scatter |
+| `pie` | `_build_pie` | Standard pie |
+| `donut` | `_build_pie` | `radius: ["40%","70%"]` |
+| `heatmap` | `_build_heatmap` | Calendar/matrix heat |
+| `waterfall` | `_build_waterfall` | Running-total waterfall |
+| `funnel` | `_build_funnel` | Conversion stages, sorted descending |
+| `gauge` | `_build_gauge` | Single-KPI dial with threshold colours |
+| `treemap` | `_build_treemap` | Proportional area treemap |
+| `radar` | `_build_radar` | Spider chart (multi-axis or single) |
+| `dual_axis` | `_build_dual_axis` | Bar (left) + line (right) combo |
+| `table` | *(envelope)* | Passthrough for tabular display |
+
+The Python dispatcher (`build_echarts_config`) also accepts aliases: `dual-axis`, `combo`.
+
+### `infer_chart_type` heuristics
+New keyword patterns added to the auto-inference logic (before the waterfall check):
+- `funnel` — keywords: `funnel`, `pipeline`, `conversion`, `drop-off`, `drop off`
+- `gauge` — keywords: `gauge`, `dial`, `speedometer`, `kpi`, `single value`, `meter`
+- `treemap` — keywords: `treemap`, `tree map`, `hierarchical`, `nested`, `breakdown by size`
+- `radar` — keywords: `radar`, `spider`, `spider web`, `radial comparison`, `multi-dimensional`; requires `len(num_cols) >= 2`
+- `dual_axis` — keywords: `dual axis`, `dual-axis`, `secondary axis`, `twin axis`, `two axis`, `combo`, `bar and line`; requires `len(num_cols) >= 2`
+
+### DashboardPage new features
+
+**Filter bar** (`DashboardFilterBar.tsx`)
+- Persistent dimension filter row above the tile grid
+- Supports operators: `=`, `!=`, `contains`, `>`, `<`
+- Toggle via `⊟ Filter` button in header; chip-based UI with inline add-filter form
+- Filter state (`ActiveFilter[]`) applied to every tile's ECharts config via `applyDashFilters()`; non-matching series dimmed to 8% opacity
+
+**Chart type switcher**
+- `⇄` button appears on chart/table tiles in edit mode
+- Opens a 15-type picker popover; clicking a type immediately calls `updateDashboardTile` + refreshes the tile
+
+**Auto-refresh**
+- Dashboard Settings panel now has an **Auto-refresh interval** selector (Off / 1 / 5 / 15 / 30 / 60 min)
+- Stored in `dashboard.theme.refresh_interval_mins`
+- A `setInterval` in `DashboardPage` re-fetches all chart and metric tiles on the chosen cadence
+
+### DashboardCanvas — react-grid-layout migration
+The workspace Canvas sidebar (`DashboardCanvas.tsx`) now uses `react-grid-layout` instead of the previous absolute-positioning drag system:
+- 12-column grid, 60 px row height, 8 px gutters
+- Drag via `.canvas-drag-handle` header strip; resize handle at bottom-right
+- Layout persisted to `localStorage` key `dh:dashboard:layout:{projectId}`
+- Default layout: items placed in 2-column grid, 6×5 cells each
+- Tiles are flex-column so charts fill all available vertical space
+
 ## Note on Historical Documentation
 If you need historical implementation notes for removed tab-era UX, use documents under `docs/archive/`.

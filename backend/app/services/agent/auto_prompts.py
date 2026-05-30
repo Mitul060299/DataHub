@@ -212,6 +212,11 @@ AUTO_PLANNER_SYSTEM = (
     "- If a reference step is provided and the column status is 'green' in the drift report, copy parameters verbatim.\n"
     "- If a column is 'amber', copy the operation but apply the suggested drift adjustment from the hints.\n"
     "- If a column is 'red', skip the step for now — it will be handled by interrupt_asker.\n"
+    "- When the plan has MORE THAN 15 steps, assign a 'phase' string to each step from:\n"
+    "  data_preparation (cleaning, casting, deduplication, null-filling),\n"
+    "  analytics (aggregations, joins, calculations, derived columns), or\n"
+    "  visualisation (pivot, reshape, select final columns, sort for display).\n"
+    "  Omit the 'phase' field when the plan has 15 or fewer steps.\n"
     "- Return JSON with a single top-level key 'steps' containing the array.\n\n"
     + _SUPPORTED_OPERATIONS
 )

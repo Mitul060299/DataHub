@@ -126,6 +126,10 @@ All operations available via NL pipeline editing and the visual step builder:
 - **Cross-pipeline step inputs** ✅ — link a saved snapshot from any other pipeline step into the current dataset via alias; AI agent automatically sees the alias as a join table and can reference it in SQL; managed via "⊕ Cross input" button in the Pipeline tab toolbar; REST API: `POST/GET/DELETE /datasets/{id}/cross-inputs`
 - **Pipeline branching (fork)** ✅ — create a new parallel branch dataset from any step in an existing pipeline via the "↗" button on pipeline graph nodes or by saying "fork from step N" in the AI chat; branch inherits all steps up to the chosen step; new dataset appears in the workspace lane bar automatically; REST API: `POST /pipeline-steps/{stepId}/fork-to-dataset`
 
+## 6b. Browser-Side Analytics
+- DuckDB-WASM ✅ — `@duckdb/duckdb-wasm` runs in the browser; `useDuckDB` singleton hook; presigned S3 URL fetched + cached 60 s; dashboard tile refresh runs client-side for chart/metric tiles, falls back to server on error
+- `echartsBuilder.ts` ✅ — TypeScript mirror of Python `echarts_builder.py`; `buildEChartsConfig()` + `extractMetricValue()` for browser-side chart rendering
+
 ## 7. Analytics & Visualizations
 - Summary charts ✅
 - Dashboards CRUD ✅
@@ -143,6 +147,11 @@ All operations available via NL pipeline editing and the visual step builder:
 - Dashboard templates ✅
 - Widget theming ✅
 - Dashboard comments ✅ (GET/POST/DELETE /api/dashboards/{id}/comments with auth)
+- **15 chart types** ✅ — bar, horizontal_bar, line, area, scatter, pie, donut, heatmap, waterfall, funnel, gauge, treemap, radar, dual_axis, table; all supported in both server-side `echarts_builder.py` and client-side `echartsBuilder.ts`
+- **Chart type switcher** ✅ — `⇄` button on each tile in edit mode; 15-type picker popover; live type change without page reload
+- **Dashboard filter bar** ✅ — persistent dimension filter row above tile grid; `=`, `!=`, `contains`, `>`, `<` operators; chips UI; non-matching series dimmed to 8% opacity
+- **Auto-refresh** ✅ — per-dashboard interval (1/5/15/30/60 min) stored in theme; `setInterval` re-fetches all chart+metric tiles on the configured cadence
+- **DashboardCanvas drag-resize** ✅ — `react-grid-layout` 12-column grid with resize handles; layout persisted to localStorage; replaces legacy absolute-positioning system
 
 ## 8. AI Chat UX
 - Streaming SSE chat with live typing indicator ✅
@@ -168,7 +177,8 @@ All operations available via NL pipeline editing and the visual step builder:
 
 ## 10. Collaboration & Automation
 - Webhooks ✅
-- Scheduled jobs 🟡 (database-backed store; no runner yet)
+- Scheduled pipeline runner ✅ — APScheduler V2 cron; `POST /pipelines/{id}/schedules`; CRON expression + timezone; Supabase Realtime push for run status
+- Background job queue ✅ — Upstash QStash integration; `POST /jobs/worker` with HMAC-SHA256 signature verification; falls back to in-process execution when `QSTASH_TOKEN` is absent
 - Approval workflows ✅
 - Approval filters ✅
 - Real-time collaboration ✅ (presence/chat with auth token)
@@ -200,7 +210,11 @@ All operations available via NL pipeline editing and the visual step builder:
 - Audit viewer UI ✅ (settings page with pagination + filter)
 - Per-user audit log API ✅ (GET /users/me/audit-log; paginated, filterable)
 - Role-based access ✅ (viewer/editor/admin)
-- OIDC SSO 🟡 (requires configuration)
+- OIDC SSO ✅ (OIDC discovery, JWKS, CSRF state, callback token exchange)
+- SAML 2.0 SSO ✅ — SP metadata endpoint; ACS handler with `defusedxml` XXE-safe parsing + RSA-SHA256 signature verification; user provisioning on first login; Enterprise plan gate; Settings → SAML SSO panel
+- White-label branding ✅ — `OrganizationBrandingDB`; `PUT/GET/DELETE /organization/branding`; `useBranding` hook applies CSS custom properties + favicon + `<title>` + custom CSS injection at runtime; Business plan: hide DataHub badge; Enterprise plan: custom CSS
+- GDPR Article 20 ✅ — `GET /users/me/gdpr-export`; full JSON export of profile, projects, datasets, pipelines, dashboards, audit log, feedback, usage
+- GDPR Article 17 ✅ — `DELETE /users/me/gdpr-erase`; cascades across 30+ tables; queues S3 objects for async deletion; anonymises audit log actor to `[deleted]`
 - Rate limiting ✅ (per-IP, per-endpoint limits; 429 + Retry-After)
 - File upload validation ✅ (format allowlist, MIME check, content sniff)
 - Usage enforcement ✅ (hard limits per plan; 429 on exceed)

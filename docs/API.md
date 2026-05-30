@@ -9,6 +9,14 @@ All endpoints are protected by rate limiting keyed per authenticated user (JWT `
 - GET /auth/oidc/login
 - GET /auth/oidc/callback?code=AUTH_CODE
 
+### SAML 2.0 SSO (Enterprise)
+- GET /auth/saml/metadata?org_id= — SP metadata XML; give this URL to your IdP admin
+- GET /auth/saml/login?org_id= — redirect user to IdP SSO URL
+- POST /auth/saml/acs — Assertion Consumer Service (IdP POST-binding callback); parses + verifies SAML Response, provisions user, returns redirect with app token in fragment
+- GET /auth/saml/config — fetch current IdP config for caller's org (Enterprise plan required)
+- POST /auth/saml/config — create or update IdP config; body: `{ entity_id, sso_url, slo_url?, certificate, sp_entity_id?, attribute_email, attribute_name?, name_id_format, is_active }` (Enterprise plan required)
+- DELETE /auth/saml/config — remove IdP config (Enterprise plan required)
+
 ## Datasets
 - POST /datasets/upload (multipart; validates format, size, and content)
 - GET /datasets
@@ -20,6 +28,7 @@ All endpoints are protected by rate limiting keyed per authenticated user (JWT `
 - GET /datasets/{dataset_id}/preview?offset=0&limit=50 — returns total_rows; supports sort/filter params
 - GET /datasets/{dataset_id}/versions — list all version records for a dataset
 - POST /datasets/{dataset_id}/upload-version — upload a new version of an existing dataset (bumps version_number)
+- GET /datasets/{dataset_id}/presigned-url — returns `{ url, expires_at, row_count, columns }` for DuckDB-WASM client-side queries; rate-limited 60 req/min; requires `storage_path` to be an S3 path
 
 ## Profiling & Insights
 - GET /profiling/{dataset_id}?columns=col1,col2
@@ -103,6 +112,13 @@ SSE event types emitted:
 - GET /users/me/notification-preferences — return current notification preference flags
 - PUT /users/me/notification-preferences — update notification preference flags
 - GET /users/me/usage — monthly usage stats vs plan limits
+- GET /users/me/gdpr-export — GDPR Article 20 data portability; returns JSON with profile, projects, datasets, pipelines, dashboards, audit log, feedback, usage history
+- DELETE /users/me/gdpr-erase — GDPR Article 17 right to erasure; cascades delete across all user-owned tables, queues S3 objects for async deletion, anonymises audit log actor to `[deleted]`
+
+## Organization Branding (Business / Enterprise)
+- GET /organization/branding — fetch white-label branding for caller's org
+- PUT /organization/branding — create or update branding; body: `{ product_name?, logo_url?, favicon_url?, primary_color?, support_email?, hide_datahub_branding?, custom_css? }`; `hide_datahub_branding` requires Business plan; `custom_css` requires Enterprise plan
+- DELETE /organization/branding — remove branding row, reverts to DataHub defaults
 
 Notification preference payload:
 ```json

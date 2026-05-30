@@ -129,5 +129,8 @@ class AgentState(TypedDict):
     duckdb_conn_path: NotRequired[str]      # DuckDB file path (for validators)
     total_tokens_used: NotRequired[int]     # running token total for this auto run
     dry_run: NotRequired[bool]              # SAMPLE 5000 ROWS mode
+    goal_clarification_pending: NotRequired[str]  # set by pre_plan_clarifier; cleared on resume
     # Internal signals (not persisted)
     _verifier_trigger_replan: NotRequired[list[int]]  # rule_ids to re-plan
+    # dashboard_generator output
+    generated_dashboard_id: NotRequired[str | None]

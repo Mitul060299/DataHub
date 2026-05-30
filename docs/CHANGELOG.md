@@ -4,6 +4,101 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-30 — Phase 11 Dashboard Overhaul: Filter Bar, New Chart Types, Chart Switcher, Auto-Refresh, RGL Canvas
+
+### New chart types — `echarts_builder.py` + `echartsBuilder.ts`
+- `backend/app/services/echarts_builder.py` — 5 new private builder functions added:
+  - `_build_funnel(rows, label_col, value_col, title, subtitle)` — funnel series sorted descending, gradient fill per stage
+  - `_build_gauge(rows, value_col, title, subtitle, min_val, max_val)` — single-KPI dial; auto-scales max; colour thresholds: green ≤33%, purple ≤66%, red above
+  - `_build_treemap(rows, label_col, value_col, title, subtitle)` — proportional area treemap with palette colouring
+  - `_build_radar(rows, x_col, y_cols, title, subtitle)` — spider chart; multi-y_col mode (each y_col = axis, each row = series) or single-y_col mode
+  - `_build_dual_axis(rows, x_col, y_cols, title, subtitle)` — first y_col as bar on left yAxis, rest as line on right yAxis (combo chart)
+- Dispatcher in `build_echarts_config` extended to handle: `funnel`, `gauge`, `treemap`, `radar`, `dual_axis` / `dual-axis` / `combo`
+- `infer_chart_type` heuristics extended — context-keyword patterns for funnel (pipeline/conversion), gauge (KPI/dial), treemap (hierarchy/breakdown), radar (multi-dimensional/spider), dual_axis (combo/dual-axis/secondary-axis) — each guarded by `len(num_cols) >= 2` where appropriate
+- `frontend/src/lib/echartsBuilder.ts` — `buildEChartsConfig` fully rewritten; now covers: `bar`, `horizontal_bar`, `line`, `area` (gradient fill), `scatter`, `pie`, `donut`, `heatmap`, `waterfall`, `funnel`, `gauge`, `treemap`, `radar`, `dual_axis` / `combo`, `table`
+
+### DashboardFilterBar — new component
+- `frontend/src/components/DashboardFilterBar.tsx` (new) — persistent dimension filter row above the dashboard grid
+  - `ActiveFilter` type: `{ id, column, operator: "=" | "!=" | "contains" | ">" | "<", value }`
+  - Active filter chips (column OP value + × remove) with inline add-filter form (column selector + operator selector + value input)
+  - Apply on Enter, dismiss on Escape
+- `frontend/src/pages/DashboardPage.tsx` — wired in:
+  - `applyDashFilters(cfg, filters)` — applies all 5 operators against xAxis.data / series labels; dims non-matching items to opacity 0.08
+  - `activeFilters` + `filterBarVisible` state added
+  - `⊟ Filter` toggle button in header (shows live count when filters active)
+  - `DashboardFilterBar` rendered below header when visible
+  - `displayCfg` now applies dash filters after cross-filter
+
+### Chart type switcher — DashboardPage TileCard
+- `CHART_TYPES` constant — 15 types: bar, horizontal_bar, line, area, scatter, pie, donut, heatmap, waterfall, funnel, gauge, treemap, radar, dual_axis, table
+- `⇄` button in TileCard header (visible in edit mode for chart/table tiles) opens a 3-column popover grid of all 15 types with active-type highlight
+- `handleChartTypeChange(tileId, chartType)` — calls `updateDashboardTile` then `handleTileRefresh` to rebuild the ECharts config server-side
+- `onChartTypeChange` and `activeFilters` props threaded through to every `<TileCard>` instance
+
+### Auto-refresh — DashboardPage
+- `SettingsOverlay` now includes an **Auto-refresh interval** `<select>` (Off / 1 / 5 / 15 / 30 / 60 min); saved to `dashboard.theme.refresh_interval_mins`
+- `useEffect` timer in `DashboardPage` calls `handleTileRefresh` for all chart + metric tiles on the configured interval; cleared on unmount or interval change
+
+### DashboardCanvas → react-grid-layout
+- `frontend/src/components/DashboardCanvas.tsx` — migrated from absolute positioning + custom drag handlers to `react-grid-layout`:
+  - `WidthProvider(GridLayout)` with 12-column grid, 60px row height, 8px gutters
+  - Layout persisted to localStorage under new key `dh:dashboard:layout:{projectId}` (was `dh:dashboard:positions:{projectId}`)
+  - Default layout: 2-column grid, 6 cols × 5 rows per tile
+  - Both drag (via `.canvas-drag-handle` header class) and resize are enabled
+  - Tiles are `display:flex;flex-direction:column` so the ECharts renderer fills available height
+  - Old `Position`, `toPosition`, `dragging` ref, `handleMouseDown`, and `persistPositions` removed
+
+### Bug fix — AIPanel.tsx
+- `frontend/src/components/AIPanel.tsx` — fixed pre-existing JSX parse error (TS2657 / esbuild `Expected ")"` at line 1871): wrapped two sibling `<div>` elements inside `{aiMode === "chat" && (...)}` in a `<>` Fragment; build was failing silently when run from the wrong working directory
+
+---
+
+## 2026-05-30 — Phase 10 Enterprise: SAML 2.0 SSO + GDPR + White-Label Branding
+
+### SAML 2.0 SP (Enterprise SSO)
+- `backend/app/routers/saml.py` (new) — full SAML 2.0 Service Provider implementation:
+  - `GET /auth/saml/metadata` — SP metadata XML (entity ID, ACS URL, NameID format)
+  - `GET /auth/saml/login?org_id=` — redirect user to IdP SSO URL
+  - `POST /auth/saml/acs` — Assertion Consumer Service; decodes Base64 SAML Response; parses with `defusedxml` (XXE-safe); verifies RSA-SHA256 XML-DSig signature against stored PEM cert using `cryptography`; provisions user on first login; issues app JWT; redirects to frontend with token in fragment
+  - `POST/GET/DELETE /auth/saml/config` — IdP config CRUD (Enterprise plan required)
+- `backend/app/models_db.py` — `SamlIdpConfigDB` added (`saml_idp_configs` table; `org_id` PK FK to organizations)
+- `backend/app/main.py` — `saml_idp_configs` DDL entry #0086 in startup safety-net; `saml_router` registered
+- `backend/requirements.txt` — `defusedxml>=0.7.1` added
+- `frontend/src/api.ts` — `SamlIdpConfig` interface; `fetchSamlConfig`, `updateSamlConfig`, `deleteSamlConfig`
+- `frontend/src/pages/SettingsPage.tsx` — `SamlConfigPanel` component; "SAML SSO" sidebar item; `"saml"` section type
+- `frontend/src/App.tsx` — `/settings/saml` route
+
+### GDPR Compliance
+- `backend/app/routers/users.py` — two new endpoints:
+  - `GET /users/me/gdpr-export` — Article 20 full data portability; JSON export of all user-owned data (30+ tables)
+  - `DELETE /users/me/gdpr-erase` — Article 17 right to erasure; cascades hard delete across all user tables; queues S3 paths for async cleanup; anonymises audit log actor to `[deleted]`
+- `frontend/src/api.ts` — `gdprExport()`, `gdprErase()`
+
+### White-Label Branding
+- `backend/app/models_db.py` — `OrganizationBrandingDB` added (`organization_branding` table)
+- `backend/app/routers/branding.py` (new) — `GET/PUT/DELETE /organization/branding`; `hide_datahub_branding` requires Business; `custom_css` requires Enterprise
+- `backend/app/main.py` — `organization_branding` DDL entry #0085; `branding_router` registered
+- `frontend/src/hooks/useBranding.ts` (new) — fetches org branding on mount; applies `--brand-primary` CSS vars, favicon, `<title>`, and custom CSS injection
+- `frontend/src/App.tsx` — `useBranding()` called at app root; `/settings/branding` route
+- `frontend/src/pages/SettingsPage.tsx` — `BrandingPanel` component; colour picker + plan-gated controls
+
+---
+
+## 2026-05-25 — Phase S2/S3: DuckDB-WASM + QStash Background Workers
+
+### DuckDB-WASM (browser-side analytics)
+- `backend/app/routers/datasets.py` — `GET /datasets/{id}/presigned-url` returns short-lived S3 signed URL for client-side DuckDB queries; rate-limited 60 req/min
+- `frontend/src/hooks/useDuckDB.ts` (new) — module singleton; lazy WASM init via jsDelivr CDN; presigned URL cache with 60 s buffer; `runQuery(datasetId, sql)` → Arrow → plain JS rows
+- `frontend/src/lib/echartsBuilder.ts` (new) — `buildEChartsConfig()` + `extractMetricValue()` TypeScript mirror of Python chart builder
+- `frontend/src/pages/DashboardPage.tsx` — `handleTileRefresh` runs client-side DuckDB first for chart/metric tiles; double-fallback to server on error or missing `dataset_id`
+
+### QStash Background Workers (Phase S3)
+- `backend/app/routers/jobs.py` — `POST /jobs/worker` with HMAC-SHA256 signature verification from QStash signing keys
+- `backend/app/services/job_queue.py` — `enqueue_pipeline_job()` publishes to QStash when `QSTASH_TOKEN` set; in-process fallback when absent
+- `frontend/src/hooks/useRealtimePipelineRun.ts` (new) — subscribes to `pipeline:{id}` Supabase Realtime channel; `triggerRun()` stores `run_id` and filters events to avoid collisions
+
+---
+
 ## 2026-05-11 — DirectQuery (Live Connect) Mode
 
 **Backend:**

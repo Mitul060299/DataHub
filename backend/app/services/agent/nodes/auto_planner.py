@@ -137,6 +137,8 @@ async def auto_planner(state: AgentState) -> dict:
         }
         if s.get("sql"):
             step["sql"] = str(s["sql"])
+        if s.get("phase"):
+            step["phase"] = str(s["phase"])
         steps.append(step)
 
     _logger.info("auto_planner: generated %d steps", len(steps))
@@ -151,6 +153,7 @@ async def auto_planner(state: AgentState) -> dict:
             "estimated_rows": "—",
             "sql": s.get("sql", ""),
             "depends_on": s.get("depends_on", []),
+            **({"phase": s["phase"]} if s.get("phase") else {}),
         }
         for s in steps
     ]

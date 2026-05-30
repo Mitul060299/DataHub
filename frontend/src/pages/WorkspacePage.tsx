@@ -114,7 +114,9 @@ export function WorkspacePage() {
         .filter((s): s is NonNullable<typeof s> => s !== null);
 
       if (!replayPipelineSteps.length) {
-        setReplayError("No replayable steps — none of your pipeline steps have a stored SQL + output table.");
+        const msg = "No replayable steps — none of your pipeline steps have a stored SQL + output table.";
+        setReplayError(msg);
+        window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: msg, tone: "error" } }));
         return;
       }
 
@@ -150,6 +152,7 @@ export function WorkspacePage() {
       const axiosDetail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
       const msg = axiosDetail ?? (err instanceof Error ? err.message : "Pipeline replay failed. Please try again.");
       setReplayError(msg);
+      window.dispatchEvent(new CustomEvent("datahub:toast", { detail: { message: `Pipeline failed: ${msg}`, tone: "error" } }));
     } finally {
       setReplayingPipeline(false);
     }

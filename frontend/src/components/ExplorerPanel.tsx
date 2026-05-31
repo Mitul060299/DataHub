@@ -418,12 +418,12 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
                 position: "absolute",
                 left: 0,
                 right: 0,
-                top: "calc(100% + 4px)",
+                bottom: "calc(100% + 4px)",
                 zIndex: 200,
                 background: "var(--bg2)",
                 border: "1px solid var(--bd)",
                 borderRadius: "var(--r6)",
-                boxShadow: "0 4px 12px rgba(0,0,0,.25)",
+                boxShadow: "0 -4px 12px rgba(0,0,0,.25)",
                 overflow: "hidden",
               }}
             >

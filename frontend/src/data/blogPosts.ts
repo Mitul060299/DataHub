@@ -234,6 +234,166 @@ export const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  {
+    slug: "automate-excel-transformations",
+    title: "How to Automate Excel Transformations: Build Reusable Pipelines Without VBA",
+    excerpt:
+      "If you run the same Excel transformations every week — cleaning a report, reformatting a column, joining two files — you're doing work a pipeline should handle. Here's how to automate Excel transformations so the data arrives clean without you touching it.",
+    date: "2026-05-28",
+    readTime: 8,
+    tags: ["Excel", "Automation", "Pipelines"],
+    faqItems: [
+      {
+        q: "Can DataHub automate transformations on Excel files I receive via email?",
+        a: "Not automatically from email. You upload the file to DataHub manually, then run your saved pipeline on it — which takes seconds rather than the minutes of manual work.",
+      },
+      {
+        q: "What if the columns change in a new file?",
+        a: "DataHub will flag any column name mismatches when you upload a new file against a saved pipeline. You can update the column mapping step without rebuilding the whole workflow.",
+      },
+      {
+        q: "How many transformation steps can a pipeline have?",
+        a: "There's no hard limit. Real-world pipelines typically have 5–20 steps. Each step is named, ordered, and fully editable after the pipeline is saved.",
+      },
+    ],
+  },
+  {
+    slug: "clean-csv-files-with-ai",
+    title: "How to Clean CSV Files with AI: Fix Formatting, Nulls, and Duplicates Fast",
+    excerpt:
+      "AI tools have made cleaning CSV files dramatically faster — you describe what needs fixing in plain English, the AI generates the transformation logic, and the file comes out clean. Here's how to use AI to fix the most common CSV data quality problems in minutes.",
+    date: "2026-05-29",
+    readTime: 9,
+    tags: ["CSV", "AI", "Data Cleaning"],
+    faqItems: [
+      {
+        q: "Does DataHub change my original CSV file?",
+        a: "No. DataHub works on a copy of your uploaded data. Your original file is never modified. You export the clean results as a new file.",
+      },
+      {
+        q: "Can I clean CSV files with different column orders?",
+        a: "Yes. DataHub operations work by column name, not position. If the column order changes between files, the same pipeline still works correctly.",
+      },
+      {
+        q: "Is AI CSV cleaning accurate?",
+        a: "DataHub's AI generates SQL transformations that you review before they run. The accuracy depends on how precisely you describe the problem. For ambiguous cases, DataHub flags rows for your review rather than making assumptions.",
+      },
+    ],
+  },
+  {
+    slug: "best-data-analysis-tool-small-teams",
+    title: "Best Data Analytics Tool for Analysts and Small Teams in 2026",
+    excerpt:
+      "The best data analytics tool for your team depends on what your team actually is. For analysts without a data engineering background, tools that require Python, SQL expertise, or complex setup often get abandoned. Here's an honest comparison of the best options for analysts in 2026.",
+    date: "2026-05-30",
+    readTime: 11,
+    tags: ["Data Analytics", "Comparison", "Small Teams"],
+    faqItems: [
+      {
+        q: "What is the best free data analytics tool?",
+        a: "DataHub's free plan for data preparation and analysis; Google Looker Studio for free visualisation; Google Sheets or Excel Online for basic spreadsheet analytics.",
+      },
+      {
+        q: "What's the best data analysis tool for small teams?",
+        a: "DataHub — affordable (free plan + $19/month), requires no data engineering skills to operate, and reduces manual weekly data work through automation.",
+      },
+    ],
+  },
+  {
+    slug: "julius-ai-alternative",
+    title: "Julius AI Alternative: Reusable Pipelines Instead of One-Off Chat",
+    excerpt:
+      "Julius AI is impressive for one-off data exploration. But if you're doing the same analysis every week on updated data, one-off chat isn't enough. Here's why analysts look for Julius AI alternatives with pipeline automation.",
+    date: "2026-05-31",
+    readTime: 8,
+    tags: ["Julius AI", "Comparison", "Pipelines"],
+    faqItems: [
+      {
+        q: "Is DataHub a Julius AI replacement?",
+        a: "They serve different use cases. Julius AI is excellent for ad-hoc conversational exploration. DataHub is designed for recurring analytical workflows — building pipelines that run automatically on fresh data.",
+      },
+      {
+        q: "Can DataHub do AI-powered analysis like Julius AI?",
+        a: "Yes. DataHub accepts plain-English analysis requests — 'show me revenue by region', 'identify top customers by spend' — and generates SQL queries that run against your data.",
+      },
+    ],
+  },
+  {
+    slug: "copilot-for-excel-alternative",
+    title: "Copilot for Excel Alternative: AI Data Preparation That Works Beyond Excel",
+    excerpt:
+      "Copilot for Excel adds AI to Microsoft Excel — but requires a $30/user/month add-on, works only inside Excel files, and doesn't automate workflows or connect to external databases. Here are the best alternatives for analysts who need more.",
+    date: "2026-05-31",
+    readTime: 9,
+    tags: ["Copilot for Excel", "Microsoft 365", "Comparison"],
+    faqItems: [
+      {
+        q: "Is DataHub a good Copilot for Excel alternative?",
+        a: "If you need AI-powered data preparation that works across multiple data sources and builds reusable pipelines — yes. If you need deep Excel formula assistance within Microsoft 365, Copilot for Excel is more convenient.",
+      },
+      {
+        q: "What is the cheapest AI data analysis tool?",
+        a: "DataHub has a free plan. Paid plans start at $19/month. Copilot for Excel requires an additional $30/user/month on top of Microsoft 365.",
+      },
+    ],
+  },
+  {
+    slug: "power-query-alternative",
+    title: "Power Query Alternative: No M Code, Works Outside Microsoft Tools",
+    excerpt:
+      "Power Query is Microsoft's built-in data transformation tool for Excel and Power BI. It's capable, but complex transformations require M code and it doesn't schedule independently. Here are the best Power Query alternatives for analysts who want more.",
+    date: "2026-05-31",
+    readTime: 9,
+    tags: ["Power Query", "Microsoft 365", "Comparison"],
+    faqItems: [
+      {
+        q: "Can DataHub replace Power Query entirely?",
+        a: "For data preparation workflows that feed into Power BI, yes — DataHub can replace Power Query as the transformation layer while Power BI remains the visualisation tool.",
+      },
+      {
+        q: "Does DataHub work with Power BI?",
+        a: "Yes. DataHub can export clean, transformed data to CSV, a connected database, or directly to Power BI-compatible formats.",
+      },
+    ],
+  },
+  {
+    slug: "knime-alternative",
+    title: "KNIME Alternative for Analysts: No Installation, No Node Graph Required",
+    excerpt:
+      "KNIME is a powerful open-source data analytics platform but requires a Java desktop installation, weeks of learning, and expensive Server licensing for scheduling. Here are the best KNIME alternatives for analysts who need capable data preparation without the complexity.",
+    date: "2026-05-31",
+    readTime: 9,
+    tags: ["KNIME", "Comparison", "Data Tools"],
+    faqItems: [
+      {
+        q: "Is there a free KNIME alternative?",
+        a: "DataHub has a free plan with 50 AI messages/month, 10 pipeline runs, and 500 MB storage. For browser-based, no-install KNIME-like capability, DataHub's free tier is the most accessible starting point.",
+      },
+      {
+        q: "What's a good KNIME alternative for non-data-scientists?",
+        a: "DataHub — designed for analysts who work with data daily but don't have machine learning or data engineering backgrounds.",
+      },
+    ],
+  },
+  {
+    slug: "dataiku-alternative",
+    title: "Dataiku Alternative for Small Teams: Analyst-Focused, Not Enterprise-Only",
+    excerpt:
+      "Dataiku is a leading enterprise AI platform — excellent for large organisations running complex ML workflows, but priced at $30,000+/year and designed for data scientists. Here are the best Dataiku alternatives for small teams and analysts.",
+    date: "2026-05-31",
+    readTime: 9,
+    tags: ["Dataiku", "Comparison", "Small Teams"],
+    faqItems: [
+      {
+        q: "What is the best Dataiku alternative for small teams?",
+        a: "DataHub for data preparation, pipeline automation, and analyst-focused workflows at a price point that's practical for teams of 1–50 people.",
+      },
+      {
+        q: "Is Dataiku overkill for a small analytics team?",
+        a: "For most small analytics teams doing data preparation, reporting, and dashboard work — yes. Dataiku's pricing and complexity reflect the enterprise market it's designed for.",
+      },
+    ],
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

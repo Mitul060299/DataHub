@@ -31,6 +31,17 @@ const BlogIndexPage = lazy(() => import("./pages/BlogIndexPage").then(m => ({ de
 const BlogPostPage = lazy(() => import("./pages/BlogPostPage").then(m => ({ default: m.BlogPostPage })));
 const FAQPage = lazy(() => import("./pages/FAQPage").then(m => ({ default: m.FAQPage })));
 const ChangelogPage = lazy(() => import("./pages/ChangelogPage").then(m => ({ default: m.ChangelogPage })));
+const AlteryxAlternativePage = lazy(() => import("./pages/AlteryxAlternativePage").then(m => ({ default: m.AlteryxAlternativePage })));
+const PowerQueryAlternativePage = lazy(() => import("./pages/PowerQueryAlternativePage").then(m => ({ default: m.PowerQueryAlternativePage })));
+const ExcelAIAlternativePage = lazy(() => import("./pages/ExcelAIAlternativePage").then(m => ({ default: m.ExcelAIAlternativePage })));
+const TableauPrepAlternativePage = lazy(() => import("./pages/TableauPrepAlternativePage").then(m => ({ default: m.TableauPrepAlternativePage })));
+const KNIMEAlternativePage = lazy(() => import("./pages/KNIMEAlternativePage").then(m => ({ default: m.KNIMEAlternativePage })));
+const DataikuAlternativePage = lazy(() => import("./pages/DataikuAlternativePage").then(m => ({ default: m.DataikuAlternativePage })));
+const JuliusAIAlternativePage = lazy(() => import("./pages/JuliusAIAlternativePage").then(m => ({ default: m.JuliusAIAlternativePage })));
+const AIDataAnalyticsPage = lazy(() => import("./pages/AIDataAnalyticsPage").then(m => ({ default: m.AIDataAnalyticsPage })));
+const DataPreparationToolPage = lazy(() => import("./pages/DataPreparationToolPage").then(m => ({ default: m.DataPreparationToolPage })));
+const NoCodeAnalyticsPage = lazy(() => import("./pages/NoCodeAnalyticsPage").then(m => ({ default: m.NoCodeAnalyticsPage })));
+const BusinessIntelligencePage = lazy(() => import("./pages/BusinessIntelligencePage").then(m => ({ default: m.BusinessIntelligencePage })));
 
 // Minimal fallback — full-viewport fill prevents layout shifts while a page chunk loads
 const PageFallback = () => (
@@ -79,6 +90,17 @@ export function App() {
       <Route path="/blog/:slug" element={<BlogPostPage />} />
       <Route path="/faq" element={<FAQPage />} />
       <Route path="/changelog" element={<ChangelogPage />} />
+      <Route path="/alteryx-alternative" element={<AlteryxAlternativePage />} />
+      <Route path="/power-query-alternative" element={<PowerQueryAlternativePage />} />
+      <Route path="/excel-ai-alternative" element={<ExcelAIAlternativePage />} />
+      <Route path="/tableau-prep-alternative" element={<TableauPrepAlternativePage />} />
+      <Route path="/knime-alternative" element={<KNIMEAlternativePage />} />
+      <Route path="/dataiku-alternative" element={<DataikuAlternativePage />} />
+      <Route path="/julius-ai-alternative" element={<JuliusAIAlternativePage />} />
+      <Route path="/ai-data-analytics" element={<AIDataAnalyticsPage />} />
+      <Route path="/data-preparation-tool" element={<DataPreparationToolPage />} />
+      <Route path="/no-code-analytics" element={<NoCodeAnalyticsPage />} />
+      <Route path="/business-intelligence-tool" element={<BusinessIntelligencePage />} />
       <Route path="/" element={<AppShell />}>
         <Route index element={<HomePage />} />
         <Route path="home" element={<HomePage />} />

@@ -291,6 +291,153 @@ const routes = [
     ogType: "article",
     date: "2026-05-24",
   },
+
+  // ── New blog posts ───────────────────────────────────────────
+  {
+    path: "blog/automate-excel-transformations",
+    title: "How to Automate Excel Transformations: Build Reusable Pipelines Without VBA | DataHub Blog",
+    description:
+      "If you run the same Excel transformations every week, you're doing work a pipeline should handle. Here's how to automate Excel transformations with reusable, scheduled pipelines.",
+    ogType: "article",
+    date: "2026-05-28",
+  },
+  {
+    path: "blog/clean-csv-files-with-ai",
+    title: "How to Clean CSV Files with AI: Fix Formatting, Nulls, and Duplicates Fast | DataHub Blog",
+    description:
+      "AI tools have made cleaning CSV files dramatically faster. Describe what needs fixing in plain English and get clean results in minutes — no Python, no formulas required.",
+    ogType: "article",
+    date: "2026-05-29",
+  },
+  {
+    path: "blog/best-data-analysis-tool-small-teams",
+    title: "Best Data Analytics Tool for Analysts and Small Teams in 2026 | DataHub Blog",
+    description:
+      "An honest comparison of the best data analytics tools for analysts in 2026 — DataHub, Power BI, Tableau, Alteryx, and Looker Studio — based on learning curve, depth, automation, and cost.",
+    ogType: "article",
+    date: "2026-05-30",
+  },
+  {
+    path: "blog/julius-ai-alternative",
+    title: "Julius AI Alternative: Reusable Pipelines Instead of One-Off Chat | DataHub Blog",
+    description:
+      "Julius AI is impressive for ad-hoc data exploration. But if you're repeating the same analysis every week on updated data, you need pipelines — not just chat. Here's what to use instead.",
+    ogType: "article",
+    date: "2026-05-31",
+  },
+  {
+    path: "blog/copilot-for-excel-alternative",
+    title: "Copilot for Excel Alternative: AI Data Preparation That Works Beyond Excel | DataHub Blog",
+    description:
+      "Copilot for Excel requires a $30/user/month add-on and only works inside Excel files. Here are the best Copilot for Excel alternatives for analysts who need AI across all their data sources.",
+    ogType: "article",
+    date: "2026-05-31",
+  },
+  {
+    path: "blog/power-query-alternative",
+    title: "Power Query Alternative: No M Code, Works Outside Microsoft Tools | DataHub Blog",
+    description:
+      "Power Query is capable but requires M code for anything non-trivial and is tied to Excel/Power BI. Here are the best Power Query alternatives for analysts who want more flexibility.",
+    ogType: "article",
+    date: "2026-05-31",
+  },
+  {
+    path: "blog/knime-alternative",
+    title: "KNIME Alternative for Analysts: No Installation, No Node Graph Required | DataHub Blog",
+    description:
+      "KNIME is powerful but requires a Java desktop install, weeks of learning, and expensive Server licensing for scheduling. Here are the best KNIME alternatives for analysts.",
+    ogType: "article",
+    date: "2026-05-31",
+  },
+  {
+    path: "blog/dataiku-alternative",
+    title: "Dataiku Alternative for Small Teams: Analyst-Focused, Not Enterprise-Only | DataHub Blog",
+    description:
+      "Dataiku is priced at $30,000+/year and designed for data scientists. Here are the best Dataiku alternatives for small teams and analysts who need data preparation without enterprise complexity.",
+    ogType: "article",
+    date: "2026-05-31",
+  },
+
+  // ── Competitor alternative landing pages ──────────────────────
+  {
+    path: "alteryx-alternative",
+    title: "The Best Alteryx Alternative in 2026 | DataHub",
+    description:
+      "DataHub is the best Alteryx alternative for analysts: AI-powered data preparation, pipeline automation, and no-code ETL — at a fraction of Alteryx's cost. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "power-query-alternative",
+    title: "The Best Power Query Alternative in 2026 | DataHub",
+    description:
+      "DataHub is the best Power Query alternative: no M code required, works outside Microsoft products, with built-in scheduling and audit trails. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "excel-ai-alternative",
+    title: "The Best Excel AI Alternative in 2026 | DataHub",
+    description:
+      "DataHub is the best Excel AI alternative and Copilot for Excel alternative: works across all data sources, builds reusable pipelines, and costs less. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "tableau-prep-alternative",
+    title: "The Best Tableau Prep Alternative in 2026 | DataHub",
+    description:
+      "DataHub is the best Tableau Prep alternative: browser-based data preparation, AI-powered transformations, and pipeline automation — without the Tableau pricing. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "knime-alternative",
+    title: "The Best KNIME Alternative for Analysts in 2026 | DataHub",
+    description:
+      "DataHub is the best KNIME alternative for analysts: browser-based, no installation, plain-English AI interface, and built-in scheduling. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "dataiku-alternative",
+    title: "The Best Dataiku Alternative for Small Teams | DataHub",
+    description:
+      "DataHub is the best Dataiku alternative for small teams and analysts: no enterprise contract, no data engineering team required, from $19/month. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "julius-ai-alternative",
+    title: "The Best Julius AI Alternative: Reusable Pipelines, Not Just Chat | DataHub",
+    description:
+      "DataHub is the best Julius AI alternative: save analysis workflows as reusable pipelines, schedule them on fresh data, and connect to databases — not just file uploads.",
+    ogType: "website",
+  },
+
+  // ── Category landing pages ────────────────────────────────────
+  {
+    path: "ai-data-analytics",
+    title: "AI Data Analytics Tool for Analysts and Teams | DataHub",
+    description:
+      "DataHub is an AI data analytics tool that turns plain-English descriptions into SQL-powered analysis. No code required. Connect databases, build pipelines, share dashboards. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "data-preparation-tool",
+    title: "AI Data Preparation & ETL Tool — No Code Required | DataHub",
+    description:
+      "DataHub is an AI data preparation tool and no-code ETL platform: clean, transform, and automate data pipelines in plain English. 13+ data sources supported. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "no-code-analytics",
+    title: "No-Code Data Analytics Tool | Analyse & Transform Data Without Writing Code | DataHub",
+    description:
+      "DataHub is the best no-code data analytics tool: clean, transform, and analyse data using plain English — no SQL, no Python. For business analysts and small teams. Free plan available.",
+    ogType: "website",
+  },
+  {
+    path: "business-intelligence-tool",
+    title: "Business Intelligence Tool for Analysts | AI Analytics Software — No SQL Required | DataHub",
+    description:
+      "DataHub is an AI analytics tool for business intelligence: prepare data, build dashboards, and automate reporting without SQL or a data engineering team. Free plan available.",
+    ogType: "website",
+  },
 ];
 
 /**

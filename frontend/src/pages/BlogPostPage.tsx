@@ -50,6 +50,30 @@ const ARTICLE_COMPONENTS: Record<string, React.LazyExoticComponent<() => JSX.Ele
   "automate-monthly-excel-reports": lazy(
     () => import("../content/blog/automate-monthly-excel-reports"),
   ),
+  "automate-excel-transformations": lazy(
+    () => import("../content/blog/automate-excel-transformations"),
+  ),
+  "clean-csv-files-with-ai": lazy(
+    () => import("../content/blog/clean-csv-files-with-ai"),
+  ),
+  "best-data-analysis-tool-small-teams": lazy(
+    () => import("../content/blog/best-data-analysis-tool-small-teams"),
+  ),
+  "julius-ai-alternative": lazy(
+    () => import("../content/blog/julius-ai-alternative"),
+  ),
+  "copilot-for-excel-alternative": lazy(
+    () => import("../content/blog/copilot-for-excel-alternative"),
+  ),
+  "power-query-alternative": lazy(
+    () => import("../content/blog/power-query-alternative"),
+  ),
+  "knime-alternative": lazy(
+    () => import("../content/blog/knime-alternative"),
+  ),
+  "dataiku-alternative": lazy(
+    () => import("../content/blog/dataiku-alternative"),
+  ),
 };
 
 function ArticleSkeleton() {

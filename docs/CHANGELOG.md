@@ -4,6 +4,37 @@ This file tracks all non-trivial changes made to the codebase: security fixes, b
 
 ---
 
+## 2026-05-31 — SEO Expansion: Competitor Alternative Pages, Category Landing Pages, Blog Posts
+
+### New landing pages — `frontend/src/pages/`
+- 7 competitor alternative landing pages: `AlteryxAlternativePage`, `PowerQueryAlternativePage`, `ExcelAIAlternativePage`, `TableauPrepAlternativePage`, `KNIMEAlternativePage`, `DataikuAlternativePage`, `JuliusAIAlternativePage`
+- 4 category keyword landing pages: `AIDataAnalyticsPage` (`/ai-data-analytics`), `DataPreparationToolPage` (`/data-preparation-tool`), `NoCodeAnalyticsPage` (`/no-code-analytics`), `BusinessIntelligencePage` (`/business-intelligence-tool`)
+- All pages follow dark-theme design system (`#0d0f1a` bg, `#5B6AF0` accent), include `useSEO` with canonical URL, FAQ structured data (FAQPage schema), BreadcrumbList schema, and bottom CTA
+
+### New blog posts — `frontend/src/content/blog/`
+- 8 new articles: `automate-excel-transformations`, `clean-csv-files-with-ai`, `best-data-analysis-tool-small-teams`, `julius-ai-alternative`, `copilot-for-excel-alternative`, `power-query-alternative`, `knime-alternative`, `dataiku-alternative`
+- Each targets a high-intent search query; all use `_components.tsx` shared primitives (`Article`, `Lead`, `H2`, `CompareTable`, `MidCTA`, `FAQ`)
+- Registered in `BLOG_POSTS` array (`blogPosts.ts`) and `ARTICLE_COMPONENTS` map (`BlogPostPage.tsx`)
+
+### Routing — `frontend/src/App.tsx`
+- 11 new `lazy()` imports and `<Route>` entries added outside `AppShell` (same pattern as `/blog`, `/faq`)
+
+### Prerendering — `frontend/scripts/prerender-routes.mjs`
+- 19 new route entries added (8 blog posts + 11 landing pages) so the custom postbuild script bakes correct `<title>`, `<meta description>`, `<link canonical>`, and JSON-LD into static HTML at build time
+
+### Sitemap — `frontend/public/sitemap.xml`
+- 19 new URLs added: competitor/category pages at `priority 0.9`, blog posts at `priority 0.8`, `lastmod 2026-05-31`
+
+### Homepage meta — `frontend/index.html` + `frontend/src/pages/HomePage.tsx`
+- `<title>` updated to lead with "AI Data Analytics Tool"
+- `<meta name="description">` expanded with broad category keywords
+- `<meta name="keywords">` expanded with 20+ category and competitor terms
+- JSON-LD `applicationCategory` updated to array; `featureList` expanded to 16 entries
+- 5 new FAQ entries prepended to `HOME_FAQ_LD` covering category queries
+- `useSEO` call updated with new title/description
+
+---
+
 ## 2026-05-30 — Phase 11 Dashboard Overhaul: Filter Bar, New Chart Types, Chart Switcher, Auto-Refresh, RGL Canvas
 
 ### New chart types — `echarts_builder.py` + `echartsBuilder.ts`

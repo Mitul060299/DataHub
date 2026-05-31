@@ -416,6 +416,46 @@ const HOME_FAQ_LD = [
     mainEntity: [
       {
         "@type": "Question",
+        name: "What is the best AI data analytics tool for analysts?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "DataHub is consistently rated among the best AI data analytics tools for analysts and small teams. It combines AI-powered plain-English data transformation, reusable visual pipelines, and transparent SQL execution — making it powerful enough for complex workflows while staying accessible to non-coders.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What is no-code data analytics?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "No-code data analytics means cleaning, transforming, and analysing data without writing SQL, Python, or formulas. Tools like DataHub let you describe what you want in plain English — 'remove duplicates', 'join with sales data', 'calculate month-over-month growth' — and the AI translates it into executable operations you review before they run.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How is DataHub different from Alteryx, Power Query, and KNIME?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "All four tools handle data transformation, but differ significantly in cost and accessibility. Alteryx costs ~$5,195/seat/year and requires learning a drag-and-drop tool interface. Power Query is embedded in Excel/Power BI but limited to those ecosystems and doesn't schedule automatically. KNIME is open-source but has a steep learning curve for analysts. DataHub uses plain-English AI to build the same pipelines, costs from $0/month, and runs in a browser with no installation required.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Can DataHub work as a business intelligence tool?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "DataHub sits upstream of business intelligence tools — it prepares, cleans, and transforms the data that feeds into BI dashboards. It also includes a built-in dashboard layer for sharing charts and tables directly, without needing Power BI or Tableau for basic reporting use cases.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What is an AI ETL tool and how does DataHub fit?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "An AI ETL tool uses artificial intelligence to extract data from sources, transform it according to natural-language instructions, and load it into a destination — replacing manual SQL pipelines and drag-and-drop ETL builders. DataHub is an AI ETL tool built specifically for analysts: you describe the transformation you need, DataHub generates the SQL, you approve it, and the pipeline runs on a schedule automatically.",
+        },
+      },
+      {
+        "@type": "Question",
         name: "What is DataHub?",
         acceptedAnswer: {
           "@type": "Answer",
@@ -506,9 +546,9 @@ export function HomePage() {
 
   const pageLd = useMemo(() => [...HOME_FAQ_LD, HOME_HOWTO_LD], []);
   useSEO({
-    title: "DataHub – AI Tool for Analysts | Clean Excel Files, Merge CSVs, Automate Data Work",
+    title: "DataHub – AI Data Analytics Tool | No-Code Data Preparation & ETL Platform",
     description:
-      "Clean messy Excel files, merge multiple CSVs, remove duplicates, and automate repetitive data workflows — DataHub is the AI-powered transformation tool for analysts, accountants, and consultants. No code required.",
+      "The best AI data analytics tool for analysts and teams. DataHub cleans, transforms, and prepares data using plain English — no code or SQL required. A powerful Alteryx, Power Query, and KNIME alternative at 86% lower cost.",
     canonical: "https://datahub.org.in/",
     structuredData: pageLd,
   });

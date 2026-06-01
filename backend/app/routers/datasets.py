@@ -2670,6 +2670,23 @@ def preview_dataset(
                 "DuckDB preview_page failed for %s: %s",
                 dataset_id, exc,
             )
+            if is_demo or "Invalid storage path" in str(exc):
+                try:
+                    df_fallback = get_dataset_from_db(dataset_id, db, user_id=user_id)
+                    if not df_fallback.empty:
+                        rows_fb = df_fallback.to_dict(orient="records")
+                        sliced = rows_fb[offset: offset + limit]
+                        return DatasetPage(
+                            dataset_id=dataset_id,
+                            columns=list(df_fallback.columns),
+                            offset=offset,
+                            limit=limit,
+                            rows=sliced,
+                            total_rows=len(rows_fb),
+                        )
+                except Exception:
+                    pass
+
             # For storage-path datasets do NOT fall back to pd.read_parquet — that
             # loads the entire file into Python RAM with no memory cap, which is
             # worse than the DuckDB failure and will OOM-kill the process.

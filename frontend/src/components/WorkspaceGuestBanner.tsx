@@ -5,6 +5,8 @@ import { capture } from "../lib/posthog";
 /** Persistent sign-in banner shown to unauthenticated (guest) visitors when
  * they browse the workspace in demo mode. Non-dismissible. */
 export function WorkspaceGuestBanner() {
+  const GUEST_CHAT_LIMIT = 5;
+  const GUEST_CHAT_USED_KEY = "dh_guest_ai_commands_used";
   const { signInWithProvider, signInWithPassword, resetPasswordEmail } = useAuth();
   const [emailExpanded, setEmailExpanded] = useState(false);
   const [email, setEmail] = useState("");
@@ -14,6 +16,7 @@ export function WorkspaceGuestBanner() {
   const [error, setError] = useState<string | null>(null);
   const [magicSent, setMagicSent] = useState(false);
   const [pulsing, setPulsing] = useState(false);
+  const [guestCommandsUsed, setGuestCommandsUsed] = useState(0);
   const emailRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLDivElement>(null);
 
@@ -26,6 +29,33 @@ export function WorkspaceGuestBanner() {
     };
     window.addEventListener("datahub:guest-banner:pulse", handler);
     return () => window.removeEventListener("datahub:guest-banner:pulse", handler);
+  }, []);
+
+  useEffect(() => {
+    const loadUsage = () => {
+      try {
+        const raw = sessionStorage.getItem(GUEST_CHAT_USED_KEY);
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed >= 0) {
+          setGuestCommandsUsed(Math.min(GUEST_CHAT_LIMIT, Math.floor(parsed)));
+        } else {
+          setGuestCommandsUsed(0);
+        }
+      } catch {
+        setGuestCommandsUsed(0);
+      }
+    };
+    const usageHandler = (event: Event) => {
+      const detail = (event as CustomEvent<{ used?: number; limit?: number }>).detail;
+      if (typeof detail?.used === "number") {
+        setGuestCommandsUsed(Math.min(GUEST_CHAT_LIMIT, Math.max(0, Math.floor(detail.used))));
+        return;
+      }
+      loadUsage();
+    };
+    loadUsage();
+    window.addEventListener("datahub:guest-ai-usage", usageHandler);
+    return () => window.removeEventListener("datahub:guest-ai-usage", usageHandler);
   }, []);
 
   const handleProvider = async (provider: "google" | "github") => {
@@ -92,7 +122,7 @@ export function WorkspaceGuestBanner() {
           }}
         >
           <span style={{ fontWeight: 600 }}>You&apos;re exploring a live retail store demo — 12,575 transactions.</span>
-          {" "}Sign in to upload your own data and use AI — free, no card needed.
+          {" "}Try {GUEST_CHAT_LIMIT} AI commands free ({guestCommandsUsed}/{GUEST_CHAT_LIMIT} used), then sign in to upload your own data.
         </span>
 
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>

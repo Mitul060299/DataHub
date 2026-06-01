@@ -310,6 +310,8 @@ interface AIPanelProps {
 }
 
 export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, selectedPipelineStep, onStepDeselect, mode, guestMode }: AIPanelProps) {
+  const GUEST_CHAT_LIMIT = 5;
+  const GUEST_CHAT_USED_KEY = "dh_guest_ai_commands_used";
   const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
   const { setActiveDataset, activeLanes } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -346,6 +348,45 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
   const firstPromptFiredRef = useRef(false);
   // Counter: how many AI transformations have completed this session
   const aiTransformCountRef = useRef(0);
+  const [guestCommandsUsed, setGuestCommandsUsed] = useState<number>(() => {
+    try {
+      const raw = sessionStorage.getItem(GUEST_CHAT_USED_KEY);
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed >= 0) return Math.floor(parsed);
+    } catch {
+      // Ignore storage access failures.
+    }
+    return 0;
+  });
+
+  const guestCommandsRemaining = Math.max(0, GUEST_CHAT_LIMIT - guestCommandsUsed);
+  const guestTrialLocked = Boolean(guestMode) && guestCommandsRemaining <= 0;
+
+  const bumpGuestCommandUsage = () => {
+    setGuestCommandsUsed((prev) => {
+      const next = Math.min(GUEST_CHAT_LIMIT, prev + 1);
+      try {
+        sessionStorage.setItem(GUEST_CHAT_USED_KEY, String(next));
+      } catch {
+        // Ignore storage access failures.
+      }
+      window.dispatchEvent(new CustomEvent("datahub:guest-ai-usage", { detail: { used: next, limit: GUEST_CHAT_LIMIT } }));
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!guestMode) return;
+    try {
+      const raw = sessionStorage.getItem(GUEST_CHAT_USED_KEY);
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        setGuestCommandsUsed(Math.min(GUEST_CHAT_LIMIT, Math.floor(parsed)));
+      }
+    } catch {
+      // Ignore storage access failures.
+    }
+  }, [guestMode]);
 
   // Fetch typed column schema whenever the active dataset changes
   useEffect(() => {
@@ -1058,6 +1099,19 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
     if (!dataset) return;
     const rawContent = (text || input).trim();
 
+    if (guestTrialLocked && !approvePlan) {
+      window.dispatchEvent(new CustomEvent("datahub:guest-banner:pulse"));
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "You have used all 5 guest AI commands. Sign in to continue with unlimited prompts and save your work.",
+        },
+      ]);
+      return;
+    }
+
     // ── Tab-separation intercept: catch obvious cross-tab requests ──────────
     if (rawContent && !approvePlan) {
       let redirectMsg: string | null = null;
@@ -1135,6 +1189,9 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
         pending_plan: pendingPlan,
         onEvent: handleAgentEvent,
       });
+      if (guestMode && content && !approvePlan) {
+        bumpGuestCommandUsage();
+      }
     } catch (error: unknown) {
       const humanised = humaniseError(error);
       capture("ai_error", { error_type: "send_failed", retryable: isRetryableError(error) });
@@ -1928,24 +1985,63 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
           </div>
         )}
         {guestMode ? (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("datahub:guest-banner:pulse"))}
-            style={{
-              width: "100%",
-              minHeight: 36,
-              border: "1px solid rgba(91,106,240,0.4)",
-              borderRadius: "var(--r8)",
-              background: "rgba(91,106,240,0.07)",
-              padding: "8px 12px",
-              textAlign: "left",
-              color: "#a5b4fc",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Sign in to use the AI agent →
-          </button>
+          guestTrialLocked ? (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("datahub:guest-banner:pulse"))}
+              style={{
+                width: "100%",
+                minHeight: 36,
+                border: "1px solid rgba(91,106,240,0.4)",
+                borderRadius: "var(--r8)",
+                background: "rgba(91,106,240,0.07)",
+                padding: "8px 12px",
+                textAlign: "left",
+                color: "#a5b4fc",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Guest trial complete (5/5). Sign in to continue →
+            </button>
+          ) : (
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder={guestMode ? `Try: "show top products by revenue" (${guestCommandsRemaining} free commands left)` : "Ask the AI agent… (press / to focus)"}
+          rows={1}
+          style={{
+            width: "100%",
+            resize: "none",
+            border: guestMode ? "1px solid rgba(91,106,240,0.7)" : "1px solid var(--bd2)",
+            borderRadius: "var(--r8)",
+            background: guestMode ? "linear-gradient(180deg, rgba(91,106,240,0.08) 0%, rgba(91,106,240,0.03) 100%)" : "var(--bg2)",
+            padding: 8,
+            minHeight: 36,
+            maxHeight: 160,
+            overflowY: "auto",
+            boxSizing: "border-box",
+            boxShadow: guestMode ? "0 0 0 1px rgba(91,106,240,0.25), 0 0 16px rgba(91,106,240,0.22)" : "none",
+          }}
+          onInput={(event) => {
+            const el = event.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && sending) {
+              event.preventDefault();
+              handleCancel();
+              return;
+            }
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void handleSend();
+            }
+          }}
+        />
+          )
         ) : (
         <textarea
           ref={textareaRef}
@@ -1995,6 +2091,11 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             </button>
           ) : null}
           <span style={{ flex: 1 }} />
+          {guestMode && (
+            <span style={{ fontSize: 10, color: "#a5b4fc", whiteSpace: "nowrap" }}>
+              Free trial: {Math.min(guestCommandsUsed, GUEST_CHAT_LIMIT)}/{GUEST_CHAT_LIMIT} commands used
+            </span>
+          )}
           <span style={{ fontSize: 10, color: "var(--tx2)" }}>Enter to send · Shift+Enter for newline</span>
         </div>
       </div>

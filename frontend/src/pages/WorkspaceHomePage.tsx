@@ -82,6 +82,14 @@ export function WorkspaceHomePage() {
           updatedAt: null,
         };
         setActiveProject(project);
+        if (demo.dataset_id) {
+          try {
+            sessionStorage.setItem("dh_guest_demo_dataset_id", demo.dataset_id);
+          } catch {
+            // Ignore storage failures (private mode quota, etc.)
+          }
+          window.dispatchEvent(new CustomEvent("datahub:activate-dataset", { detail: demo.dataset_id }));
+        }
         navigate(`/workspace/project/${demo.project_id}/pipeline/new`, { replace: true });
       })
       .catch(() => {

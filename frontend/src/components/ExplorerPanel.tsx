@@ -61,6 +61,15 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
     return () => window.removeEventListener("datahub:activate-dataset", handleActivate);
   }, []);
 
+  useEffect(() => {
+    try {
+      const pending = sessionStorage.getItem("dh_guest_demo_dataset_id");
+      if (pending) setPendingActivateId(pending);
+    } catch {
+      // Ignore storage failures (private mode quota, etc.)
+    }
+  }, []);
+
   const datasetsById = useMemo(() => {
     const datasetMap = new Map<string, Dataset>();
     for (const dataset of datasets) {
@@ -203,6 +212,11 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
     if (match) {
       setActiveDataset(match);
       setPendingActivateId(null);
+      try {
+        sessionStorage.removeItem("dh_guest_demo_dataset_id");
+      } catch {
+        // Ignore storage failures
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingActivateId, datasetsLoading, datasets]);

@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from typing import Dict
 import json
 import logging
+import os
 import threading
 from io import StringIO
 import pandas as pd
@@ -640,11 +641,25 @@ def list_datasets(
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization)
-    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.user_id == user_id)
-    # Hide soft-deleted (trashed) datasets from the main list.
-    query = query.filter(DatasetMetaDB.deleted_at.is_(None))
-    if project_id:
-        query = query.filter(DatasetMetaDB.project_id == project_id)
+
+    demo_project_id = getattr(settings, "demo_project_id", "") or os.getenv("DEMO_PROJECT_ID", "")
+    demo_owner_id = os.getenv("DEMO_SYSTEM_USER_ID", "demo-system-user")
+    is_guest_demo_request = (not user_id) and bool(project_id) and (project_id == demo_project_id)
+
+    if is_guest_demo_request:
+        # Guests should see the shared seeded demo dataset under the demo project.
+        query = (
+            db.query(DatasetMetaDB)
+            .filter(DatasetMetaDB.project_id == project_id)
+            .filter(DatasetMetaDB.user_id == demo_owner_id)
+            .filter(DatasetMetaDB.deleted_at.is_(None))
+        )
+    else:
+        query = db.query(DatasetMetaDB).filter(DatasetMetaDB.user_id == user_id)
+        # Hide soft-deleted (trashed) datasets from the main list.
+        query = query.filter(DatasetMetaDB.deleted_at.is_(None))
+        if project_id:
+            query = query.filter(DatasetMetaDB.project_id == project_id)
     rows = query.all()
     datasets: list[DatasetMeta] = []
 

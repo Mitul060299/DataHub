@@ -54,14 +54,14 @@ SessionLocal = sessionmaker(bind=engine)
 # ── Demo project constants ────────────────────────────────────────────────────
 
 DEMO_SYSTEM_USER_ID = "demo-system-user"
-DEMO_PROJECT_NAME = "Retail Store Demo"
+DEMO_PROJECT_NAME = "Demo"
 DEMO_PROJECT_COLOUR = "#5b6af0"
 DEMO_PROJECT_ICON = "📊"
 DEMO_PROJECT_DESCRIPTION = (
     "12,575 retail store transactions — categories, items, payment methods, "
     "locations and spend. Sign in to upload your own data and use AI."
 )
-DEMO_DATASET_NAME = "Retail Store Sales (Demo)"
+DEMO_DATASET_NAME = "Demo Data"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -588,14 +588,18 @@ def get_dataset_from_db(
             dataset_id,
         )
     else:
-        meta = (
-            db.query(DatasetMetaDB)
-            .filter(
-                DatasetMetaDB.id == dataset_id,
-                DatasetMetaDB.user_id == user_id,
-            )
-            .first()
+        # Allow anonymous access to the demo dataset
+        is_demo = (
+            settings.demo_dataset_id 
+            and dataset_id == settings.demo_dataset_id
+            and user_id == "anonymous"
         )
+        
+        query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
+        if not is_demo:
+            query = query.filter(DatasetMetaDB.user_id == user_id)
+            
+        meta = query.first()
         if not meta:
             raise KeyError("Dataset not found")
 
@@ -716,14 +720,21 @@ def get_pipeline_steps(
     role = get_current_role(authorization)
     require_role("viewer", role)
     user_id = get_current_user_id(authorization) or "anonymous"
-    meta = (
-        db.query(DatasetMetaDB)
-        .filter(
-            DatasetMetaDB.id == dataset_id,
-            DatasetMetaDB.user_id == user_id,
-        )
-        .first()
+    
+    # ── Auth check ────────────────────────────────────────────────────────────
+    # Normally users can only see their own datasets. However, we allow
+    # anonymous (unauthenticated) access to the public DEMO dataset if configured.
+    is_demo = (
+        settings.demo_dataset_id 
+        and dataset_id == settings.demo_dataset_id
+        and user_id == "anonymous"
     )
+
+    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
+    if not is_demo:
+        query = query.filter(DatasetMetaDB.user_id == user_id)
+        
+    meta = query.first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -2498,7 +2509,19 @@ def get_dataset_schema(
     """Return column names and types for a dataset (lightweight, no row scan)."""
     role = get_current_role(authorization)
     require_role("viewer", role)
-    meta = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id).first()
+    
+    user_id = get_current_user_id(authorization) or "anonymous"
+    is_demo = (
+        settings.demo_dataset_id 
+        and dataset_id == settings.demo_dataset_id
+        and user_id == "anonymous"
+    )
+    
+    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
+    if not is_demo:
+        query = query.filter(DatasetMetaDB.user_id == user_id)
+        
+    meta = query.first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
     raw_schema = DuckDBService.get_schema(dataset_id)
@@ -2534,15 +2557,20 @@ def get_presigned_url(
     require_role("viewer", role)
     if expires_in > 3600:
         expires_in = 3600
-    user_id = get_current_user_id(authorization)
-    meta = (
-        db.query(DatasetMetaDB)
-        .filter(
-            DatasetMetaDB.id == dataset_id,
-            DatasetMetaDB.user_id == user_id,
-        )
-        .first()
+    user_id = get_current_user_id(authorization) or "anonymous"
+    
+    # Allow anonymous access to the demo dataset
+    is_demo = (
+        settings.demo_dataset_id 
+        and dataset_id == settings.demo_dataset_id
+        and user_id == "anonymous"
     )
+    
+    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
+    if not is_demo:
+        query = query.filter(DatasetMetaDB.user_id == user_id)
+        
+    meta = query.first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
     if not meta.storage_path or str(meta.storage_path).startswith("local://"):
@@ -2588,14 +2616,19 @@ def preview_dataset(
     if limit > 500:
         limit = 500
     user_id = get_current_user_id(authorization) or "anonymous"
-    meta = (
-        db.query(DatasetMetaDB)
-        .filter(
-            DatasetMetaDB.id == dataset_id,
-            DatasetMetaDB.user_id == user_id,
-        )
-        .first()
+    
+    # Allow anonymous access to the demo dataset
+    is_demo = (
+        settings.demo_dataset_id 
+        and dataset_id == settings.demo_dataset_id
+        and user_id == "anonymous"
     )
+    
+    query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
+    if not is_demo:
+        query = query.filter(DatasetMetaDB.user_id == user_id)
+        
+    meta = query.first()
     if not meta:
         raise HTTPException(status_code=404, detail="Dataset not found")
 

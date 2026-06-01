@@ -121,7 +121,7 @@ export function WorkspaceGuestBanner() {
             lineHeight: 1.4,
           }}
         >
-          <span style={{ fontWeight: 600 }}>You&apos;re exploring a live retail store demo — 12,575 transactions.</span>
+          <span style={{ fontWeight: 600 }}>You&apos;re exploring the Demo — 12,575 transactions.</span>
           {" "}Try {GUEST_CHAT_LIMIT} AI commands free ({guestCommandsUsed}/{GUEST_CHAT_LIMIT} used), then sign in to upload your own data.
         </span>
 

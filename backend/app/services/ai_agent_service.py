@@ -836,12 +836,13 @@ class AIAgentService:
         sample_data: list[dict[str, Any]] = []
         # When a live DuckDB session has pipeline output, query that instead of
         # the original Parquet — the user expects the report on transformed data.
+        import logging as _ctx_log
+        _logger = _ctx_log.getLogger(__name__)
+
         _used_session = False
         _fallback_reason: str | None = None
         if session_id and table_name:
             from .duckdb_session import execute_in_session, table_exists
-            import logging as _ctx_log
-            _logger = _ctx_log.getLogger(__name__)
 
             # First request per process for this session: replay views so any
             # disk-persisted view definitions referencing expired signed URLs

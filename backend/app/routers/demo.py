@@ -129,8 +129,7 @@ def preview_demo_dataset(
                 limit=limit,
                 allowed_columns=list(meta.columns or []),
             )
-            if not filter:
-                total = meta.row_count or total
+            total = meta.row_count or total
             return DemoDatasetPreviewOut(
                 dataset_id=dataset_id,
                 columns=list(meta.columns or []),
@@ -140,7 +139,30 @@ def preview_demo_dataset(
     except Exception as exc:  # noqa: BLE001
         _log.warning("DuckDB fast path failed for demo dataset %s: %s", dataset_id, exc)
 
-    # Fallback: return empty preview rather than exposing an error.
+    # Fallback: try loading from DB chunks before returning empty.
+    try:
+        from ..models_db import DatasetChunkDB
+        chunks = (
+            db.query(DatasetChunkDB)
+            .filter(DatasetChunkDB.dataset_id == dataset_id)
+            .order_by(DatasetChunkDB.chunk_index.asc())
+            .all()
+        )
+        if chunks:
+            rows: list[dict] = []
+            for chunk in chunks:
+                rows.extend(chunk.rows or [])
+            sliced = rows[offset : offset + limit]
+            return DemoDatasetPreviewOut(
+                dataset_id=dataset_id,
+                columns=list(meta.columns or []),
+                rows=sliced,
+                total_rows=len(rows),
+            )
+    except Exception as fallback_exc:
+        _log.warning("DB chunk fallback also failed for demo dataset %s: %s", dataset_id, fallback_exc)
+
+    # Last resort: return empty preview.
     return DemoDatasetPreviewOut(
         dataset_id=dataset_id,
         columns=list(meta.columns or []),

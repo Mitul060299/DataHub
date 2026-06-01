@@ -354,14 +354,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // React to expired/invalid sessions surfaced by the axios interceptor.
   useEffect(() => {
     const handler = () => {
-      void supabase.auth.signOut().finally(() => {
-        if (typeof window !== "undefined") {
-          const path = window.location.pathname || "";
-          const onAuthPage = ["/login", "/signup", "/reset", "/forgot"].some((p) => path.startsWith(p));
-          if (!onAuthPage) {
-            window.location.assign("/login?reason=session_expired");
+      // Pure guests (no Supabase session, no anon session) will get 401s on
+      // authenticated endpoints — that's expected, not a session expiry.
+      // Skip the redirect so they stay in the guest workspace view.
+      void supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+        if (!currentSession && !anonSessionRef.current) return;
+        void supabase.auth.signOut().finally(() => {
+          if (typeof window !== "undefined") {
+            const path = window.location.pathname || "";
+            const onAuthPage = ["/login", "/signup", "/reset", "/forgot"].some((p) => path.startsWith(p));
+            if (!onAuthPage) {
+              window.location.assign("/login?reason=session_expired");
+            }
           }
-        }
+        });
       });
     };
     window.addEventListener("datahub:session-expired", handler);

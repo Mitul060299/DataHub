@@ -91,12 +91,13 @@ export function WorkspaceHomePage() {
   }, [isGuest]);
 
   useEffect(() => {
+    if (isGuest) { setRecentLoading(false); return; }
     setRecentLoading(true);
     fetchWorkspaceRecent()
       .then((data) => setRecent(data))
       .catch(() => setRecent(null))
       .finally(() => setRecentLoading(false));
-  }, []);
+  }, [isGuest]);
 
   // Auto-navigation:
   //   Anon users with a single project (the demo) → jump straight into it.

@@ -588,12 +588,8 @@ def get_dataset_from_db(
             dataset_id,
         )
     else:
-        # Allow anonymous access to the demo dataset
-        is_demo = (
-            settings.demo_dataset_id 
-            and dataset_id == settings.demo_dataset_id
-            and user_id == "anonymous"
-        )
+        demo_dataset_id = getattr(settings, "demo_dataset_id", "") or os.getenv("DEMO_DATASET_ID", "")
+        is_demo = bool(demo_dataset_id) and dataset_id == demo_dataset_id and user_id == "anonymous"
         
         query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
         if not is_demo:
@@ -724,11 +720,8 @@ def get_pipeline_steps(
     # ── Auth check ────────────────────────────────────────────────────────────
     # Normally users can only see their own datasets. However, we allow
     # anonymous (unauthenticated) access to the public DEMO dataset if configured.
-    is_demo = (
-        settings.demo_dataset_id 
-        and dataset_id == settings.demo_dataset_id
-        and user_id == "anonymous"
-    )
+    demo_dataset_id = getattr(settings, "demo_dataset_id", "") or os.getenv("DEMO_DATASET_ID", "")
+    is_demo = bool(demo_dataset_id) and dataset_id == demo_dataset_id and user_id == "anonymous"
 
     query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
     if not is_demo:
@@ -2511,11 +2504,8 @@ def get_dataset_schema(
     require_role("viewer", role)
     
     user_id = get_current_user_id(authorization) or "anonymous"
-    is_demo = (
-        settings.demo_dataset_id 
-        and dataset_id == settings.demo_dataset_id
-        and user_id == "anonymous"
-    )
+    demo_dataset_id = getattr(settings, "demo_dataset_id", "") or os.getenv("DEMO_DATASET_ID", "")
+    is_demo = bool(demo_dataset_id) and dataset_id == demo_dataset_id and user_id == "anonymous"
     
     query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
     if not is_demo:
@@ -2560,11 +2550,8 @@ def get_presigned_url(
     user_id = get_current_user_id(authorization) or "anonymous"
     
     # Allow anonymous access to the demo dataset
-    is_demo = (
-        settings.demo_dataset_id 
-        and dataset_id == settings.demo_dataset_id
-        and user_id == "anonymous"
-    )
+    demo_dataset_id = getattr(settings, "demo_dataset_id", "") or os.getenv("DEMO_DATASET_ID", "")
+    is_demo = bool(demo_dataset_id) and dataset_id == demo_dataset_id and user_id == "anonymous"
     
     query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
     if not is_demo:
@@ -2618,11 +2605,8 @@ def preview_dataset(
     user_id = get_current_user_id(authorization) or "anonymous"
     
     # Allow anonymous access to the demo dataset
-    is_demo = (
-        settings.demo_dataset_id 
-        and dataset_id == settings.demo_dataset_id
-        and user_id == "anonymous"
-    )
+    demo_dataset_id = getattr(settings, "demo_dataset_id", "") or os.getenv("DEMO_DATASET_ID", "")
+    is_demo = bool(demo_dataset_id) and dataset_id == demo_dataset_id and user_id == "anonymous"
     
     query = db.query(DatasetMetaDB).filter(DatasetMetaDB.id == dataset_id)
     if not is_demo:

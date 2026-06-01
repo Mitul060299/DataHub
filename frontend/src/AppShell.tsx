@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { TopBar } from "./components/TopBar";
+import { WorkspaceGuestBanner } from "./components/WorkspaceGuestBanner";
 import { useAuth } from "./contexts/AuthContext";
 import { PipelineProvider } from "./contexts/PipelineContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
@@ -25,6 +26,7 @@ export function AppShell() {
   }, []);
 
   const isPublic = location.pathname === "/" || PUBLIC_PATHS.some((p) => location.pathname.startsWith(p));
+  const isWorkspace = location.pathname.startsWith("/workspace");
 
   // Public pages render immediately — auth resolves in the background so the
   // hero / landing content paints without waiting for a server round-trip.
@@ -45,14 +47,20 @@ export function AppShell() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: { pathname: location.pathname } }} replace />;
+    // Workspace pages: render the workspace in guest/demo mode with a sign-in
+    // banner rather than bouncing straight to /login. All other private pages
+    // still redirect.
+    if (!isWorkspace) {
+      return <Navigate to="/login" state={{ from: { pathname: location.pathname } }} replace />;
+    }
   }
 
   return (
-    <WorkspaceProvider>
+    <WorkspaceProvider isGuest={!isAuthenticated}>
       <PipelineProvider>
         <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
           <TopBar />
+          {!isAuthenticated && <WorkspaceGuestBanner />}
           {upgradeMessage ? (
             <div style={{ borderBottom: "1px solid var(--bd2)", background: "var(--bg2)", padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <span style={{ color: "var(--tx1)", fontSize: 12 }}>

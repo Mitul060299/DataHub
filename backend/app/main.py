@@ -78,6 +78,7 @@ from .routers.saml import router as saml_router
 from .routers.projects import router as projects_router, recent_router as workspace_recent_router
 from .routers.artifacts import router as artifacts_router
 from .routers.saved_visualizations import router as saved_visualizations_router
+from .routers.demo import router as demo_router
 # Note: Old 'dashboards' and 'widgets' routers removed - use 'visualizations' router instead
 from .db import Base, engine
 from . import models_db
@@ -860,3 +861,4 @@ app.include_router(pipeline_steps_router)
 app.include_router(audit_log_router.router)
 app.include_router(branding_router)
 app.include_router(saml_router)
+app.include_router(demo_router)

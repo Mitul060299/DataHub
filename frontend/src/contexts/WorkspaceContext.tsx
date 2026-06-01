@@ -56,6 +56,9 @@ export interface WorkspaceContextValue {
   /** Last project id the user explicitly opened in this account; persists
    * across reloads so a refresh on /workspace can deep-link back to it. */
   lastProjectId: string | null;
+  /** True when the workspace is rendered for an unauthenticated visitor
+   * in read-only demo mode. */
+  isGuest: boolean;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
@@ -78,7 +81,7 @@ function toProject(raw: ProjectOut): Project {
   };
 }
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+export function WorkspaceProvider({ children, isGuest = false }: { children: ReactNode; isGuest?: boolean }) {
   const { session, isAnonymous, anonUserId } = useAuth();
   // User-scoped key so two accounts on the same browser don't clobber each
   // other's "last project" memory, and an anon visitor's last project can't
@@ -251,8 +254,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       members,
       setMembers,
       lastProjectId,
+      isGuest,
     }),
-    [projects, projectsLoading, refreshProjects, createProject, activeProject, setActiveProject, activeDataset, setActiveDataset, activeLanes, addLane, removeLane, members, lastProjectId],
+    [projects, projectsLoading, refreshProjects, createProject, activeProject, setActiveProject, activeDataset, setActiveDataset, activeLanes, addLane, removeLane, members, lastProjectId, isGuest],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

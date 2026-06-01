@@ -8,6 +8,7 @@ import type { Project } from "../contexts/WorkspaceContext";
 import { useWorkspaceContext } from "../contexts/WorkspaceContext";
 import { useAuth } from "../contexts/AuthContext";
 import { capture } from "../lib/posthog";
+import { fetchDemoProject } from "../api";
 
 function Skeleton({ width, height = 14, style }: { width: string | number; height?: number; style?: React.CSSProperties }) {
   return (
@@ -48,7 +49,7 @@ export function WorkspaceHomePage() {
   const location = useLocation();
   const locationState = location.state as { fromRoot?: boolean } | null;
   const { isAnonymous } = useAuth();
-  const { projects, projectsLoading, setActiveProject, refreshProjects, lastProjectId } = useWorkspaceContext();
+  const { projects, projectsLoading, setActiveProject, refreshProjects, lastProjectId, isGuest } = useWorkspaceContext();
   const [recent, setRecent] = useState<WorkspaceRecentOut | null>(null);
   const [recentLoading, setRecentLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -58,6 +59,36 @@ export function WorkspaceHomePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [inviteProjectId, setInviteProjectId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Guest path: load demo project and navigate into it immediately.
+  useEffect(() => {
+    if (!isGuest) return;
+    capture("guest_workspace_landed");
+    fetchDemoProject()
+      .then((demo) => {
+        if (!demo) return;
+        const project: Project = {
+          id: demo.project_id,
+          name: demo.project_name,
+          colour: demo.colour ?? "#5b6af0",
+          color: demo.colour ?? "#5b6af0",
+          icon: demo.icon ?? "📊",
+          initial: (demo.project_name ?? "D").charAt(0).toUpperCase(),
+          description: demo.description ?? "Live sales demo",
+          is_quickstart: false,
+          pipelineCount: demo.pipeline_count ?? 0,
+          dashboardCount: 0,
+          sourceCount: 0,
+          updatedAt: null,
+        };
+        setActiveProject(project);
+        navigate(`/workspace/project/${demo.project_id}/pipeline/new`, { replace: true });
+      })
+      .catch(() => {
+        // Demo backend not set up yet — show the empty-state home page instead
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGuest]);
 
   useEffect(() => {
     setRecentLoading(true);
@@ -70,7 +101,9 @@ export function WorkspaceHomePage() {
   // Auto-navigation:
   //   Anon users with a single project (the demo) → jump straight into it.
   //   Real users returning via the AppShell / redirect → restore their last project.
+  //   Guest users are handled by the demo effect above.
   useEffect(() => {
+    if (isGuest) return;
     if (projectsLoading || projects.length === 0) return;
     if (isAnonymous) {
       if (projects.length === 1) {
@@ -87,7 +120,7 @@ export function WorkspaceHomePage() {
     }
   // Run once after projects load — don’t re-trigger on every lastProjectId change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectsLoading, isAnonymous]);
+  }, [projectsLoading, isAnonymous, isGuest]);
 
   // Project-level model: show every project the user can see.
   // Backend list_projects already enforces visibility (owner + workspace co-members).

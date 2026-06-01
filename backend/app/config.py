@@ -187,6 +187,11 @@ class Settings(BaseModel):
     clamd_socket: str = os.getenv("CLAMD_SOCKET", "")
     clamd_host: str = os.getenv("CLAMD_HOST", "")
     clamd_port: int = int(os.getenv("CLAMD_PORT", "3310"))
+    # ── Public demo project ────────────────────────────────────────────────────
+    # Set these env vars after running scripts/seed_demo.py to activate the
+    # public read-only demo workspace for unauthenticated visitors.
+    demo_project_id: str = os.getenv("DEMO_PROJECT_ID", "")
+    demo_dataset_id: str = os.getenv("DEMO_DATASET_ID", "")
 
 
 settings = Settings()

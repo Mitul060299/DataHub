@@ -120,15 +120,10 @@ export function TopBar() {
       <div className="topbar__nav" style={{ display: "flex", justifyContent: "center" }}>
         <nav style={{ display: "inline-flex", alignItems: "center", gap: 22 }}>
           {tabs.map((tab) => {
-            const needsAuth = tab.key === "workspace" && !session;
             return (
               <Link
                 key={tab.key}
                 to={tab.path}
-                onClick={needsAuth ? (e) => {
-                  e.preventDefault();
-                  navigate("/login", { state: { from: { pathname: tab.path } } });
-                } : undefined}
                 style={{
                   height: 32,
                   borderRadius: 8,

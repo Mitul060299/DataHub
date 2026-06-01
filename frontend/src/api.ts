@@ -1560,6 +1560,29 @@ export async function fetchWorkspaceRecent(): Promise<WorkspaceRecentOut> {
   return response.data;
 }
 
+// ── Public demo project (no auth required) ───────────────────────────────────
+
+export interface DemoProjectOut {
+  project_id: string;
+  project_name: string;
+  dataset_id: string | null;
+  colour?: string | null;
+  icon?: string | null;
+  description?: string | null;
+  pipeline_count?: number;
+}
+
+/** Fetches the public demo project metadata from the backend.
+ * Returns null if the demo has not been provisioned yet (404/500). */
+export async function fetchDemoProject(): Promise<DemoProjectOut | null> {
+  try {
+    const response = await api.get<DemoProjectOut>("/demo");
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
 // ── Workspace Members ────────────────────────────────────────────────────────
 
 export interface WorkspaceMemberOut {

@@ -305,9 +305,11 @@ interface AIPanelProps {
   onStepDeselect?: () => void;
   /** Current workspace mode — used for tab-context guidance */
   mode?: WorkspaceMode;
+  /** When true, the AI chat is disabled and prompts a sign-in action */
+  guestMode?: boolean;
 }
 
-export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, selectedPipelineStep, onStepDeselect, mode }: AIPanelProps) {
+export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMutated, onSessionPreview, onUploadClick, onFirstAiAnswer, onFirstPrompt, selectedPipelineStep, onStepDeselect, mode, guestMode }: AIPanelProps) {
   const { addStep, steps, liveArtifact, setLiveArtifact, pendingForkParentStepId } = usePipelineContext();
   const { setActiveDataset, activeLanes } = useWorkspaceContext();
   const { executeTransformation } = usePipeline();
@@ -1925,6 +1927,26 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             )}
           </div>
         )}
+        {guestMode ? (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("datahub:guest-banner:pulse"))}
+            style={{
+              width: "100%",
+              minHeight: 36,
+              border: "1px solid rgba(91,106,240,0.4)",
+              borderRadius: "var(--r8)",
+              background: "rgba(91,106,240,0.07)",
+              padding: "8px 12px",
+              textAlign: "left",
+              color: "#a5b4fc",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Sign in to use the AI agent →
+          </button>
+        ) : (
         <textarea
           ref={textareaRef}
           value={input}
@@ -1949,6 +1971,7 @@ export function AIPanel({ dataset, projectId, width, onStepApplied, onDatasetMut
             }
           }}
         />
+        )}
         {/* Toolbar row below textarea */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
           {activeLanes.filter((l) => l.id !== dataset?.id).length > 0 ? (

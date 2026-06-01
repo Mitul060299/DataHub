@@ -24,7 +24,7 @@ export function WorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isAnonymous } = useAuth();
-  const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects } = useWorkspaceContext();
+  const { activeProject, activeDataset, setActiveDataset, activeLanes, removeLane, projects, isGuest } = useWorkspaceContext();
 
   // Resolve project from URL param or fall back to activeProject
   const resolvedProject = projectId
@@ -72,6 +72,10 @@ export function WorkspacePage() {
   // the live banner / pipeline steps would disappear.  Replay must be a
   // session-only operation: it rebuilds the in-memory views and previews them.
   const handleRunPipeline = async () => {
+    if (isGuest) {
+      window.dispatchEvent(new CustomEvent("datahub:guest-banner:pulse"));
+      return;
+    }
     if (!activeDataset?.id || !steps.length || replayingPipeline) return;
     setReplayingPipeline(true);
     try {
@@ -243,6 +247,15 @@ export function WorkspacePage() {
     };
   }, []);
 
+  /** Opens the import modal, or pulses the guest sign-in banner if in demo mode. */
+  const openImport = () => {
+    if (isGuest) {
+      window.dispatchEvent(new CustomEvent("datahub:guest-banner:pulse"));
+      return;
+    }
+    setImportOpen(true);
+  };
+
   // ── Global keyboard shortcuts ────────────────────────────────────────────
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -264,7 +277,7 @@ export function WorkspacePage() {
       // Cmd/Ctrl+I : open import
       if (!inEditable && e.key.toLowerCase() === "i") {
         e.preventDefault();
-        setImportOpen(true);
+        openImport();
       }
       // Cmd/Ctrl+/ : focus search
       if (e.key === "/") {
@@ -514,7 +527,7 @@ export function WorkspacePage() {
         rows={data?.rows ?? []}
         lastAction={steps.length ? steps[steps.length - 1].operation : "Idle"}
         onSheetsExport={() => setSheetsExportOpen(true)}
-        onImport={() => setImportOpen(true)}
+        onImport={() => openImport()}
         onArtifactSaved={() => setDatasetRefreshNonce((value) => value + 1)}
         sessionPreviewRows={showingOriginal ? undefined : sessionPreview?.rows}
         sessionPreviewColumns={showingOriginal ? undefined : sessionPreview?.columns}
@@ -563,6 +576,7 @@ export function WorkspacePage() {
         selectedPipelineStep={selectedPipelineStep}
         onStepDeselect={() => setSelectedPipelineStep(null)}
         mode={workspaceMode}
+        guestMode={isGuest}
             onStepApplied={() => {
               setDatasetRefreshNonce((value) => value + 1);
               void refetch();
@@ -579,7 +593,7 @@ export function WorkspacePage() {
               skipNextClearRef.current = true;
               setSessionPreview({ rows, columns });
             }}
-            onUploadClick={() => setImportOpen(true)}
+            onUploadClick={() => openImport()}
             onFirstPrompt={() => {
               setHasAskedFirstQuestion(true);
               ctxRecordMilestone("ai_prompt_submitted");

@@ -111,7 +111,7 @@ New keyword patterns added to the auto-inference logic (before the waterfall che
 - A `setInterval` in `DashboardPage` re-fetches all chart and metric tiles on the chosen cadence
 
 ### DashboardCanvas — react-grid-layout migration
-The workspace Canvas sidebar (`DashboardCanvas.tsx`) now uses `react-grid-layout` instead of the previous absolute-positioning drag system:
+The Canvas sidebar (`DashboardCanvas.tsx`) now uses `react-grid-layout` instead of the previous absolute-positioning drag system:
 - 12-column grid, 60 px row height, 8 px gutters
 - Drag via `.canvas-drag-handle` header strip; resize handle at bottom-right
 - Layout persisted to `localStorage` key `dh:dashboard:layout:{projectId}`

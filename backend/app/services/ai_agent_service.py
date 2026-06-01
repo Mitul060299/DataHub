@@ -933,7 +933,18 @@ class AIAgentService:
                     if is_large
                     else f"SELECT * FROM dataset LIMIT {sample_size}"
                 )
-                sample_data = DuckDBService.query_parquet(dataset.storage_path, sample_query)
+                try:
+                    sample_data = DuckDBService.query_parquet(dataset.storage_path, sample_query)
+                except ValueError as exc:
+                    if "Invalid storage path" in str(exc):
+                        _logger.warning(
+                            "Invalid storage path for dataset %s (%s). Falling back to DB chunks.",
+                            dataset_id, dataset.storage_path,
+                        )
+                        df = AIAgentService._load_dataframe(dataset_id, db)
+                        sample_data = df.head(sample_size).to_dict(orient="records")
+                    else:
+                        raise
             else:
                 df = AIAgentService._load_dataframe(dataset_id, db)
                 sample_data = df.head(sample_size).to_dict(orient="records")

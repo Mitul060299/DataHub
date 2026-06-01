@@ -163,6 +163,56 @@ An email warning is sent when any metric crosses 80% of its limit (requires `RES
 - DELETE /api/projects/{project_id} — delete project
 - GET /api/project/recent — recent pipelines and dashboards across all projects
 
+## Organizations (Team/Business/Enterprise)
+Organization-level collaboration with seat-based billing.
+
+- GET /organization — current user's org info + plan + seats
+- GET /organization/members — list active + pending org members
+- POST /organization/invite — invite a user by email
+- DELETE /organization/members/{member_id} — remove member (owner only) or leave org (self)
+- GET /invites/organizations/{token}/accept — accept invite token, redirect to app
+
+**Response schemas:**
+
+`GET /organization` returns:
+```json
+{
+  "id": "uuid",
+  "name": "Acme Corp",
+  "owner_user_id": "uuid",
+  "plan": "Team",
+  "seat_count": 5,
+  "member_count": 3,
+  "created_at": "2026-01-01T00:00:00Z"
+}
+```
+
+`GET /organization/members` returns:
+```json
+[
+  {
+    "id": "uuid",
+    "org_id": "uuid",
+    "user_id": "uuid",
+    "email": "alice@acme.com",
+    "status": "active|pending",
+    "invited_by": "owner-user-uuid",
+    "is_owner": false,
+    "created_at": "2026-01-01T00:00:00Z",
+    "accepted_at": "2026-01-02T00:00:00Z"
+  }
+]
+```
+
+`POST /organization/invite` body:
+```json
+{ "email": "bob@acme.com" }
+```
+
+**Plan gating:** Only Team / Business / Enterprise can invite members. Returns `403` for Free/Professional tiers.
+
+**Seat limit:** Enforced against subscription quantity. Returns inline error `seat_limit_exceeded` when full.
+
 ## Project Members
 Project-level collaboration. Billing flows through the project owner's plan.
 - GET /projects/{project_id}/members — list members (owner or any active member)

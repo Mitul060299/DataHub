@@ -32,15 +32,25 @@ Current production stack:
 
 ### Supabase
 - Auth provider (email/password + OIDC).
-- Postgres for all transactional data: users, projects, projects, project_members, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback.
+- Postgres for all transactional data: users, projects, projects, project_members, datasets, pipelines, dashboards, comments, reviews, audit logs, billing, feedback, organizations, organization_members, usage_logs, email_logs, email_preferences.
 
 ### Collaboration Model
-DataHub is migrating from project-level to **project-level** collaboration:
+DataHub supports two levels of collaboration:
+
+**1. Project-level collaboration (all tiers)**
 - `project_members` (added in alembic 0063) carries email, role (`editor`/`viewer`), status, invite_token. Owner is implicit via `projects.user_id`.
 - Billing flows through the **project owner's** plan — invitees do not consume their own seats; the project owner does.
 - Plan caps: `max_project_members` (members per project) and `max_collaborative_projects` (projects with ≥1 member).
 - Seat limit is the union of `workspace_members` + `project_members` emails per owner (during the migration window).
 - `workspace_members` retained alongside `project_members` until Phase 6 dual-read closes; both code paths run in parallel with no functional regression.
+
+**2. Organization-level collaboration (Team/Business/Enterprise tiers)**
+- `organizations` (added in alembic 0068) represents a billing entity — one paying user (org owner) can invite N members by email.
+- `organization_members` stores pending and active members; the owner is implicit via `organizations.owner_user_id`.
+- **Seat model**: all members are equal (no role column in org_members); seat cap = subscription quantity (from Razorpay).
+- **Usage aggregation**: all usage rolls up to the org owner — pipelines, datasets, storage, and AI calls count against the owner's plan.
+- **Personal orgs**: created lazily on first `GET /organization` call; every user automatically gets a personal org so the API is consistent.
+- **Invite flow**: owner sends invite → token generated → email link → user accepts → `OrganizationMemberDB` updated with `user_id` and `accepted_at`.
 
 ### Upstash Redis
 - Rate limit counters.
@@ -102,10 +112,44 @@ The agent is a 9-node state machine pipeline.
 ## Data Storage Model
 | Layer | Technology | What's stored |
 |---|---|---|
-| Transactional/metadata | Supabase Postgres | Users, projects, projects, dataset metadata, recipes, pipelines, dashboards, comments, reviews, audit logs, billing, feedback |
+| Transactional/metadata | Supabase Postgres | Users, projects, projects, dataset metadata, recipes, pipelines, dashboards, comments, reviews, audit logs, billing, feedback, organizations, organization_members, usage_logs, email_logs, email_preferences |
 | File/object | S3 | Uploaded datasets (Parquet) + user-saved checkpoints |
 | Compute/query | DuckDB | In-process session tables for pipeline step outputs; previews against S3 Parquet |
 | Cache | Redis | Hot query responses; rate limit counters |
+
+## Usage Tracking & Analytics
+
+### AI Token Tracking (0069)
+Every AI agent call is logged to `usage_logs` with:
+- `model_used`: Groq model name (e.g., `llama-3.3-70b`)
+- `input_tokens` / `output_tokens`: token counts from Groq response headers
+- `cost_score`: internal cost metric (computed from token counts)
+- `query_type`: type of AI operation (intent classification, planning, execution, etc.)
+- `dataset_rows`: number of rows in the dataset being processed
+- `session_id`: correlates with chat session for analytics
+
+This enables:
+- Per-user/per-org AI usage dashboards
+- Cost attribution by feature (chat vs. NL edit vs. insights)
+- Anomaly detection on unusual usage patterns
+- Budget alerts and rate limiting based on real token consumption
+
+### Activation Milestones (0070)
+Four timestamp columns on `users` track the user's onboarding journey:
+- `first_dataset_at`: when the user uploaded their first dataset
+- `first_ai_answer_at`: when the AI agent answered the first question
+- `first_pipeline_step_at`: when the first pipeline step was executed
+- `first_export_at`: when the user exported data for the first time
+
+These milestones power:
+- **Activation email service**: sends contextual onboarding emails triggered by milestone events (e.g., "You ran your first pipeline! Here's how to schedule it.")
+- **Onboarding funnel analytics**: tracks drop-off at each stage
+- **Engagement scoring**: scores users based on which milestones they've hit
+
+### Email Preferences & Tracking (0070)
+- `email_preferences`: per-user opt-out for lifecycle emails + unsubscribe token (GDPR-compliant)
+- `email_log`: tracks sent emails with Resend open/click timestamps for analytics
+- Supports: weekly digest, usage warnings, pipeline complete notifications, activation emails
 
 ## Parquet-First Ingest (Phase 1)
 

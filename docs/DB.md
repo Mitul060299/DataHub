@@ -113,3 +113,21 @@ DATABASE_URL=<postgres_url> alembic upgrade head
 | Table | Key Columns | Notes |
 |---|---|---|
 | `chat_sessions` | id, dataset_id, user_id, messages (JSONB), created_at | |
+
+### Organizations (0068)
+| Table | Key Columns | Notes |
+|---|---|---|
+| `organizations` | id, owner_user_id, name, created_at, updated_at | Billing entity; owner is the paying user |
+| `organization_members` | id, org_id, user_id, email, status, invite_token, invited_by, created_at, accepted_at | Org members (owner implicit via organizations.owner_user_id); unique on (org_id, email) |
+
+### Usage Tracking (0069)
+| Table | Key Columns | Notes |
+|---|---|---|
+| `usage_logs` | id, user_id, session_id, timestamp, model_used, query_type, input_tokens, output_tokens, cost_score, dataset_rows | Per-call AI token tracking; indexed on (user_id, timestamp) and session_id |
+
+### Activation & Email (0070)
+| Table | Key Columns | Notes |
+|---|---|---|
+| `users` (extended) | first_dataset_at, first_ai_answer_at, first_pipeline_step_at, first_export_at | Milestone timestamps for onboarding funnel |
+| `email_log` | id, user_id, email, template, sent_at, opened_at, clicked_at | Email delivery tracking with Resend open/click events |
+| `email_preferences` | user_id, email, lifecycle_emails, weekly_digest, unsubscribe_token, updated_at | Per-user email opt-out (GDPR-compliant) |

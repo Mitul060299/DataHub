@@ -198,6 +198,13 @@ All operations available via NL pipeline editing and the visual step builder:
 - Email — 80% usage warning ✅ (Resend; respects user pref)
 - Notification preferences ✅ (GET/PUT /users/me/notification-preferences; 3 toggles)
 - Projects ✅ (user-scoped project grouping for pipelines, dashboards, data sources)
+- **Organization collaboration (Team+)** ✅ — org-account model with seat-based billing; `GET/POST/DELETE /organization`; personal orgs created lazily; usage rolls up to org owner
+- **Org member invitations (Team+)** ✅ — invite by email with token-based acceptance; seat limit enforced against subscription quantity; email notifications via Resend
+- **Activation milestones (all tiers)** ✅ — four timestamp columns on users: first_dataset_at, first_ai_answer_at, first_pipeline_step_at, first_export_at; powers onboarding funnel analytics
+- **Activation email service** ✅ — contextual emails triggered by milestone events (e.g., "You ran your first pipeline!")
+- **AI usage logs (all tiers)** ✅ — per-call token tracking with model_used, input/output tokens, cost_score; indexed for analytics dashboards
+- **Email tracking & preferences** ✅ — email_log with Resend open/click events; email_preferences with unsubscribe token (GDPR-compliant)
+- **Granular email opt-out** ✅ — separate toggles for lifecycle_emails and weekly_digest; per-user unsubscribe token
 
 ## 11. Extensibility & Integration
 - REST API ✅

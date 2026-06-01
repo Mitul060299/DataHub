@@ -1,17 +1,17 @@
 # Onboarding
 
 ## Welcome Modal (First Visit)
-On your first visit to a workspace, DataHub shows an interactive 4-slide welcome walkthrough:
+On your first visit to a project, DataHub shows an interactive 4-slide welcome walkthrough:
 
 1. **Feature overview** — four feature cards: Upload Data, Transform with AI, Build Pipelines, and Export & Share.
 2. **Data tab tips** — how to upload a file, preview data, and trigger profiling.
 3. **Pipeline tab tips** — how to open the Pipeline tab, add steps, and run transformations.
-4. **Sample dataset picker** — choose a starter dataset (Customers, Sales Data, Journal Entries, or Employee Records) to load it directly into the workspace.
+4. **Sample dataset picker** — choose a starter dataset (Customers, Sales Data, Journal Entries, or Employee Records) to load it directly into the project.
 
 Progress dots at the top let you jump to any slide. Use **Back** / **Next** to navigate, or click a dot to jump directly. Click **Skip** to close the modal and upload your own file.
 
-## Workspace Layout
-The workspace is a three-panel layout:
+## Project Layout
+The project interface is a three-panel layout:
 
 - **Left panel — Explorer** (always visible): shows Datasets, Artifacts, and Visualizations. Drag the resize handle on the right edge to adjust its width; the size is remembered in `localStorage`.
 - **Center panel — Canvas**: a tabbed surface with **Data**, **Pipeline**, **Canvas**, **Schedule**, and **History** tabs.
@@ -32,7 +32,7 @@ Switch to any other tab to restore the AI Agent panel.
 5. Build a dashboard with KPI and visualisation widgets on the **Canvas** tab.
 
 ## First-Time Tour
-After closing the welcome modal, a step-by-step tooltip tour highlights 8 key features in the workspace:
+After closing the welcome modal, a step-by-step tooltip tour highlights 8 key features in the project:
 
 1. **Data section** — the Datasets list in the Explorer panel
 2. **AI Agent header** — the chat input and ＋ Join button
@@ -97,7 +97,7 @@ A collapsible "Getting started" widget in the bottom-right tracks three onboardi
 - Run migrations with Alembic when you are ready to manage schema versions.
 
 ## AI Chat Agent
-The AI Agent panel is on the right side of the workspace (hidden automatically when the Pipeline tab is active). Type a request in plain English and the agent will classify your intent, generate an execution plan, and execute it step by step.
+The AI Agent panel is on the right side of the project interface (hidden automatically when the Pipeline tab is active). Type a request in plain English and the agent will classify your intent, generate an execution plan, and execute it step by step.
 
 **Tips:**
 - Press `/` anywhere on the page (not in an input) to instantly focus the AI chat input.

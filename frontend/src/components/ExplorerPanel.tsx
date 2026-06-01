@@ -23,7 +23,7 @@ interface ExplorerPanelProps {
 }
 
 export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pipelineId, selectedStepId, onStepSelect }: ExplorerPanelProps) {
-  const { activeProject, setActiveProject, activeDataset, setActiveDataset, projectsLoading } = useWorkspaceContext();
+  const { activeProject, setActiveProject, activeDataset, setActiveDataset, projectsLoading, isGuest } = useWorkspaceContext();
   const { steps } = usePipelineContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -85,6 +85,7 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
   }, [datasets, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
+    if (isGuest && !activeProject?.id) return;
     const cacheKey = `dh_ds_${activeProject?.id ?? "all"}`;
     // Hydrate immediately from session cache so the list paints before the
     // network round-trip completes (especially useful on Render cold-starts).
@@ -149,9 +150,10 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
     } finally {
       setDatasetsLoading(false);
     }
-  }, [activeProject?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProject?.id, isGuest]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const removeDataset = async (dataset: Dataset) => {
+    if (isGuest) return;
     if (!dataset.id) return;
     // Optimistic removal — instantly reflects in the UI
     setDatasets((prev) => prev.filter((d) => d.id !== dataset.id));
@@ -197,13 +199,13 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
   // After datasets load, auto-restore the last selected dataset from localStorage
   // so chat history and pipeline context survive page reloads.
   useEffect(() => {
-    if (datasetsLoading || datasets.length === 0 || activeDataset) return;
+    if (isGuest || datasetsLoading || datasets.length === 0 || activeDataset) return;
     const lastId = localStorage.getItem("activeDatasetId");
     if (!lastId) return;
     const match = datasets.find((d) => d.id === lastId);
     if (match) setActiveDataset(match);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetsLoading, datasets]);
+  }, [datasetsLoading, datasets, isGuest]);
 
   // Auto-activate a newly uploaded dataset when its id arrives via pendingActivateId.
   useEffect(() => {

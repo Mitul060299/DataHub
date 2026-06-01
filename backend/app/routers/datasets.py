@@ -646,6 +646,9 @@ def list_datasets(
     demo_owner_id = os.getenv("DEMO_SYSTEM_USER_ID", "demo-system-user")
     is_guest_demo_request = (not user_id) and bool(project_id) and (project_id == demo_project_id)
 
+    if not user_id and not is_guest_demo_request:
+        return []
+
     if is_guest_demo_request:
         # Guests should see the shared seeded demo dataset under the demo project.
         query = (
@@ -1668,8 +1671,10 @@ def delete_dataset(
     (legacy destructive behaviour, used by tests and explicit "purge" actions).
     """
     role = get_current_role(authorization)
-    require_role("viewer", role)
+    require_role("editor", role)
     user_id = get_current_user_id(authorization)
+    if not user_id:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     # Enforce ownership on both soft and hard delete paths so a malicious caller
     # can't trash someone else's dataset by guessing IDs. include_deleted=True
     # so a hard delete can still purge a previously soft-deleted row.

@@ -18,6 +18,7 @@ Security:
 """
 
 import logging
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
@@ -61,7 +62,7 @@ def get_demo_project(db: Session = Depends(get_db)) -> DemoProjectOut:
     Returns 404 when DEMO_PROJECT_ID env var is not configured, so the
     frontend gracefully falls back to the empty workspace home page.
     """
-    project_id = settings.demo_project_id
+    project_id = getattr(settings, "demo_project_id", None) or os.getenv("DEMO_PROJECT_ID", "")
     if not project_id:
         raise HTTPException(status_code=404, detail="Demo project not configured")
 
@@ -78,7 +79,7 @@ def get_demo_project(db: Session = Depends(get_db)) -> DemoProjectOut:
     return DemoProjectOut(
         project_id=project.id,
         project_name=project.name,
-        dataset_id=settings.demo_dataset_id or None,
+        dataset_id=getattr(settings, "demo_dataset_id", None) or os.getenv("DEMO_DATASET_ID") or None,
         colour=getattr(project, "colour", "#5b6af0") or "#5b6af0",
         icon=getattr(project, "icon", "📊") or "📊",
         description=project.description,
@@ -102,7 +103,7 @@ def preview_demo_dataset(
     Only the configured DEMO_DATASET_ID is accessible via this public route.
     Any other dataset_id returns 404.
     """
-    demo_dataset_id = settings.demo_dataset_id
+    demo_dataset_id = getattr(settings, "demo_dataset_id", None) or os.getenv("DEMO_DATASET_ID", "")
     if not demo_dataset_id:
         raise HTTPException(status_code=404, detail="Demo dataset not configured")
 

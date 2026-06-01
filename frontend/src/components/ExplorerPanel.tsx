@@ -85,7 +85,10 @@ export function ExplorerPanel({ refreshNonce, searchFocusNonce, width, mode, pip
   }, [datasets, searchQuery]);
 
   const loadDatasets = useCallback(async (attempt = 0) => {
-    if (isGuest && !activeProject?.id) return;
+    if (isGuest && !activeProject?.id) {
+      setDatasetsLoading(false);
+      return;
+    }
     const cacheKey = `dh_ds_${activeProject?.id ?? "all"}`;
     // Hydrate immediately from session cache so the list paints before the
     // network round-trip completes (especially useful on Render cold-starts).

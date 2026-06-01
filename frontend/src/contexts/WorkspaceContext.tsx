@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { createProject as apiCreateProject, fetchProjects } from "../api";
-import type { ProjectOut } from "../api";
+import { createProject as apiCreateProject, fetchDemoProject, fetchProjects } from "../api";
+import type { DemoProjectOut, ProjectOut } from "../api";
 import { useAuth, AUTH_CHANGE_NONCE } from "./AuthContext";
 
 export interface Project {
@@ -177,6 +177,39 @@ export function WorkspaceProvider({ children, isGuest = false }: { children: Rea
     // Allow both real sessions and anonymous guest sessions to load projects.
     // Anonymous users have a valid JWT set via setAuthToken() — the API works;
     // only the Supabase `session` object is null for them.
+    if (isGuest && !session && !isAnonymous) {
+      setProjectsLoading(true);
+      try {
+        const demo: DemoProjectOut | null = await fetchDemoProject();
+        if (!demo) {
+          setProjects([]);
+          setActiveProjectState(null);
+          return;
+        }
+        const project: Project = {
+          id: demo.project_id,
+          name: demo.project_name,
+          colour: demo.colour ?? "#5b6af0",
+          color: demo.colour ?? "#5b6af0",
+          icon: demo.icon ?? "📊",
+          initial: (demo.project_name ?? "D").charAt(0).toUpperCase(),
+          description: demo.description ?? "Live sales demo",
+          is_quickstart: false,
+          pipelineCount: demo.pipeline_count ?? 0,
+          dashboardCount: 0,
+          sourceCount: 0,
+          updatedAt: null,
+        };
+        setProjects([project]);
+        setActiveProjectState(project);
+      } catch {
+        setProjects([]);
+        setActiveProjectState(null);
+      } finally {
+        setProjectsLoading(false);
+      }
+      return;
+    }
     if (!session && !isAnonymous) {
       setProjectsLoading(false);
       return;

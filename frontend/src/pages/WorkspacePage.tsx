@@ -164,13 +164,14 @@ export function WorkspacePage() {
 
   // Record workspace_first_visit milestone on first open.
   useEffect(() => {
+    if (isGuest) return;
     const visitedKey = "datahub_workspace_first_visit_recorded";
     if (!localStorage.getItem(visitedKey)) {
       localStorage.setItem(visitedKey, "1");
       recordMilestone("workspace_first_visit");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isGuest]);
 
   // Auto-import a sample CSV when the user lands here with `?sample=<url>` in
   // the URL. Used by the Welcome flow on WorkspaceHomePage and by the

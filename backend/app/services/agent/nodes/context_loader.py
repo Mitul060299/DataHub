@@ -128,18 +128,20 @@ async def context_loader(state: AgentState) -> dict:
     table_registry: dict = dict(state.get("table_registry") or {})
     _restored_pipeline_steps: list[dict] = []
 
-    def _register_dataset_view(ds_id: str, alias: str, storage_path: str | None = None) -> None:
+    def _register_dataset_view(ds_id: str, alias: str, storage_path: str | None = None) -> bool:
         """Register one dataset as a named view in the persistent DuckDB session."""
         if not session_id or not storage_path:
-            return
+            return False
         try:
             file_path = StorageService.get_query_path(storage_path)
             register_view(session_id, alias, file_path)
+            return True
         except Exception as _exc:
             _logger.warning(
                 "VIEW_REGISTER_FAILED: alias=%s storage_path=%s error=%s",
                 alias, storage_path, _exc,
             )
+            return False
 
     if session_id:
         try:
@@ -153,12 +155,61 @@ async def context_loader(state: AgentState) -> dict:
     # Always re-register primary dataset view so execute_step can query it.
     if dataset and dataset.storage_path:
         _primary_alias = _sanitize_alias(str(dataset.name if dataset and dataset.name else dataset_id))
-        _register_dataset_view(dataset_id, _primary_alias, storage_path=dataset.storage_path)
+        _primary_ok = _register_dataset_view(dataset_id, _primary_alias, storage_path=dataset.storage_path)
+        if not _primary_ok and session_id:
+            import pandas as _pd_cnk2
+            from ....models_db import DatasetChunkDB as _DatasetChunkDB2, DatasetDataDB as _DatasetDataDB2
+
+            _cnk_rows2: list[dict] = []
+            _cnk_db2 = SessionLocal()
+            try:
+                for _cc2 in (
+                    _cnk_db2.query(_DatasetChunkDB2)
+                    .filter(_DatasetChunkDB2.dataset_id == dataset_id)
+                    .order_by(_DatasetChunkDB2.chunk_index)
+                    .all()
+                ):
+                    _cnk_rows2.extend(_cc2.rows or [])
+                if not _cnk_rows2:
+                    _ddata2 = _cnk_db2.query(_DatasetDataDB2).filter(_DatasetDataDB2.id == dataset_id).first()
+                    if _ddata2 and isinstance(_ddata2.rows, list):
+                        _cnk_rows2 = list(_ddata2.rows)
+            finally:
+                _cnk_db2.close()
+
+            if _cnk_rows2:
+                try:
+                    _df_cnk2 = _pd_cnk2.DataFrame(_cnk_rows2)
+                    _conn_cnk2 = get_connection(session_id)
+                    _conn_cnk2.register("_cnk_src", _df_cnk2)
+                    _conn_cnk2.execute(
+                        f'CREATE OR REPLACE TABLE "{_primary_alias}" AS SELECT * FROM _cnk_src'
+                    )
+                    if _primary_alias != "dataset":
+                        _conn_cnk2.execute(
+                            f'CREATE OR REPLACE VIEW "dataset" AS SELECT * FROM "{_primary_alias}"'
+                        )
+                    _uuid_alias_cnk2 = _re.sub(r"[^A-Za-z0-9_]", "_", dataset_id)
+                    if _uuid_alias_cnk2 != _primary_alias:
+                        _conn_cnk2.execute(
+                            f'CREATE OR REPLACE VIEW "{_uuid_alias_cnk2}" AS SELECT * FROM "{_primary_alias}"'
+                        )
+                    _primary_ok = True
+                except Exception as _cnk_exc2:
+                    _logger.warning(
+                        "JSONB_DUCKDB_TABLE_FAILED: alias=%s error=%s", _primary_alias, _cnk_exc2
+                    )
         # Also register a "dataset" alias as a compatibility fallback for any SQL
         # the LLM generates that still uses the generic name. Execute_step will
         # rewrite these before execution, but the view must exist as a backstop.
         if _primary_alias != "dataset":
-            _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
+            if session_id and _primary_ok:
+                try:
+                    get_connection(session_id).execute(
+                        f'CREATE OR REPLACE VIEW "dataset" AS SELECT * FROM "{_primary_alias}"'
+                    )
+                except Exception:
+                    _register_dataset_view(dataset_id, "dataset", storage_path=dataset.storage_path)
         if _primary_alias not in table_registry:
             _col_names: list[str] = []
             _cached = state.get("schema") or {}
@@ -176,7 +227,7 @@ async def context_loader(state: AgentState) -> dict:
                 "column_names": _col_names,
                 "pipeline_step_number": 0,
                 "is_artifact": False,
-                "is_view": True,
+                "is_view": bool(_primary_ok),
             }
 
         # DB-backed session replay: reconstruct intermediate pipeline tables from

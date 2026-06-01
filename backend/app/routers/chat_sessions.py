@@ -5,6 +5,7 @@ Path: /api/chat/*
 
 from typing import Optional, List
 from datetime import datetime, timezone
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc
 
 from app.db import get_db
+from app.config import settings
 from app.security import get_current_subject
 from app.models_db import ChatSessionDB, TransformationStepDB, PipelineV2DB, ChatSessionSnapshotDB
 from app.services.chat_engine import ChatEngine, EventType, ChatEvent
@@ -227,10 +229,15 @@ class SessionHistoryPayload(BaseModel):
 async def upsert_session_history(
     session_id: str,
     payload: SessionHistoryPayload,
-    current_user_id: str = Depends(get_current_subject),
+    current_user_id: str | None = Depends(get_current_subject),
     db: DBSession = Depends(get_db),
 ):
     """Upsert conversation history for a session (create if new, update messages if existing)"""
+    if not current_user_id:
+        demo_dataset_id = getattr(settings, "demo_dataset_id", "") or os.getenv("DEMO_DATASET_ID", "")
+        if demo_dataset_id and payload.dataset_id == demo_dataset_id:
+            return {"success": True}
+        raise HTTPException(status_code=401, detail="Authentication required")
     session = db.query(ChatSessionDB).filter(
         ChatSessionDB.id == session_id,
         ChatSessionDB.user_id == current_user_id,

@@ -225,6 +225,7 @@ export function useChatSession() {
     const sid = sessionIdRef.current || sessionId;
     if (!sid) return;
     const token = getAuthToken();
+    if (!token) return;
     try {
       const res = await fetch(`/api/chat/sessions/${sid}/history`, {
         method: "PUT",
